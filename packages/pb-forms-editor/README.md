@@ -1,6 +1,5 @@
-# PureBasic Forms Editor (MVP) v0.3
+# PureBasic Forms Editor v0.4
 
-New in v0.3
 - Supports PureBasic Form Designer style assignments:
   - `Button_0 = ButtonGadget(#PB_Any, ...)`
   - `Window_0 = OpenWindow(#PB_Any, ...)`
@@ -9,4 +8,4 @@ New in v0.3
   - Else key is the first param (e.g. `#Button_0`).
 - Patches multi-line calls and preserves the left-side assignment (if any).
 
-Still MVP: It only patches `x/y` on drag.
+Still in development : It only patches `x/y` on drag.
