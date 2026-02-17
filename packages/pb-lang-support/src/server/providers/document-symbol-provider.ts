@@ -354,11 +354,11 @@ export function handleDocumentSymbol(
     updateSymbolRanges(symbols, lines);
     sortSymbolsStable(symbols);
 
-    // for Debug output only
+    /* for Debug output only
     console.log('symbols.length', symbols.length);
     if (symbols.length > 0) {
         console.log('first symbol', symbols[0].name, symbols[0].range, symbols[0].selectionRange);
-    }
+    }*/
     
     return symbols;
 }
