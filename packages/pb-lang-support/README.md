@@ -1,6 +1,6 @@
 # PureBasic Language Support for VSCode
 
-[![pb-lang-support](https://img.shields.io/github/v/tag/CalDymos/pb-lang-suite?sort=semver&filter=pb-lang-support-v*&label=pb-lang-support)](https://github.com/CalDymos/pb-lang-suite/tags)
+[![pb-lang-support](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=pb-lang-support-v*&label=pb-lang-support)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)
 
 A Visual Studio Code extension that provides comprehensive PureBasic language support.
 
