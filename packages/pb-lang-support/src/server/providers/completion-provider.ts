@@ -572,13 +572,13 @@ function getTriggerContext(linePrefix: string): {
     const isAfterDot = linePrefix.trim().endsWith('.');
 
     // Check if it follows the module operator: Module:: or Module::# or Module:: prefix
-    const moduleConstMatch = linePrefix.match(/([a-zA-Z_]\w*)::#([a-zA-Z_]\w*\$?)$/);
+    const moduleConstMatch = linePrefix.match(/([a-zA-Z_]\w*)::#([a-zA-Z_]\w*\$?)?$/);
     const moduleMatch = moduleConstMatch || linePrefix.match(/([a-zA-Z_]\w*)::(\w*)$/);
     const isAfterModuleOperator = !!moduleMatch;
     const moduleName = moduleMatch ? moduleMatch[1] : '';
     const moduleMemberPrefix = moduleConstMatch ? '' : (moduleMatch ? moduleMatch[2] : '');
     const isModuleConstantContext = !!moduleConstMatch;
-    const moduleConstPrefix = moduleConstMatch ? moduleConstMatch[2] : '';
+    const moduleConstPrefix = moduleConstMatch ? (moduleConstMatch[2] ?? '') : '';
 
     // Check if in constant context: #Name... (but not after Module::)
     const constMatch = linePrefix.match(/#([a-zA-Z_]\w*\$?)?$/);
