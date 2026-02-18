@@ -1,6 +1,16 @@
 import * as vscode from "vscode";
 import { parseFormDocument } from "./core/parser/formParser";
-import { applyMovePatch, applyRectPatch, applyWindowRectPatch } from "./core/emitter/patchEmitter";
+import {
+  applyGadgetColumnDelete,
+  applyGadgetColumnInsert,
+  applyGadgetColumnUpdate,
+  applyGadgetItemDelete,
+  applyGadgetItemInsert,
+  applyGadgetItemUpdate,
+  applyMovePatch,
+  applyRectPatch,
+  applyWindowRectPatch
+} from "./core/emitter/patchEmitter";
 import { readDesignerSettings, SETTINGS_SECTION, DesignerSettings } from "./settings";
 import { FormDocument } from "./core/model";
 
@@ -8,7 +18,13 @@ type WebviewToExtensionMessage =
   | { type: "ready" }
   | { type: "moveGadget"; id: string; x: number; y: number }
   | { type: "setGadgetRect"; id: string; x: number; y: number; w: number; h: number }
-  | { type: "setWindowRect"; id: string; x: number; y: number; w: number; h: number };
+  | { type: "setWindowRect"; id: string; x: number; y: number; w: number; h: number }
+  | { type: "insertGadgetItem"; id: string; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
+  | { type: "updateGadgetItem"; id: string; sourceLine: number; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
+  | { type: "deleteGadgetItem"; id: string; sourceLine: number }
+  | { type: "insertGadgetColumn"; id: string; colRaw: string; titleRaw: string; widthRaw: string }
+  | { type: "updateGadgetColumn"; id: string; sourceLine: number; colRaw: string; titleRaw: string; widthRaw: string }
+  | { type: "deleteGadgetColumn"; id: string; sourceLine: number };
 
 type ExtensionToWebviewMessage =
   | { type: "init"; model: any; settings: DesignerSettings }
@@ -41,7 +57,11 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         return parseFormDocument(text);
       } catch (e: any) {
         return {
+          window: undefined,
           gadgets: [],
+          menus: [],
+          toolbars: [],
+          statusbars: [],
           meta: {
             scanRange: { start: 0, end: text.length },
             issues: [{ severity: "error", message: e?.message ?? String(e) }]
@@ -87,7 +107,11 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
       } catch (e: any) {
         // Keep the webview alive with a minimal model and a structured error.
         const model: FormDocument = {
+          window: undefined,
           gadgets: [],
+          menus: [],
+          toolbars: [],
+          statusbars: [],
           meta: {
             scanRange: { start: 0, end: document.getText().length },
             issues: [{ severity: "error", message: e?.message ?? String(e) }]
@@ -96,10 +120,6 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         lastModel = model;
         post({ type: "init", model, settings: readDesignerSettings() });
       }
-    };
-
-    const sendSettings = () => {
-      post({ type: "settings", settings: readDesignerSettings() });
     };
 
     sendInit();
@@ -123,52 +143,124 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
     });
 
     webviewPanel.webview.onDidReceiveMessage(async (msg: WebviewToExtensionMessage) => {
+      const sr = lastModel?.meta.scanRange;
+      const rangeInfo = sr ? ` (scanRange: ${sr.start}-${sr.end})` : "";
+
       if (msg.type === "ready") {
         sendInit();
         return;
       }
 
       if (msg.type === "moveGadget") {
-        const edit = applyMovePatch(document, msg.id, msg.x, msg.y, lastModel?.meta.scanRange);
+        const edit = applyMovePatch(document, msg.id, msg.x, msg.y, sr);
         if (!edit) {
-          const sr = lastModel?.meta.scanRange;
-          const rangeInfo = sr ? ` (scanRange: ${sr.start}-${sr.end})` : "";
-          post({
-            type: "error",
-            message: `Could not patch gadget '${msg.id}'. No matching call found${rangeInfo}.`
-          });
+          post({ type: "error", message: `Could not patch gadget '${msg.id}'. No matching call found${rangeInfo}.` });
           return;
         }
         await vscode.workspace.applyEdit(edit);
+        return;
       }
 
-
       if (msg.type === "setGadgetRect") {
-        const edit = applyRectPatch(document, msg.id, msg.x, msg.y, msg.w, msg.h, lastModel?.meta.scanRange);
+        const edit = applyRectPatch(document, msg.id, msg.x, msg.y, msg.w, msg.h, sr);
         if (!edit) {
-          const sr = lastModel?.meta.scanRange;
-          const rangeInfo = sr ? ` (scanRange: ${sr.start}-${sr.end})` : "";
-          post({
-            type: "error",
-            message: `Could not patch gadget '${msg.id}'. No matching call found${rangeInfo}.`
-          });
+          post({ type: "error", message: `Could not patch gadget '${msg.id}'. No matching call found${rangeInfo}.` });
           return;
         }
         await vscode.workspace.applyEdit(edit);
+        return;
       }
 
       if (msg.type === "setWindowRect") {
-        const edit = applyWindowRectPatch(document, msg.id, msg.x, msg.y, msg.w, msg.h, lastModel?.meta.scanRange);
+        const edit = applyWindowRectPatch(document, msg.id, msg.x, msg.y, msg.w, msg.h, sr);
         if (!edit) {
-          const sr = lastModel?.meta.scanRange;
-          const rangeInfo = sr ? ` (scanRange: ${sr.start}-${sr.end})` : "";
-          post({
-            type: "error",
-            message: `Could not patch window '${msg.id}'. No matching OpenWindow call found${rangeInfo}.`
-          });
+          post({ type: "error", message: `Could not patch window '${msg.id}'. No matching OpenWindow call found${rangeInfo}.` });
           return;
         }
         await vscode.workspace.applyEdit(edit);
+        return;
+      }
+
+      if (msg.type === "insertGadgetItem") {
+        const edit = applyGadgetItemInsert(
+          document,
+          msg.id,
+          { posRaw: msg.posRaw, textRaw: msg.textRaw, imageRaw: msg.imageRaw, flagsRaw: msg.flagsRaw },
+          sr
+        );
+        if (!edit) {
+          post({ type: "error", message: `Could not insert item for gadget '${msg.id}'. No suitable insertion point found${rangeInfo}.` });
+          return;
+        }
+        await vscode.workspace.applyEdit(edit);
+        return;
+      }
+
+      if (msg.type === "updateGadgetItem") {
+        const edit = applyGadgetItemUpdate(
+          document,
+          msg.id,
+          msg.sourceLine,
+          { posRaw: msg.posRaw, textRaw: msg.textRaw, imageRaw: msg.imageRaw, flagsRaw: msg.flagsRaw },
+          sr
+        );
+        if (!edit) {
+          post({ type: "error", message: `Could not update item for gadget '${msg.id}'. No matching AddGadgetItem call found${rangeInfo}.` });
+          return;
+        }
+        await vscode.workspace.applyEdit(edit);
+        return;
+      }
+
+      if (msg.type === "deleteGadgetItem") {
+        const edit = applyGadgetItemDelete(document, msg.id, msg.sourceLine, sr);
+        if (!edit) {
+          post({ type: "error", message: `Could not delete item for gadget '${msg.id}'. No matching AddGadgetItem call found${rangeInfo}.` });
+          return;
+        }
+        await vscode.workspace.applyEdit(edit);
+        return;
+      }
+
+      if (msg.type === "insertGadgetColumn") {
+        const edit = applyGadgetColumnInsert(
+          document,
+          msg.id,
+          { colRaw: msg.colRaw, titleRaw: msg.titleRaw, widthRaw: msg.widthRaw },
+          sr
+        );
+        if (!edit) {
+          post({ type: "error", message: `Could not insert column for gadget '${msg.id}'. No suitable insertion point found${rangeInfo}.` });
+          return;
+        }
+        await vscode.workspace.applyEdit(edit);
+        return;
+      }
+
+      if (msg.type === "updateGadgetColumn") {
+        const edit = applyGadgetColumnUpdate(
+          document,
+          msg.id,
+          msg.sourceLine,
+          { colRaw: msg.colRaw, titleRaw: msg.titleRaw, widthRaw: msg.widthRaw },
+          sr
+        );
+        if (!edit) {
+          post({ type: "error", message: `Could not update column for gadget '${msg.id}'. No matching AddGadgetColumn call found${rangeInfo}.` });
+          return;
+        }
+        await vscode.workspace.applyEdit(edit);
+        return;
+      }
+
+      if (msg.type === "deleteGadgetColumn") {
+        const edit = applyGadgetColumnDelete(document, msg.id, msg.sourceLine, sr);
+        if (!edit) {
+          post({ type: "error", message: `Could not delete column for gadget '${msg.id}'. No matching AddGadgetColumn call found${rangeInfo}.` });
+          return;
+        }
+        await vscode.workspace.applyEdit(edit);
+        return;
       }
     });
   }
@@ -206,7 +298,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
 
       .root {
         display: grid;
-        grid-template-columns: 1fr 320px;
+        grid-template-columns: 1fr 360px;
         height: 100vh;
       }
 
@@ -232,13 +324,13 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
 
       .row {
         display: grid;
-        grid-template-columns: 90px 1fr;
+        grid-template-columns: 110px 1fr;
         gap: 8px;
         margin-bottom: 8px;
         align-items: center;
       }
 
-      input {
+      input, select, button {
         width: 100%;
         background: var(--vscode-input-background);
         color: var(--vscode-input-foreground);
@@ -247,21 +339,42 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         padding: 2px 6px;
       }
 
+      button {
+        background: var(--vscode-button-background);
+        color: var(--vscode-button-foreground);
+        border: 1px solid var(--vscode-button-border);
+        cursor: pointer;
+        padding: 6px 8px;
+      }
+
+      button:hover {
+        background: var(--vscode-button-hoverBackground);
+      }
+
       .list { margin-top: 12px; }
 
-      .item {
+      .treeItem {
+        display: grid;
+        grid-template-columns: 18px 1fr;
+        align-items: center;
         padding: 6px 8px;
         border-radius: 8px;
         cursor: pointer;
+        user-select: none;
       }
 
-      .item:hover {
+      .treeItem:hover {
         background: var(--vscode-list-hoverBackground);
       }
 
-      .item.sel {
+      .treeItem.sel {
         background: var(--vscode-list-activeSelectionBackground);
         color: var(--vscode-list-activeSelectionForeground);
+      }
+
+      .twisty {
+        text-align: center;
+        opacity: .9;
       }
 
       .muted { opacity: .75; font-size: 12px; }
@@ -288,6 +401,41 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         font-size: 12px;
         white-space: pre-wrap;
       }
+
+      .subHeader { margin-top: 10px; font-weight: 600; }
+
+      .miniList {
+        border: 1px solid var(--vscode-panel-border);
+        border-radius: 8px;
+        padding: 8px;
+        margin: 8px 0;
+        background: var(--vscode-editorWidget-background);
+      }
+
+      .miniRow {
+        display: grid;
+        grid-template-columns: 1fr 56px 56px;
+        gap: 6px;
+        align-items: center;
+        margin: 4px 0;
+        font-size: 12px;
+      }
+
+      .miniRow button {
+        width: 100%;
+        padding: 2px 6px;
+        font-size: 12px;
+      }
+
+      .miniActions {
+        display: flex;
+        gap: 6px;
+        margin-top: 6px;
+      }
+
+      .miniActions button {
+        flex: 1;
+      }
     </style>
   </head>
   <body>
@@ -295,12 +443,18 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
       <div class="canvasWrap"><canvas id="designer"></canvas></div>
       <div class="panel">
         <div id="diag" class="diag" style="display:none"></div>
+
         <div><b>Properties</b></div>
-        <div class="muted">Drag/resize gadgets. This Version patches only x/y/w/h.</div>
+        <div class="muted">Drag/resize gadgets. Items/Columns patching is supported for AddGadgetItem/AddGadgetColumn.</div>
         <div id="props"></div>
 
         <div class="list">
           <div><b>Hierarchy</b></div>
+          <div class="muted" style="margin:6px 0 8px">Select Parent lets you quickly navigate to a container/root.</div>
+          <div class="row" style="grid-template-columns: 110px 1fr;">
+            <div>Select Parent</div>
+            <select id="parentSel"></select>
+          </div>
           <div id="list"></div>
         </div>
 

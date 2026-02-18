@@ -1,3 +1,24 @@
+type SourceRange = { line: number };
+
+type GadgetItem = {
+  index?: number;
+  posRaw: string;
+  textRaw?: string;
+  text?: string;
+  imageRaw?: string;
+  flagsRaw?: string;
+  source?: SourceRange;
+};
+
+type GadgetColumn = {
+  index?: number;
+  colRaw: string;
+  titleRaw?: string;
+  title?: string;
+  widthRaw?: string;
+  source?: SourceRange;
+};
+
 type Gadget = {
   id: string;
   kind: string;
@@ -8,8 +29,8 @@ type Gadget = {
   w: number;
   h: number;
   text?: string;
-  items?: Array<any>;
-  columns?: Array<any>;
+  items?: GadgetItem[];
+  columns?: GadgetColumn[];
 };
 
 type WindowModel = {
@@ -21,9 +42,43 @@ type WindowModel = {
   title?: string;
 };
 
+type MenuEntry = {
+  kind: string;
+  level?: number;
+  idRaw?: string;
+  textRaw?: string;
+  text?: string;
+  iconRaw?: string;
+  widthRaw?: string;
+  source?: SourceRange;
+};
+
+type MenuModel = {
+  id: string;
+  entries: MenuEntry[];
+};
+
+type ToolbarModel = {
+  id: string;
+  entries: MenuEntry[];
+};
+
+type StatusbarField = {
+  widthRaw: string;
+  source?: SourceRange;
+};
+
+type StatusbarModel = {
+  id: string;
+  fields: StatusbarField[];
+};
+
 type Model = {
   window?: WindowModel;
   gadgets: Gadget[];
+  menus?: MenuModel[];
+  toolbars?: ToolbarModel[];
+  statusbars?: StatusbarModel[];
   meta?: {
     header?: { version?: string; line: number; hasStrictSyntaxWarning: boolean };
     issues?: Array<{ severity: "error" | "warning" | "info"; message: string; line?: number }>;
@@ -60,7 +115,13 @@ type WebviewToExtensionMessage =
   | { type: "ready" }
   | { type: "moveGadget"; id: string; x: number; y: number }
   | { type: "setGadgetRect"; id: string; x: number; y: number; w: number; h: number }
-  | { type: "setWindowRect"; id: string; x: number; y: number; w: number; h: number };
+  | { type: "setWindowRect"; id: string; x: number; y: number; w: number; h: number }
+  | { type: "insertGadgetItem"; id: string; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
+  | { type: "updateGadgetItem"; id: string; sourceLine: number; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
+  | { type: "deleteGadgetItem"; id: string; sourceLine: number }
+  | { type: "insertGadgetColumn"; id: string; colRaw: string; titleRaw: string; widthRaw: string }
+  | { type: "updateGadgetColumn"; id: string; sourceLine: number; colRaw: string; titleRaw: string; widthRaw: string }
+  | { type: "deleteGadgetColumn"; id: string; sourceLine: number };
 
 declare const acquireVsCodeApi: () => { postMessage: (msg: WebviewToExtensionMessage) => void };
 
@@ -69,13 +130,22 @@ const vscode = acquireVsCodeApi();
 const canvas = document.getElementById("designer") as HTMLCanvasElement;
 const propsEl = document.getElementById("props") as HTMLDivElement;
 const listEl = document.getElementById("list") as HTMLDivElement;
+const parentSelEl = document.getElementById("parentSel") as HTMLSelectElement;
 const errEl = document.getElementById("err") as HTMLDivElement;
 const diagEl = document.getElementById("diag") as HTMLDivElement;
 
 let model: Model = { gadgets: [] };
 
-type DesignerSelection = { kind: "gadget"; id: string } | { kind: "window" } | null;
+type DesignerSelection =
+  | { kind: "gadget"; id: string }
+  | { kind: "window" }
+  | { kind: "menu"; id: string }
+  | { kind: "toolbar"; id: string }
+  | { kind: "statusbar"; id: string }
+  | null;
 let selection: DesignerSelection = null;
+
+const expanded = new Map<string, boolean>();
 
 let settings: DesignerSettings = {
   showGrid: true,
@@ -169,18 +239,34 @@ window.addEventListener("message", (ev: MessageEvent<ExtensionToWebviewMessage>)
     if (msg.settings) {
       applySettings(msg.settings);
     }
-
     // Validate selection after model refresh
-    if (selection?.kind === "gadget") {
-      const selId = selection.id;
-      if (!model.gadgets.some(g => g.id === selId)) {
-        selection = null;
+    if (selection) {
+      if (selection.kind === "gadget") {
+        const selId = selection.id;
+        if (!model.gadgets.some(g => g.id === selId)) selection = null;
+
+      } else if (selection.kind === "window") {
+        if (!model.window) selection = null;
+
+      } else if (selection.kind === "menu") {
+        const selId = selection.id;
+        const menus = model.menus ?? [];
+        if (!menus.some(m => m.id === selId)) selection = null;
+
+      } else if (selection.kind === "toolbar") {
+        const selId = selection.id;
+        const toolbars = model.toolbars ?? [];
+        if (!toolbars.some(t => t.id === selId)) selection = null;
+
+      } else if (selection.kind === "statusbar") {
+        const selId = selection.id;
+        const statusbars = model.statusbars ?? [];
+        if (!statusbars.some(sb => sb.id === selId)) selection = null;
       }
-    } else if (selection?.kind === "window") {
-      if (!model.window) selection = null;
     }
 
     render();
+    renderParentSelector();
     renderList();
     renderProps();
     renderDiagnostics();
@@ -919,19 +1005,201 @@ function drawHandles(ctx: CanvasRenderingContext2D, x: number, y: number, w: num
 function renderList() {
   listEl.innerHTML = "";
 
+  type Node = {
+    kind: "window" | "gadget" | "menu" | "toolbar" | "statusbar" | "menuEntry";
+    id: string;
+    label: string;
+    selectable: boolean;
+    children: Node[];
+  };
+
+  const keyOf = (n: Node) => `${n.kind}:${n.id}`;
+
+  const isSel = (n: Node): boolean => {
+    if (!selection) return false;
+    if (n.kind === "window") return selection.kind === "window";
+    if (n.kind === "gadget") return selection.kind === "gadget" && selection.id === n.id;
+    if (n.kind === "menu") return selection.kind === "menu" && selection.id === n.id;
+    if (n.kind === "toolbar") return selection.kind === "toolbar" && selection.id === n.id;
+    if (n.kind === "statusbar") return selection.kind === "statusbar" && selection.id === n.id;
+    return false;
+  };
+
+  const containerKinds = new Set(["ContainerGadget", "PanelGadget", "ScrollAreaGadget"]);
+
+  const gadgetMap = new Map<string, Gadget>();
+  const childrenMap = new Map<string, string[]>();
+  for (const g of model.gadgets) {
+    gadgetMap.set(g.id, g);
+    const p = g.parentId ?? "__root__";
+    if (!childrenMap.has(p)) childrenMap.set(p, []);
+    childrenMap.get(p)!.push(g.id);
+  }
+
+  const gadgetNode = (id: string): Node => {
+    const g = gadgetMap.get(id)!;
+    const kids = childrenMap.get(id) ?? [];
+
+    const itemsCnt = g.items?.length ?? 0;
+    const colsCnt = g.columns?.length ?? 0;
+    const tab = typeof g.parentItem === "number" ? `  tab:${g.parentItem}` : "";
+    const extra = `${itemsCnt ? `  items:${itemsCnt}` : ""}${colsCnt ? `  cols:${colsCnt}` : ""}${tab}`;
+
+    return {
+      kind: "gadget",
+      id,
+      label: `${g.kind}  ${g.id}${extra}`,
+      selectable: true,
+      children: kids.map(gadgetNode)
+    };
+  };
+
+  const menuNodes: Node[] = (model.menus ?? []).map(m => {
+    const entries = (m.entries ?? []).map((e, idx) => {
+      const prefix = " ".repeat(Math.max(0, (e.level ?? 0)) * 2);
+      const text = e.text ?? e.textRaw ?? "";
+      const idPart = e.idRaw ? ` ${e.idRaw}` : "";
+      return {
+        kind: "menuEntry" as const,
+        id: `${m.id}:${idx}`,
+        label: `${prefix}${e.kind}${idPart}${text ? `  ${text}` : ""}`,
+        selectable: false,
+        children: []
+      };
+    });
+
+    return {
+      kind: "menu" as const,
+      id: m.id,
+      label: `Menu  ${m.id}  entries:${m.entries?.length ?? 0}`,
+      selectable: true,
+      children: entries
+    };
+  });
+
+  const toolbarNodes: Node[] = (model.toolbars ?? []).map(t => {
+    const entries = (t.entries ?? []).map((e, idx) => {
+      const text = e.text ?? e.textRaw ?? "";
+      const idPart = e.idRaw ? ` ${e.idRaw}` : "";
+      return {
+        kind: "menuEntry" as const,
+        id: `${t.id}:${idx}`,
+        label: `${e.kind}${idPart}${text ? `  ${text}` : ""}${e.iconRaw ? `  ${e.iconRaw}` : ""}`,
+        selectable: false,
+        children: []
+      };
+    });
+
+    return {
+      kind: "toolbar" as const,
+      id: t.id,
+      label: `ToolBar  ${t.id}  entries:${t.entries?.length ?? 0}`,
+      selectable: true,
+      children: entries
+    };
+  });
+
+  const statusbarNodes: Node[] = (model.statusbars ?? []).map(sb => {
+    const fields = (sb.fields ?? []).map((f, idx) => ({
+      kind: "menuEntry" as const,
+      id: `${sb.id}:field:${idx}`,
+      label: `Field  ${idx}  width:${f.widthRaw}`,
+      selectable: false,
+      children: []
+    }));
+
+    return {
+      kind: "statusbar" as const,
+      id: sb.id,
+      label: `StatusBar  ${sb.id}  fields:${sb.fields?.length ?? 0}`,
+      selectable: true,
+      children: fields
+    };
+  });
+
+  const roots: Node[] = [];
   if (model.window) {
+    roots.push({ kind: "window", id: model.window.id, label: `Window  ${model.window.id}`, selectable: true, children: [] });
+  }
+
+  const gadgetRoots = (childrenMap.get("__root__") ?? []).map(gadgetNode);
+  roots.push(...gadgetRoots);
+
+  // Attach non-visual structures under the window node (if present)
+  if (roots.length > 0 && roots[0].kind === "window") {
+    const win = roots[0];
+    win.children = [...menuNodes, ...toolbarNodes, ...statusbarNodes];
+  } else {
+    roots.push(...menuNodes, ...toolbarNodes, ...statusbarNodes);
+  }
+
+  const ensureExpanded = (n: Node) => {
+    const k = keyOf(n);
+    if (!expanded.has(k)) {
+      // Expand container gadgets and the window by default.
+      const defaultExpanded = n.kind === "window" || (n.kind === "gadget" && containerKinds.has(gadgetMap.get(n.id)?.kind ?? ""));
+      expanded.set(k, defaultExpanded);
+    }
+    return expanded.get(k)!;
+  };
+
+  const renderNode = (n: Node, depth: number) => {
     const div = document.createElement("div");
-    const sel = selection?.kind === "window";
-    div.className = "item" + (sel ? " sel" : "");
-    div.textContent = `Window  ${model.window.id}`;
+    div.className = "treeItem" + (isSel(n) ? " sel" : "");
+    div.style.paddingLeft = `${8 + depth * 14}px`;
+
+    const twisty = document.createElement("div");
+    twisty.className = "twisty";
+
+    const hasKids = n.children.length > 0;
+    const isOpen = hasKids ? ensureExpanded(n) : false;
+    twisty.textContent = hasKids ? (isOpen ? "▾" : "▸") : "";
+
+    twisty.onclick = (ev) => {
+      ev.stopPropagation();
+      if (!hasKids) return;
+      expanded.set(keyOf(n), !isOpen);
+      renderList();
+      renderParentSelector();
+    };
+
+    const label = document.createElement("div");
+    label.textContent = n.label;
+
+    div.appendChild(twisty);
+    div.appendChild(label);
+
     div.onclick = () => {
-      selection = { kind: "window" };
+      if (!n.selectable) return;
+      if (n.kind === "window") selection = { kind: "window" };
+      else if (n.kind === "gadget") selection = { kind: "gadget", id: n.id };
+      else if (n.kind === "menu") selection = { kind: "menu", id: n.id };
+      else if (n.kind === "toolbar") selection = { kind: "toolbar", id: n.id };
+      else if (n.kind === "statusbar") selection = { kind: "statusbar", id: n.id };
       render();
       renderList();
+      renderParentSelector();
       renderProps();
     };
+
     listEl.appendChild(div);
+
+    if (hasKids && isOpen) {
+      for (const c of n.children) {
+        renderNode(c, depth + 1);
+      }
+    }
+  };
+
+  for (const n of roots) {
+    renderNode(n, 0);
   }
+}
+
+function renderParentSelector() {
+  if (!parentSelEl) return;
+
+  const containerKinds = new Set(["ContainerGadget", "PanelGadget", "ScrollAreaGadget"]);
 
   const parentMap = new Map<string, string | undefined>();
   for (const g of model.gadgets) parentMap.set(g.id, g.parentId);
@@ -940,7 +1208,7 @@ function renderList() {
     let depth = 0;
     let cur = parentMap.get(id);
     const seen = new Set<string>();
-    while (cur && !seen.has(cur) && depth < 20) {
+    while (cur && !seen.has(cur) && depth < 40) {
       seen.add(cur);
       depth++;
       cur = parentMap.get(cur);
@@ -948,25 +1216,61 @@ function renderList() {
     return depth;
   };
 
-  for (const g of model.gadgets) {
-    const div = document.createElement("div");
-    const sel = selection?.kind === "gadget" && g.id === selection.id;
-    div.className = "item" + (sel ? " sel" : "");
+  const opts: Array<{ value: string; label: string }> = [];
+  if (model.window) {
+    opts.push({ value: "window", label: `Window  ${model.window.id}` });
+  }
 
-    const itemsCnt = g.items?.length ?? 0;
-    const colsCnt = g.columns?.length ?? 0;
-    const tab = typeof g.parentItem === "number" ? `  tab:${g.parentItem}` : "";
-    const extra = `${itemsCnt ? `  items:${itemsCnt}` : ""}${colsCnt ? `  cols:${colsCnt}` : ""}${tab}`;
+  const containers = model.gadgets
+    .filter(g => containerKinds.has(g.kind))
+    .sort((a, b) => depthOf(a.id) - depthOf(b.id));
 
-    div.textContent = `${g.kind}  ${g.id}${extra}`;
-    div.style.paddingLeft = `${8 + depthOf(g.id) * 14}px`;
-    div.onclick = () => {
-      selection = { kind: "gadget", id: g.id };
-      render();
-      renderList();
-      renderProps();
-    };
-    listEl.appendChild(div);
+  for (const g of containers) {
+    const depth = depthOf(g.id);
+    const pad = " ".repeat(depth * 2);
+    opts.push({ value: `gadget:${g.id}`, label: `${pad}${g.kind}  ${g.id}` });
+  }
+
+  const computeCurrent = (): string => {
+    if (!selection) return opts[0]?.value ?? "window";
+    if (selection.kind === "window") return "window";
+    if (selection && selection.kind === "gadget") {
+      const selId = selection.id;
+      const g = model.gadgets.find(x => x.id === selId);
+      if (g?.parentId) return `gadget:${g.parentId}`;
+      return "window";
+    }
+    return "window";
+  };
+
+  const current = computeCurrent();
+
+  parentSelEl.onchange = () => {
+    const v = parentSelEl.value;
+    if (v === "window") {
+      selection = { kind: "window" };
+    } else if (v.startsWith("gadget:")) {
+      const id = v.slice("gadget:".length);
+      selection = { kind: "gadget", id };
+    }
+    render();
+    renderList();
+    renderParentSelector();
+    renderProps();
+  };
+
+  parentSelEl.innerHTML = "";
+  for (const o of opts) {
+    const opt = document.createElement("option");
+    opt.value = o.value;
+    opt.textContent = o.label;
+    parentSelEl.appendChild(opt);
+  }
+
+  if (opts.some(o => o.value === current)) {
+    parentSelEl.value = current;
+  } else if (opts.length) {
+    parentSelEl.value = opts[0].value;
   }
 }
 
@@ -977,6 +1281,47 @@ function renderProps() {
     propsEl.innerHTML = "<div class='muted'>No selection</div>";
     return;
   }
+
+  const toPbString = (v: string): string => {
+    const esc = (v ?? "").replace(/"/g, '""');
+    return `"${esc}"`;
+  };
+
+  const section = (title: string) => {
+    const h = document.createElement("div");
+    h.className = "subHeader";
+    h.textContent = title;
+    return h;
+  };
+
+  const miniList = () => {
+    const d = document.createElement("div");
+    d.className = "miniList";
+    return d;
+  };
+
+  const miniRow = (label: string, onEdit?: () => void, onDelete?: () => void) => {
+    const r = document.createElement("div");
+    r.className = "miniRow";
+
+    const l = document.createElement("div");
+    l.textContent = label;
+
+    const b1 = document.createElement("button");
+    b1.textContent = "Edit";
+    b1.disabled = !onEdit;
+    b1.onclick = () => onEdit?.();
+
+    const b2 = document.createElement("button");
+    b2.textContent = "Del";
+    b2.disabled = !onDelete;
+    b2.onclick = () => onDelete?.();
+
+    r.appendChild(l);
+    r.appendChild(b1);
+    r.appendChild(b2);
+    return r;
+  };
 
   if (selection.kind === "window") {
     if (!model.window) {
@@ -1001,6 +1346,71 @@ function renderProps() {
     return;
   }
 
+  if (selection.kind === "menu") {
+    const selId = selection.id;
+    const m = (model.menus ?? []).find(x => x.id === selId);
+    if (!m) {
+      propsEl.innerHTML = "<div class='muted'>Menu not found</div>";
+      return;
+    }
+
+    propsEl.appendChild(row("Id", readonlyInput(m.id)));
+    propsEl.appendChild(row("Entries", readonlyInput(String(m.entries?.length ?? 0))));
+    const box = miniList();
+    for (const e of m.entries ?? []) {
+      const prefix = " ".repeat(Math.max(0, (e.level ?? 0)) * 2);
+      const text = e.text ?? e.textRaw ?? "";
+      const idPart = e.idRaw ? ` ${e.idRaw}` : "";
+      const line = `${prefix}${e.kind}${idPart}${text ? `  ${text}` : ""}`;
+      box.appendChild(miniRow(line));
+    }
+    propsEl.appendChild(section("Structure"));
+    propsEl.appendChild(box);
+    return;
+  }
+
+  if (selection.kind === "toolbar") {
+    const selId = selection.id;
+    const t = (model.toolbars ?? []).find(x => x.id === selId);
+    if (!t) {
+      propsEl.innerHTML = "<div class='muted'>ToolBar not found</div>";
+      return;
+    }
+
+    propsEl.appendChild(row("Id", readonlyInput(t.id)));
+    propsEl.appendChild(row("Entries", readonlyInput(String(t.entries?.length ?? 0))));
+    const box = miniList();
+    for (const e of t.entries ?? []) {
+      const text = e.text ?? e.textRaw ?? "";
+      const idPart = e.idRaw ? ` ${e.idRaw}` : "";
+      const extra = e.iconRaw ? `  ${e.iconRaw}` : "";
+      const line = `${e.kind}${idPart}${text ? `  ${text}` : ""}${extra}`;
+      box.appendChild(miniRow(line));
+    }
+    propsEl.appendChild(section("Structure"));
+    propsEl.appendChild(box);
+    return;
+  }
+
+  if (selection.kind === "statusbar") {
+    const selId = selection.id;
+    const sb = (model.statusbars ?? []).find(x => x.id === selId);
+    if (!sb) {
+      propsEl.innerHTML = "<div class='muted'>StatusBar not found</div>";
+      return;
+    }
+
+    propsEl.appendChild(row("Id", readonlyInput(sb.id)));
+    propsEl.appendChild(row("Fields", readonlyInput(String(sb.fields?.length ?? 0))));
+    const box = miniList();
+    (sb.fields ?? []).forEach((f, idx) => {
+      box.appendChild(miniRow(`Field ${idx}  width:${f.widthRaw}`));
+    });
+    propsEl.appendChild(section("Fields"));
+    propsEl.appendChild(box);
+    return;
+  }
+
   if (selection.kind !== "gadget") {
     propsEl.innerHTML = "<div class='muted'>No selection</div>";
     return;
@@ -1019,10 +1429,160 @@ function renderProps() {
   propsEl.appendChild(row("Tab", readonlyInput(typeof g.parentItem === "number" ? String(g.parentItem) : "")));
   propsEl.appendChild(row("Items", readonlyInput(String(g.items?.length ?? 0))));
   propsEl.appendChild(row("Columns", readonlyInput(String(g.columns?.length ?? 0))));
+
+  if (g.parentId) {
+    const btn = document.createElement("button");
+    btn.textContent = "Select Parent";
+    btn.onclick = () => {
+      selection = { kind: "gadget", id: g.parentId! };
+      render();
+      renderList();
+      renderParentSelector();
+      renderProps();
+    };
+    propsEl.appendChild(row("", btn));
+  }
+
   propsEl.appendChild(row("X", numberInput(g.x, v => { g.x = asInt(v); postGadgetRect(g); render(); renderProps(); })));
   propsEl.appendChild(row("Y", numberInput(g.y, v => { g.y = asInt(v); postGadgetRect(g); render(); renderProps(); })));
   propsEl.appendChild(row("W", numberInput(g.w, v => { g.w = asInt(v); postGadgetRect(g); render(); renderProps(); })));
   propsEl.appendChild(row("H", numberInput(g.h, v => { g.h = asInt(v); postGadgetRect(g); render(); renderProps(); })));
+
+  // Items editor (minimal UI)
+  propsEl.appendChild(section("Items"));
+  const itemsBox = miniList();
+  (g.items ?? []).forEach((it, idx) => {
+    const label = `${idx}  ${it.text ?? it.textRaw ?? ""}`;
+    const canPatch = typeof it.source?.line === "number";
+
+    itemsBox.appendChild(
+      miniRow(
+        label,
+        canPatch
+          ? () => {
+              const txt = prompt("Item text", it.text ?? "");
+              if (txt === null) return;
+              const pos = prompt("Position (-1 append)", it.posRaw ?? "-1");
+              if (pos === null) return;
+              const img = prompt("Image raw (optional)", it.imageRaw ?? "");
+              if (img === null) return;
+              const flags = prompt("Flags raw (optional)", it.flagsRaw ?? "");
+              if (flags === null) return;
+
+              vscode.postMessage({
+                type: "updateGadgetItem",
+                id: g.id,
+                sourceLine: it.source!.line,
+                posRaw: pos,
+                textRaw: toPbString(txt),
+                imageRaw: img.trim().length ? img.trim() : undefined,
+                flagsRaw: flags.trim().length ? flags.trim() : undefined
+              });
+            }
+          : undefined,
+        canPatch
+          ? () => {
+              if (!confirm("Delete this item?")) return;
+              vscode.postMessage({ type: "deleteGadgetItem", id: g.id, sourceLine: it.source!.line });
+            }
+          : undefined
+      )
+    );
+  });
+
+  const addItemBtn = document.createElement("button");
+  addItemBtn.textContent = "Add Item";
+  addItemBtn.onclick = () => {
+    const txt = prompt("Item text", "");
+              if (txt === null) return;
+    const pos = prompt("Position (-1 append)", "-1");
+              if (pos === null) return;
+    const img = prompt("Image raw (optional)", "");
+              if (img === null) return;
+    const flags = prompt("Flags raw (optional)", "");
+              if (flags === null) return;
+
+    vscode.postMessage({
+      type: "insertGadgetItem",
+      id: g.id,
+      posRaw: pos,
+      textRaw: toPbString(txt),
+      imageRaw: img.trim().length ? img.trim() : undefined,
+      flagsRaw: flags.trim().length ? flags.trim() : undefined
+    });
+  };
+
+  const itemActions = document.createElement("div");
+  itemActions.className = "miniActions";
+  itemActions.appendChild(addItemBtn);
+
+  propsEl.appendChild(itemsBox);
+  propsEl.appendChild(itemActions);
+
+  // Columns editor (minimal UI)
+  propsEl.appendChild(section("Columns"));
+  const colsBox = miniList();
+  (g.columns ?? []).forEach((c, idx) => {
+    const label = `${idx}  ${c.title ?? c.titleRaw ?? ""}  w:${c.widthRaw ?? ""}`;
+    const canPatch = typeof c.source?.line === "number";
+
+    colsBox.appendChild(
+      miniRow(
+        label,
+        canPatch
+          ? () => {
+              const title = prompt("Column title", c.title ?? "");
+              if (title === null) return;
+              const col = prompt("Column index", c.colRaw ?? String(idx));
+              if (col === null) return;
+              const width = prompt("Width", c.widthRaw ?? "80");
+              if (width === null) return;
+
+              vscode.postMessage({
+                type: "updateGadgetColumn",
+                id: g.id,
+                sourceLine: c.source!.line,
+                colRaw: col,
+                titleRaw: toPbString(title),
+                widthRaw: width
+              });
+            }
+          : undefined,
+        canPatch
+          ? () => {
+              if (!confirm("Delete this column?")) return;
+              vscode.postMessage({ type: "deleteGadgetColumn", id: g.id, sourceLine: c.source!.line });
+            }
+          : undefined
+      )
+    );
+  });
+
+  const addColBtn = document.createElement("button");
+  addColBtn.textContent = "Add Column";
+  addColBtn.onclick = () => {
+    const title = prompt("Column title", "");
+              if (title === null) return;
+    const col = prompt("Column index", String(g.columns?.length ?? 0));
+    if (col === null) return;
+    const width = prompt("Width", "80");
+              if (width === null) return;
+
+    vscode.postMessage({
+      type: "insertGadgetColumn",
+      id: g.id,
+      colRaw: col,
+      titleRaw: toPbString(title),
+      widthRaw: width
+    });
+  };
+
+  const colActions = document.createElement("div");
+  colActions.className = "miniActions";
+  colActions.appendChild(addColBtn);
+
+  propsEl.appendChild(colsBox);
+  propsEl.appendChild(colActions);
 }
 
 function row(label: string, input: HTMLElement) {

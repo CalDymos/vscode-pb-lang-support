@@ -123,8 +123,70 @@ export interface FormEnumerations {
   gadgets: string[];
 }
 
+
+export type MenuEntryKind =
+  | "MenuTitle"
+  | "MenuItem"
+  | "MenuBar"
+  | "OpenSubMenu"
+  | "CloseSubMenu"
+  | "Unknown";
+
+export interface FormMenuEntry {
+  kind: MenuEntryKind;
+  level?: number;        // nesting level (OpenSubMenu / CloseSubMenu)
+  idRaw?: string;        // raw id token (MenuItem)
+  textRaw?: string;      // raw title/text token
+  text?: string;         // unquoted (when possible)
+  iconRaw?: string;      // for ToolBar entries (optional)
+  widthRaw?: string;     // for StatusBar fields (optional)
+  source?: SourceRange;
+}
+
+export interface FormMenu {
+  id: string;
+  entries: FormMenuEntry[];
+  source?: SourceRange;
+}
+
+export type ToolBarEntryKind =
+  | "ToolBarStandardButton"
+  | "ToolBarButton"
+  | "ToolBarSeparator"
+  | "ToolBarToolTip"
+  | "Unknown";
+
+export interface FormToolBarEntry {
+  kind: ToolBarEntryKind;
+  idRaw?: string;
+  iconRaw?: string;
+  textRaw?: string;
+  text?: string;
+  source?: SourceRange;
+}
+
+export interface FormToolBar {
+  id: string;
+  entries: FormToolBarEntry[];
+  source?: SourceRange;
+}
+
+export interface FormStatusBarField {
+  widthRaw: string;
+  source?: SourceRange;
+}
+
+export interface FormStatusBar {
+  id: string;
+  fields: FormStatusBarField[];
+  source?: SourceRange;
+}
+
 export interface FormDocument {
   window?: FormWindow;
   gadgets: Gadget[];
+  menus: FormMenu[];
+  toolbars: FormToolBar[];
+  statusbars: FormStatusBar[];
   meta: FormMeta;
 }

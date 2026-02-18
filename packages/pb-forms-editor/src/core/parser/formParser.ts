@@ -1,4 +1,4 @@
-import { FormDocument, FormEnumerations, FormIssue, FormMeta, Gadget, GadgetColumn, GadgetItem, GadgetKind, ScanRange } from "../model";
+import { FormDocument, FormEnumerations, FormIssue, FormMenu, FormMenuEntry, FormToolBar, FormToolBarEntry, FormStatusBar, FormStatusBarField, FormMeta, Gadget, GadgetColumn, GadgetItem, GadgetKind, ScanRange } from "../model";
 import { splitParams, unquoteString, asNumber } from "./tokenizer";
 import { scanCalls } from "./callScanner";
 
@@ -67,13 +67,19 @@ export function parseFormDocument(text: string): FormDocument {
     enums
   };
 
-  const doc: FormDocument = { gadgets: [], meta };
+  const doc: FormDocument = { window: undefined, gadgets: [], menus: [], toolbars: [], statusbars: [], meta };
 
   const gadgetById = new Map<string, Gadget>();
   const panelCurrentItem = new Map<string, number>();
 
   type ParentCtx = { id: string; kind: GadgetKind; currentPanelItem?: number };
   const parentStack: ParentCtx[] = [];
+
+  let curMenu: FormMenu | undefined;
+  let menuLevel = 0;
+  let curToolBar: FormToolBar | undefined;
+  let curStatusBar: FormStatusBar | undefined;
+
 
   const pushImplicitParent = (g: Gadget) => {
     if (g.kind === "ContainerGadget" || g.kind === "PanelGadget" || g.kind === "ScrollAreaGadget") {
@@ -101,6 +107,115 @@ export function parseFormDocument(text: string): FormDocument {
 
   const calls = scanCalls(text, scanRange);
   for (const c of calls) {
+    // -----------------------------------------------------------------------------
+    // Menu / ToolBar / StatusBar parsing (independent from gadget list nesting)
+    // -----------------------------------------------------------------------------
+
+    if (c.name === "CreateMenu") {
+      const p = splitParams(c.args);
+      const id = (p[0] ?? "").trim();
+      if (id.length) {
+        curMenu = { id, entries: [], source: c.range };
+        doc.menus.push(curMenu);
+        menuLevel = 0;
+      } else {
+        curMenu = undefined;
+        menuLevel = 0;
+      }
+      curToolBar = undefined;
+      curStatusBar = undefined;
+    }
+
+    if (c.name === "MenuTitle" && curMenu) {
+      const p = splitParams(c.args);
+      const textRaw = p[0]?.trim();
+      const e: FormMenuEntry = { kind: "MenuTitle", level: menuLevel, textRaw, text: unquoteString(textRaw ?? ""), source: c.range };
+      curMenu.entries.push(e);
+    }
+
+    if (c.name === "MenuItem" && curMenu) {
+      const p = splitParams(c.args);
+      const idRaw = p[0]?.trim();
+      const textRaw = p[1]?.trim();
+      const e: FormMenuEntry = { kind: "MenuItem", level: menuLevel, idRaw, textRaw, text: unquoteString(textRaw ?? ""), source: c.range };
+      curMenu.entries.push(e);
+    }
+
+    if (c.name === "MenuBar" && curMenu) {
+      curMenu.entries.push({ kind: "MenuBar", level: menuLevel, source: c.range });
+    }
+
+    if (c.name === "OpenSubMenu" && curMenu) {
+      const p = splitParams(c.args);
+      const textRaw = p[0]?.trim();
+      curMenu.entries.push({ kind: "OpenSubMenu", level: menuLevel, textRaw, text: unquoteString(textRaw ?? ""), source: c.range });
+      menuLevel++;
+    }
+
+    if (c.name === "CloseSubMenu" && curMenu) {
+      menuLevel = Math.max(0, menuLevel - 1);
+      curMenu.entries.push({ kind: "CloseSubMenu", level: menuLevel, source: c.range });
+    }
+
+    if (c.name === "CreateToolBar") {
+      const p = splitParams(c.args);
+      const id = (p[0] ?? "").trim();
+      if (id.length) {
+        curToolBar = { id, entries: [], source: c.range };
+        doc.toolbars.push(curToolBar);
+      } else {
+        curToolBar = undefined;
+      }
+      curMenu = undefined;
+      menuLevel = 0;
+      curStatusBar = undefined;
+    }
+
+    if (c.name === "ToolBarStandardButton" && curToolBar) {
+      const p = splitParams(c.args);
+      const e: FormToolBarEntry = { kind: "ToolBarStandardButton", idRaw: p[0]?.trim(), iconRaw: p[1]?.trim(), source: c.range };
+      curToolBar.entries.push(e);
+    }
+
+    if (c.name === "ToolBarButton" && curToolBar) {
+      const p = splitParams(c.args);
+      const e: FormToolBarEntry = { kind: "ToolBarButton", idRaw: p[0]?.trim(), iconRaw: p[1]?.trim(), textRaw: p[2]?.trim(), text: unquoteString(p[2] ?? ""), source: c.range };
+      curToolBar.entries.push(e);
+    }
+
+    if (c.name === "ToolBarSeparator" && curToolBar) {
+      curToolBar.entries.push({ kind: "ToolBarSeparator", source: c.range });
+    }
+
+    if (c.name === "ToolBarToolTip" && curToolBar) {
+      const p = splitParams(c.args);
+      const e: FormToolBarEntry = { kind: "ToolBarToolTip", idRaw: p[0]?.trim(), textRaw: p[1]?.trim(), text: unquoteString(p[1] ?? ""), source: c.range };
+      curToolBar.entries.push(e);
+    }
+
+    if (c.name === "CreateStatusBar") {
+      const p = splitParams(c.args);
+      const id = (p[0] ?? "").trim();
+      if (id.length) {
+        curStatusBar = { id, fields: [], source: c.range };
+        doc.statusbars.push(curStatusBar);
+      } else {
+        curStatusBar = undefined;
+      }
+      curMenu = undefined;
+      menuLevel = 0;
+      curToolBar = undefined;
+    }
+
+    if (c.name === "AddStatusBarField" && curStatusBar) {
+      const p = splitParams(c.args);
+      const widthRaw = p[0]?.trim();
+      if (widthRaw && widthRaw.length) {
+        const field: FormStatusBarField = { widthRaw, source: c.range };
+        curStatusBar.fields.push(field);
+      }
+    }
+
     if (c.name === "CloseGadgetList") {
       if (parentStack.length > 0) parentStack.pop();
       continue;
