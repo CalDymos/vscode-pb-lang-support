@@ -7,8 +7,17 @@ import {
   applyGadgetItemDelete,
   applyGadgetItemInsert,
   applyGadgetItemUpdate,
+  applyMenuEntryDelete,
+  applyMenuEntryInsert,
+  applyMenuEntryUpdate,
   applyMovePatch,
   applyRectPatch,
+  applyStatusBarFieldDelete,
+  applyStatusBarFieldInsert,
+  applyStatusBarFieldUpdate,
+  applyToolBarEntryDelete,
+  applyToolBarEntryInsert,
+  applyToolBarEntryUpdate,
   applyWindowRectPatch
 } from "./core/emitter/patchEmitter";
 import { readDesignerSettings, SETTINGS_SECTION, DesignerSettings } from "./settings";
@@ -24,7 +33,16 @@ type WebviewToExtensionMessage =
   | { type: "deleteGadgetItem"; id: string; sourceLine: number }
   | { type: "insertGadgetColumn"; id: string; colRaw: string; titleRaw: string; widthRaw: string }
   | { type: "updateGadgetColumn"; id: string; sourceLine: number; colRaw: string; titleRaw: string; widthRaw: string }
-  | { type: "deleteGadgetColumn"; id: string; sourceLine: number };
+  | { type: "deleteGadgetColumn"; id: string; sourceLine: number }
+  | { type: "insertMenuEntry"; menuId: string; kind: string; idRaw?: string; textRaw?: string }
+  | { type: "updateMenuEntry"; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string }
+  | { type: "deleteMenuEntry"; menuId: string; sourceLine: number; kind: string }
+  | { type: "insertToolBarEntry"; toolBarId: string; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string }
+  | { type: "updateToolBarEntry"; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string }
+  | { type: "deleteToolBarEntry"; toolBarId: string; sourceLine: number; kind: string }
+  | { type: "insertStatusBarField"; statusBarId: string; widthRaw: string }
+  | { type: "updateStatusBarField"; statusBarId: string; sourceLine: number; widthRaw: string }
+  | { type: "deleteStatusBarField"; statusBarId: string; sourceLine: number };
 
 type ExtensionToWebviewMessage =
   | { type: "init"; model: any; settings: DesignerSettings }
@@ -257,6 +275,148 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         const edit = applyGadgetColumnDelete(document, msg.id, msg.sourceLine, sr);
         if (!edit) {
           post({ type: "error", message: `Could not delete column for gadget '${msg.id}'. No matching AddGadgetColumn call found${rangeInfo}.` });
+          return;
+        }
+        await vscode.workspace.applyEdit(edit);
+        return;
+      }
+
+      if (msg.type === "insertMenuEntry") {
+        const allowed = new Set(["MenuTitle", "MenuItem", "MenuBar", "OpenSubMenu", "CloseSubMenu"]);
+        if (!allowed.has(msg.kind)) {
+          post({ type: "error", message: `Unsupported menu entry kind '${msg.kind}'.` });
+          return;
+        }
+        const edit = applyMenuEntryInsert(
+          document,
+          msg.menuId,
+          { kind: msg.kind as any, idRaw: msg.idRaw, textRaw: msg.textRaw },
+          sr
+        );
+        if (!edit) {
+          post({ type: "error", message: `Could not insert menu entry for menu '${msg.menuId}'. No suitable insertion point found${rangeInfo}.` });
+          return;
+        }
+        await vscode.workspace.applyEdit(edit);
+        return;
+      }
+
+      if (msg.type === "updateMenuEntry") {
+        const allowed = new Set(["MenuTitle", "MenuItem", "MenuBar", "OpenSubMenu", "CloseSubMenu"]);
+        if (!allowed.has(msg.kind)) {
+          post({ type: "error", message: `Unsupported menu entry kind '${msg.kind}'.` });
+          return;
+        }
+        const edit = applyMenuEntryUpdate(
+          document,
+          msg.menuId,
+          msg.sourceLine,
+          { kind: msg.kind as any, idRaw: msg.idRaw, textRaw: msg.textRaw },
+          sr
+        );
+        if (!edit) {
+          post({ type: "error", message: `Could not update menu entry for menu '${msg.menuId}'. No matching call found${rangeInfo}.` });
+          return;
+        }
+        await vscode.workspace.applyEdit(edit);
+        return;
+      }
+
+      if (msg.type === "deleteMenuEntry") {
+        const allowed = new Set(["MenuTitle", "MenuItem", "MenuBar", "OpenSubMenu", "CloseSubMenu"]);
+        if (!allowed.has(msg.kind)) {
+          post({ type: "error", message: `Unsupported menu entry kind '${msg.kind}'.` });
+          return;
+        }
+        const edit = applyMenuEntryDelete(document, msg.menuId, msg.sourceLine, msg.kind as any, sr);
+        if (!edit) {
+          post({ type: "error", message: `Could not delete menu entry for menu '${msg.menuId}'. No matching call found${rangeInfo}.` });
+          return;
+        }
+        await vscode.workspace.applyEdit(edit);
+        return;
+      }
+
+      if (msg.type === "insertToolBarEntry") {
+        const allowed = new Set(["ToolBarStandardButton", "ToolBarButton", "ToolBarSeparator", "ToolBarToolTip"]);
+        if (!allowed.has(msg.kind)) {
+          post({ type: "error", message: `Unsupported toolbar entry kind '${msg.kind}'.` });
+          return;
+        }
+        const edit = applyToolBarEntryInsert(
+          document,
+          msg.toolBarId,
+          { kind: msg.kind as any, idRaw: msg.idRaw, iconRaw: msg.iconRaw, textRaw: msg.textRaw },
+          sr
+        );
+        if (!edit) {
+          post({ type: "error", message: `Could not insert toolbar entry for toolbar '${msg.toolBarId}'. No suitable insertion point found${rangeInfo}.` });
+          return;
+        }
+        await vscode.workspace.applyEdit(edit);
+        return;
+      }
+
+      if (msg.type === "updateToolBarEntry") {
+        const allowed = new Set(["ToolBarStandardButton", "ToolBarButton", "ToolBarSeparator", "ToolBarToolTip"]);
+        if (!allowed.has(msg.kind)) {
+          post({ type: "error", message: `Unsupported toolbar entry kind '${msg.kind}'.` });
+          return;
+        }
+        const edit = applyToolBarEntryUpdate(
+          document,
+          msg.toolBarId,
+          msg.sourceLine,
+          { kind: msg.kind as any, idRaw: msg.idRaw, iconRaw: msg.iconRaw, textRaw: msg.textRaw },
+          sr
+        );
+        if (!edit) {
+          post({ type: "error", message: `Could not update toolbar entry for toolbar '${msg.toolBarId}'. No matching call found${rangeInfo}.` });
+          return;
+        }
+        await vscode.workspace.applyEdit(edit);
+        return;
+      }
+
+      if (msg.type === "deleteToolBarEntry") {
+        const allowed = new Set(["ToolBarStandardButton", "ToolBarButton", "ToolBarSeparator", "ToolBarToolTip"]);
+        if (!allowed.has(msg.kind)) {
+          post({ type: "error", message: `Unsupported toolbar entry kind '${msg.kind}'.` });
+          return;
+        }
+        const edit = applyToolBarEntryDelete(document, msg.toolBarId, msg.sourceLine, msg.kind as any, sr);
+        if (!edit) {
+          post({ type: "error", message: `Could not delete toolbar entry for toolbar '${msg.toolBarId}'. No matching call found${rangeInfo}.` });
+          return;
+        }
+        await vscode.workspace.applyEdit(edit);
+        return;
+      }
+
+      if (msg.type === "insertStatusBarField") {
+        const edit = applyStatusBarFieldInsert(document, msg.statusBarId, { widthRaw: msg.widthRaw }, sr);
+        if (!edit) {
+          post({ type: "error", message: `Could not insert statusbar field for statusbar '${msg.statusBarId}'. No suitable insertion point found${rangeInfo}.` });
+          return;
+        }
+        await vscode.workspace.applyEdit(edit);
+        return;
+      }
+
+      if (msg.type === "updateStatusBarField") {
+        const edit = applyStatusBarFieldUpdate(document, msg.statusBarId, msg.sourceLine, { widthRaw: msg.widthRaw }, sr);
+        if (!edit) {
+          post({ type: "error", message: `Could not update statusbar field for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.` });
+          return;
+        }
+        await vscode.workspace.applyEdit(edit);
+        return;
+      }
+
+      if (msg.type === "deleteStatusBarField") {
+        const edit = applyStatusBarFieldDelete(document, msg.statusBarId, msg.sourceLine, sr);
+        if (!edit) {
+          post({ type: "error", message: `Could not delete statusbar field for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.` });
           return;
         }
         await vscode.workspace.applyEdit(edit);

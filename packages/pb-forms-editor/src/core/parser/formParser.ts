@@ -1,4 +1,20 @@
-import { FormDocument, FormEnumerations, FormIssue, FormMenu, FormMenuEntry, FormToolBar, FormToolBarEntry, FormStatusBar, FormStatusBarField, FormMeta, Gadget, GadgetColumn, GadgetItem, GadgetKind, ScanRange } from "../model";
+import {
+  FormDocument,
+  FormEnumerations,
+  FormIssue,
+  FormMenu,
+  FormMenuEntry,
+  FormMeta,
+  FormStatusBar,
+  FormStatusBarField,
+  FormToolBar,
+  FormToolBarEntry,
+  Gadget,
+  GadgetColumn,
+  GadgetItem,
+  GadgetKind,
+  ScanRange
+} from "../model";
 import { splitParams, unquoteString, asNumber } from "./tokenizer";
 import { scanCalls } from "./callScanner";
 

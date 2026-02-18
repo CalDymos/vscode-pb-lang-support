@@ -121,7 +121,16 @@ type WebviewToExtensionMessage =
   | { type: "deleteGadgetItem"; id: string; sourceLine: number }
   | { type: "insertGadgetColumn"; id: string; colRaw: string; titleRaw: string; widthRaw: string }
   | { type: "updateGadgetColumn"; id: string; sourceLine: number; colRaw: string; titleRaw: string; widthRaw: string }
-  | { type: "deleteGadgetColumn"; id: string; sourceLine: number };
+  | { type: "deleteGadgetColumn"; id: string; sourceLine: number }
+  | { type: "insertMenuEntry"; menuId: string; kind: string; idRaw?: string; textRaw?: string }
+  | { type: "updateMenuEntry"; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string }
+  | { type: "deleteMenuEntry"; menuId: string; sourceLine: number; kind: string }
+  | { type: "insertToolBarEntry"; toolBarId: string; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string }
+  | { type: "updateToolBarEntry"; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string }
+  | { type: "deleteToolBarEntry"; toolBarId: string; sourceLine: number; kind: string }
+  | { type: "insertStatusBarField"; statusBarId: string; widthRaw: string }
+  | { type: "updateStatusBarField"; statusBarId: string; sourceLine: number; widthRaw: string }
+  | { type: "deleteStatusBarField"; statusBarId: string; sourceLine: number };
 
 declare const acquireVsCodeApi: () => { postMessage: (msg: WebviewToExtensionMessage) => void };
 
@@ -240,28 +249,24 @@ window.addEventListener("message", (ev: MessageEvent<ExtensionToWebviewMessage>)
       applySettings(msg.settings);
     }
     // Validate selection after model refresh
-    if (selection) {
-      if (selection.kind === "gadget") {
-        const selId = selection.id;
-        if (!model.gadgets.some(g => g.id === selId)) selection = null;
-
-      } else if (selection.kind === "window") {
+    {
+      const sel = selection;
+      if (sel && sel.kind === "gadget") {
+        const selId = sel.id;
+        if (!model.gadgets.some(g => g.id === selId)) {
+          selection = null;
+        }
+      } else if (sel && sel.kind === "window") {
         if (!model.window) selection = null;
-
-      } else if (selection.kind === "menu") {
-        const selId = selection.id;
+      } else if (sel && sel.kind === "menu") {
         const menus = model.menus ?? [];
-        if (!menus.some(m => m.id === selId)) selection = null;
-
-      } else if (selection.kind === "toolbar") {
-        const selId = selection.id;
+        if (!menus.some(m => m.id === sel.id)) selection = null;
+      } else if (sel && sel.kind === "toolbar") {
         const toolbars = model.toolbars ?? [];
-        if (!toolbars.some(t => t.id === selId)) selection = null;
-
-      } else if (selection.kind === "statusbar") {
-        const selId = selection.id;
+        if (!toolbars.some(t => t.id === sel.id)) selection = null;
+      } else if (sel && sel.kind === "statusbar") {
         const statusbars = model.statusbars ?? [];
-        if (!statusbars.some(sb => sb.id === selId)) selection = null;
+        if (!statusbars.some(sb => sb.id === sel.id)) selection = null;
       }
     }
 
@@ -645,14 +650,17 @@ window.addEventListener("mousemove", (e) => {
     }
 
     // Gadget handle only when selected (like typical designers)
-    if (selection?.kind === "gadget") {
-      const selId = selection.id;
-      const sel = model.gadgets.find(it => it.id === selId);
-      if (sel) {
-        const gh = hitHandleGadget(sel, mx, my);
-        if (gh) {
-          canvas.style.cursor = getHandleCursor(gh);
-          return;
+    {
+      const sel = selection;
+      if (sel && sel.kind === "gadget") {
+        const selId = sel.id;
+        const gSel = model.gadgets.find(it => it.id === selId);
+        if (gSel) {
+          const gh = hitHandleGadget(gSel, mx, my);
+          if (gh) {
+            canvas.style.cursor = getHandleCursor(gh);
+            return;
+          }
         }
       }
     }
@@ -910,7 +918,8 @@ function render() {
     ctx.strokeRect(gx + 0.5, gy + 0.5, g.w, g.h);
     ctx.fillText(`${g.kind} ${g.id}`, gx + 4, gy + 14);
 
-    if (selection?.kind === "gadget" && g.id === selection.id) {
+    const sel = selection;
+    if (sel && sel.kind === "gadget" && g.id === sel.id) {
       ctx.save();
       ctx.strokeStyle = focus;
       ctx.lineWidth = 2;
@@ -1016,12 +1025,13 @@ function renderList() {
   const keyOf = (n: Node) => `${n.kind}:${n.id}`;
 
   const isSel = (n: Node): boolean => {
-    if (!selection) return false;
-    if (n.kind === "window") return selection.kind === "window";
-    if (n.kind === "gadget") return selection.kind === "gadget" && selection.id === n.id;
-    if (n.kind === "menu") return selection.kind === "menu" && selection.id === n.id;
-    if (n.kind === "toolbar") return selection.kind === "toolbar" && selection.id === n.id;
-    if (n.kind === "statusbar") return selection.kind === "statusbar" && selection.id === n.id;
+    const sel = selection;
+    if (!sel) return false;
+    if (n.kind === "window") return sel.kind === "window";
+    if (n.kind === "gadget") return sel.kind === "gadget" && sel.id === n.id;
+    if (n.kind === "menu") return sel.kind === "menu" && sel.id === n.id;
+    if (n.kind === "toolbar") return sel.kind === "toolbar" && sel.id === n.id;
+    if (n.kind === "statusbar") return sel.kind === "statusbar" && sel.id === n.id;
     return false;
   };
 
@@ -1232,11 +1242,11 @@ function renderParentSelector() {
   }
 
   const computeCurrent = (): string => {
-    if (!selection) return opts[0]?.value ?? "window";
-    if (selection.kind === "window") return "window";
-    if (selection && selection.kind === "gadget") {
-      const selId = selection.id;
-      const g = model.gadgets.find(x => x.id === selId);
+    const sel = selection;
+    if (!sel) return opts[0]?.value ?? "window";
+    if (sel.kind === "window") return "window";
+    if (sel.kind === "gadget") {
+      const g = model.gadgets.find(x => x.id === sel.id);
       if (g?.parentId) return `gadget:${g.parentId}`;
       return "window";
     }
@@ -1277,7 +1287,8 @@ function renderParentSelector() {
 function renderProps() {
   propsEl.innerHTML = "";
 
-  if (!selection) {
+  const sel = selection;
+  if (!sel) {
     propsEl.innerHTML = "<div class='muted'>No selection</div>";
     return;
   }
@@ -1323,7 +1334,7 @@ function renderProps() {
     return r;
   };
 
-  if (selection.kind === "window") {
+  if (sel.kind === "window") {
     if (!model.window) {
       propsEl.innerHTML = "<div class='muted'>No window</div>";
       return;
@@ -1346,9 +1357,8 @@ function renderProps() {
     return;
   }
 
-  if (selection.kind === "menu") {
-    const selId = selection.id;
-    const m = (model.menus ?? []).find(x => x.id === selId);
+  if (sel.kind === "menu") {
+    const m = (model.menus ?? []).find(x => x.id === sel.id);
     if (!m) {
       propsEl.innerHTML = "<div class='muted'>Menu not found</div>";
       return;
@@ -1362,16 +1372,102 @@ function renderProps() {
       const text = e.text ?? e.textRaw ?? "";
       const idPart = e.idRaw ? ` ${e.idRaw}` : "";
       const line = `${prefix}${e.kind}${idPart}${text ? `  ${text}` : ""}`;
-      box.appendChild(miniRow(line));
+
+      const canPatch = typeof e.source?.line === "number";
+      const editFn = canPatch
+        ? () => {
+            const kind = e.kind;
+            if (kind === "MenuItem") {
+              const idRaw = prompt("Menu id", e.idRaw ?? "");
+              if (idRaw === null) return;
+              const txt = prompt("Menu text", e.text ?? "");
+              if (txt === null) return;
+              vscode.postMessage({
+                type: "updateMenuEntry",
+                menuId: m.id,
+                sourceLine: e.source!.line,
+                kind,
+                idRaw: idRaw.trim(),
+                textRaw: toPbString(txt)
+              });
+              return;
+            }
+
+            if (kind === "MenuTitle" || kind === "OpenSubMenu") {
+              const txt = prompt("Title", e.text ?? "");
+              if (txt === null) return;
+              vscode.postMessage({
+                type: "updateMenuEntry",
+                menuId: m.id,
+                sourceLine: e.source!.line,
+                kind,
+                textRaw: toPbString(txt)
+              });
+              return;
+            }
+
+            // MenuBar / CloseSubMenu are structural; no edit.
+          }
+        : undefined;
+
+      const delFn = canPatch
+        ? () => {
+            if (!confirm("Delete this menu entry?")) return;
+            vscode.postMessage({
+              type: "deleteMenuEntry",
+              menuId: m.id,
+              sourceLine: e.source!.line,
+              kind: e.kind
+            });
+          }
+        : undefined;
+
+      box.appendChild(miniRow(line, editFn, delFn));
     }
     propsEl.appendChild(section("Structure"));
     propsEl.appendChild(box);
+
+    const addBtn = document.createElement("button");
+    addBtn.textContent = "Add Entry";
+    addBtn.onclick = () => {
+      const kind = prompt(
+        "Entry kind (MenuTitle/MenuItem/MenuBar/OpenSubMenu/CloseSubMenu)",
+        "MenuItem"
+      );
+      if (kind === null) return;
+      const k = kind.trim();
+      if (!k.length) return;
+
+      if (k === "MenuItem") {
+        const idRaw = prompt("Menu id", "");
+        if (idRaw === null) return;
+        const txt = prompt("Menu text", "");
+        if (txt === null) return;
+        vscode.postMessage({ type: "insertMenuEntry", menuId: m.id, kind: k, idRaw: idRaw.trim(), textRaw: toPbString(txt) });
+        return;
+      }
+
+      if (k === "MenuTitle" || k === "OpenSubMenu") {
+        const txt = prompt("Title", "");
+        if (txt === null) return;
+        vscode.postMessage({ type: "insertMenuEntry", menuId: m.id, kind: k, textRaw: toPbString(txt) });
+        return;
+      }
+
+      if (k === "MenuBar" || k === "CloseSubMenu") {
+        vscode.postMessage({ type: "insertMenuEntry", menuId: m.id, kind: k });
+      }
+    };
+
+    const actions = document.createElement("div");
+    actions.className = "miniActions";
+    actions.appendChild(addBtn);
+    propsEl.appendChild(actions);
     return;
   }
 
-  if (selection.kind === "toolbar") {
-    const selId = selection.id;
-    const t = (model.toolbars ?? []).find(x => x.id === selId);
+  if (sel.kind === "toolbar") {
+    const t = (model.toolbars ?? []).find(x => x.id === sel.id);
     if (!t) {
       propsEl.innerHTML = "<div class='muted'>ToolBar not found</div>";
       return;
@@ -1385,16 +1481,137 @@ function renderProps() {
       const idPart = e.idRaw ? ` ${e.idRaw}` : "";
       const extra = e.iconRaw ? `  ${e.iconRaw}` : "";
       const line = `${e.kind}${idPart}${text ? `  ${text}` : ""}${extra}`;
-      box.appendChild(miniRow(line));
+
+      const canPatch = typeof e.source?.line === "number";
+      const editFn = canPatch
+        ? () => {
+            const kind = e.kind;
+            if (kind === "ToolBarStandardButton") {
+              const idRaw = prompt("Button id", e.idRaw ?? "");
+              if (idRaw === null) return;
+              const iconRaw = prompt("Icon raw", e.iconRaw ?? "0");
+              if (iconRaw === null) return;
+              vscode.postMessage({
+                type: "updateToolBarEntry",
+                toolBarId: t.id,
+                sourceLine: e.source!.line,
+                kind,
+                idRaw: idRaw.trim(),
+                iconRaw: iconRaw.trim()
+              });
+              return;
+            }
+
+            if (kind === "ToolBarButton") {
+              const idRaw = prompt("Button id", e.idRaw ?? "");
+              if (idRaw === null) return;
+              const iconRaw = prompt("Icon raw", e.iconRaw ?? "0");
+              if (iconRaw === null) return;
+              const txt = prompt("Text", e.text ?? "");
+              if (txt === null) return;
+              vscode.postMessage({
+                type: "updateToolBarEntry",
+                toolBarId: t.id,
+                sourceLine: e.source!.line,
+                kind,
+                idRaw: idRaw.trim(),
+                iconRaw: iconRaw.trim(),
+                textRaw: toPbString(txt)
+              });
+              return;
+            }
+
+            if (kind === "ToolBarToolTip") {
+              const idRaw = prompt("Button id", e.idRaw ?? "");
+              if (idRaw === null) return;
+              const txt = prompt("Tooltip", e.text ?? "");
+              if (txt === null) return;
+              vscode.postMessage({
+                type: "updateToolBarEntry",
+                toolBarId: t.id,
+                sourceLine: e.source!.line,
+                kind,
+                idRaw: idRaw.trim(),
+                textRaw: toPbString(txt)
+              });
+              return;
+            }
+
+            // ToolBarSeparator has no editable fields.
+          }
+        : undefined;
+
+      const delFn = canPatch
+        ? () => {
+            if (!confirm("Delete this toolbar entry?")) return;
+            vscode.postMessage({
+              type: "deleteToolBarEntry",
+              toolBarId: t.id,
+              sourceLine: e.source!.line,
+              kind: e.kind
+            });
+          }
+        : undefined;
+
+      box.appendChild(miniRow(line, editFn, delFn));
     }
     propsEl.appendChild(section("Structure"));
     propsEl.appendChild(box);
+
+    const addBtn = document.createElement("button");
+    addBtn.textContent = "Add Entry";
+    addBtn.onclick = () => {
+      const kind = prompt(
+        "Entry kind (ToolBarButton/ToolBarStandardButton/ToolBarSeparator/ToolBarToolTip)",
+        "ToolBarButton"
+      );
+      if (kind === null) return;
+      const k = kind.trim();
+      if (!k.length) return;
+
+      if (k === "ToolBarSeparator") {
+        vscode.postMessage({ type: "insertToolBarEntry", toolBarId: t.id, kind: k });
+        return;
+      }
+
+      if (k === "ToolBarStandardButton") {
+        const idRaw = prompt("Button id", "");
+        if (idRaw === null) return;
+        const iconRaw = prompt("Icon raw", "0");
+        if (iconRaw === null) return;
+        vscode.postMessage({ type: "insertToolBarEntry", toolBarId: t.id, kind: k, idRaw: idRaw.trim(), iconRaw: iconRaw.trim() });
+        return;
+      }
+
+      if (k === "ToolBarButton") {
+        const idRaw = prompt("Button id", "");
+        if (idRaw === null) return;
+        const iconRaw = prompt("Icon raw", "0");
+        if (iconRaw === null) return;
+        const txt = prompt("Text", "");
+        if (txt === null) return;
+        vscode.postMessage({ type: "insertToolBarEntry", toolBarId: t.id, kind: k, idRaw: idRaw.trim(), iconRaw: iconRaw.trim(), textRaw: toPbString(txt) });
+        return;
+      }
+
+      if (k === "ToolBarToolTip") {
+        const idRaw = prompt("Button id", "");
+        if (idRaw === null) return;
+        const txt = prompt("Tooltip", "");
+        if (txt === null) return;
+        vscode.postMessage({ type: "insertToolBarEntry", toolBarId: t.id, kind: k, idRaw: idRaw.trim(), textRaw: toPbString(txt) });
+      }
+    };
+
+    const actions = document.createElement("div");
+    actions.className = "miniActions";
+    actions.appendChild(addBtn);
+    propsEl.appendChild(actions);
     return;
   }
 
-  if (selection.kind === "statusbar") {
-    const selId = selection.id;
-    const sb = (model.statusbars ?? []).find(x => x.id === selId);
+  if (sel.kind === "statusbar") {
+    const sb = (model.statusbars ?? []).find(x => x.id === sel.id);
     if (!sb) {
       propsEl.innerHTML = "<div class='muted'>StatusBar not found</div>";
       return;
@@ -1404,19 +1621,59 @@ function renderProps() {
     propsEl.appendChild(row("Fields", readonlyInput(String(sb.fields?.length ?? 0))));
     const box = miniList();
     (sb.fields ?? []).forEach((f, idx) => {
-      box.appendChild(miniRow(`Field ${idx}  width:${f.widthRaw}`));
+      const canPatch = typeof f.source?.line === "number";
+      const label = `Field ${idx}  width:${f.widthRaw}`;
+
+      const editFn = canPatch
+        ? () => {
+            const width = prompt("Width raw", f.widthRaw ?? "0");
+            if (width === null) return;
+            vscode.postMessage({
+              type: "updateStatusBarField",
+              statusBarId: sb.id,
+              sourceLine: f.source!.line,
+              widthRaw: width.trim()
+            });
+          }
+        : undefined;
+
+      const delFn = canPatch
+        ? () => {
+            if (!confirm("Delete this statusbar field?")) return;
+            vscode.postMessage({
+              type: "deleteStatusBarField",
+              statusBarId: sb.id,
+              sourceLine: f.source!.line
+            });
+          }
+        : undefined;
+
+      box.appendChild(miniRow(label, editFn, delFn));
     });
     propsEl.appendChild(section("Fields"));
     propsEl.appendChild(box);
+
+    const addBtn = document.createElement("button");
+    addBtn.textContent = "Add Field";
+    addBtn.onclick = () => {
+      const width = prompt("Width raw", "0");
+      if (width === null) return;
+      vscode.postMessage({ type: "insertStatusBarField", statusBarId: sb.id, widthRaw: width.trim() });
+    };
+
+    const actions = document.createElement("div");
+    actions.className = "miniActions";
+    actions.appendChild(addBtn);
+    propsEl.appendChild(actions);
     return;
   }
 
-  if (selection.kind !== "gadget") {
+  if (sel.kind !== "gadget") {
     propsEl.innerHTML = "<div class='muted'>No selection</div>";
     return;
   }
 
-  const selId = selection.id;
+  const selId = sel.id;
   const g = model.gadgets.find(it => it.id === selId);
   if (!g) {
     propsEl.innerHTML = "<div class='muted'>No selection</div>";
