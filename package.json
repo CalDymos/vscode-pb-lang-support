@@ -4,7 +4,7 @@
   "workspaces": [
     "packages/*"
   ],
-  "version": "0.3.9",
+  "version": "0.3.10",
   "repository": {
     "type": "git",
     "url": "https://github.com/CalDymos/vscode-pb-lang-suite.git"

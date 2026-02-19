@@ -17,7 +17,7 @@ import {
   ScanRange
 } from "../model";
 import { splitParams, unquoteString, asNumber } from "./tokenizer";
-import { scanCalls } from "./callScanner";
+import { PbCall, scanCalls } from "./callScanner";
 
 const GADGET_KINDS: Record<string, GadgetKind> = {
   ButtonGadget: "ButtonGadget",
@@ -54,6 +54,11 @@ const GADGET_KINDS: Record<string, GadgetKind> = {
   ScrollBarGadget: "ScrollBarGadget",
   ScintillaGadget: "ScintillaGadget"
 };
+
+function resolveNonNegativeIndex(raw: string, fallback: number): number {
+  const n = asNumber(raw);
+  return typeof n === "number" && n >= 0 ? n : fallback;
+}
 
 export function parseFormDocument(text: string): FormDocument {
   const issues: FormIssue[] = [];
@@ -125,216 +130,267 @@ export function parseFormDocument(text: string): FormDocument {
 
   const lines = text.split(/\r?\n/);
 
-  const calls = scanCalls(text, scanRange);
+  const setMenuContext = (menu: FormMenu | undefined) => {
+    curMenu = menu;
+    menuLevel = 0;
+    curToolBar = undefined;
+    curStatusBar = undefined;
+  };
+
+  const setToolBarContext = (toolBar: FormToolBar | undefined) => {
+    curToolBar = toolBar;
+    curMenu = undefined;
+    menuLevel = 0;
+    curStatusBar = undefined;
+  };
+
+  const setStatusBarContext = (statusBar: FormStatusBar | undefined) => {
+    curStatusBar = statusBar;
+    curMenu = undefined;
+    menuLevel = 0;
+    curToolBar = undefined;
+  };
+
+  const addMenuEntry = (entry: FormMenuEntry) => {
+    if (curMenu) curMenu.entries.push(entry);
+  };
+
+  const addToolBarEntry = (entry: FormToolBarEntry) => {
+    if (curToolBar) curToolBar.entries.push(entry);
+  };
+
+  const addStatusBarField = (field: FormStatusBarField) => {
+    if (curStatusBar) curStatusBar.fields.push(field);
+  };
+
+  const calls: PbCall[] = scanCalls(text, scanRange);
   for (const c of calls) {
     // -----------------------------------------------------------------------------
     // Menu / ToolBar / StatusBar parsing (independent from gadget list nesting)
     // -----------------------------------------------------------------------------
-
-    if (c.name === "CreateMenu") {
-      const p = splitParams(c.args);
-      const id = (p[0] ?? "").trim();
-      if (id.length) {
-        curMenu = { id, entries: [], source: c.range };
-        doc.menus.push(curMenu);
-        menuLevel = 0;
-      } else {
-        curMenu = undefined;
-        menuLevel = 0;
+    switch (c.name) {
+      case "CreateMenu": {
+        const p = splitParams(c.args);
+        const id = (p[0] ?? "").trim();
+        if (id.length) {
+          const menu: FormMenu = { id, entries: [], source: c.range };
+          doc.menus.push(menu);
+          setMenuContext(menu);
+        } else {
+          setMenuContext(undefined);
+        }
+        break;
       }
-      curToolBar = undefined;
-      curStatusBar = undefined;
-    }
 
-    if (c.name === "MenuTitle" && curMenu) {
-      const p = splitParams(c.args);
-      const textRaw = p[0]?.trim();
-      const e: FormMenuEntry = { kind: "MenuTitle", level: menuLevel, textRaw, text: unquoteString(textRaw ?? ""), source: c.range };
-      curMenu.entries.push(e);
-    }
-
-    if (c.name === "MenuItem" && curMenu) {
-      const p = splitParams(c.args);
-      const idRaw = p[0]?.trim();
-      const textRaw = p[1]?.trim();
-      const e: FormMenuEntry = { kind: "MenuItem", level: menuLevel, idRaw, textRaw, text: unquoteString(textRaw ?? ""), source: c.range };
-      curMenu.entries.push(e);
-    }
-
-    if (c.name === "MenuBar" && curMenu) {
-      curMenu.entries.push({ kind: "MenuBar", level: menuLevel, source: c.range });
-    }
-
-    if (c.name === "OpenSubMenu" && curMenu) {
-      const p = splitParams(c.args);
-      const textRaw = p[0]?.trim();
-      curMenu.entries.push({ kind: "OpenSubMenu", level: menuLevel, textRaw, text: unquoteString(textRaw ?? ""), source: c.range });
-      menuLevel++;
-    }
-
-    if (c.name === "CloseSubMenu" && curMenu) {
-      menuLevel = Math.max(0, menuLevel - 1);
-      curMenu.entries.push({ kind: "CloseSubMenu", level: menuLevel, source: c.range });
-    }
-
-    if (c.name === "CreateToolBar") {
-      const p = splitParams(c.args);
-      const id = (p[0] ?? "").trim();
-      if (id.length) {
-        curToolBar = { id, entries: [], source: c.range };
-        doc.toolbars.push(curToolBar);
-      } else {
-        curToolBar = undefined;
+      case "MenuTitle": {
+        if (!curMenu) break;
+        const p = splitParams(c.args);
+        const textRaw = p[0]?.trim();
+        addMenuEntry({ kind: "MenuTitle", level: menuLevel, textRaw, text: unquoteString(textRaw ?? ""), source: c.range });
+        break;
       }
-      curMenu = undefined;
-      menuLevel = 0;
-      curStatusBar = undefined;
-    }
 
-    if (c.name === "ToolBarStandardButton" && curToolBar) {
-      const p = splitParams(c.args);
-      const e: FormToolBarEntry = { kind: "ToolBarStandardButton", idRaw: p[0]?.trim(), iconRaw: p[1]?.trim(), source: c.range };
-      curToolBar.entries.push(e);
-    }
-
-    if (c.name === "ToolBarButton" && curToolBar) {
-      const p = splitParams(c.args);
-      const e: FormToolBarEntry = { kind: "ToolBarButton", idRaw: p[0]?.trim(), iconRaw: p[1]?.trim(), textRaw: p[2]?.trim(), text: unquoteString(p[2] ?? ""), source: c.range };
-      curToolBar.entries.push(e);
-    }
-
-    if (c.name === "ToolBarSeparator" && curToolBar) {
-      curToolBar.entries.push({ kind: "ToolBarSeparator", source: c.range });
-    }
-
-    if (c.name === "ToolBarToolTip" && curToolBar) {
-      const p = splitParams(c.args);
-      const e: FormToolBarEntry = { kind: "ToolBarToolTip", idRaw: p[0]?.trim(), textRaw: p[1]?.trim(), text: unquoteString(p[1] ?? ""), source: c.range };
-      curToolBar.entries.push(e);
-    }
-
-    if (c.name === "CreateStatusBar") {
-      const p = splitParams(c.args);
-      const id = (p[0] ?? "").trim();
-      if (id.length) {
-        curStatusBar = { id, fields: [], source: c.range };
-        doc.statusbars.push(curStatusBar);
-      } else {
-        curStatusBar = undefined;
+      case "MenuItem": {
+        if (!curMenu) break;
+        const p = splitParams(c.args);
+        const idRaw = p[0]?.trim();
+        const textRaw = p[1]?.trim();
+        addMenuEntry({ kind: "MenuItem", level: menuLevel, idRaw, textRaw, text: unquoteString(textRaw ?? ""), source: c.range });
+        break;
       }
-      curMenu = undefined;
-      menuLevel = 0;
-      curToolBar = undefined;
-    }
 
-    if (c.name === "AddStatusBarField" && curStatusBar) {
-      const p = splitParams(c.args);
-      const widthRaw = p[0]?.trim();
-      if (widthRaw && widthRaw.length) {
-        const field: FormStatusBarField = { widthRaw, source: c.range };
-        curStatusBar.fields.push(field);
+      case "MenuBar": {
+        if (!curMenu) break;
+        addMenuEntry({ kind: "MenuBar", level: menuLevel, source: c.range });
+        break;
       }
-    }
 
-    if (c.name === "CloseGadgetList") {
-      if (parentStack.length > 0) parentStack.pop();
-      continue;
-    }
+      case "OpenSubMenu": {
+        if (!curMenu) break;
+        const p = splitParams(c.args);
+        const textRaw = p[0]?.trim();
+        addMenuEntry({ kind: "OpenSubMenu", level: menuLevel, textRaw, text: unquoteString(textRaw ?? ""), source: c.range });
+        menuLevel++;
+        break;
+      }
 
-    if (c.name === "OpenGadgetList") {
-      const p = splitParams(c.args);
-      const target = (p[0] ?? "").trim();
-      const g = gadgetById.get(target);
-      if (g) {
-        parentStack.push({
-          id: g.id,
-          kind: g.kind,
-          currentPanelItem: g.kind === "PanelGadget" ? panelCurrentItem.get(g.id) : undefined
+      case "CloseSubMenu": {
+        if (!curMenu) break;
+        menuLevel = Math.max(0, menuLevel - 1);
+        addMenuEntry({ kind: "CloseSubMenu", level: menuLevel, source: c.range });
+        break;
+      }
+
+      case "CreateToolBar": {
+        const p = splitParams(c.args);
+        const id = (p[0] ?? "").trim();
+        if (id.length) {
+          const toolBar: FormToolBar = { id, entries: [], source: c.range };
+          doc.toolbars.push(toolBar);
+          setToolBarContext(toolBar);
+        } else {
+          setToolBarContext(undefined);
+        }
+        break;
+      }
+
+      case "ToolBarStandardButton": {
+        if (!curToolBar) break;
+        const p = splitParams(c.args);
+        addToolBarEntry({ kind: "ToolBarStandardButton", idRaw: p[0]?.trim(), iconRaw: p[1]?.trim(), source: c.range });
+        break;
+      }
+
+      case "ToolBarButton": {
+        if (!curToolBar) break;
+        const p = splitParams(c.args);
+        addToolBarEntry({
+          kind: "ToolBarButton",
+          idRaw: p[0]?.trim(),
+          iconRaw: p[1]?.trim(),
+          textRaw: p[2]?.trim(),
+          text: unquoteString(p[2] ?? ""),
+          source: c.range
         });
+        break;
       }
-      continue;
-    }
 
-    if (c.name === "AddGadgetItem") {
-      const p = splitParams(c.args);
-      if (p.length >= 3) {
-        const targetId = (p[0] ?? "").trim();
-        const g = gadgetById.get(targetId);
+      case "ToolBarSeparator": {
+        if (!curToolBar) break;
+        addToolBarEntry({ kind: "ToolBarSeparator", source: c.range });
+        break;
+      }
+
+      case "ToolBarToolTip": {
+        if (!curToolBar) break;
+        const p = splitParams(c.args);
+        addToolBarEntry({ kind: "ToolBarToolTip", idRaw: p[0]?.trim(), textRaw: p[1]?.trim(), text: unquoteString(p[1] ?? ""), source: c.range });
+        break;
+      }
+
+      case "CreateStatusBar": {
+        const p = splitParams(c.args);
+        const id = (p[0] ?? "").trim();
+        if (id.length) {
+          const statusBar: FormStatusBar = { id, fields: [], source: c.range };
+          doc.statusbars.push(statusBar);
+          setStatusBarContext(statusBar);
+        } else {
+          setStatusBarContext(undefined);
+        }
+        break;
+      }
+
+      case "AddStatusBarField": {
+        if (!curStatusBar) break;
+        const p = splitParams(c.args);
+        const widthRaw = p[0]?.trim();
+        if (widthRaw && widthRaw.length) {
+          addStatusBarField({ widthRaw, source: c.range });
+        }
+        break;
+      }
+
+      // ---------------------------------------------------------------------------
+      // Gadget list nesting & related statements
+      // ---------------------------------------------------------------------------
+
+      case "CloseGadgetList": {
+        if (parentStack.length > 0) parentStack.pop();
+        continue;
+      }
+
+      case "OpenGadgetList": {
+        const p = splitParams(c.args);
+        const target = (p[0] ?? "").trim();
+        const g = gadgetById.get(target);
         if (g) {
-          const beforeLen = g.items?.length ?? 0;
-          const posRaw = (p[1] ?? "").trim();
-          const textRaw = (p[2] ?? "").trim();
-          const item: GadgetItem = {
-            posRaw,
-            textRaw,
-            text: unquoteString(textRaw),
-            imageRaw: p[3]?.trim(),
-            flagsRaw: p[4]?.trim(),
-            source: c.range
-          };
-
-          const posNum = asNumber(posRaw);
-          if (typeof posNum === "number" && posNum >= 0) item.index = posNum;
-          else item.index = beforeLen; // append / unknown
-
-          if (!g.items) g.items = [];
-          g.items.push(item);
-
-          if (g.kind === "PanelGadget") {
-            setPanelItem(g.id, item.index);
-          }
-        }
-      }
-      continue;
-    }
-
-    if (c.name === "AddGadgetColumn") {
-      const p = splitParams(c.args);
-      if (p.length >= 4) {
-        const targetId = (p[0] ?? "").trim();
-        const g = gadgetById.get(targetId);
-        if (g) {
-          const beforeLen = g.columns?.length ?? 0;
-          const colRaw = (p[1] ?? "").trim();
-          const titleRaw = (p[2] ?? "").trim();
-          const col: GadgetColumn = {
-            colRaw,
-            titleRaw,
-            title: unquoteString(titleRaw),
-            widthRaw: p[3]?.trim(),
-            source: c.range
-          };
-
-          const colNum = asNumber(colRaw);
-          if (typeof colNum === "number" && colNum >= 0) col.index = colNum;
-          else col.index = beforeLen;
-
-          if (!g.columns) g.columns = [];
-          g.columns.push(col);
-        }
-      }
-      continue;
-    }
-
-    if (c.name === "OpenWindow") {
-      const procDefaults = findProcDefaultsAbove(lines, c.range.line);
-      const win = parseOpenWindow(c.assignedVar, c.args, procDefaults);
-      if (win) {
-        if (!win.pbAny && win.firstParam.startsWith("#")) {
-          win.enumValueRaw = winEnumValues[win.firstParam] ?? undefined;
-        }
-        doc.window = win;
-
-        // Warn when #PB_Any has no stable assignment (strict Form Designer output uses: Var = OpenWindow(#PB_Any, ...))
-        if (win.pbAny && !c.assignedVar) {
-          issues.push({
-            severity: "error",
-            message: "Found OpenWindow(#PB_Any, ...) without a stable assignment (expected: Var = OpenWindow(#PB_Any, ...)). Patching may be ambiguous.",
-            line: c.range.line
+          parentStack.push({
+            id: g.id,
+            kind: g.kind,
+            currentPanelItem: g.kind === "PanelGadget" ? panelCurrentItem.get(g.id) : undefined
           });
         }
+        continue;
       }
-      continue;
+
+      case "AddGadgetItem": {
+        const p = splitParams(c.args);
+        if (p.length >= 3) {
+          const targetId = (p[0] ?? "").trim();
+          const g = gadgetById.get(targetId);
+          if (g) {
+            const beforeLen = g.items?.length ?? 0;
+            const posRaw = (p[1] ?? "").trim();
+            const textRaw = (p[2] ?? "").trim();
+            const item: GadgetItem = {
+              posRaw,
+              textRaw,
+              text: unquoteString(textRaw),
+              imageRaw: p[3]?.trim(),
+              flagsRaw: p[4]?.trim(),
+              source: c.range
+            };
+
+            item.index = resolveNonNegativeIndex(posRaw, beforeLen);
+
+            if (!g.items) g.items = [];
+            g.items.push(item);
+
+            if (g.kind === "PanelGadget") {
+              setPanelItem(g.id, item.index);
+            }
+          }
+        }
+        continue;
+      }
+
+      case "AddGadgetColumn": {
+        const p = splitParams(c.args);
+        if (p.length >= 4) {
+          const targetId = (p[0] ?? "").trim();
+          const g = gadgetById.get(targetId);
+          if (g) {
+            const beforeLen = g.columns?.length ?? 0;
+            const colRaw = (p[1] ?? "").trim();
+            const titleRaw = (p[2] ?? "").trim();
+            const col: GadgetColumn = {
+              colRaw,
+              titleRaw,
+              title: unquoteString(titleRaw),
+              widthRaw: p[3]?.trim(),
+              source: c.range
+            };
+
+            col.index = resolveNonNegativeIndex(colRaw, beforeLen);
+
+            if (!g.columns) g.columns = [];
+            g.columns.push(col);
+          }
+        }
+        continue;
+      }
+
+      case "OpenWindow": {
+        const procDefaults = findProcDefaultsAbove(lines, c.range.line);
+        const win = parseOpenWindow(c.assignedVar, c.args, procDefaults);
+        if (win) {
+          if (!win.pbAny && win.firstParam.startsWith("#")) {
+            win.enumValueRaw = winEnumValues[win.firstParam] ?? undefined;
+          }
+          doc.window = win;
+
+          // Warn when #PB_Any has no stable assignment (strict Form Designer output uses: Var = OpenWindow(#PB_Any, ...))
+          if (win.pbAny && !c.assignedVar) {
+            issues.push({
+              severity: "error",
+              message: "Found OpenWindow(#PB_Any, ...) without a stable assignment (expected: Var = OpenWindow(#PB_Any, ...)). Patching may be ambiguous.",
+              line: c.range.line
+            });
+          }
+        }
+        continue;
+      }
     }
 
     const kind = GADGET_KINDS[c.name];
@@ -363,7 +419,6 @@ export function parseFormDocument(text: string): FormDocument {
       gadgetById.set(gadget.id, gadget);
       pushImplicitParent(gadget);
     }
-
   }
 
   return doc;
@@ -377,20 +432,28 @@ function parseFormEnumerations(text: string, scanRange: ScanRange): FormEnumerat
   };
 }
 
-function parseEnumerationValueMap(text: string, scanRange: ScanRange, enumName: string): Record<string, string | undefined> {
-  const out: Record<string, string | undefined> = {};
-  const slice = text.slice(scanRange.start, scanRange.end);
+function getEnumerationBodyLines(slice: string, enumName: string): string[] {
+  const out: string[] = [];
   const lines = slice.split(/\r?\n/);
   let inEnum = false;
-
   const startRe = new RegExp(`^\\s*Enumeration\\s+${enumName}\\b`, "i");
+
   for (const line of lines) {
     if (!inEnum) {
       if (startRe.test(line)) inEnum = true;
       continue;
     }
     if (/^\s*EndEnumeration\b/i.test(line)) break;
+    out.push(line);
+  }
+  return out;
+}
 
+function parseEnumerationValueMap(text: string, scanRange: ScanRange, enumName: string): Record<string, string | undefined> {
+  const out: Record<string, string | undefined> = {};
+  const slice = text.slice(scanRange.start, scanRange.end);
+  const lines = getEnumerationBodyLines(slice, enumName);
+  for (const line of lines) {
     const noComment = line.split(";")[0] ?? "";
     const m = /^\s*(#\w+)\b\s*(?:=\s*(.+?))?\s*$/.exec(noComment);
     if (!m) continue;
@@ -404,17 +467,8 @@ function parseEnumerationValueMap(text: string, scanRange: ScanRange, enumName: 
 
 function parseEnumerationBlock(slice: string, enumName: string): string[] {
   const out: string[] = [];
-  const lines = slice.split(/\r?\n/);
-  let inEnum = false;
-
-  const startRe = new RegExp(`^\\s*Enumeration\\s+${enumName}\\b`, "i");
+  const lines = getEnumerationBodyLines(slice, enumName);
   for (const line of lines) {
-    if (!inEnum) {
-      if (startRe.test(line)) inEnum = true;
-      continue;
-    }
-
-    if (/^\s*EndEnumeration\b/i.test(line)) break;
     const m = /^\s*(#\w+)\b/.exec(line);
     if (m) out.push(m[1]);
   }
@@ -481,6 +535,17 @@ function parseProcDefaultsFromHeader(line: string): Record<string, string> | und
   const parts = splitParams(raw);
   const out: Record<string, string> = {};
 
+  const normalizeParamName = (nameRaw: string) => {
+    let name = nameRaw.trim();
+
+    // Strip pointer marker and optional type suffix: x.i, *ptr, etc.
+    name = name.replace(/^\*+/, "");
+    const dot = name.indexOf(".");
+    if (dot >= 0) name = name.slice(0, dot);
+
+    return name.toLowerCase();
+  };
+
   for (const part of parts) {
     const eq = part.indexOf("=");
     if (eq < 0) continue;
@@ -489,13 +554,7 @@ function parseProcDefaultsFromHeader(line: string): Record<string, string> | und
     const def = part.slice(eq + 1).trim();
     if (!name.length || !def.length) continue;
 
-    // Strip pointer marker and optional type suffix: x.i, *ptr, etc.
-    name = name.replace(/^\*+/, "");
-    const dot = name.indexOf(".");
-    if (dot >= 0) name = name.slice(0, dot);
-
-    const key = name.toLowerCase();
-    out[key] = def;
+    out[normalizeParamName(name)] = def;
   }
 
   return Object.keys(out).length ? out : undefined;

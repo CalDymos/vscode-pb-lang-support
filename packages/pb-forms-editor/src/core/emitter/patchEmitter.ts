@@ -3,6 +3,8 @@ import { scanCalls } from "../parser/callScanner";
 import { splitParams } from "../parser/tokenizer";
 import { ScanRange } from "../model";
 
+type PbCall = ReturnType<typeof scanCalls>[number];
+
 function stableKey(assignedVar: string | undefined, params: string[]): string | undefined {
   if (params.length < 1) return undefined;
 
@@ -75,8 +77,12 @@ function getLineIndent(document: vscode.TextDocument, line: number): string {
   return m?.[0] ?? "";
 }
 
+function scanDocumentCalls(document: vscode.TextDocument, scanRange?: ScanRange): PbCall[] {
+  return scanCalls(document.getText(), scanRange);
+}
+
 function findCallByStableKey(
-  calls: ReturnType<typeof scanCalls>,
+  calls: PbCall[],
   key: string,
   namePredicate?: (name: string) => boolean
 ) {
@@ -88,7 +94,7 @@ function findCallByStableKey(
   });
 }
 
-function findCallsByName(calls: ReturnType<typeof scanCalls>, nameLower: string) {
+function findCallsByName(calls: PbCall[], nameLower: string) {
   return calls.filter(c => c.name.toLowerCase() === nameLower);
 }
 
@@ -182,7 +188,7 @@ function isCreateBoundary(nameLower: string): boolean {
 }
 
 function findNearestCreateAbove(
-  calls: ReturnType<typeof scanCalls>,
+  calls: PbCall[],
   line: number,
   createNameLower: string
 ) {
@@ -426,7 +432,7 @@ function patchProcedureNameInBlock(
 function patchProcedureCallsBestEffort(
   edit: vscode.WorkspaceEdit,
   document: vscode.TextDocument,
-  calls: ReturnType<typeof scanCalls>,
+  calls: PbCall[],
   oldProcName: string,
   newProcName: string,
   scanRange?: ScanRange
@@ -509,7 +515,7 @@ function renameProcedureHeaderGlobal(
 function renameCallsGlobalByScanner(
   edit: vscode.WorkspaceEdit,
   document: vscode.TextDocument,
-  calls: ReturnType<typeof scanCalls>,
+  calls: PbCall[],
   oldName: string,
   newName: string
 ) {
@@ -554,6 +560,24 @@ function replaceEnumSymbolGlobal(
   }
 }
 
+function replaceCallArgsEdit(
+  document: vscode.TextDocument,
+  call: PbCall,
+  params: string[]
+): vscode.WorkspaceEdit {
+  const rebuilt = `${call.name}(${params.join(", ")})`;
+  const updated = call.assignedVar ? `${call.indent ?? ""}${call.assignedVar} = ${rebuilt}` : rebuilt;
+  const replaceStart = call.assignedVar ? call.range.lineStart : call.range.start;
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.replace(
+    document.uri,
+    new vscode.Range(document.positionAt(replaceStart), document.positionAt(call.range.end)),
+    updated
+  );
+  return edit;
+}
+
 export function applyMovePatch(
   document: vscode.TextDocument,
   gadgetKey: string,
@@ -561,14 +585,8 @@ export function applyMovePatch(
   y: number,
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
-  const text = document.getText();
-  const calls = scanCalls(text, scanRange);
-
-  const call = calls.find(c => {
-    const params = splitParams(c.args);
-    const key = stableKey(c.assignedVar, params);
-    return key === gadgetKey;
-  });
+  const calls = scanDocumentCalls(document, scanRange);
+  const call = findCallByStableKey(calls, gadgetKey);
 
   if (!call) return undefined;
 
@@ -578,19 +596,7 @@ export function applyMovePatch(
   params[1] = String(Math.trunc(x));
   params[2] = String(Math.trunc(y));
 
-  const rebuilt = `${call.name}(${params.join(", ")})`;
-  const updated = call.assignedVar ? `${call.indent ?? ""}${call.assignedVar} = ${rebuilt}` : rebuilt;
-
-  const replaceStart = call.assignedVar ? call.range.lineStart : call.range.start;
-
-  const edit = new vscode.WorkspaceEdit();
-  edit.replace(
-    document.uri,
-    new vscode.Range(document.positionAt(replaceStart), document.positionAt(call.range.end)),
-    updated
-  );
-
-  return edit;
+  return replaceCallArgsEdit(document, call, params);
 }
 
 export function applyRectPatch(
@@ -602,14 +608,8 @@ export function applyRectPatch(
   h: number,
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
-  const text = document.getText();
-  const calls = scanCalls(text, scanRange);
-
-  const call = calls.find(c => {
-    const params = splitParams(c.args);
-    const key = stableKey(c.assignedVar, params);
-    return key === gadgetKey;
-  });
+  const calls = scanDocumentCalls(document, scanRange);
+  const call = findCallByStableKey(calls, gadgetKey);
 
   if (!call) return undefined;
 
@@ -621,19 +621,7 @@ export function applyRectPatch(
   params[3] = String(Math.trunc(w));
   params[4] = String(Math.trunc(h));
 
-  const rebuilt = `${call.name}(${params.join(", ")})`;
-  const updated = call.assignedVar ? `${call.indent ?? ""}${call.assignedVar} = ${rebuilt}` : rebuilt;
-
-  const replaceStart = call.assignedVar ? call.range.lineStart : call.range.start;
-
-  const edit = new vscode.WorkspaceEdit();
-  edit.replace(
-    document.uri,
-    new vscode.Range(document.positionAt(replaceStart), document.positionAt(call.range.end)),
-    updated
-  );
-
-  return edit;
+  return replaceCallArgsEdit(document, call, params);
 }
 
 export function applyWindowRectPatch(
@@ -645,15 +633,8 @@ export function applyWindowRectPatch(
   h: number,
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
-  const text = document.getText();
-  const calls = scanCalls(text, scanRange);
-
-  const call = calls.find(c => {
-    if (c.name !== "OpenWindow") return false;
-    const params = splitParams(c.args);
-    const key = stableKey(c.assignedVar, params);
-    return key === windowKey;
-  });
+  const calls = scanDocumentCalls(document, scanRange);
+  const call = findCallByStableKey(calls, windowKey, name => name === "OpenWindow");
 
   if (!call) return undefined;
 
@@ -684,19 +665,7 @@ export function applyWindowRectPatch(
   params[3] = String(Math.trunc(w));
   params[4] = String(Math.trunc(h));
 
-  const rebuilt = `${call.name}(${params.join(", ")})`;
-  const updated = call.assignedVar ? `${call.indent ?? ""}${call.assignedVar} = ${rebuilt}` : rebuilt;
-
-  const replaceStart = call.assignedVar ? call.range.lineStart : call.range.start;
-
-  const edit = new vscode.WorkspaceEdit();
-  edit.replace(
-    document.uri,
-    new vscode.Range(document.positionAt(replaceStart), document.positionAt(call.range.end)),
-    updated
-  );
-
-  return edit;
+  return replaceCallArgsEdit(document, call, params);
 }
 
 export function applyWindowPbAnyToggle(
@@ -708,8 +677,7 @@ export function applyWindowPbAnyToggle(
   enumValueRaw: string | undefined,
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
-  const text = document.getText();
-  const calls = scanCalls(text, scanRange);
+  const calls = scanDocumentCalls(document, scanRange);
 
   const openWin = calls.find(c => {
     if (c.name !== "OpenWindow") return false;
@@ -866,8 +834,7 @@ export function applyWindowVariableNamePatch(
   const newVar = variableName.trim();
   if (!newVar.length) return undefined;
 
-  const text = document.getText();
-  const calls = scanCalls(text, scanRange);
+  const calls = scanDocumentCalls(document, scanRange);
 
   const openWin = calls.find(c => c.name === "OpenWindow");
   if (!openWin) return undefined;
@@ -1035,40 +1002,56 @@ export function applyWindowVariableNamePatch(
   return edit;
 }
 
+function findInsertAfterLineForGadgetEntry(
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  gadgetKey: string,
+  entryNameLower: string
+): { insertAfterLine: number; indent: string } | undefined {
+  const own = findCallsByName(calls, entryNameLower).filter(c => firstParamOfCall(c.args) === gadgetKey);
+
+  let insertAfterLine: number | undefined;
+  if (own.length > 0) {
+    insertAfterLine = own[own.length - 1].range.line;
+  } else {
+    const all = findCallsByName(calls, entryNameLower);
+    if (all.length > 0) {
+      insertAfterLine = all[all.length - 1].range.line;
+    } else {
+      const createCall = findCallByStableKey(calls, gadgetKey, n => /gadget$/i.test(n));
+      if (!createCall) return undefined;
+      insertAfterLine = createCall.range.line;
+    }
+  }
+
+  const indent = getLineIndent(document, insertAfterLine);
+  return { insertAfterLine, indent };
+}
+
+function findGadgetEntryCallAtLine(
+  calls: PbCall[],
+  entryNameLower: string,
+  gadgetKey: string,
+  sourceLine: number
+): PbCall | undefined {
+  return calls.find(
+    c => c.name.toLowerCase() === entryNameLower && c.range.line === sourceLine && firstParamOfCall(c.args) === gadgetKey
+  );
+}
+
 export function applyGadgetItemInsert(
   document: vscode.TextDocument,
   gadgetKey: string,
   args: GadgetItemArgs,
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
-  const text = document.getText();
-  const calls = scanCalls(text, scanRange);
+  const calls = scanDocumentCalls(document, scanRange);
 
-  const own = findCallsByName(calls, "addgadgetitem").filter(c => firstParamOfCall(c.args) === gadgetKey);
+  const insert = findInsertAfterLineForGadgetEntry(document, calls, gadgetKey, "addgadgetitem");
+  if (!insert) return undefined;
 
-  let insertAfterLine: number | undefined;
-  let indent = "";
-
-  if (own.length > 0) {
-    const last = own[own.length - 1];
-    insertAfterLine = last.range.line;
-    indent = getLineIndent(document, insertAfterLine);
-  } else {
-    const all = findCallsByName(calls, "addgadgetitem");
-    if (all.length > 0) {
-      const last = all[all.length - 1];
-      insertAfterLine = last.range.line;
-      indent = getLineIndent(document, insertAfterLine);
-    } else {
-      const createCall = findCallByStableKey(calls, gadgetKey, n => /gadget$/i.test(n));
-      if (!createCall) return undefined;
-      insertAfterLine = createCall.range.line;
-      indent = getLineIndent(document, insertAfterLine);
-    }
-  }
-
-  const insertPos = new vscode.Position(Math.min(document.lineCount, insertAfterLine + 1), 0);
-  const line = `${indent}AddGadgetItem(${buildAddGadgetItemArgs(gadgetKey, args)})\n`;
+  const insertPos = new vscode.Position(Math.min(document.lineCount, insert.insertAfterLine + 1), 0);
+  const line = `${insert.indent}AddGadgetItem(${buildAddGadgetItemArgs(gadgetKey, args)})\n`;
 
   const edit = new vscode.WorkspaceEdit();
   edit.insert(document.uri, insertPos, line);
@@ -1084,10 +1067,9 @@ export function applyGadgetItemUpdate(
 ): vscode.WorkspaceEdit | undefined {
   if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
 
-  const text = document.getText();
-  const calls = scanCalls(text, scanRange);
+  const calls = scanDocumentCalls(document, scanRange);
 
-  const call = calls.find(c => c.name.toLowerCase() === "addgadgetitem" && c.range.line === sourceLine && firstParamOfCall(c.args) === gadgetKey);
+  const call = findGadgetEntryCallAtLine(calls, "addgadgetitem", gadgetKey, sourceLine);
   if (!call) return undefined;
 
   const indent = getLineIndent(document, sourceLine);
@@ -1103,9 +1085,9 @@ export function applyGadgetItemDelete(
 ): vscode.WorkspaceEdit | undefined {
   if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
 
-  const text = document.getText();
-  const calls = scanCalls(text, scanRange);
-  const call = calls.find(c => c.name.toLowerCase() === "addgadgetitem" && c.range.line === sourceLine && firstParamOfCall(c.args) === gadgetKey);
+  const calls = scanDocumentCalls(document, scanRange);
+
+  const call = findGadgetEntryCallAtLine(calls, "addgadgetitem", gadgetKey, sourceLine);
   if (!call) return undefined;
 
   const edit = new vscode.WorkspaceEdit();
@@ -1119,34 +1101,13 @@ export function applyGadgetColumnInsert(
   args: GadgetColumnArgs,
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
-  const text = document.getText();
-  const calls = scanCalls(text, scanRange);
+  const calls = scanDocumentCalls(document, scanRange);
 
-  const own = findCallsByName(calls, "addgadgetcolumn").filter(c => firstParamOfCall(c.args) === gadgetKey);
+  const insert = findInsertAfterLineForGadgetEntry(document, calls, gadgetKey, "addgadgetcolumn");
+  if (!insert) return undefined;
 
-  let insertAfterLine: number | undefined;
-  let indent = "";
-
-  if (own.length > 0) {
-    const last = own[own.length - 1];
-    insertAfterLine = last.range.line;
-    indent = getLineIndent(document, insertAfterLine);
-  } else {
-    const all = findCallsByName(calls, "addgadgetcolumn");
-    if (all.length > 0) {
-      const last = all[all.length - 1];
-      insertAfterLine = last.range.line;
-      indent = getLineIndent(document, insertAfterLine);
-    } else {
-      const createCall = findCallByStableKey(calls, gadgetKey, n => /gadget$/i.test(n));
-      if (!createCall) return undefined;
-      insertAfterLine = createCall.range.line;
-      indent = getLineIndent(document, insertAfterLine);
-    }
-  }
-
-  const insertPos = new vscode.Position(Math.min(document.lineCount, insertAfterLine + 1), 0);
-  const line = `${indent}AddGadgetColumn(${buildAddGadgetColumnArgs(gadgetKey, args)})\n`;
+  const insertPos = new vscode.Position(Math.min(document.lineCount, insert.insertAfterLine + 1), 0);
+  const line = `${insert.indent}AddGadgetColumn(${buildAddGadgetColumnArgs(gadgetKey, args)})\n`;
 
   const edit = new vscode.WorkspaceEdit();
   edit.insert(document.uri, insertPos, line);
@@ -1162,10 +1123,9 @@ export function applyGadgetColumnUpdate(
 ): vscode.WorkspaceEdit | undefined {
   if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
 
-  const text = document.getText();
-  const calls = scanCalls(text, scanRange);
+  const calls = scanDocumentCalls(document, scanRange);
 
-  const call = calls.find(c => c.name.toLowerCase() === "addgadgetcolumn" && c.range.line === sourceLine && firstParamOfCall(c.args) === gadgetKey);
+  const call = findGadgetEntryCallAtLine(calls, "addgadgetcolumn", gadgetKey, sourceLine);
   if (!call) return undefined;
 
   const indent = getLineIndent(document, sourceLine);
@@ -1181,10 +1141,9 @@ export function applyGadgetColumnDelete(
 ): vscode.WorkspaceEdit | undefined {
   if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
 
-  const text = document.getText();
-  const calls = scanCalls(text, scanRange);
+  const calls = scanDocumentCalls(document, scanRange);
 
-  const call = calls.find(c => c.name.toLowerCase() === "addgadgetcolumn" && c.range.line === sourceLine && firstParamOfCall(c.args) === gadgetKey);
+  const call = findGadgetEntryCallAtLine(calls, "addgadgetcolumn", gadgetKey, sourceLine);
   if (!call) return undefined;
 
   const edit = new vscode.WorkspaceEdit();
@@ -1196,36 +1155,63 @@ export function applyGadgetColumnDelete(
 // Menu / ToolBar / StatusBar emitters
 // -----------------------------------------------------------------------------
 
+const MENU_ENTRY_NAMES = new Set(["menutitle", "menuitem", "menubar", "opensubmenu", "closesubmenu"]);
+const TOOLBAR_ENTRY_NAMES = new Set([
+  "toolbarstandardbutton",
+  "toolbarbutton",
+  "toolbarseparator",
+  "toolbartooltip"
+]);
+const STATUSBAR_FIELD_NAMES = new Set(["addstatusbarfield"]);
+
+function findCreateCallById(calls: PbCall[], createNameLower: string, id: string): PbCall | undefined {
+  return calls.find(c => c.name.toLowerCase() === createNameLower && firstParamOfCall(c.args) === id);
+}
+
+function findSectionEndIndex(calls: PbCall[], startIdx: number): number {
+  for (let i = startIdx + 1; i < calls.length; i++) {
+    if (isCreateBoundary(calls[i].name.toLowerCase())) {
+      return i;
+    }
+  }
+  return calls.length;
+}
+
+function findLastEntryLineInSection(
+  calls: PbCall[],
+  startIdx: number,
+  endIdx: number,
+  entryNamesLower: Set<string>
+): number {
+  let insertAfterLine = calls[startIdx].range.line;
+  for (let i = startIdx + 1; i < endIdx; i++) {
+    if (entryNamesLower.has(calls[i].name.toLowerCase())) {
+      insertAfterLine = calls[i].range.line;
+    }
+  }
+  return insertAfterLine;
+}
+
+function isLineInCreateSection(calls: PbCall[], line: number, createNameLower: string, expectedId: string): boolean {
+  const create = findNearestCreateAbove(calls, line, createNameLower);
+  return !!create && firstParamOfCall(create.args) === expectedId;
+}
+
 export function applyMenuEntryInsert(
   document: vscode.TextDocument,
   menuId: string,
   args: MenuEntryArgs,
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
-  const text = document.getText();
-  const calls = scanCalls(text, scanRange);
+  const calls = scanDocumentCalls(document, scanRange);
 
-  const create = calls.find(
-    c => c.name.toLowerCase() === "createmenu" && firstParamOfCall(c.args) === menuId
-  );
+  const create = findCreateCallById(calls, "createmenu", menuId);
   if (!create) return undefined;
 
   const startIdx = calls.indexOf(create);
-  let endIdx = calls.length;
-  for (let i = startIdx + 1; i < calls.length; i++) {
-    if (isCreateBoundary(calls[i].name.toLowerCase())) {
-      endIdx = i;
-      break;
-    }
-  }
 
-  const entryNames = new Set(["menutitle", "menuitem", "menubar", "opensubmenu", "closesubmenu"]);
-  let insertAfterLine = create.range.line;
-  for (let i = startIdx + 1; i < endIdx; i++) {
-    if (entryNames.has(calls[i].name.toLowerCase())) {
-      insertAfterLine = calls[i].range.line;
-    }
-  }
+  const endIdx = findSectionEndIndex(calls, startIdx);
+  const insertAfterLine = findLastEntryLineInSection(calls, startIdx, endIdx, MENU_ENTRY_NAMES);
 
   const indent = getLineIndent(document, insertAfterLine);
   const line = `${indent}${buildMenuEntryLine(args)}\n`;
@@ -1245,16 +1231,14 @@ export function applyMenuEntryUpdate(
 ): vscode.WorkspaceEdit | undefined {
   if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
 
-  const text = document.getText();
-  const calls = scanCalls(text, scanRange);
+  const calls = scanDocumentCalls(document, scanRange);
 
   const call = calls.find(
     c => c.range.line === sourceLine && c.name.toLowerCase() === args.kind.toLowerCase()
   );
   if (!call) return undefined;
 
-  const create = findNearestCreateAbove(calls, sourceLine, "createmenu");
-  if (!create || firstParamOfCall(create.args) !== menuId) return undefined;
+  if (!isLineInCreateSection(calls, sourceLine, "createmenu", menuId)) return undefined;
 
   const indent = getLineIndent(document, sourceLine);
   const rebuilt = `${indent}${buildMenuEntryLine(args)}`;
@@ -1270,16 +1254,14 @@ export function applyMenuEntryDelete(
 ): vscode.WorkspaceEdit | undefined {
   if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
 
-  const text = document.getText();
-  const calls = scanCalls(text, scanRange);
+  const calls = scanDocumentCalls(document, scanRange);
 
   const call = calls.find(
     c => c.range.line === sourceLine && c.name.toLowerCase() === kind.toLowerCase()
   );
   if (!call) return undefined;
 
-  const create = findNearestCreateAbove(calls, sourceLine, "createmenu");
-  if (!create || firstParamOfCall(create.args) !== menuId) return undefined;
+  if (!isLineInCreateSection(calls, sourceLine, "createmenu", menuId)) return undefined;
 
   const edit = new vscode.WorkspaceEdit();
   edit.delete(document.uri, document.lineAt(sourceLine).rangeIncludingLineBreak);
@@ -1292,35 +1274,15 @@ export function applyToolBarEntryInsert(
   args: ToolBarEntryArgs,
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
-  const text = document.getText();
-  const calls = scanCalls(text, scanRange);
+  const calls = scanDocumentCalls(document, scanRange);
 
-  const create = calls.find(
-    c => c.name.toLowerCase() === "createtoolbar" && firstParamOfCall(c.args) === toolBarId
-  );
+  const create = findCreateCallById(calls, "createtoolbar", toolBarId);
   if (!create) return undefined;
 
   const startIdx = calls.indexOf(create);
-  let endIdx = calls.length;
-  for (let i = startIdx + 1; i < calls.length; i++) {
-    if (isCreateBoundary(calls[i].name.toLowerCase())) {
-      endIdx = i;
-      break;
-    }
-  }
 
-  const entryNames = new Set([
-    "toolbarstandardbutton",
-    "toolbarbutton",
-    "toolbarseparator",
-    "toolbartooltip"
-  ]);
-  let insertAfterLine = create.range.line;
-  for (let i = startIdx + 1; i < endIdx; i++) {
-    if (entryNames.has(calls[i].name.toLowerCase())) {
-      insertAfterLine = calls[i].range.line;
-    }
-  }
+  const endIdx = findSectionEndIndex(calls, startIdx);
+  const insertAfterLine = findLastEntryLineInSection(calls, startIdx, endIdx, TOOLBAR_ENTRY_NAMES);
 
   const indent = getLineIndent(document, insertAfterLine);
   const line = `${indent}${buildToolBarEntryLine(args)}\n`;
@@ -1340,16 +1302,14 @@ export function applyToolBarEntryUpdate(
 ): vscode.WorkspaceEdit | undefined {
   if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
 
-  const text = document.getText();
-  const calls = scanCalls(text, scanRange);
+  const calls = scanDocumentCalls(document, scanRange);
 
   const call = calls.find(
     c => c.range.line === sourceLine && c.name.toLowerCase() === args.kind.toLowerCase()
   );
   if (!call) return undefined;
 
-  const create = findNearestCreateAbove(calls, sourceLine, "createtoolbar");
-  if (!create || firstParamOfCall(create.args) !== toolBarId) return undefined;
+  if (!isLineInCreateSection(calls, sourceLine, "createtoolbar", toolBarId)) return undefined;
 
   const indent = getLineIndent(document, sourceLine);
   const rebuilt = `${indent}${buildToolBarEntryLine(args)}`;
@@ -1365,16 +1325,14 @@ export function applyToolBarEntryDelete(
 ): vscode.WorkspaceEdit | undefined {
   if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
 
-  const text = document.getText();
-  const calls = scanCalls(text, scanRange);
+  const calls = scanDocumentCalls(document, scanRange);
 
   const call = calls.find(
     c => c.range.line === sourceLine && c.name.toLowerCase() === kind.toLowerCase()
   );
   if (!call) return undefined;
 
-  const create = findNearestCreateAbove(calls, sourceLine, "createtoolbar");
-  if (!create || firstParamOfCall(create.args) !== toolBarId) return undefined;
+  if (!isLineInCreateSection(calls, sourceLine, "createtoolbar", toolBarId)) return undefined;
 
   const edit = new vscode.WorkspaceEdit();
   edit.delete(document.uri, document.lineAt(sourceLine).rangeIncludingLineBreak);
@@ -1387,29 +1345,15 @@ export function applyStatusBarFieldInsert(
   args: StatusBarFieldArgs,
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
-  const text = document.getText();
-  const calls = scanCalls(text, scanRange);
+  const calls = scanDocumentCalls(document, scanRange);
 
-  const create = calls.find(
-    c => c.name.toLowerCase() === "createstatusbar" && firstParamOfCall(c.args) === statusBarId
-  );
+  const create = findCreateCallById(calls, "createstatusbar", statusBarId);
   if (!create) return undefined;
 
   const startIdx = calls.indexOf(create);
-  let endIdx = calls.length;
-  for (let i = startIdx + 1; i < calls.length; i++) {
-    if (isCreateBoundary(calls[i].name.toLowerCase())) {
-      endIdx = i;
-      break;
-    }
-  }
 
-  let insertAfterLine = create.range.line;
-  for (let i = startIdx + 1; i < endIdx; i++) {
-    if (calls[i].name.toLowerCase() === "addstatusbarfield") {
-      insertAfterLine = calls[i].range.line;
-    }
-  }
+  const endIdx = findSectionEndIndex(calls, startIdx);
+  const insertAfterLine = findLastEntryLineInSection(calls, startIdx, endIdx, STATUSBAR_FIELD_NAMES);
 
   const indent = getLineIndent(document, insertAfterLine);
   const line = `${indent}AddStatusBarField(${args.widthRaw.trim()})\n`;
@@ -1429,16 +1373,14 @@ export function applyStatusBarFieldUpdate(
 ): vscode.WorkspaceEdit | undefined {
   if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
 
-  const text = document.getText();
-  const calls = scanCalls(text, scanRange);
+  const calls = scanDocumentCalls(document, scanRange);
 
   const call = calls.find(
     c => c.range.line === sourceLine && c.name.toLowerCase() === "addstatusbarfield"
   );
   if (!call) return undefined;
 
-  const create = findNearestCreateAbove(calls, sourceLine, "createstatusbar");
-  if (!create || firstParamOfCall(create.args) !== statusBarId) return undefined;
+  if (!isLineInCreateSection(calls, sourceLine, "createstatusbar", statusBarId)) return undefined;
 
   const indent = getLineIndent(document, sourceLine);
   const rebuilt = `${indent}AddStatusBarField(${args.widthRaw.trim()})`;
@@ -1453,16 +1395,14 @@ export function applyStatusBarFieldDelete(
 ): vscode.WorkspaceEdit | undefined {
   if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
 
-  const text = document.getText();
-  const calls = scanCalls(text, scanRange);
+  const calls = scanDocumentCalls(document, scanRange);
 
   const call = calls.find(
     c => c.range.line === sourceLine && c.name.toLowerCase() === "addstatusbarfield"
   );
   if (!call) return undefined;
 
-  const create = findNearestCreateAbove(calls, sourceLine, "createstatusbar");
-  if (!create || firstParamOfCall(create.args) !== statusBarId) return undefined;
+  if (!isLineInCreateSection(calls, sourceLine, "createstatusbar", statusBarId)) return undefined;
 
   const edit = new vscode.WorkspaceEdit();
   edit.delete(document.uri, document.lineAt(sourceLine).rangeIncludingLineBreak);
