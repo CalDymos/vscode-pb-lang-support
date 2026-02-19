@@ -4,12 +4,12 @@
   "workspaces": [
     "packages/*"
   ],
-  "version": "0.3.10",
-    "engines": {
+  "version": "0.3.11",
+  "engines": {
     "vscode": "^1.85.0"
   },
   "overrides": {
-  "minimatch": "^10.2.1"
+    "minimatch": "^10.2.1"
   },
   "repository": {
     "type": "git",
