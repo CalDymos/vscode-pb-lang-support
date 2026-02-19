@@ -21,6 +21,10 @@
     "v:patch": "npm version patch --no-git-tag-version",
     "v:patch:l": "npm version patch -w packages/pb-lang-support --no-git-tag-version",
     "v:patch:f": "npm version patch -w packages/pb-forms-editor --no-git-tag-version",
-    "v:patch:all": "npm run v:patch && npm run v:patch:f && npm run v:patch:l"
+    "v:patch:all": "npm run v:patch && npm run v:patch:f && npm run v:patch:l",
+    "t:all": "node scripts/tag-and-push.mjs all",
+    "t:suite": "node scripts/tag-and-push.mjs suite",
+    "t:forms": "node scripts/tag-and-push.mjs forms",
+    "t:lang": "node scripts/tag-and-push.mjs lang"
   }
 }
