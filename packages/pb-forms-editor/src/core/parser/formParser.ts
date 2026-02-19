@@ -574,5 +574,18 @@ function parseGadgetCall(kind: GadgetKind, assignedVar: string | undefined, args
   const text = unquoteString(p[5] ?? "");
   const flagsExpr = p[6]?.trim();
 
-  return { id, kind, pbAny, assignedVar, firstParam, x, y, w, h, text, flagsExpr, source: range };
+  return { 
+    id, 
+    kind, 
+    pbAny, 
+    variable: pbAny ? (assignedVar ?? undefined) : firstParam.replace(/^#/, ""), 
+    firstParam, 
+    x, 
+    y, 
+    w, 
+    h, 
+    text, 
+    flagsExpr, 
+    source: range 
+  };
 }

@@ -45,7 +45,7 @@ export interface Gadget {
   id: string;            // stable key for patching (assigned var for #PB_Any, else first param)
   kind: GadgetKind;
   pbAny: boolean;
-  assignedVar?: string   //variable?: string;     // e.g. "Gadget_1" (used when pbAny is true)
+  variable?: string;     // e.g. "Gadget_1" (used when pbAny is true)
   firstParam: string;    // raw first param token
   parentId?: string;     // parent gadget id (Container/Panel/ScrollArea/OpenGadgetList)
   parentItem?: number;   // for PanelGadget children: active tab index (best-effort)
