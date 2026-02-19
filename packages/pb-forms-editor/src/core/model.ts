@@ -83,7 +83,7 @@ export interface FormWindow {
   id: string;            // stable key for window (assigned var for #PB_Any, else enum symbol)
   pbAny: boolean;
   variable?: string;     // e.g. "Dlg" (used when pbAny is true)
-  enumValueRaw?: string; // e.g. "500" (variant 2); undefined means variant 3
+  enumValueRaw?: string; // e.g. "500" or undefined if assigned var is used
   firstParam: string;
   x: number;
   y: number;
