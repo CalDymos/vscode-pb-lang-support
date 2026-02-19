@@ -4,17 +4,23 @@
   "workspaces": [
     "packages/*"
   ],
-  "version": "0.3.0",
+  "version": "0.3.8",
   "repository": {
     "type": "git",
     "url": "https://github.com/CalDymos/vscode-pb-lang-suite.git"
   },
   "scripts": {
-    "compile:lang": "npm -w packages/pb-lang-support run compile",
-    "compile:forms": "npm -w packages/pb-forms-editor run compile",
-    "compile:all": "npm run compile:lang && npm run compile:forms",
-    "vsix:lang": "npm -w packages/pb-lang-support run compile && npm -w packages/pb-lang-support run webpack:prod && cd packages/pb-lang-support && npx @vscode/vsce package --no-dependencies -o ../../pb-lang-support.vsix",
-    "vsix:forms": "npm -w packages/pb-forms-editor run compile && cd packages/pb-forms-editor && npx @vscode/vsce package --no-dependencies -o ../../pb-forms-editor.vsix",
-    "vsix:all": "npm run vsix:lang && npm run vsix:forms"
+    "w:lang": "npm -w packages/pb-lang-support",
+    "w:forms": "npm -w packages/pb-forms-editor",
+    "c:l": "npm run -w packages/pb-lang-support compile",
+    "c:f": "npm run -w packages/pb-forms-editor compile",
+    "c": "npm run c:l && npm run c:f",
+    "vsix:l": "npm run -w packages/pb-lang-support compile && npm run -w packages/pb-lang-support webpack:prod && npx --prefix packages/pb-lang-support @vscode/vsce package --no-dependencies -o pb-lang-support.vsix",
+    "vsix:f": "npm run -w packages/pb-forms-editor compile && npx --prefix packages/pb-forms-editor @vscode/vsce package --no-dependencies -o pb-forms-editor.vsix",
+    "vsix": "npm run vsix:l && npm run vsix:f",
+    "v:patch": "npm version patch --no-git-tag-version",
+    "v:patch:l": "npm version patch -w packages/pb-lang-support --no-git-tag-version",
+    "v:patch:f": "npm version patch -w packages/pb-forms-editor --no-git-tag-version",
+    "v:patch:all": "npm run v:patch && npm run v:patch:f && npm run v:patch:l"
   }
 }

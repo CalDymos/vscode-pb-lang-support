@@ -10,6 +10,7 @@
   "purebasicFormsDesigner.snapToGrid.description": "Snap gadget positions to the grid while dragging.",
   "purebasicFormsDesigner.windowFillOpacity.description": "Window background fill opacity inside the designer.",
   "purebasicFormsDesigner.canvasBackground.description": "Optional CSS color for the designer background. Empty = use theme editor background.",
+  "purebasicFormsDesigner.canvasReadonlyBackground.description": "Optional CSS color for the designer background when form is read-only. Empty = use theme editor background.",
   "purebasicFormsDesigner.snapMode.description": "Snapping behavior: live while dragging, or only on mouse release.",
   "purebasicFormsDesigner.outsideDimOpacity.description": "Dim opacity for the area outside the form window.",
   "purebasicFormsDesigner.titleBarHeight.description": "Title bar height drawn at the top of the form window (0 disables).",

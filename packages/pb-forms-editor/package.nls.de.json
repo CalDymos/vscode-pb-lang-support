@@ -10,6 +10,7 @@
   "purebasicFormsDesigner.snapToGrid.description": "Gadget-Positionen beim Ziehen am Raster ausrichten.",
   "purebasicFormsDesigner.windowFillOpacity.description": "Deckkraft der Fenster-Hintergrundfüllung im Designer.",
   "purebasicFormsDesigner.canvasBackground.description": "Optionale CSS-Farbe für den Designer-Hintergrund. Leer = Editor-Hintergrund des Themes verwenden.",
+  "purebasicFormsDesigner.canvasReadonlyBackground.description": "Optionale CSS-Farbe für den Designer-Hintergrund bei schreibgeschützten Formularen. Leer = Editor-Hintergrund des Themes verwenden.",
   "purebasicFormsDesigner.snapMode.description": "Ausrichtungsverhalten: live während des Ziehens oder erst beim Loslassen der Maus.",
   "purebasicFormsDesigner.outsideDimOpacity.description": "Abdunklungs-Deckkraft für den Bereich außerhalb des Formularfensters.",
   "purebasicFormsDesigner.titleBarHeight.description": "Höhe der Titelleiste oben im Formularfenster (0 deaktiviert).",

@@ -9,6 +9,7 @@ import {
   FormStatusBarField,
   FormToolBar,
   FormToolBarEntry,
+  FormWindow,
   Gadget,
   GadgetColumn,
   GadgetItem,
@@ -75,6 +76,7 @@ export function parseFormDocument(text: string): FormDocument {
   const scanRange = detectFormScanRange(text, header?.line);
 
   const enums = parseFormEnumerations(text, scanRange);
+  const winEnumValues = parseEnumerationValueMap(text, scanRange, "FormWindow");
 
   const meta: FormMeta = {
     header: header ?? undefined,
@@ -120,6 +122,8 @@ export function parseFormDocument(text: string): FormDocument {
       }
     }
   };
+
+  const lines = text.split(/\r?\n/);
 
   const calls = scanCalls(text, scanRange);
   for (const c of calls) {
@@ -313,8 +317,12 @@ export function parseFormDocument(text: string): FormDocument {
     }
 
     if (c.name === "OpenWindow") {
-      const win = parseOpenWindow(c.assignedVar, c.args);
+      const procDefaults = findProcDefaultsAbove(lines, c.range.line);
+      const win = parseOpenWindow(c.assignedVar, c.args, procDefaults);
       if (win) {
+        if (!win.pbAny && win.firstParam.startsWith("#")) {
+          win.enumValueRaw = winEnumValues[win.firstParam] ?? undefined;
+        }
         doc.window = win;
 
         // Warn when #PB_Any has no stable assignment (strict Form Designer output uses: Var = OpenWindow(#PB_Any, ...))
@@ -367,6 +375,31 @@ function parseFormEnumerations(text: string, scanRange: ScanRange): FormEnumerat
     windows: parseEnumerationBlock(slice, "FormWindow"),
     gadgets: parseEnumerationBlock(slice, "FormGadget")
   };
+}
+
+function parseEnumerationValueMap(text: string, scanRange: ScanRange, enumName: string): Record<string, string | undefined> {
+  const out: Record<string, string | undefined> = {};
+  const slice = text.slice(scanRange.start, scanRange.end);
+  const lines = slice.split(/\r?\n/);
+  let inEnum = false;
+
+  const startRe = new RegExp(`^\\s*Enumeration\\s+${enumName}\\b`, "i");
+  for (const line of lines) {
+    if (!inEnum) {
+      if (startRe.test(line)) inEnum = true;
+      continue;
+    }
+    if (/^\s*EndEnumeration\b/i.test(line)) break;
+
+    const noComment = line.split(";")[0] ?? "";
+    const m = /^\s*(#\w+)\b\s*(?:=\s*(.+?))?\s*$/.exec(noComment);
+    if (!m) continue;
+    const name = m[1];
+    const valueRaw = m[2]?.trim();
+    out[name] = valueRaw && valueRaw.length ? valueRaw : undefined;
+  }
+
+  return out;
 }
 
 function parseEnumerationBlock(slice: string, enumName: string): string[] {
@@ -440,7 +473,55 @@ function lineToIndex(text: string, targetLine: number): number {
   return text.length;
 }
 
-function parseOpenWindow(assignedVar: string | undefined, args: string) {
+function parseProcDefaultsFromHeader(line: string): Record<string, string> | undefined {
+  const m = /^\s*Procedure(?:\.\w+)?\s+[\w:]+\s*\((.*)\)\s*$/i.exec(line);
+  if (!m) return undefined;
+
+  const raw = m[1];
+  const parts = splitParams(raw);
+  const out: Record<string, string> = {};
+
+  for (const part of parts) {
+    const eq = part.indexOf("=");
+    if (eq < 0) continue;
+
+    let name = part.slice(0, eq).trim();
+    const def = part.slice(eq + 1).trim();
+    if (!name.length || !def.length) continue;
+
+    // Strip pointer marker and optional type suffix: x.i, *ptr, etc.
+    name = name.replace(/^\*+/, "");
+    const dot = name.indexOf(".");
+    if (dot >= 0) name = name.slice(0, dot);
+
+    const key = name.toLowerCase();
+    out[key] = def;
+  }
+
+  return Object.keys(out).length ? out : undefined;
+}
+
+function findProcDefaultsAbove(lines: string[], fromLine: number): Record<string, string> | undefined {
+  for (let i = Math.min(fromLine, lines.length - 1); i >= 0; i--) {
+    const line = lines[i];
+    if (/^\s*EndProcedure\b/i.test(line)) break;
+    const defs = parseProcDefaultsFromHeader(line);
+    if (defs) return defs;
+  }
+  return undefined;
+}
+
+function resolveProcDefault(raw: string | undefined, name: string, defs?: Record<string, string>): string | undefined {
+  if (!raw) return raw;
+  const t = raw.trim();
+  if (!defs) return t;
+  if (t.toLowerCase() === name.toLowerCase()) {
+    return defs[name.toLowerCase()] ?? t;
+  }
+  return t;
+}
+
+function parseOpenWindow(assignedVar: string | undefined, args: string, procDefaults?: Record<string, string>): FormDocument["window"] {
   const p = splitParams(args);
   // OpenWindow(id, x, y, w, h, "title", flags)
   if (p.length < 6) return undefined;
@@ -449,15 +530,32 @@ function parseOpenWindow(assignedVar: string | undefined, args: string) {
   const pbAny = firstParam === "#PB_Any";
   const id = pbAny ? (assignedVar ?? "#PB_Any") : firstParam;
 
-  const x = asNumber(p[1] ?? "0") ?? 0;
-  const y = asNumber(p[2] ?? "0") ?? 0;
-  const w = asNumber(p[3] ?? "0") ?? 0;
-  const h = asNumber(p[4] ?? "0") ?? 0;
+  const xRaw = resolveProcDefault(p[1], "x", procDefaults) ?? "0";
+  const yRaw = resolveProcDefault(p[2], "y", procDefaults) ?? "0";
+  const wRaw = resolveProcDefault(p[3], "width", procDefaults) ?? "0";
+  const hRaw = resolveProcDefault(p[4], "height", procDefaults) ?? "0";
+
+  const x = asNumber(xRaw) ?? 0;
+  const y = asNumber(yRaw) ?? 0;
+  const w = asNumber(wRaw) ?? 0;
+  const h = asNumber(hRaw) ?? 0;
 
   const title = unquoteString(p[5] ?? "");
   const flagsExpr = p[6]?.trim();
 
-  return { id, pbAny, assignedVar, firstParam, x, y, w, h, title, flagsExpr };
+  return {
+    id,
+    pbAny,
+    variable: pbAny ? (assignedVar ?? undefined) : firstParam.replace(/^#/, ""),
+    enumValueRaw: undefined,
+    firstParam,
+    x,
+    y,
+    w,
+    h,
+    title,
+    flagsExpr
+  };
 }
 
 function parseGadgetCall(kind: GadgetKind, assignedVar: string | undefined, args: string, range: any): Gadget | undefined {
@@ -476,5 +574,18 @@ function parseGadgetCall(kind: GadgetKind, assignedVar: string | undefined, args
   const text = unquoteString(p[5] ?? "");
   const flagsExpr = p[6]?.trim();
 
-  return { id, kind, pbAny, assignedVar, firstParam, x, y, w, h, text, flagsExpr, source: range };
+  return { 
+    id, 
+    kind, 
+    pbAny, 
+    variable: pbAny ? (assignedVar ?? undefined) : firstParam.replace(/^#/, ""), 
+    firstParam, 
+    x, 
+    y, 
+    w, 
+    h, 
+    text, 
+    flagsExpr, 
+    source: range 
+  };
 }

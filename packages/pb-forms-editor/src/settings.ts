@@ -17,6 +17,7 @@ export interface DesignerSettings {
   titleBarHeight: number;
 
   canvasBackground: string;
+  canvasReadonlyBackground: string;
 }
 
 export const SETTINGS_SECTION = "purebasicFormsDesigner";
@@ -37,7 +38,8 @@ export function readDesignerSettings(): DesignerSettings {
     outsideDimOpacity: clamp(cfg.get<number>("outsideDimOpacity", 0.12), 0, 0.35),
     titleBarHeight: clamp(cfg.get<number>("titleBarHeight", 26), 0, 60),
 
-    canvasBackground: cfg.get<string>("canvasBackground", "")
+    canvasBackground: cfg.get<string>("canvasBackground", ""),
+    canvasReadonlyBackground: cfg.get<string>("canvasReadonlyBackground", "")
   };
 }
 

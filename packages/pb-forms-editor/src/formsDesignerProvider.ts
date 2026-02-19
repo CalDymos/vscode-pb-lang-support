@@ -18,6 +18,9 @@ import {
   applyToolBarEntryDelete,
   applyToolBarEntryInsert,
   applyToolBarEntryUpdate,
+  applyWindowEnumValuePatch,
+  applyWindowVariableNamePatch,
+  applyWindowPbAnyToggle,
   applyWindowRectPatch
 } from "./core/emitter/patchEmitter";
 import { readDesignerSettings, SETTINGS_SECTION, DesignerSettings } from "./settings";
@@ -28,6 +31,9 @@ type WebviewToExtensionMessage =
   | { type: "moveGadget"; id: string; x: number; y: number }
   | { type: "setGadgetRect"; id: string; x: number; y: number; w: number; h: number }
   | { type: "setWindowRect"; id: string; x: number; y: number; w: number; h: number }
+  | { type: "toggleWindowPbAny"; windowKey: string; toPbAny: boolean; variableName: string; enumSymbol: string; enumValueRaw?: string }
+  | { type: "setWindowEnumValue"; enumSymbol: string; enumValueRaw?: string }
+  | { type: "setWindowVariableName"; variableName?: string }
   | { type: "insertGadgetItem"; id: string; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
   | { type: "updateGadgetItem"; id: string; sourceLine: number; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
   | { type: "deleteGadgetItem"; id: string; sourceLine: number }
@@ -142,7 +148,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
 
     sendInit();
 
-    const cfgSub = vscode.workspace.onDidChangeConfiguration((e: any) => {
+    const cfgSub = vscode.workspace.onDidChangeConfiguration((e: vscode.ConfigurationChangeEvent) => {
       if (e.affectsConfiguration(SETTINGS_SECTION)) {
         post({ type: "settings", settings: readDesignerSettings() });
       }
@@ -193,6 +199,48 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         const edit = applyWindowRectPatch(document, msg.id, msg.x, msg.y, msg.w, msg.h, sr);
         if (!edit) {
           post({ type: "error", message: `Could not patch window '${msg.id}'. No matching OpenWindow call found${rangeInfo}.` });
+          return;
+        }
+        await vscode.workspace.applyEdit(edit);
+        return;
+      }
+
+      if (msg.type === "toggleWindowPbAny") {
+        const edit = applyWindowPbAnyToggle(
+          document,
+          msg.windowKey,
+          msg.toPbAny,
+          msg.variableName,
+          msg.enumSymbol,
+          msg.enumValueRaw,
+          sr
+        );
+        if (!edit) {
+          post({ type: "error", message: `Could not toggle window pbAny. No matching OpenWindow call found${rangeInfo}.` });
+          return;
+        }
+        await vscode.workspace.applyEdit(edit);
+        return;
+      }
+
+      if (msg.type === "setWindowEnumValue") {
+        const edit = applyWindowEnumValuePatch(document, msg.enumSymbol, msg.enumValueRaw, sr);
+        if (!edit) {
+          post({ type: "error", message: `Could not patch FormWindow enumeration entry '${msg.enumSymbol}'. No Enumeration FormWindow block found${rangeInfo}.` });
+          return;
+        }
+        await vscode.workspace.applyEdit(edit);
+        return;
+      }
+
+      if (msg.type === "setWindowVariableName") {
+        if (msg.variableName === undefined || !msg.variableName.trim().length) {
+          post({ type: "error", message: `Could not patch FormWindow variable name. Empty variable name is not allowed${rangeInfo}.` });
+          return;
+        }
+        const edit = applyWindowVariableNamePatch(document, msg.variableName);
+        if (!edit) {
+          post({ type: "error", message: `Could not patch FormWindow variable name '${msg.variableName}'. No matching OpenWindow call found${rangeInfo}.` });
           return;
         }
         await vscode.workspace.applyEdit(edit);
@@ -446,6 +494,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
       :root {
         color-scheme: light dark;
         --pbfd-canvas-bg: var(--vscode-editor-background);
+        --pbfd-readonly-bg: var(--vscode-readonly-input-background);
       }
 
       body {
@@ -498,6 +547,10 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         border-radius: 4px;
         padding: 2px 6px;
       }
+
+      input[readonly] {
+        background: var(--pbfd-readonly-bg);
+      }        
 
       button {
         background: var(--vscode-button-background);

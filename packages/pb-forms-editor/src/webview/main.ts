@@ -35,6 +35,10 @@ type Gadget = {
 
 type WindowModel = {
   id: string;
+  pbAny: boolean;
+  variable?: string;
+  enumValueRaw?: string;
+  firstParam: string;
   x: number;
   y: number;
   w: number;
@@ -102,6 +106,7 @@ type DesignerSettings = {
   titleBarHeight: number;
 
   canvasBackground: string;
+  canvasReadonlyBackground: string;
 };
 
 // Backwards compatible:
@@ -116,6 +121,9 @@ type WebviewToExtensionMessage =
   | { type: "moveGadget"; id: string; x: number; y: number }
   | { type: "setGadgetRect"; id: string; x: number; y: number; w: number; h: number }
   | { type: "setWindowRect"; id: string; x: number; y: number; w: number; h: number }
+  | { type: "toggleWindowPbAny"; windowKey: string; toPbAny: boolean; variableName: string; enumSymbol: string; enumValueRaw?: string }
+  | { type: "setWindowEnumValue"; enumSymbol: string; enumValueRaw?: string }
+  | { type: "setWindowVariableName"; variableName?: string }
   | { type: "insertGadgetItem"; id: string; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
   | { type: "updateGadgetItem"; id: string; sourceLine: number; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
   | { type: "deleteGadgetItem"; id: string; sourceLine: number }
@@ -169,7 +177,8 @@ let settings: DesignerSettings = {
   outsideDimOpacity: 0.12,
   titleBarHeight: 26,
 
-  canvasBackground: ""
+  canvasBackground: "",
+  canvasReadonlyBackground: ""
 };
 
 type Handle = "nw" | "n" | "ne" | "w" | "e" | "sw" | "s" | "se";
@@ -217,9 +226,15 @@ function applySettings(s: DesignerSettings) {
   settings = s;
 
   const bg = (settings.canvasBackground ?? "").trim();
+  const bgReadonly = (settings.canvasReadonlyBackground ?? "").trim();
   document.documentElement.style.setProperty(
     "--pbfd-canvas-bg",
     bg.length ? bg : "var(--vscode-editor-background)"
+  );
+
+  document.documentElement.style.setProperty(
+    "--pbfd-readonly-bg",
+    bgReadonly.length ? bgReadonly : "var(--vscode-readonly-input-background)"
   );
 
   render();
@@ -1340,7 +1355,44 @@ function renderProps() {
       return;
     }
 
-    propsEl.appendChild(row("Id", readonlyInput(model.window.id)));
+    const variableName = (model.window.variable ?? model.window.firstParam.replace(/^#/, "")).trim() || "Window_0";
+    const enumSymbol = variableName ? `#${variableName.trim()}` : "#Window_0";
+
+    propsEl.appendChild(row("Key", readonlyInput(model.window.id)));
+    propsEl.appendChild(
+      row("#PB_Any", checkboxInput(model.window.pbAny, v => {
+        if (!model.window) return;
+        vscode.postMessage({
+          type: "toggleWindowPbAny",
+          windowKey: model.window.id,
+          toPbAny: v,
+          variableName,
+          enumSymbol,
+          enumValueRaw: model.window.enumValueRaw
+        });
+      }))
+    );
+
+    propsEl.appendChild(
+      row("Variable", textInput(variableName ?? "", v => {
+        vscode.postMessage({
+          type: "setWindowVariableName",
+          variableName: v.trim().length ? v.trim() : undefined
+        });
+      }))
+    );
+    if (!model.window.pbAny) {
+      propsEl.appendChild(
+        row("Enum Value", textInput(model.window.enumValueRaw ?? "", v => {
+          vscode.postMessage({
+            type: "setWindowEnumValue",
+            enumSymbol,
+            enumValueRaw: v.trim().length ? v.trim() : undefined
+          });
+        }))
+      );
+    }
+
     propsEl.appendChild(row("Title", readonlyInput(model.window.title ?? "")));
     propsEl.appendChild(
       row("X", numberInput(model.window.x, v => { if (!model.window) return; model.window.x = asInt(v); postWindowRect(); render(); renderProps(); }))
@@ -1856,6 +1908,21 @@ function readonlyInput(value: string) {
   const i = document.createElement("input");
   i.value = value;
   i.readOnly = true;
+  return i;
+}
+
+function textInput(value: string, onChange: (v: string) => void) {
+  const i = document.createElement("input");
+  i.value = value;
+  i.onchange = () => onChange(i.value);
+  return i;
+}
+
+function checkboxInput(value: boolean, onChange: (v: boolean) => void) {
+  const i = document.createElement("input");
+  i.type = "checkbox";
+  i.checked = Boolean(value);
+  i.onchange = () => onChange(i.checked);
   return i;
 }
 

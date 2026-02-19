@@ -45,7 +45,7 @@ export interface Gadget {
   id: string;            // stable key for patching (assigned var for #PB_Any, else first param)
   kind: GadgetKind;
   pbAny: boolean;
-  assignedVar?: string;  // left side if any
+  variable?: string;     // e.g. "Gadget_1" (used when pbAny is true)
   firstParam: string;    // raw first param token
   parentId?: string;     // parent gadget id (Container/Panel/ScrollArea/OpenGadgetList)
   parentItem?: number;   // for PanelGadget children: active tab index (best-effort)
@@ -80,9 +80,10 @@ export interface GadgetColumn {
 }
 
 export interface FormWindow {
-  id: string;            // stable key for window (assigned var for #PB_Any, else first param)
+  id: string;            // stable key for window (assigned var for #PB_Any, else enum symbol)
   pbAny: boolean;
-  assignedVar?: string;
+  variable?: string;     // e.g. "Dlg" (used when pbAny is true)
+  enumValueRaw?: string; // e.g. "500" (variant 2); undefined means variant 3
   firstParam: string;
   x: number;
   y: number;
