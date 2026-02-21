@@ -1,38 +1,42 @@
-export type GadgetKind =
-  | "ButtonGadget"
-  | "ButtonImageGadget"
-  | "StringGadget"
-  | "TextGadget"
-  | "CheckBoxGadget"
-  | "OptionGadget"
-  | "FrameGadget"
-  | "ComboBoxGadget"
-  | "ListViewGadget"
-  | "ListIconGadget"
-  | "TreeGadget"
-  | "EditorGadget"
-  | "SpinGadget"
-  | "TrackBarGadget"
-  | "ProgressBarGadget"
-  | "ImageGadget"
-  | "HyperLinkGadget"
-  | "CalendarGadget"
-  | "DateGadget"
-  | "ContainerGadget"
-  | "PanelGadget"
-  | "ScrollAreaGadget"
-  | "SplitterGadget"
-  | "WebViewGadget"
-  | "OpenGLGadget"
-  | "CanvasGadget"
-  | "ExplorerTreeGadget"
-  | "ExplorerListGadget"
-  | "ExplorerComboGadget"
-  | "IPAddressGadget"
-  | "ScrollBarGadget"
-  | "ScintillaGadget"
-  | "WebGadget"
-  | "Unknown";
+export const GADGET_KIND = {
+  ButtonGadget: "ButtonGadget",
+  ButtonImageGadget: "ButtonImageGadget",
+  StringGadget: "StringGadget",
+  TextGadget: "TextGadget",
+  CheckBoxGadget: "CheckBoxGadget",
+  OptionGadget: "OptionGadget",
+  FrameGadget: "FrameGadget",
+  ComboBoxGadget: "ComboBoxGadget",
+  ListViewGadget: "ListViewGadget",
+  ListIconGadget: "ListIconGadget",
+  TreeGadget: "TreeGadget",
+  EditorGadget: "EditorGadget",
+  SpinGadget: "SpinGadget",
+  TrackBarGadget: "TrackBarGadget",
+  ProgressBarGadget: "ProgressBarGadget",
+  ImageGadget: "ImageGadget",
+  HyperLinkGadget: "HyperLinkGadget",
+  CalendarGadget: "CalendarGadget",
+  DateGadget: "DateGadget",
+  ContainerGadget: "ContainerGadget",
+  PanelGadget: "PanelGadget",
+  ScrollAreaGadget: "ScrollAreaGadget",
+  SplitterGadget: "SplitterGadget",
+  WebViewGadget: "WebViewGadget",
+  WebGadget: "WebGadget",
+  OpenGLGadget: "OpenGLGadget",
+  CanvasGadget: "CanvasGadget",
+  ExplorerTreeGadget: "ExplorerTreeGadget",
+  ExplorerListGadget: "ExplorerListGadget",
+  ExplorerComboGadget: "ExplorerComboGadget",
+  IPAddressGadget: "IPAddressGadget",
+  ScrollBarGadget: "ScrollBarGadget",
+  ScintillaGadget: "ScintillaGadget",
+  Unknown: "Unknown",
+} as const;
+
+export type GadgetKind =  typeof GADGET_KIND[keyof typeof GADGET_KIND]
+export const GADGET_KIND_SET: ReadonlySet<GadgetKind> = new Set(Object.values(GADGET_KIND));
 
 export interface SourceRange {
   start: number;
@@ -125,13 +129,17 @@ export interface FormEnumerations {
 }
 
 
-export type MenuEntryKind =
-  | "MenuTitle"
-  | "MenuItem"
-  | "MenuBar"
-  | "OpenSubMenu"
-  | "CloseSubMenu"
-  | "Unknown";
+export const MENU_ENTRY_KIND = {
+  MenuTitle: "MenuTitle",
+  MenuItem: "MenuItem",
+  MenuBar: "MenuBar",
+  OpenSubMenu: "OpenSubMenu",
+  CloseSubMenu: "CloseSubMenu",
+  Unknown: "Unknown",
+} as const;
+
+export type MenuEntryKind = typeof MENU_ENTRY_KIND[keyof typeof MENU_ENTRY_KIND];
+export const MENU_ENTRY_KIND_SET: ReadonlySet<MenuEntryKind> = new Set(Object.values(MENU_ENTRY_KIND));
 
 export interface FormMenuEntry {
   kind: MenuEntryKind;
@@ -150,12 +158,16 @@ export interface FormMenu {
   source?: SourceRange;
 }
 
-export type ToolBarEntryKind =
-  | "ToolBarStandardButton"
-  | "ToolBarButton"
-  | "ToolBarSeparator"
-  | "ToolBarToolTip"
-  | "Unknown";
+export const TOOLBAR_ENTRY_KIND = {
+  ToolBarStandardButton: "ToolBarStandardButton",
+  ToolBarButton: "ToolBarButton",
+  ToolBarSeparator: "ToolBarSeparator",
+  ToolBarToolTip: "ToolBarToolTip",
+  Unknown: "Unknown",
+} as const;
+
+export type ToolBarEntryKind = typeof TOOLBAR_ENTRY_KIND[keyof typeof TOOLBAR_ENTRY_KIND];
+export const TOOLBAR_ENTRY_KIND_SET: ReadonlySet<ToolBarEntryKind> = new Set(Object.values(TOOLBAR_ENTRY_KIND));
 
 export interface FormToolBarEntry {
   kind: ToolBarEntryKind;
@@ -191,3 +203,24 @@ export interface FormDocument {
   statusbars: FormStatusBar[];
   meta: FormMeta;
 }
+
+export const ENUM_NAMES = {
+  windows: "FormWindow", 
+  gadgets: "FormGadget"
+} as const;
+
+// PBFD_* constants: shared symbol sets from the PureBasic Form Designer.
+// These are used by the parser/emitter and injected into the webview
+// to ensure consistency of identifiers (menu entries, toolbar buttons, container gadgets, etc.)
+// and to avoid magic strings or mismatches between extension and webview.
+export const PBFD_MENU_ENTRY_KINDS = [MENU_ENTRY_KIND.MenuTitle, MENU_ENTRY_KIND.MenuItem, MENU_ENTRY_KIND.MenuBar, MENU_ENTRY_KIND.OpenSubMenu, MENU_ENTRY_KIND.CloseSubMenu] as const;
+export const PBFD_TOOLBAR_ENTRY_KINDS = [TOOLBAR_ENTRY_KIND.ToolBarButton, TOOLBAR_ENTRY_KIND.ToolBarStandardButton, TOOLBAR_ENTRY_KIND.ToolBarSeparator, TOOLBAR_ENTRY_KIND.ToolBarToolTip] as const;
+export const PBFD_CONTAINER_GADGET_KINDS = [GADGET_KIND.ContainerGadget, GADGET_KIND.PanelGadget, GADGET_KIND.ScrollAreaGadget] as const;
+export const PBFD_ENUM_NAMES = ENUM_NAMES;
+
+export const PBFD_SYMBOLS = {
+  menuEntryKinds: PBFD_MENU_ENTRY_KINDS,
+  toolBarEntryKinds: PBFD_TOOLBAR_ENTRY_KINDS,
+  containerGadgetKinds: PBFD_CONTAINER_GADGET_KINDS,
+  enumNames: PBFD_ENUM_NAMES
+} as const;

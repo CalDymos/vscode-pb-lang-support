@@ -14,46 +14,20 @@ import {
   GadgetColumn,
   GadgetItem,
   GadgetKind,
-  ScanRange
+  ScanRange,
+  TOOLBAR_ENTRY_KIND,
+  MENU_ENTRY_KIND,
+  GADGET_KIND_SET,
+  GADGET_KIND,
+  ENUM_NAMES
 } from "../model";
+
 import { splitParams, unquoteString, asNumber } from "./tokenizer";
 import { PbCall, scanCalls } from "./callScanner";
 
-const GADGET_KINDS: Record<string, GadgetKind> = {
-  ButtonGadget: "ButtonGadget",
-  ButtonImageGadget: "ButtonImageGadget",
-  StringGadget: "StringGadget",
-  TextGadget: "TextGadget",
-  CheckBoxGadget: "CheckBoxGadget",
-  OptionGadget: "OptionGadget",
-  FrameGadget: "FrameGadget",
-  ComboBoxGadget: "ComboBoxGadget",
-  ListViewGadget: "ListViewGadget",
-  ListIconGadget: "ListIconGadget",
-  TreeGadget: "TreeGadget",
-  EditorGadget: "EditorGadget",
-  SpinGadget: "SpinGadget",
-  TrackBarGadget: "TrackBarGadget",
-  ProgressBarGadget: "ProgressBarGadget",
-  ImageGadget: "ImageGadget",
-  HyperLinkGadget: "HyperLinkGadget",
-  CalendarGadget: "CalendarGadget",
-  DateGadget: "DateGadget",
-  ContainerGadget: "ContainerGadget",
-  PanelGadget: "PanelGadget",
-  ScrollAreaGadget: "ScrollAreaGadget",
-  SplitterGadget: "SplitterGadget",
-  WebViewGadget: "WebViewGadget",
-  WebGadget: "WebGadget",
-  OpenGLGadget: "OpenGLGadget",
-  CanvasGadget: "CanvasGadget",
-  ExplorerTreeGadget: "ExplorerTreeGadget",
-  ExplorerListGadget: "ExplorerListGadget",
-  ExplorerComboGadget: "ExplorerComboGadget",
-  IPAddressGadget: "IPAddressGadget",
-  ScrollBarGadget: "ScrollBarGadget",
-  ScintillaGadget: "ScintillaGadget"
-};
+function asGadgetKind(s: string): GadgetKind | undefined {
+  return GADGET_KIND_SET.has(s as GadgetKind) ? (s as GadgetKind) : undefined;
+}
 
 function resolveNonNegativeIndex(raw: string, fallback: number): number {
   const n = asNumber(raw);
@@ -81,7 +55,7 @@ export function parseFormDocument(text: string): FormDocument {
   const scanRange = detectFormScanRange(text, header?.line);
 
   const enums = parseFormEnumerations(text, scanRange);
-  const winEnumValues = parseEnumerationValueMap(text, scanRange, "FormWindow");
+  const winEnumValues = parseEnumerationValueMap(text, scanRange, ENUM_NAMES.windows);
 
   const meta: FormMeta = {
     header: header ?? undefined,
@@ -105,11 +79,11 @@ export function parseFormDocument(text: string): FormDocument {
 
 
   const pushImplicitParent = (g: Gadget) => {
-    if (g.kind === "ContainerGadget" || g.kind === "PanelGadget" || g.kind === "ScrollAreaGadget") {
+    if (g.kind === GADGET_KIND.ContainerGadget || g.kind === GADGET_KIND.PanelGadget || g.kind === GADGET_KIND.ScrollAreaGadget) {
       parentStack.push({
         id: g.id,
         kind: g.kind,
-        currentPanelItem: g.kind === "PanelGadget" ? panelCurrentItem.get(g.id) : undefined
+        currentPanelItem: g.kind === GADGET_KIND.PanelGadget ? panelCurrentItem.get(g.id) : undefined
       });
     }
   };
@@ -121,7 +95,7 @@ export function parseFormDocument(text: string): FormDocument {
     // Update the nearest matching PanelGadget context on the stack.
     for (let i = parentStack.length - 1; i >= 0; i--) {
       const ctx = parentStack[i];
-      if (ctx.kind === "PanelGadget" && ctx.id === panelId) {
+      if (ctx.kind === GADGET_KIND.PanelGadget && ctx.id === panelId) {
         ctx.currentPanelItem = itemIndex;
         break;
       }
@@ -182,42 +156,42 @@ export function parseFormDocument(text: string): FormDocument {
         break;
       }
 
-      case "MenuTitle": {
+      case MENU_ENTRY_KIND.MenuTitle: {
         if (!curMenu) break;
         const p = splitParams(c.args);
         const textRaw = p[0]?.trim();
-        addMenuEntry({ kind: "MenuTitle", level: menuLevel, textRaw, text: unquoteString(textRaw ?? ""), source: c.range });
+        addMenuEntry({ kind: MENU_ENTRY_KIND.MenuTitle, level: menuLevel, textRaw, text: unquoteString(textRaw ?? ""), source: c.range });
         break;
       }
 
-      case "MenuItem": {
+      case MENU_ENTRY_KIND.MenuItem: {
         if (!curMenu) break;
         const p = splitParams(c.args);
         const idRaw = p[0]?.trim();
         const textRaw = p[1]?.trim();
-        addMenuEntry({ kind: "MenuItem", level: menuLevel, idRaw, textRaw, text: unquoteString(textRaw ?? ""), source: c.range });
+        addMenuEntry({ kind: MENU_ENTRY_KIND.MenuItem, level: menuLevel, idRaw, textRaw, text: unquoteString(textRaw ?? ""), source: c.range });
         break;
       }
 
-      case "MenuBar": {
+      case MENU_ENTRY_KIND.MenuBar: {
         if (!curMenu) break;
-        addMenuEntry({ kind: "MenuBar", level: menuLevel, source: c.range });
+        addMenuEntry({ kind: MENU_ENTRY_KIND.MenuBar, level: menuLevel, source: c.range });
         break;
       }
 
-      case "OpenSubMenu": {
+      case MENU_ENTRY_KIND.OpenSubMenu: {
         if (!curMenu) break;
         const p = splitParams(c.args);
         const textRaw = p[0]?.trim();
-        addMenuEntry({ kind: "OpenSubMenu", level: menuLevel, textRaw, text: unquoteString(textRaw ?? ""), source: c.range });
+        addMenuEntry({ kind: MENU_ENTRY_KIND.OpenSubMenu, level: menuLevel, textRaw, text: unquoteString(textRaw ?? ""), source: c.range });
         menuLevel++;
         break;
       }
 
-      case "CloseSubMenu": {
+      case MENU_ENTRY_KIND.CloseSubMenu: {
         if (!curMenu) break;
         menuLevel = Math.max(0, menuLevel - 1);
-        addMenuEntry({ kind: "CloseSubMenu", level: menuLevel, source: c.range });
+        addMenuEntry({ kind: MENU_ENTRY_KIND.CloseSubMenu, level: menuLevel, source: c.range });
         break;
       }
 
@@ -234,18 +208,18 @@ export function parseFormDocument(text: string): FormDocument {
         break;
       }
 
-      case "ToolBarStandardButton": {
+      case TOOLBAR_ENTRY_KIND.ToolBarStandardButton: {
         if (!curToolBar) break;
         const p = splitParams(c.args);
-        addToolBarEntry({ kind: "ToolBarStandardButton", idRaw: p[0]?.trim(), iconRaw: p[1]?.trim(), source: c.range });
+        addToolBarEntry({ kind: TOOLBAR_ENTRY_KIND.ToolBarStandardButton, idRaw: p[0]?.trim(), iconRaw: p[1]?.trim(), source: c.range });
         break;
       }
 
-      case "ToolBarButton": {
+      case TOOLBAR_ENTRY_KIND.ToolBarButton: {
         if (!curToolBar) break;
         const p = splitParams(c.args);
         addToolBarEntry({
-          kind: "ToolBarButton",
+          kind: TOOLBAR_ENTRY_KIND.ToolBarButton,
           idRaw: p[0]?.trim(),
           iconRaw: p[1]?.trim(),
           textRaw: p[2]?.trim(),
@@ -255,16 +229,16 @@ export function parseFormDocument(text: string): FormDocument {
         break;
       }
 
-      case "ToolBarSeparator": {
+      case TOOLBAR_ENTRY_KIND.ToolBarSeparator: {
         if (!curToolBar) break;
-        addToolBarEntry({ kind: "ToolBarSeparator", source: c.range });
+        addToolBarEntry({ kind: TOOLBAR_ENTRY_KIND.ToolBarSeparator, source: c.range });
         break;
       }
 
-      case "ToolBarToolTip": {
+      case TOOLBAR_ENTRY_KIND.ToolBarToolTip: {
         if (!curToolBar) break;
         const p = splitParams(c.args);
-        addToolBarEntry({ kind: "ToolBarToolTip", idRaw: p[0]?.trim(), textRaw: p[1]?.trim(), text: unquoteString(p[1] ?? ""), source: c.range });
+        addToolBarEntry({ kind: TOOLBAR_ENTRY_KIND.ToolBarToolTip, idRaw: p[0]?.trim(), textRaw: p[1]?.trim(), text: unquoteString(p[1] ?? ""), source: c.range });
         break;
       }
 
@@ -308,7 +282,7 @@ export function parseFormDocument(text: string): FormDocument {
           parentStack.push({
             id: g.id,
             kind: g.kind,
-            currentPanelItem: g.kind === "PanelGadget" ? panelCurrentItem.get(g.id) : undefined
+            currentPanelItem: g.kind === GADGET_KIND.PanelGadget ? panelCurrentItem.get(g.id) : undefined
           });
         }
         continue;
@@ -337,7 +311,7 @@ export function parseFormDocument(text: string): FormDocument {
             if (!g.items) g.items = [];
             g.items.push(item);
 
-            if (g.kind === "PanelGadget") {
+            if (g.kind === GADGET_KIND.PanelGadget) {
               setPanelItem(g.id, item.index);
             }
           }
@@ -393,7 +367,7 @@ export function parseFormDocument(text: string): FormDocument {
       }
     }
 
-    const kind = GADGET_KINDS[c.name];
+    const kind = asGadgetKind(c.name);
     if (!kind) continue;
 
     const gadget = parseGadgetCall(kind, c.assignedVar, c.args, c.range);
@@ -401,7 +375,7 @@ export function parseFormDocument(text: string): FormDocument {
       const parent = parentStack[parentStack.length - 1];
       if (parent) {
         gadget.parentId = parent.id;
-        if (parent.kind === "PanelGadget" && typeof parent.currentPanelItem === "number") {
+        if (parent.kind === GADGET_KIND.PanelGadget && typeof parent.currentPanelItem === "number") {
           gadget.parentItem = parent.currentPanelItem;
         }
       }
@@ -427,8 +401,8 @@ export function parseFormDocument(text: string): FormDocument {
 function parseFormEnumerations(text: string, scanRange: ScanRange): FormEnumerations {
   const slice = text.slice(scanRange.start, scanRange.end);
   return {
-    windows: parseEnumerationBlock(slice, "FormWindow"),
-    gadgets: parseEnumerationBlock(slice, "FormGadget")
+    windows: parseEnumerationBlock(slice, ENUM_NAMES.windows),
+    gadgets: parseEnumerationBlock(slice, ENUM_NAMES.gadgets)
   };
 }
 

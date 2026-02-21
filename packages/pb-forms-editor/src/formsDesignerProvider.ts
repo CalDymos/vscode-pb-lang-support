@@ -24,36 +24,80 @@ import {
   applyWindowRectPatch
 } from "./core/emitter/patchEmitter";
 import { readDesignerSettings, SETTINGS_SECTION, DesignerSettings } from "./settings";
-import { FormDocument } from "./core/model";
+import { FormDocument, PBFD_SYMBOLS } from "./core/model";
+
+const CONFIG_KEYS = {
+  expectedPbVersion: "expectedPbVersion"
+} as const;
+
+const ALLOWED_MENU_ENTRY_KINDS: ReadonlySet<string> = new Set(PBFD_SYMBOLS.menuEntryKinds);
+const ALLOWED_TOOLBAR_ENTRY_KINDS: ReadonlySet<string> = new Set(PBFD_SYMBOLS.toolBarEntryKinds);
+
+const EXT_TO_WEBVIEW_MSG_TYPE = {
+  init: "init",
+  settings: "settings",
+  error: "error"
+} as const;
+
+const WEBVIEW_TO_EXT_MSG_TYPE = {
+  ready: "ready",
+
+  moveGadget: "moveGadget",
+  setGadgetRect: "setGadgetRect",
+  setWindowRect: "setWindowRect",
+  toggleWindowPbAny: "toggleWindowPbAny",
+  setWindowEnumValue: "setWindowEnumValue",
+  setWindowVariableName: "setWindowVariableName",
+
+  insertGadgetItem: "insertGadgetItem",
+  updateGadgetItem: "updateGadgetItem",
+  deleteGadgetItem: "deleteGadgetItem",
+
+  insertGadgetColumn: "insertGadgetColumn",
+  updateGadgetColumn: "updateGadgetColumn",
+  deleteGadgetColumn: "deleteGadgetColumn",
+
+  insertMenuEntry: "insertMenuEntry",
+  updateMenuEntry: "updateMenuEntry",
+  deleteMenuEntry: "deleteMenuEntry",
+
+  insertToolBarEntry: "insertToolBarEntry",
+  updateToolBarEntry: "updateToolBarEntry",
+  deleteToolBarEntry: "deleteToolBarEntry",
+
+  insertStatusBarField: "insertStatusBarField",
+  updateStatusBarField: "updateStatusBarField",
+  deleteStatusBarField: "deleteStatusBarField"
+} as const;
 
 type WebviewToExtensionMessage =
-  | { type: "ready" }
-  | { type: "moveGadget"; id: string; x: number; y: number }
-  | { type: "setGadgetRect"; id: string; x: number; y: number; w: number; h: number }
-  | { type: "setWindowRect"; id: string; x: number; y: number; w: number; h: number }
-  | { type: "toggleWindowPbAny"; windowKey: string; toPbAny: boolean; variableName: string; enumSymbol: string; enumValueRaw?: string }
-  | { type: "setWindowEnumValue"; enumSymbol: string; enumValueRaw?: string }
-  | { type: "setWindowVariableName"; variableName?: string }
-  | { type: "insertGadgetItem"; id: string; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
-  | { type: "updateGadgetItem"; id: string; sourceLine: number; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
-  | { type: "deleteGadgetItem"; id: string; sourceLine: number }
-  | { type: "insertGadgetColumn"; id: string; colRaw: string; titleRaw: string; widthRaw: string }
-  | { type: "updateGadgetColumn"; id: string; sourceLine: number; colRaw: string; titleRaw: string; widthRaw: string }
-  | { type: "deleteGadgetColumn"; id: string; sourceLine: number }
-  | { type: "insertMenuEntry"; menuId: string; kind: string; idRaw?: string; textRaw?: string }
-  | { type: "updateMenuEntry"; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string }
-  | { type: "deleteMenuEntry"; menuId: string; sourceLine: number; kind: string }
-  | { type: "insertToolBarEntry"; toolBarId: string; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string }
-  | { type: "updateToolBarEntry"; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string }
-  | { type: "deleteToolBarEntry"; toolBarId: string; sourceLine: number; kind: string }
-  | { type: "insertStatusBarField"; statusBarId: string; widthRaw: string }
-  | { type: "updateStatusBarField"; statusBarId: string; sourceLine: number; widthRaw: string }
-  | { type: "deleteStatusBarField"; statusBarId: string; sourceLine: number };
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.ready }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveGadget; id: string; x: number; y: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetRect; id: string; x: number; y: number; w: number; h: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowRect; id: string; x: number; y: number; w: number; h: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.toggleWindowPbAny; windowKey: string; toPbAny: boolean; variableName: string; enumSymbol: string; enumValueRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEnumValue; enumSymbol: string; enumValueRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowVariableName; variableName?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadgetItem; id: string; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateGadgetItem; id: string; sourceLine: number; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadgetItem; id: string; sourceLine: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadgetColumn; id: string; colRaw: string; titleRaw: string; widthRaw: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateGadgetColumn; id: string; sourceLine: number; colRaw: string; titleRaw: string; widthRaw: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadgetColumn; id: string; sourceLine: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertMenuEntry; menuId: string; kind: string; idRaw?: string; textRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateMenuEntry; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteMenuEntry; menuId: string; sourceLine: number; kind: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertToolBarEntry; toolBarId: string; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateToolBarEntry; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBarEntry; toolBarId: string; sourceLine: number; kind: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertStatusBarField; statusBarId: string; widthRaw: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateStatusBarField; statusBarId: string; sourceLine: number; widthRaw: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBarField; statusBarId: string; sourceLine: number };
 
 type ExtensionToWebviewMessage =
-  | { type: "init"; model: any; settings: DesignerSettings }
-  | { type: "settings"; settings: DesignerSettings }
-  | { type: "error"; message: string };
+  | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.init; model: any; settings: DesignerSettings }
+  | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.settings; settings: DesignerSettings }
+  | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.error; message: string };
 
 export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorProvider {
   public static readonly viewType = "purebasic.formDesigner";
@@ -76,21 +120,25 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
     let lastModel: FormDocument | undefined;
     let initTimer: ReturnType<typeof setTimeout> | undefined;
 
+    function createErrorModel(textLen: number, message: string): FormDocument {
+      return {
+        window: undefined,
+        gadgets: [],
+        menus: [],
+        toolbars: [],
+        statusbars: [],
+        meta: {
+          scanRange: { start: 0, end: textLen },
+          issues: [{ severity: "error", message }]
+        }
+      };
+    }
+
     function safeParse(text: string): FormDocument {
       try {
         return parseFormDocument(text);
       } catch (e: any) {
-        return {
-          window: undefined,
-          gadgets: [],
-          menus: [],
-          toolbars: [],
-          statusbars: [],
-          meta: {
-            scanRange: { start: 0, end: text.length },
-            issues: [{ severity: "error", message: e?.message ?? String(e) }]
-          }
-        };
+        return createErrorModel(text.length, e?.message ?? String(e));
       }
     }
 
@@ -100,14 +148,16 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
     };
 
     const sendInit = () => {
+      const text = document.getText();
+
       try {
-        const model = safeParse(document.getText());
+        const model = safeParse(text);
         lastModel = model;
 
         // Optional: warn if the header PB version differs from the configured expectation.
         const expectedPbVersion = vscode.workspace
           .getConfiguration(SETTINGS_SECTION)
-          .get<string>("expectedPbVersion", "")
+          .get<string>(CONFIG_KEYS.expectedPbVersion, "")
           .trim();
 
         if (expectedPbVersion.length) {
@@ -130,17 +180,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         post({ type: "init", model, settings });
       } catch (e: any) {
         // Keep the webview alive with a minimal model and a structured error.
-        const model: FormDocument = {
-          window: undefined,
-          gadgets: [],
-          menus: [],
-          toolbars: [],
-          statusbars: [],
-          meta: {
-            scanRange: { start: 0, end: document.getText().length },
-            issues: [{ severity: "error", message: e?.message ?? String(e) }]
-          }
-        };
+        const model = createErrorModel(text.length, e?.message ?? String(e));
         lastModel = model;
         post({ type: "init", model, settings: readDesignerSettings() });
       }
@@ -154,7 +194,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
       }
     });
 
-    const docSub = vscode.workspace.onDidChangeTextDocument((e: any) => {
+    const docSub = vscode.workspace.onDidChangeTextDocument((e: vscode.TextDocumentChangeEvent) => {
       if (e.document.uri.toString() === document.uri.toString()) {
         scheduleInit();
       }
@@ -169,306 +209,226 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
     webviewPanel.webview.onDidReceiveMessage(async (msg: WebviewToExtensionMessage) => {
       const sr = lastModel?.meta.scanRange;
       const rangeInfo = sr ? ` (scanRange: ${sr.start}-${sr.end})` : "";
+      const postError = (message: string) => post({ type: "error", message });
 
-      if (msg.type === "ready") {
-        sendInit();
-        return;
-      }
-
-      if (msg.type === "moveGadget") {
-        const edit = applyMovePatch(document, msg.id, msg.x, msg.y, sr);
+      const applyEditOrError = async (edit: vscode.WorkspaceEdit | undefined, errorMessage: string) => {
         if (!edit) {
-          post({ type: "error", message: `Could not patch gadget '${msg.id}'. No matching call found${rangeInfo}.` });
-          return;
+          postError(errorMessage);
+          return false;
         }
         await vscode.workspace.applyEdit(edit);
-        return;
-      }
+        return true;
+      };
 
-      if (msg.type === "setGadgetRect") {
-        const edit = applyRectPatch(document, msg.id, msg.x, msg.y, msg.w, msg.h, sr);
-        if (!edit) {
-          post({ type: "error", message: `Could not patch gadget '${msg.id}'. No matching call found${rangeInfo}.` });
-          return;
-        }
-        await vscode.workspace.applyEdit(edit);
-        return;
-      }
+      const ensureMenuEntryKind = (kind: string): boolean => {
+        if (ALLOWED_MENU_ENTRY_KINDS.has(kind)) return true;
+        postError(`Unsupported menu entry kind '${kind}'.`);
+        return false;
+      };
 
-      if (msg.type === "setWindowRect") {
-        const edit = applyWindowRectPatch(document, msg.id, msg.x, msg.y, msg.w, msg.h, sr);
-        if (!edit) {
-          post({ type: "error", message: `Could not patch window '${msg.id}'. No matching OpenWindow call found${rangeInfo}.` });
-          return;
-        }
-        await vscode.workspace.applyEdit(edit);
-        return;
-      }
+      const ensureToolBarEntryKind = (kind: string): boolean => {
+        if (ALLOWED_TOOLBAR_ENTRY_KINDS.has(kind)) return true;
+        postError(`Unsupported toolbar entry kind '${kind}'.`);
+        return false;
+      };
 
-      if (msg.type === "toggleWindowPbAny") {
-        const edit = applyWindowPbAnyToggle(
-          document,
-          msg.windowKey,
-          msg.toPbAny,
-          msg.variableName,
-          msg.enumSymbol,
-          msg.enumValueRaw,
-          sr
-        );
-        if (!edit) {
-          post({ type: "error", message: `Could not toggle window pbAny. No matching OpenWindow call found${rangeInfo}.` });
+      switch (msg.type) {
+        case WEBVIEW_TO_EXT_MSG_TYPE.ready:
+          sendInit();
           return;
-        }
-        await vscode.workspace.applyEdit(edit);
-        return;
-      }
 
-      if (msg.type === "setWindowEnumValue") {
-        const edit = applyWindowEnumValuePatch(document, msg.enumSymbol, msg.enumValueRaw, sr);
-        if (!edit) {
-          post({ type: "error", message: `Could not patch FormWindow enumeration entry '${msg.enumSymbol}'. No Enumeration FormWindow block found${rangeInfo}.` });
+        case WEBVIEW_TO_EXT_MSG_TYPE.moveGadget: {
+          const edit = applyMovePatch(document, msg.id, msg.x, msg.y, sr);
+          await applyEditOrError(edit, `Could not patch gadget '${msg.id}'. No matching call found${rangeInfo}.`);
           return;
         }
-        await vscode.workspace.applyEdit(edit);
-        return;
-      }
 
-      if (msg.type === "setWindowVariableName") {
-        if (msg.variableName === undefined || !msg.variableName.trim().length) {
-          post({ type: "error", message: `Could not patch FormWindow variable name. Empty variable name is not allowed${rangeInfo}.` });
+        case WEBVIEW_TO_EXT_MSG_TYPE.setGadgetRect: {
+          const edit = applyRectPatch(document, msg.id, msg.x, msg.y, msg.w, msg.h, sr);
+          await applyEditOrError(edit, `Could not patch gadget '${msg.id}'. No matching call found${rangeInfo}.`);
           return;
         }
-        const edit = applyWindowVariableNamePatch(document, msg.variableName);
-        if (!edit) {
-          post({ type: "error", message: `Could not patch FormWindow variable name '${msg.variableName}'. No matching OpenWindow call found${rangeInfo}.` });
-          return;
-        }
-        await vscode.workspace.applyEdit(edit);
-        return;
-      }
 
-      if (msg.type === "insertGadgetItem") {
-        const edit = applyGadgetItemInsert(
-          document,
-          msg.id,
-          { posRaw: msg.posRaw, textRaw: msg.textRaw, imageRaw: msg.imageRaw, flagsRaw: msg.flagsRaw },
-          sr
-        );
-        if (!edit) {
-          post({ type: "error", message: `Could not insert item for gadget '${msg.id}'. No suitable insertion point found${rangeInfo}.` });
+        case WEBVIEW_TO_EXT_MSG_TYPE.setWindowRect: {
+          const edit = applyWindowRectPatch(document, msg.id, msg.x, msg.y, msg.w, msg.h, sr);
+          await applyEditOrError(edit, `Could not patch window '${msg.id}'. No matching OpenWindow call found${rangeInfo}.`);
           return;
         }
-        await vscode.workspace.applyEdit(edit);
-        return;
-      }
 
-      if (msg.type === "updateGadgetItem") {
-        const edit = applyGadgetItemUpdate(
-          document,
-          msg.id,
-          msg.sourceLine,
-          { posRaw: msg.posRaw, textRaw: msg.textRaw, imageRaw: msg.imageRaw, flagsRaw: msg.flagsRaw },
-          sr
-        );
-        if (!edit) {
-          post({ type: "error", message: `Could not update item for gadget '${msg.id}'. No matching AddGadgetItem call found${rangeInfo}.` });
+        case WEBVIEW_TO_EXT_MSG_TYPE.toggleWindowPbAny: {
+          const edit = applyWindowPbAnyToggle(
+            document,
+            msg.windowKey,
+            msg.toPbAny,
+            msg.variableName,
+            msg.enumSymbol,
+            msg.enumValueRaw,
+            sr
+          );
+          await applyEditOrError(edit, `Could not toggle window pbAny. No matching OpenWindow call found${rangeInfo}.`);
           return;
         }
-        await vscode.workspace.applyEdit(edit);
-        return;
-      }
 
-      if (msg.type === "deleteGadgetItem") {
-        const edit = applyGadgetItemDelete(document, msg.id, msg.sourceLine, sr);
-        if (!edit) {
-          post({ type: "error", message: `Could not delete item for gadget '${msg.id}'. No matching AddGadgetItem call found${rangeInfo}.` });
+        case WEBVIEW_TO_EXT_MSG_TYPE.setWindowEnumValue: {
+          const edit = applyWindowEnumValuePatch(document, msg.enumSymbol, msg.enumValueRaw, sr);
+          await applyEditOrError(
+            edit,
+            `Could not patch FormWindow enumeration entry '${msg.enumSymbol}'. No Enumeration FormWindow block found${rangeInfo}.`
+          );
           return;
         }
-        await vscode.workspace.applyEdit(edit);
-        return;
-      }
 
-      if (msg.type === "insertGadgetColumn") {
-        const edit = applyGadgetColumnInsert(
-          document,
-          msg.id,
-          { colRaw: msg.colRaw, titleRaw: msg.titleRaw, widthRaw: msg.widthRaw },
-          sr
-        );
-        if (!edit) {
-          post({ type: "error", message: `Could not insert column for gadget '${msg.id}'. No suitable insertion point found${rangeInfo}.` });
+        case WEBVIEW_TO_EXT_MSG_TYPE.setWindowVariableName: {
+          if (msg.variableName === undefined || !msg.variableName.trim().length) {
+            postError(`Could not patch FormWindow variable name. Empty variable name is not allowed${rangeInfo}.`);
+            return;
+          }
+          const edit = applyWindowVariableNamePatch(document, msg.variableName);
+          await applyEditOrError(
+            edit,
+            `Could not patch FormWindow variable name '${msg.variableName}'. No matching OpenWindow call found${rangeInfo}.`
+          );
           return;
         }
-        await vscode.workspace.applyEdit(edit);
-        return;
-      }
 
-      if (msg.type === "updateGadgetColumn") {
-        const edit = applyGadgetColumnUpdate(
-          document,
-          msg.id,
-          msg.sourceLine,
-          { colRaw: msg.colRaw, titleRaw: msg.titleRaw, widthRaw: msg.widthRaw },
-          sr
-        );
-        if (!edit) {
-          post({ type: "error", message: `Could not update column for gadget '${msg.id}'. No matching AddGadgetColumn call found${rangeInfo}.` });
+        case WEBVIEW_TO_EXT_MSG_TYPE.insertGadgetItem: {
+          const edit = applyGadgetItemInsert(
+            document,
+            msg.id,
+            { posRaw: msg.posRaw, textRaw: msg.textRaw, imageRaw: msg.imageRaw, flagsRaw: msg.flagsRaw },
+            sr
+          );
+          await applyEditOrError(edit, `Could not insert item for gadget '${msg.id}'. No suitable insertion point found${rangeInfo}.`);
           return;
         }
-        await vscode.workspace.applyEdit(edit);
-        return;
-      }
 
-      if (msg.type === "deleteGadgetColumn") {
-        const edit = applyGadgetColumnDelete(document, msg.id, msg.sourceLine, sr);
-        if (!edit) {
-          post({ type: "error", message: `Could not delete column for gadget '${msg.id}'. No matching AddGadgetColumn call found${rangeInfo}.` });
+        case WEBVIEW_TO_EXT_MSG_TYPE.updateGadgetItem: {
+          const edit = applyGadgetItemUpdate(
+            document,
+            msg.id,
+            msg.sourceLine,
+            { posRaw: msg.posRaw, textRaw: msg.textRaw, imageRaw: msg.imageRaw, flagsRaw: msg.flagsRaw },
+            sr
+          );
+          await applyEditOrError(edit, `Could not update item for gadget '${msg.id}'. No matching AddGadgetItem call found${rangeInfo}.`);
           return;
         }
-        await vscode.workspace.applyEdit(edit);
-        return;
-      }
 
-      if (msg.type === "insertMenuEntry") {
-        const allowed = new Set(["MenuTitle", "MenuItem", "MenuBar", "OpenSubMenu", "CloseSubMenu"]);
-        if (!allowed.has(msg.kind)) {
-          post({ type: "error", message: `Unsupported menu entry kind '${msg.kind}'.` });
+        case WEBVIEW_TO_EXT_MSG_TYPE.deleteGadgetItem: {
+          const edit = applyGadgetItemDelete(document, msg.id, msg.sourceLine, sr);
+          await applyEditOrError(edit, `Could not delete item for gadget '${msg.id}'. No matching AddGadgetItem call found${rangeInfo}.`);
           return;
         }
-        const edit = applyMenuEntryInsert(
-          document,
-          msg.menuId,
-          { kind: msg.kind as any, idRaw: msg.idRaw, textRaw: msg.textRaw },
-          sr
-        );
-        if (!edit) {
-          post({ type: "error", message: `Could not insert menu entry for menu '${msg.menuId}'. No suitable insertion point found${rangeInfo}.` });
-          return;
-        }
-        await vscode.workspace.applyEdit(edit);
-        return;
-      }
 
-      if (msg.type === "updateMenuEntry") {
-        const allowed = new Set(["MenuTitle", "MenuItem", "MenuBar", "OpenSubMenu", "CloseSubMenu"]);
-        if (!allowed.has(msg.kind)) {
-          post({ type: "error", message: `Unsupported menu entry kind '${msg.kind}'.` });
+        case WEBVIEW_TO_EXT_MSG_TYPE.insertGadgetColumn: {
+          const edit = applyGadgetColumnInsert(document, msg.id, { colRaw: msg.colRaw, titleRaw: msg.titleRaw, widthRaw: msg.widthRaw }, sr);
+          await applyEditOrError(edit, `Could not insert column for gadget '${msg.id}'. No suitable insertion point found${rangeInfo}.`);
           return;
         }
-        const edit = applyMenuEntryUpdate(
-          document,
-          msg.menuId,
-          msg.sourceLine,
-          { kind: msg.kind as any, idRaw: msg.idRaw, textRaw: msg.textRaw },
-          sr
-        );
-        if (!edit) {
-          post({ type: "error", message: `Could not update menu entry for menu '${msg.menuId}'. No matching call found${rangeInfo}.` });
-          return;
-        }
-        await vscode.workspace.applyEdit(edit);
-        return;
-      }
 
-      if (msg.type === "deleteMenuEntry") {
-        const allowed = new Set(["MenuTitle", "MenuItem", "MenuBar", "OpenSubMenu", "CloseSubMenu"]);
-        if (!allowed.has(msg.kind)) {
-          post({ type: "error", message: `Unsupported menu entry kind '${msg.kind}'.` });
+        case WEBVIEW_TO_EXT_MSG_TYPE.updateGadgetColumn: {
+          const edit = applyGadgetColumnUpdate(
+            document,
+            msg.id,
+            msg.sourceLine,
+            { colRaw: msg.colRaw, titleRaw: msg.titleRaw, widthRaw: msg.widthRaw },
+            sr
+          );
+          await applyEditOrError(edit, `Could not update column for gadget '${msg.id}'. No matching AddGadgetColumn call found${rangeInfo}.`);
           return;
         }
-        const edit = applyMenuEntryDelete(document, msg.menuId, msg.sourceLine, msg.kind as any, sr);
-        if (!edit) {
-          post({ type: "error", message: `Could not delete menu entry for menu '${msg.menuId}'. No matching call found${rangeInfo}.` });
-          return;
-        }
-        await vscode.workspace.applyEdit(edit);
-        return;
-      }
 
-      if (msg.type === "insertToolBarEntry") {
-        const allowed = new Set(["ToolBarStandardButton", "ToolBarButton", "ToolBarSeparator", "ToolBarToolTip"]);
-        if (!allowed.has(msg.kind)) {
-          post({ type: "error", message: `Unsupported toolbar entry kind '${msg.kind}'.` });
+        case WEBVIEW_TO_EXT_MSG_TYPE.deleteGadgetColumn: {
+          const edit = applyGadgetColumnDelete(document, msg.id, msg.sourceLine, sr);
+          await applyEditOrError(edit, `Could not delete column for gadget '${msg.id}'. No matching AddGadgetColumn call found${rangeInfo}.`);
           return;
         }
-        const edit = applyToolBarEntryInsert(
-          document,
-          msg.toolBarId,
-          { kind: msg.kind as any, idRaw: msg.idRaw, iconRaw: msg.iconRaw, textRaw: msg.textRaw },
-          sr
-        );
-        if (!edit) {
-          post({ type: "error", message: `Could not insert toolbar entry for toolbar '${msg.toolBarId}'. No suitable insertion point found${rangeInfo}.` });
-          return;
-        }
-        await vscode.workspace.applyEdit(edit);
-        return;
-      }
 
-      if (msg.type === "updateToolBarEntry") {
-        const allowed = new Set(["ToolBarStandardButton", "ToolBarButton", "ToolBarSeparator", "ToolBarToolTip"]);
-        if (!allowed.has(msg.kind)) {
-          post({ type: "error", message: `Unsupported toolbar entry kind '${msg.kind}'.` });
+        case WEBVIEW_TO_EXT_MSG_TYPE.insertMenuEntry: {
+          if (!ensureMenuEntryKind(msg.kind)) return;
+          const edit = applyMenuEntryInsert(document, msg.menuId, { kind: msg.kind as any, idRaw: msg.idRaw, textRaw: msg.textRaw }, sr);
+          await applyEditOrError(edit, `Could not insert menu entry for menu '${msg.menuId}'. No suitable insertion point found${rangeInfo}.`);
           return;
         }
-        const edit = applyToolBarEntryUpdate(
-          document,
-          msg.toolBarId,
-          msg.sourceLine,
-          { kind: msg.kind as any, idRaw: msg.idRaw, iconRaw: msg.iconRaw, textRaw: msg.textRaw },
-          sr
-        );
-        if (!edit) {
-          post({ type: "error", message: `Could not update toolbar entry for toolbar '${msg.toolBarId}'. No matching call found${rangeInfo}.` });
-          return;
-        }
-        await vscode.workspace.applyEdit(edit);
-        return;
-      }
 
-      if (msg.type === "deleteToolBarEntry") {
-        const allowed = new Set(["ToolBarStandardButton", "ToolBarButton", "ToolBarSeparator", "ToolBarToolTip"]);
-        if (!allowed.has(msg.kind)) {
-          post({ type: "error", message: `Unsupported toolbar entry kind '${msg.kind}'.` });
+        case WEBVIEW_TO_EXT_MSG_TYPE.updateMenuEntry: {
+          if (!ensureMenuEntryKind(msg.kind)) return;
+          const edit = applyMenuEntryUpdate(
+            document,
+            msg.menuId,
+            msg.sourceLine,
+            { kind: msg.kind as any, idRaw: msg.idRaw, textRaw: msg.textRaw },
+            sr
+          );
+          await applyEditOrError(edit, `Could not update menu entry for menu '${msg.menuId}'. No matching call found${rangeInfo}.`);
           return;
         }
-        const edit = applyToolBarEntryDelete(document, msg.toolBarId, msg.sourceLine, msg.kind as any, sr);
-        if (!edit) {
-          post({ type: "error", message: `Could not delete toolbar entry for toolbar '${msg.toolBarId}'. No matching call found${rangeInfo}.` });
-          return;
-        }
-        await vscode.workspace.applyEdit(edit);
-        return;
-      }
 
-      if (msg.type === "insertStatusBarField") {
-        const edit = applyStatusBarFieldInsert(document, msg.statusBarId, { widthRaw: msg.widthRaw }, sr);
-        if (!edit) {
-          post({ type: "error", message: `Could not insert statusbar field for statusbar '${msg.statusBarId}'. No suitable insertion point found${rangeInfo}.` });
+        case WEBVIEW_TO_EXT_MSG_TYPE.deleteMenuEntry: {
+          if (!ensureMenuEntryKind(msg.kind)) return;
+          const edit = applyMenuEntryDelete(document, msg.menuId, msg.sourceLine, msg.kind as any, sr);
+          await applyEditOrError(edit, `Could not delete menu entry for menu '${msg.menuId}'. No matching call found${rangeInfo}.`);
           return;
         }
-        await vscode.workspace.applyEdit(edit);
-        return;
-      }
 
-      if (msg.type === "updateStatusBarField") {
-        const edit = applyStatusBarFieldUpdate(document, msg.statusBarId, msg.sourceLine, { widthRaw: msg.widthRaw }, sr);
-        if (!edit) {
-          post({ type: "error", message: `Could not update statusbar field for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.` });
+        case WEBVIEW_TO_EXT_MSG_TYPE.insertToolBarEntry: {
+          if (!ensureToolBarEntryKind(msg.kind)) return;
+          const edit = applyToolBarEntryInsert(
+            document,
+            msg.toolBarId,
+            { kind: msg.kind as any, idRaw: msg.idRaw, iconRaw: msg.iconRaw, textRaw: msg.textRaw },
+            sr
+          );
+          await applyEditOrError(edit, `Could not insert toolbar entry for toolbar '${msg.toolBarId}'. No suitable insertion point found${rangeInfo}.`);
           return;
         }
-        await vscode.workspace.applyEdit(edit);
-        return;
-      }
 
-      if (msg.type === "deleteStatusBarField") {
-        const edit = applyStatusBarFieldDelete(document, msg.statusBarId, msg.sourceLine, sr);
-        if (!edit) {
-          post({ type: "error", message: `Could not delete statusbar field for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.` });
+        case WEBVIEW_TO_EXT_MSG_TYPE.updateToolBarEntry: {
+          if (!ensureToolBarEntryKind(msg.kind)) return;
+          const edit = applyToolBarEntryUpdate(
+            document,
+            msg.toolBarId,
+            msg.sourceLine,
+            { kind: msg.kind as any, idRaw: msg.idRaw, iconRaw: msg.iconRaw, textRaw: msg.textRaw },
+            sr
+          );
+          await applyEditOrError(edit, `Could not update toolbar entry for toolbar '${msg.toolBarId}'. No matching call found${rangeInfo}.`);
           return;
         }
-        await vscode.workspace.applyEdit(edit);
-        return;
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBarEntry: {
+          if (!ensureToolBarEntryKind(msg.kind)) return;
+          const edit = applyToolBarEntryDelete(document, msg.toolBarId, msg.sourceLine, msg.kind as any, sr);
+          await applyEditOrError(edit, `Could not delete toolbar entry for toolbar '${msg.toolBarId}'. No matching call found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.insertStatusBarField: {
+          const edit = applyStatusBarFieldInsert(document, msg.statusBarId, { widthRaw: msg.widthRaw }, sr);
+          await applyEditOrError(edit, `Could not insert statusbar field for statusbar '${msg.statusBarId}'. No suitable insertion point found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.updateStatusBarField: {
+          const edit = applyStatusBarFieldUpdate(document, msg.statusBarId, msg.sourceLine, { widthRaw: msg.widthRaw }, sr);
+          await applyEditOrError(
+            edit,
+            `Could not update statusbar field for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`
+          );
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBarField: {
+          const edit = applyStatusBarFieldDelete(document, msg.statusBarId, msg.sourceLine, sr);
+          await applyEditOrError(
+            edit,
+            `Could not delete statusbar field for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`
+          );
+          return;
+        }
+
+        default:
+          return;
       }
     });
   }
@@ -478,6 +438,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
       vscode.Uri.joinPath(this.context.extensionUri, "out", "webview", "main.js")
     );
     const nonce = getNonce();
+    const symbolsJson = JSON.stringify(PBFD_SYMBOLS);
 
     return `<!doctype html>
 <html>
@@ -675,6 +636,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
       </div>
     </div>
 
+    <script nonce="${nonce}">window.__PBFD_SYMBOLS__ = ${symbolsJson};</script>
     <script nonce="${nonce}" src="${scriptUri}"></script>
   </body>
 </html>`;

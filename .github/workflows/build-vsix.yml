@@ -2,6 +2,17 @@ name: Build VSIX (for Marketplace Upload)
 
 on:
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch, tag, SHA) to build"
+        required: true
+        default: "main"
+        type: string
+  push:
+    tags:
+      - "suite-v*"
+      - "pb-lang-support-v*"
+      - "pb-forms-editor-v*"
 
 permissions:
   contents: read
@@ -12,33 +23,36 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pkg: [ pb-lang-support, pb-forms-editor ]
+        pkg: [pb-lang-support, pb-forms-editor]
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+          fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: "20"
-          # cache: "npm"
 
-      - run: npm ci
+      - name: Install dependencies (workspaces)
+        run: npm ci
 
-      - run: npm -w packages/${{ matrix.pkg }} run compile
+      - name: Compile
+        run: npm -w packages/${{ matrix.pkg }} run compile
 
-      - if: matrix.pkg == 'pb-lang-support'
+      - name: Build bundle (pb-lang-support only)
+        if: matrix.pkg == 'pb-lang-support'
         run: npm -w packages/${{ matrix.pkg }} run webpack:prod
 
       - name: Package VSIX
-        run: |
-          if [ "${{ matrix.pkg }}" = "pb-forms-editor" ]; then
-            npx @vscode/vsce package --no-dependencies --out ${{ matrix.pkg }}.vsix
-          else
-            npx @vscode/vsce package --no-dependencies --out ${{ matrix.pkg }}.vsix
-          fi
+        run: npx @vscode/vsce package --no-dependencies --out ${{ matrix.pkg }}.vsix
         working-directory: packages/${{ matrix.pkg }}
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
         with:
           name: vsix-${{ matrix.pkg }}
           path: packages/${{ matrix.pkg }}/${{ matrix.pkg }}.vsix

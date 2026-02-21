@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { scanCalls } from "../parser/callScanner";
 import { splitParams } from "../parser/tokenizer";
-import { ScanRange } from "../model";
+import { ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, ToolBarEntryKind } from "../model";
 
 type PbCall = ReturnType<typeof scanCalls>[number];
 
@@ -157,15 +157,11 @@ export interface GadgetColumnArgs {
   widthRaw: string;
 }
 
-export type MenuEntryKind = "MenuTitle" | "MenuItem" | "MenuBar" | "OpenSubMenu" | "CloseSubMenu";
-
 export interface MenuEntryArgs {
   kind: MenuEntryKind;
   idRaw?: string;
   textRaw?: string;
 }
-
-export type ToolBarEntryKind = "ToolBarStandardButton" | "ToolBarButton" | "ToolBarSeparator" | "ToolBarToolTip";
 
 export interface ToolBarEntryArgs {
   kind: ToolBarEntryKind;
@@ -203,15 +199,15 @@ function findNearestCreateAbove(
 
 function buildMenuEntryLine(args: MenuEntryArgs): string {
   switch (args.kind) {
-    case "MenuTitle":
+    case MENU_ENTRY_KIND.MenuTitle:
       return `MenuTitle(${(args.textRaw ?? "\"\"").trim()})`;
-    case "MenuItem":
+    case MENU_ENTRY_KIND.MenuItem:
       return `MenuItem(${(args.idRaw ?? "0").trim()}, ${(args.textRaw ?? "\"\"").trim()})`;
-    case "MenuBar":
+    case MENU_ENTRY_KIND.MenuBar:
       return "MenuBar()";
-    case "OpenSubMenu":
+    case MENU_ENTRY_KIND.OpenSubMenu:
       return `OpenSubMenu(${(args.textRaw ?? "\"\"").trim()})`;
-    case "CloseSubMenu":
+    case MENU_ENTRY_KIND.CloseSubMenu:
       return "CloseSubMenu()";
     default:
       return "";
@@ -220,17 +216,17 @@ function buildMenuEntryLine(args: MenuEntryArgs): string {
 
 function buildToolBarEntryLine(args: ToolBarEntryArgs): string {
   switch (args.kind) {
-    case "ToolBarStandardButton":
+    case TOOLBAR_ENTRY_KIND.ToolBarStandardButton:
       return `ToolBarStandardButton(${(args.idRaw ?? "0").trim()}, ${(args.iconRaw ?? "0").trim()})`;
-    case "ToolBarButton": {
+    case TOOLBAR_ENTRY_KIND.ToolBarButton: {
       const id = (args.idRaw ?? "0").trim();
       const icon = (args.iconRaw ?? "0").trim();
       const text = (args.textRaw ?? "\"\"").trim();
       return `ToolBarButton(${id}, ${icon}, ${text})`;
     }
-    case "ToolBarSeparator":
+    case TOOLBAR_ENTRY_KIND.ToolBarSeparator:
       return "ToolBarSeparator()";
-    case "ToolBarToolTip":
+    case TOOLBAR_ENTRY_KIND.ToolBarToolTip:
       return `ToolBarToolTip(${(args.idRaw ?? "0").trim()}, ${(args.textRaw ?? "\"\"").trim()})`;
     default:
       return "";
@@ -1197,6 +1193,71 @@ function isLineInCreateSection(calls: PbCall[], line: number, createNameLower: s
   return !!create && firstParamOfCall(create.args) === expectedId;
 }
 
+function applySectionEntryInsert(
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  createNameLower: string,
+  sectionId: string,
+  entryNamesLower: Set<string>,
+  buildLine: (indent: string) => string
+ ): vscode.WorkspaceEdit | undefined {
+  const create = findCreateCallById(calls, createNameLower, sectionId);
+  if (!create) return undefined;
+
+  const startIdx = calls.indexOf(create);
+  const endIdx = findSectionEndIndex(calls, startIdx);
+  const insertAfterLine = findLastEntryLineInSection(calls, startIdx, endIdx, entryNamesLower);
+
+  const indent = getLineIndent(document, insertAfterLine);
+  const line = `${buildLine(indent)}\n`;
+  const insertPos = new vscode.Position(Math.min(document.lineCount, insertAfterLine + 1), 0);
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.insert(document.uri, insertPos, line);
+  return edit;
+}
+
+function applySectionEntryUpdate(
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  createNameLower: string,
+  sectionId: string,
+  sourceLine: number,
+  entryNameLower: string,
+  rebuiltWithoutIndent: string
+): vscode.WorkspaceEdit | undefined {
+  if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
+
+  const call = calls.find(c => c.range.line === sourceLine && c.name.toLowerCase() === entryNameLower);
+  if (!call) return undefined;
+
+  if (!isLineInCreateSection(calls, sourceLine, createNameLower, sectionId)) return undefined;
+
+  const indent = getLineIndent(document, sourceLine);
+  const rebuilt = `${indent}${rebuiltWithoutIndent}`;
+  return replaceCallLinePreserveSuffix(document, call, rebuilt);
+}
+
+function applySectionEntryDelete(
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  createNameLower: string,
+  sectionId: string,
+  sourceLine: number,
+  entryNameLower: string
+): vscode.WorkspaceEdit | undefined {
+  if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
+
+  const call = calls.find(c => c.range.line === sourceLine && c.name.toLowerCase() === entryNameLower);
+  if (!call) return undefined;
+
+  if (!isLineInCreateSection(calls, sourceLine, createNameLower, sectionId)) return undefined;
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.delete(document.uri, document.lineAt(sourceLine).rangeIncludingLineBreak);
+  return edit;
+}
+
 export function applyMenuEntryInsert(
   document: vscode.TextDocument,
   menuId: string,
@@ -1204,22 +1265,14 @@ export function applyMenuEntryInsert(
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
   const calls = scanDocumentCalls(document, scanRange);
-
-  const create = findCreateCallById(calls, "createmenu", menuId);
-  if (!create) return undefined;
-
-  const startIdx = calls.indexOf(create);
-
-  const endIdx = findSectionEndIndex(calls, startIdx);
-  const insertAfterLine = findLastEntryLineInSection(calls, startIdx, endIdx, MENU_ENTRY_NAMES);
-
-  const indent = getLineIndent(document, insertAfterLine);
-  const line = `${indent}${buildMenuEntryLine(args)}\n`;
-  const insertPos = new vscode.Position(Math.min(document.lineCount, insertAfterLine + 1), 0);
-
-  const edit = new vscode.WorkspaceEdit();
-  edit.insert(document.uri, insertPos, line);
-  return edit;
+  return applySectionEntryInsert(
+    document,
+    calls,
+    "createmenu",
+    menuId,
+    MENU_ENTRY_NAMES,
+    indent => `${indent}${buildMenuEntryLine(args)}`
+  );
 }
 
 export function applyMenuEntryUpdate(
@@ -1229,20 +1282,16 @@ export function applyMenuEntryUpdate(
   args: MenuEntryArgs,
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
-  if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
-
   const calls = scanDocumentCalls(document, scanRange);
-
-  const call = calls.find(
-    c => c.range.line === sourceLine && c.name.toLowerCase() === args.kind.toLowerCase()
+  return applySectionEntryUpdate(
+    document,
+    calls,
+    "createmenu",
+    menuId,
+    sourceLine,
+    args.kind.toLowerCase(),
+    buildMenuEntryLine(args)
   );
-  if (!call) return undefined;
-
-  if (!isLineInCreateSection(calls, sourceLine, "createmenu", menuId)) return undefined;
-
-  const indent = getLineIndent(document, sourceLine);
-  const rebuilt = `${indent}${buildMenuEntryLine(args)}`;
-  return replaceCallLinePreserveSuffix(document, call, rebuilt);
 }
 
 export function applyMenuEntryDelete(
@@ -1252,20 +1301,15 @@ export function applyMenuEntryDelete(
   kind: MenuEntryKind,
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
-  if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
-
   const calls = scanDocumentCalls(document, scanRange);
-
-  const call = calls.find(
-    c => c.range.line === sourceLine && c.name.toLowerCase() === kind.toLowerCase()
+  return applySectionEntryDelete(
+    document,
+    calls,
+    "createmenu",
+    menuId,
+    sourceLine,
+    kind.toLowerCase()
   );
-  if (!call) return undefined;
-
-  if (!isLineInCreateSection(calls, sourceLine, "createmenu", menuId)) return undefined;
-
-  const edit = new vscode.WorkspaceEdit();
-  edit.delete(document.uri, document.lineAt(sourceLine).rangeIncludingLineBreak);
-  return edit;
 }
 
 export function applyToolBarEntryInsert(
@@ -1275,23 +1319,16 @@ export function applyToolBarEntryInsert(
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
   const calls = scanDocumentCalls(document, scanRange);
-
-  const create = findCreateCallById(calls, "createtoolbar", toolBarId);
-  if (!create) return undefined;
-
-  const startIdx = calls.indexOf(create);
-
-  const endIdx = findSectionEndIndex(calls, startIdx);
-  const insertAfterLine = findLastEntryLineInSection(calls, startIdx, endIdx, TOOLBAR_ENTRY_NAMES);
-
-  const indent = getLineIndent(document, insertAfterLine);
-  const line = `${indent}${buildToolBarEntryLine(args)}\n`;
-  const insertPos = new vscode.Position(Math.min(document.lineCount, insertAfterLine + 1), 0);
-
-  const edit = new vscode.WorkspaceEdit();
-  edit.insert(document.uri, insertPos, line);
-  return edit;
+  return applySectionEntryInsert(
+    document,
+    calls,
+    "createtoolbar",
+    toolBarId,
+    TOOLBAR_ENTRY_NAMES,
+    indent => `${indent}${buildToolBarEntryLine(args)}`
+  );
 }
+
 
 export function applyToolBarEntryUpdate(
   document: vscode.TextDocument,
@@ -1300,20 +1337,16 @@ export function applyToolBarEntryUpdate(
   args: ToolBarEntryArgs,
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
-  if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
-
   const calls = scanDocumentCalls(document, scanRange);
-
-  const call = calls.find(
-    c => c.range.line === sourceLine && c.name.toLowerCase() === args.kind.toLowerCase()
+  return applySectionEntryUpdate(
+    document,
+    calls,
+    "createtoolbar",
+    toolBarId,
+    sourceLine,
+    args.kind.toLowerCase(),
+    buildToolBarEntryLine(args)
   );
-  if (!call) return undefined;
-
-  if (!isLineInCreateSection(calls, sourceLine, "createtoolbar", toolBarId)) return undefined;
-
-  const indent = getLineIndent(document, sourceLine);
-  const rebuilt = `${indent}${buildToolBarEntryLine(args)}`;
-  return replaceCallLinePreserveSuffix(document, call, rebuilt);
 }
 
 export function applyToolBarEntryDelete(
@@ -1323,20 +1356,15 @@ export function applyToolBarEntryDelete(
   kind: ToolBarEntryKind,
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
-  if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
-
   const calls = scanDocumentCalls(document, scanRange);
-
-  const call = calls.find(
-    c => c.range.line === sourceLine && c.name.toLowerCase() === kind.toLowerCase()
+  return applySectionEntryDelete(
+    document,
+    calls,
+    "createtoolbar",
+    toolBarId,
+    sourceLine,
+    kind.toLowerCase()
   );
-  if (!call) return undefined;
-
-  if (!isLineInCreateSection(calls, sourceLine, "createtoolbar", toolBarId)) return undefined;
-
-  const edit = new vscode.WorkspaceEdit();
-  edit.delete(document.uri, document.lineAt(sourceLine).rangeIncludingLineBreak);
-  return edit;
 }
 
 export function applyStatusBarFieldInsert(
@@ -1346,22 +1374,14 @@ export function applyStatusBarFieldInsert(
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
   const calls = scanDocumentCalls(document, scanRange);
-
-  const create = findCreateCallById(calls, "createstatusbar", statusBarId);
-  if (!create) return undefined;
-
-  const startIdx = calls.indexOf(create);
-
-  const endIdx = findSectionEndIndex(calls, startIdx);
-  const insertAfterLine = findLastEntryLineInSection(calls, startIdx, endIdx, STATUSBAR_FIELD_NAMES);
-
-  const indent = getLineIndent(document, insertAfterLine);
-  const line = `${indent}AddStatusBarField(${args.widthRaw.trim()})\n`;
-  const insertPos = new vscode.Position(Math.min(document.lineCount, insertAfterLine + 1), 0);
-
-  const edit = new vscode.WorkspaceEdit();
-  edit.insert(document.uri, insertPos, line);
-  return edit;
+  return applySectionEntryInsert(
+    document,
+    calls,
+    "createstatusbar",
+    statusBarId,
+    STATUSBAR_FIELD_NAMES,
+    indent => `${indent}AddStatusBarField(${args.widthRaw.trim()})`
+  );
 }
 
 export function applyStatusBarFieldUpdate(
@@ -1371,20 +1391,16 @@ export function applyStatusBarFieldUpdate(
   args: StatusBarFieldArgs,
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
-  if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
-
   const calls = scanDocumentCalls(document, scanRange);
-
-  const call = calls.find(
-    c => c.range.line === sourceLine && c.name.toLowerCase() === "addstatusbarfield"
+  return applySectionEntryUpdate(
+    document,
+    calls,
+    "createstatusbar",
+    statusBarId,
+    sourceLine,
+    "addstatusbarfield",
+    `AddStatusBarField(${args.widthRaw.trim()})`
   );
-  if (!call) return undefined;
-
-  if (!isLineInCreateSection(calls, sourceLine, "createstatusbar", statusBarId)) return undefined;
-
-  const indent = getLineIndent(document, sourceLine);
-  const rebuilt = `${indent}AddStatusBarField(${args.widthRaw.trim()})`;
-  return replaceCallLinePreserveSuffix(document, call, rebuilt);
 }
 
 export function applyStatusBarFieldDelete(
@@ -1393,18 +1409,13 @@ export function applyStatusBarFieldDelete(
   sourceLine: number,
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
-  if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
-
   const calls = scanDocumentCalls(document, scanRange);
-
-  const call = calls.find(
-    c => c.range.line === sourceLine && c.name.toLowerCase() === "addstatusbarfield"
+  return applySectionEntryDelete(
+    document,
+    calls,
+    "createstatusbar",
+    statusBarId,
+    sourceLine,
+    "addstatusbarfield"
   );
-  if (!call) return undefined;
-
-  if (!isLineInCreateSection(calls, sourceLine, "createstatusbar", statusBarId)) return undefined;
-
-  const edit = new vscode.WorkspaceEdit();
-  edit.delete(document.uri, document.lineAt(sourceLine).rangeIncludingLineBreak);
-  return edit;
 }

@@ -2,7 +2,9 @@ name: PR Check (Monorepo)
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [devel, main]
+  push:
+    branches: [devel]
 
 permissions:
   contents: read
@@ -12,11 +14,10 @@ jobs:
   build:
     name: Build ${{ matrix.pkg }}
     runs-on: ubuntu-latest
-
     strategy:
       fail-fast: false
       matrix:
-        pkg: [ pb-lang-support, pb-forms-editor ]
+        pkg: [pb-lang-support, pb-forms-editor]
 
     steps:
       - name: Checkout
@@ -26,7 +27,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          # cache: "npm"
 
       - name: Install dependencies (workspaces)
         run: npm ci
@@ -65,7 +65,6 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     permissions:
       issues: write
-
     steps:
       - name: Post or Update PR Comment
         continue-on-error: true
@@ -76,12 +75,13 @@ jobs:
             const repo = context.repo.repo;
             const issue_number = context.issue.number;
 
-            const marker = "<!-- pb-suite-ci-status -->";
+            // Unique marker so we update only our own comment
+            const marker = "<!-- pb-suite-ci -->";
             const success = "${{ needs.build.result }}" === "success";
 
-            const body =
-            `${marker}
-            ### 🧪 PureBasic VSCode Suite – CI Status
+            const body = `${marker}
+
+            ### PureBasic VSCode Suite – CI Status
 
             **Overall Result:** ${success ? "✅ Success" : "❌ Failed"}
 
@@ -95,9 +95,7 @@ jobs:
             - Bundle build (pb-lang-support only)
             - Test run (pb-lang-support only; only if packages/pb-lang-support/test/** exists)
 
-            ${success
-              ? "All checks passed successfully. The extensions are buildable and package correctly."
-              : "One or more checks failed. Please review the workflow logs."}
+            ${success ? "All checks passed successfully.\nThe extensions are buildable and package correctly." : "One or more checks failed. Please review the workflow logs."}
 
             📦 VSIX artifacts are available in the workflow run summary.
             `;
