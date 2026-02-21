@@ -2,8 +2,8 @@
 
 This repository uses a extra branching strategy:
 
-- `main` is the **default** and **stable/release** branch (tags/releases are created from `main`).  
-- `devel` is the **integration/development** branch (day-to-day work and primary PR target)
+- `main` is the **default** and **stable/release** branch (tags/releases are created from `main`).
+- `devel` is the **integration/development** branch (day-to-day work and primary PR target).
 
 ## Workflows
 
@@ -13,13 +13,13 @@ This repository uses a extra branching strategy:
 
 **Purpose**
 
-- Validate that both extensions build and package correctly.
+- Validate that both extensions build and package correctly for pull requests.
 - Provide downloadable VSIX artifacts for PR verification.
+- Post/update a PR status comment (only for PRs from this repo, not forks).
 
 **Triggers**
 
 - Pull requests targeting `devel` or `main`
-- Pushes to `devel`
 
 **What it does**
 
@@ -31,7 +31,29 @@ This repository uses a extra branching strategy:
 - Uploads VSIX artifacts to the workflow run
 - Posts/updates a PR status comment (only for PRs from this repo, not forks)
 
-### (2) Build VSIX (for Marketplace Upload)
+### (2) Devel CI (Monorepo)
+
+**File:** `.github/workflows/devel-ci.yml`
+
+**Purpose**
+
+- Validate that both extensions build and package correctly on direct pushes to `devel`.
+- Provide downloadable VSIX artifacts for quick verification.
+
+**Triggers**
+
+- Pushes to `devel`
+
+**What it does**
+
+- `npm ci` at repository root (workspaces)
+- Builds both packages:
+  - `packages/pb-lang-support` (compile + webpack:prod)
+  - `packages/pb-forms-editor` (compile)
+- Packages VSIX for both (smoke-test)
+- Uploads VSIX artifacts to the workflow run
+
+### (3) Build VSIX (for Marketplace Upload)
 
 **File:** `.github/workflows/build-vsix.yml`
 
@@ -72,8 +94,8 @@ This repository uses a extra branching strategy:
 
 ## Important Notes
 
-- Ensure that the version information in package.json is correct
-- Test functionality locally before publishing
-- Pre-release versions can be tested in pre-release mode first  
+- Ensure that the version information in `package.json` is correct.
+- Test functionality locally before publishing.
+- Pre-release versions can be tested in pre-release mode first.
 - There is currently no automated Marketplace publish workflow in this repository.
   Upload/publish the produced VSIX artifacts manually via the desired release process.
