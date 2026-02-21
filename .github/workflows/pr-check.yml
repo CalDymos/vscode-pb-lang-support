@@ -3,12 +3,9 @@ name: PR Check (Monorepo)
 on:
   pull_request:
     branches: [devel, main]
-  push:
-    branches: [devel]
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
   build:
@@ -65,6 +62,7 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     permissions:
       issues: write
+      pull-requests: write
     steps:
       - name: Post or Update PR Comment
         continue-on-error: true
@@ -75,7 +73,7 @@ jobs:
             const repo = context.repo.repo;
             const issue_number = context.issue.number;
 
-            // Unique marker so we update only our own comment
+            // Unique marker
             const marker = "<!-- pb-suite-ci -->";
             const success = "${{ needs.build.result }}" === "success";
 
