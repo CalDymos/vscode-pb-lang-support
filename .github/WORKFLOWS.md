@@ -1,84 +1,79 @@
 # GitHub Actions Workflows
 
-This repository is configured with automated CI/CD workflows for building and publishing VSCode extensions.
+This repository uses a extra branching strategy:
 
-## Workflow Descriptions
+- `main` is the **default** and **stable/release** branch (tags/releases are created from `main`).  
+- `devel` is the **integration/development** branch (day-to-day work and primary PR target)
 
-### 1. Build VSCode Extension (`.github/workflows/build-extension.yml`)
+## Workflows
 
-**Trigger Conditions**:
+### (1) PR Check (Monorepo)
 
-- Push to `main` or `master` branch
-- Create/Update Pull Request
-- Create version tag (`v*`)
+**File:** `.github/workflows/pr-check.yml`
 
-**Tasks**:
+**Purpose**
 
-- Build under Node.js 20.x environment
-- Install dependencies (`npm install -g @vscode/vsce`)
-- Compile TypeScript (`npm run compile`)
-- Build extension (`npx @vscode/vsce package`)
-- Package extension (.vsix file)
-- Upload build artifacts
+- Validate that both extensions build and package correctly.
+- Provide downloadable VSIX artifacts for PR verification.
 
-### 2. Publish to VSCode Marketplace (`.github/workflows/publish-extension.yml`)
+**Triggers**
 
-**Trigger Conditions**:
+- Pull requests targeting `devel` or `main`
+- Pushes to `devel`
 
-- Manual trigger (workflow_dispatch)
+**What it does**
 
-**Features**:
+- `npm ci` at repository root (workspaces)
+- Builds both packages:
+  - `packages/pb-lang-support` (compile + webpack:prod)
+  - `packages/pb-forms-editor` (compile)
+- Packages VSIX for both (smoke-test)
+- Uploads VSIX artifacts to the workflow run
+- Posts/updates a PR status comment (only for PRs from this repo, not forks)
 
-- Update version number
-- Convert icon to PNG format
-- Build and package extension
-- Publish to VSCode Marketplace
-- Create Git tag
+### (2) Build VSIX (for Marketplace Upload)
 
-### 3. PR Check (`.github/workflows/pr-check.yml`)
+**File:** `.github/workflows/build-vsix.yml`
 
-**Trigger Conditions**:
+**Purpose**
 
-- Create/Update Pull Request
+- Produce VSIX artifacts for manual upload/publishing.
+- Intended to be run for releases created from `main`.
 
-**Check Items**:
+**Triggers**
 
-- TypeScript type check
-- Code quality check
-- Build testing
-- Automated PR status comment
+- Manual run (`workflow_dispatch`) (optionally building a selected ref)
+- Push of version tags:
+  - `suite-v*`
+  - `pb-lang-support-v*`
+  - `pb-forms-editor-v*`
 
-## Usage Guide
+**What it does**
 
-### Automatic Build
+- `npm ci` at repository root (workspaces)
+- Builds and packages VSIX for:
+  - `pb-lang-support`
+  - `pb-forms-editor`
+- Uploads VSIX artifacts to the workflow run
 
-The extension will automatically build on every push, and build artifacts will be retained for 30 days.
+## Recommended Release Flow (Option 2)
 
-### Publish New Version
+1. Merge feature work into `devel` (typically via PRs).
+2. When ready to release, open a PR from `devel` -> `main` and merge it.
+3. On `main`, create and push version tags:
+   - `npm run t:all` (suite + both packages)
+   - or individually: `npm run t:suite`, `npm run t:lang`, `npm run t:forms`
+4. Pushing the tags triggers **Build VSIX** and produces the VSIX artifacts.
 
-1. Visit the repository's Actions page
-2. Select "Publish to VSCode Marketplace" workflow
-3. Click "Run workflow"
-4. Enter version number (e.g.: 0.0.2)
-5. Select whether it is a pre-release version
-6. Click "Run workflow"
+## Secrets
 
-### Required Secrets
-
-Configure the following secrets in the repository settings:
-
-- `VSCE_PAT`: VSCode Marketplace Personal Access Token
-  - How to obtain: https://dev.azure.com/
-
-## Publishing Process
-
-1. Automatically build after code is merged to main branch
-2. Manually trigger publish workflow
-3. Extension automatically published to VSCode Marketplace
-4. Automatically create Git tag and Release
+- No repository secrets are required for these workflows.
+- This repository currently does not include an automated Marketplace publish workflow.
 
 ## Important Notes
 
 - Ensure that the version information in package.json is correct
 - Test functionality locally before publishing
-- Pre-release versions can be tested in pre-release mode first
+- Pre-release versions can be tested in pre-release mode first  
+- There is currently no automated Marketplace publish workflow in this repository.
+  Upload/publish the produced VSIX artifacts manually via the desired release process.

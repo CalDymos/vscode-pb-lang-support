@@ -310,7 +310,7 @@ The extension includes a comprehensive test suite:
 ### Development Setup
 
 1. **Prerequisites**
-   - Node.js 16+
+   - Node.js 20+
    - VSCode with TypeScript extension
    - PureBasic compiler (for testing)
 

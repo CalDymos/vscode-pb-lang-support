@@ -8,36 +8,85 @@ This repository contains multiple VS Code extensions related to PureBasic.
 
 ## Packages
 
-- [packages/pb-lang-support](https://github.com/CalDymos/vscode-pb-lang-suite/tree/main/packages/pb-lang-support)
+- [packages/pb-lang-support](packages/pb-lang-support)  
   PureBasic language support (syntax highlighting, snippets, basic tooling).
 
-- [packages/pb-forms-editor](https://github.com/CalDymos/vscode-pb-lang-suite/tree/main/packages/pb-forms-editor)
-  PureBasic Forms editor (custom editor for `.pbf` files). *(Work in progress)*
+- [packages/pb-forms-editor](packages/pb-forms-editor)  
+  PureBasic Forms editor (custom editor for `.pbf` files).
+
+> **(Work in progress)**
+
+## Branch Development Strategy
+
+This repository uses a two-branch model:
+
+- `main` is the **default** and **stable/release** branch  
+  (tested changes only, version tags are created from here)
+- `devel` is the **integration/development** branch  
+  (day-to-day development and PR target)
+
+Typical flow:
+
+- feature branch -> PR -> `devel`
+- release PR: `devel` -> `main`
+- (optional) hotfix: `main` -> `devel` back-merge after the fix
 
 ## Development
 
 ### Prerequisites
 
-- Node.js (LTS)
+- Node.js (Node 20 recommended)
 - npm
 
 ### Install
 
 ```bash
-npm install
+npm ci
 ```
 
-### Build
+### Build (all packages)
 
 ```bash
-npm -w packages/pb-lang-support run compile
-# (Once available)
-npm -w packages/pb-forms-editor run compile
+npm run c
+```
+
+### Build (single package)
+
+```bash
+npm run c:l
+npm run c:f
+```
+
+### Build VSIX locally
+
+This creates `pb-lang-support.vsix` and `pb-forms-editor.vsix` in the repository root.
+
+```bash
+npm run vsix
 ```
 
 ### Run (Debug)
 
 Open this repo in VS Code and use the provided launch configurations.
+
+## Versioning & Tags
+
+This repo uses annotated version tags:
+
+- suite: `suite-vX.Y.Z`
+- pb-lang-support: `pb-lang-support-vX.Y.Z`
+- pb-forms-editor: `pb-forms-editor-vX.Y.Z`
+
+Create and push tags from `main`:
+
+```bash
+npm run t:all
+# or: npm run t:suite / npm run t:lang / npm run t:forms
+```
+
+## CI / Workflows
+
+See [.github/WORKFLOWS.md](.github/WORKFLOWS.md).
 
 ## Repository Structure
 
@@ -50,11 +99,11 @@ Open this repo in VS Code and use the provided launch configurations.
 ├── .vscode
 │   ├── launch.json
 │   └── tasks.json
-├── package.json                 # configuration file
+├── package.json
 ├── packages/
-│   ├── pb-lang-support/        # purebasic language support
-│   └── pb-forms-editor/        # purebasic forms editor
-├── test/                       # Test files
+│   ├── pb-lang-support/
+│   └── pb-forms-editor/
+├── test/
 ├── README.md
 ├── LICENSE
 ├── .gitignore
