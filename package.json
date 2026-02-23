@@ -16,12 +16,14 @@
     "url": "https://github.com/CalDymos/vscode-pb-lang-suite.git"
   },
   "scripts": {
+    "w:core": "npm -w packages/pb-project-core",
     "w:lang": "npm -w packages/pb-lang-support",
     "w:forms": "npm -w packages/pb-forms-editor",
-    "c:l": "npm run -w packages/pb-lang-support compile",
+    "c:core": "npm -w packages/pb-project-core run build",
+    "c:l": "npm run c:core && npm run -w packages/pb-lang-support compile",
     "c:f": "npm run -w packages/pb-forms-editor compile",
-    "c": "npm run c:l && npm run c:f",
-    "vsix:l": "npm -w packages/pb-lang-support run compile && npm -w packages/pb-lang-support run webpack:prod && cd packages/pb-lang-support && npx @vscode/vsce package --no-dependencies -o ../../pb-lang-support.vsix",
+    "c": "npm run c:core && npm run c:l && npm run c:f",
+    "vsix:l": "npm run c:core && npm -w packages/pb-lang-support run compile && npm -w packages/pb-lang-support run webpack:prod && cd packages/pb-lang-support && npx @vscode/vsce package --no-dependencies -o ../../pb-lang-support.vsix",
     "vsix:f": "npm -w packages/pb-forms-editor run compile && cd packages/pb-forms-editor && npx @vscode/vsce package --no-dependencies -o ../../pb-forms-editor.vsix",
     "vsix": "npm run vsix:l && npm run vsix:f",
     "v:patch": "npm version patch --no-git-tag-version",

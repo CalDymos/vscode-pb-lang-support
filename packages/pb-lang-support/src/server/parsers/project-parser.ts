@@ -17,7 +17,7 @@ import {
     getProjectIncludeFiles as getPbpIncludeFiles,
     getProjectSourceFiles as getPbpSourceFiles,
     PbpConfig,
-} from '../../shared/parsers/pbp-parser';
+} from "@caldymos/pb-project-core";
 
 export interface ProjectFile {
     name: string;

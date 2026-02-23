@@ -1,10 +1,15 @@
-/* 
- * PureBasic Project (.pbp) File Parser (shared)
+/*
+ * @caldymos/pb-project-core
  *
- * Parses .pbp project files to extract file references and configuration information
- * Supports XML format for PureBasic 6.21 and later
- * dependency-free module (no VS Code / LSP imports) to use it in
- * the extension host and in the language server.
+ * PureBasic Project (.pbp) parser library.
+ *
+ * - Parses XML-based .pbp files (PureBasic >= 6.21)
+ * - Extracts source file references
+ * - Extracts project configuration metadata
+ * - No runtime or editor dependencies
+ *
+ * Intended for shared use between extension hosts,
+ * language servers, CLI tools, and build systems.
  */
 
 import * as path from 'path';
