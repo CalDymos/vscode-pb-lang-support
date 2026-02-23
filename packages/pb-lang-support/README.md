@@ -48,6 +48,10 @@ A Visual Studio Code extension that provides comprehensive PureBasic language su
 - ✅ **Arrays and Lists**: Enhanced IntelliSense for arrays, lists, and maps with specialized functions
 - ✅ **API Calls**: Comprehensive support including Windows API, graphics, networking, database, and threading functions
 
+### Compiler-/Build-/Run-Integration (Toolchain)
+
+- **TODO**
+
 ## Related Extensions
 
 - **PureBasic Forms Editor** – Visual designer and `.pbf` tooling for PureBasic Forms  

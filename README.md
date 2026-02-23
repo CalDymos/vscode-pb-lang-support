@@ -101,8 +101,10 @@ See [.github/WORKFLOWS.md](.github/WORKFLOWS.md).
 │   └── tasks.json
 ├── package.json
 ├── packages/
-│   ├── pb-lang-support/
-│   └── pb-forms-editor/
+│   ├── pb-forms-editor/  (VS Code Extension: purebasic Forms Editor)
+│   ├── pb-lang-support/  (VS Code Extension: purbasic langue support)
+│   ├── pb-project-core/  (npm lib: shared lib for pbp handling)
+│   └── pb-project-files/ (VS Code Extension: future Purebasic Project File Management / UI)
 ├── test/
 ├── README.md
 ├── LICENSE
