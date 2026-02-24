@@ -4,7 +4,7 @@
   "workspaces": [
     "packages/*"
   ],
-  "version": "0.4.0",
+  "version": "0.5.0",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -29,9 +29,11 @@
     "v:patch": "npm version patch --no-git-tag-version",
     "v:patch:l": "npm version patch -w packages/pb-lang-support --no-git-tag-version",
     "v:patch:f": "npm version patch -w packages/pb-forms-editor --no-git-tag-version",
+    "v:patch:c": "npm version patch -w packages/pb-project-core --no-git-tag-version",
     "v:minor": "npm version minor --no-git-tag-version",
     "v:minor:l": "npm version minor -w packages/pb-lang-support --no-git-tag-version",
     "v:minor:f": "npm version minor -w packages/pb-forms-editor --no-git-tag-version",
+    "v:minor:c": "npm version minor -w packages/pb-project-core --no-git-tag-version",
     "t:all": "node scripts/tag-and-push.mjs all",
     "t:suite": "node scripts/tag-and-push.mjs suite",
     "t:forms": "node scripts/tag-and-push.mjs forms",
