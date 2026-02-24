@@ -16,6 +16,17 @@
             }
         },
         {
+        "label": "compile pb-project-files",
+        "type": "shell",
+        "command": "npm -w packages/pb-project-files run compile",
+        "options": {
+            "shell": {
+            "executable": "C:\\Windows\\System32\\cmd.exe",
+            "args": ["/d", "/c"]
+            }
+        }
+        },
+        {
             "label": "compile pb-forms-editor",
             "type": "shell",
             "command": "npm -w packages/pb-forms-editor run compile",
@@ -30,13 +41,23 @@
             }
         },
         {
-            "label": "compile all",
-            "dependsOrder": "sequence",
-            "dependsOn": [
-                "compile pb-lang-support",
-                "compile pb-forms-editor"
-            ],
-            "group": "build"
+        "label": "compile all",
+        "dependsOrder": "sequence",
+        "dependsOn": [
+            "compile pb-lang-support",
+            "compile pb-project-files",
+            "compile pb-forms-editor"
+        ],
+        "group": "build"
+        },
+        {
+        "label": "compile lang + project-files",
+        "dependsOrder": "sequence",
+        "dependsOn": [
+            "compile pb-lang-support",
+            "compile pb-project-files"
+        ],
+        "group": "build"
         },
         {
             "label": "pack pb-lang-support",

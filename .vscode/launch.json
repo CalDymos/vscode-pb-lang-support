@@ -45,6 +45,25 @@
       ],
       "preLaunchTask": "compile all",
       "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Run lang + project-files",
+      "type": "extensionHost",
+      "request": "launch",
+      "runtimeExecutable": "${execPath}",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/pb-lang-support",
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/pb-project-files",
+
+        "--disable-extensions",
+        "--user-data-dir=${workspaceFolder}/.vscode/.vscode-test"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/packages/pb-lang-support/out/**/*.js",
+        "${workspaceFolder}/packages/pb-project-files/out/**/*.js"
+      ],
+      "preLaunchTask": "compile lang + project-files",
+      "cwd": "${workspaceFolder}"
     }
   ]
 }
