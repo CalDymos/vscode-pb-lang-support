@@ -1,366 +1,281 @@
 /**
- * PureBasic Project Manager
- * Manage project files and cross-file symbol parsing
+ * PureBasic Project Context Manager
+ *
+ * This manager intentionally does NOT perform workspace-wide discovery or .pbp parsing.
+ * It consumes project/target information from the extension host (pb-project-files) via
+ * LSP notifications and provides a lightweight per-project symbol aggregation.
  */
 
-import { TextDocument } from 'vscode-languageserver-textdocument';
-import { URI } from 'vscode-uri';
 import { Connection } from 'vscode-languageserver/node';
-import {
-    parseProjectFile,
-    ProjectFile,
-    ParsedProject,
-    isProjectFile,
-    extractProjectFiles,
-    getProjectIncludeDirectories
-} from '../parsers/project-parser';
+import { TextDocument } from 'vscode-languageserver-textdocument';
+
+export interface ProjectContextLspPayload {
+    version: 1;
+
+    projectFileUri?: string;
+    projectDir?: string;
+    projectName?: string;
+
+    targetName?: string;
+
+    includeDirs?: string[];
+    projectFiles?: string[];
+}
+
+export interface FileProjectLspPayload {
+    version: 1;
+
+    documentUri: string;
+    projectFileUri?: string;
+    scope?: 'internal' | 'external';
+}
 
 export interface ProjectContext {
-    projectFile: string;
-    project: ProjectFile;
-    includedFiles: Map<string, TextDocument>;
+    projectFileUri: string;
+    projectDir?: string;
+    projectName?: string;
+
+    targetName?: string;
+
+    includeDirs: string[];
+    projectFiles: Set<string>;
+
     globalSymbols: Map<string, any>;
+    fileSymbols: Map<string, Set<string>>;
+
     lastModified: number;
 }
 
 export class ProjectManager {
-    private projects: Map<string, ProjectContext> = new Map();
-    private fileToProject: Map<string, string> = new Map();
-    private workspaceRoot: string = '';
-    private connection: Connection;
+    private readonly projects = new Map<string, ProjectContext>();
+    private readonly fileToProject = new Map<string, string>();
 
-    constructor(connection: Connection, workspaceRoot: string = '') {
-        this.connection = connection;
-        this.workspaceRoot = workspaceRoot;
-    }
+    private activeProjectFileUri?: string;
+    private activeTargetName?: string;
 
-    /**
-     * Set workspace root directory
-     */
-    public setWorkspaceRoot(root: string): void {
-        this.workspaceRoot = root;
-    }
+    public constructor(private readonly connection: Connection) {}
 
-    /**
-     * Handle document open event
-     */
-    public onDocumentOpen(document: TextDocument): void {
-        if (isProjectFile(document)) {
-            this.loadProject(document);
-        } else {
-            this.associateFileWithProject(document);
+    public setActiveContext(payload: ProjectContextLspPayload): void {
+        if (!payload || payload.version !== 1) return;
+
+        this.activeProjectFileUri = payload.projectFileUri;
+        this.activeTargetName = payload.targetName;
+
+        if (!payload.projectFileUri) return;
+
+        const ctx = this.getOrCreateProject(payload.projectFileUri);
+        ctx.projectDir = payload.projectDir;
+        ctx.projectName = payload.projectName;
+        ctx.targetName = payload.targetName;
+
+        if (Array.isArray(payload.includeDirs)) {
+            ctx.includeDirs = payload.includeDirs.filter(Boolean);
         }
-    }
 
-    /**
-     * Handle document close event
-     */
-    public onDocumentClose(document: TextDocument): void {
-        const uri = document.uri;
-
-        // If it's a project file, unload the project
-        if (isProjectFile(document)) {
-            this.unloadProject(uri);
-        } else {
-            // Remove from the project's included files
-            this.removeFileFromProjects(uri);
+        if (Array.isArray(payload.projectFiles)) {
+            ctx.projectFiles = new Set(payload.projectFiles.filter(Boolean));
         }
+
+        ctx.lastModified = Date.now();
     }
 
-    /**
-     * Handle document content changes
-     */
-    public onDocumentChange(document: TextDocument): void {
-        if (isProjectFile(document)) {
-            // Project file changed, reload
-            this.reloadProject(document);
-        } else {
-            // Regular file changed, update related project symbols
-            this.updateProjectSymbols(document);
-        }
-    }
+    public setFileProjectMapping(payload: FileProjectLspPayload): void {
+        if (!payload || payload.version !== 1) return;
 
-    /**
-     * Load project file
-     */
-    private loadProject(document: TextDocument): void {
-        const uri = document.uri;
-        const parsedProject = parseProjectFile(document);
-
-        if (!parsedProject) {
-            this.connection.console.error(`Failed to parse project file: ${uri}`);
+        if (!payload.projectFileUri) {
+            this.fileToProject.delete(payload.documentUri);
             return;
         }
 
-        const projectContext: ProjectContext = {
-            projectFile: uri,
-            project: parsedProject.project,
-            includedFiles: new Map(),
+        this.fileToProject.set(payload.documentUri, payload.projectFileUri);
+        this.getOrCreateProject(payload.projectFileUri).lastModified = Date.now();
+    }
+
+    public onDocumentOpen(document: TextDocument): void {
+        this.updateProjectSymbols(document);
+    }
+
+    public onDocumentChange(document: TextDocument): void {
+        this.updateProjectSymbols(document);
+    }
+
+    public onDocumentClose(document: TextDocument): void {
+        const projectKey = this.getProjectKeyForDocument(document.uri);
+        if (!projectKey) return;
+
+        const ctx = this.projects.get(projectKey);
+        if (!ctx) return;
+
+        this.removeDocumentSymbols(ctx, document.uri);
+        ctx.lastModified = Date.now();
+    }
+
+    /**
+     * Returns include directories for the project associated with the given document.
+     */
+    public getIncludeDirsForDocument(documentUri: string): string[] {
+        const projectKey = this.getProjectKeyForDocument(documentUri);
+        const ctx = projectKey ? this.projects.get(projectKey) : undefined;
+        return ctx?.includeDirs ?? [];
+    }
+
+    /**
+     * Returns the project-related file list for the project associated with the given document.
+     */
+    public getProjectFilesForDocument(documentUri: string): string[] {
+        const projectKey = this.getProjectKeyForDocument(documentUri);
+        const ctx = projectKey ? this.projects.get(projectKey) : undefined;
+        return ctx ? Array.from(ctx.projectFiles) : [];
+    }
+
+    /**
+     * Lookup a symbol in the project that contains the given document.
+     */
+    public findSymbolDefinition(symbolName: string, documentUri: string): any | null {
+        const projectKey = this.getProjectKeyForDocument(documentUri);
+        if (!projectKey) return null;
+
+        const ctx = this.projects.get(projectKey);
+        if (!ctx) return null;
+
+        return ctx.globalSymbols.get(symbolName) || null;
+    }
+
+    private getProjectKeyForDocument(documentUri: string): string | undefined {
+        return this.fileToProject.get(documentUri) ?? this.activeProjectFileUri;
+    }
+
+    private getOrCreateProject(projectFileUri: string): ProjectContext {
+        const existing = this.projects.get(projectFileUri);
+        if (existing) return existing;
+
+        const ctx: ProjectContext = {
+            projectFileUri,
+            includeDirs: [],
+            projectFiles: new Set(),
             globalSymbols: new Map(),
-            lastModified: Date.now()
+            fileSymbols: new Map(),
+            lastModified: Date.now(),
         };
 
-        this.projects.set(uri, projectContext);
-
-        // Parse included files in the project
-        this.parseProjectIncludes(projectContext);
-
-        this.connection.console.log(`Loaded project: ${parsedProject.project.name} (${uri})`);
+        this.projects.set(projectFileUri, ctx);
+        return ctx;
     }
 
-    /**
-     * Reload project file
-     */
-    private reloadProject(document: TextDocument): void {
-        const uri = document.uri;
-        const existingProject = this.projects.get(uri);
-
-        if (existingProject) {
-            this.unloadProject(uri);
+    private updateProjectSymbols(document: TextDocument): void {
+        // Do not attempt to parse .pbp XML as PureBasic source.
+        if (document.uri.toLowerCase().endsWith('.pbp')) {
+            return;
         }
 
-        this.loadProject(document);
-    }
+        const projectKey = this.getProjectKeyForDocument(document.uri);
+        if (!projectKey) return;
 
-    /**
-     * Unload project
-     */
-    private unloadProject(uri: string): void {
-        const project = this.projects.get(uri);
-        if (project) {
-            // Clean up file-to-project mapping
-            for (const [fileUri, projectUri] of this.fileToProject) {
-                if (projectUri === uri) {
-                    this.fileToProject.delete(fileUri);
-                }
-            }
+        const ctx = this.getOrCreateProject(projectKey);
 
-            this.projects.delete(uri);
-            this.connection.console.log(`Unloaded project: ${uri}`);
+        // Replace symbols from this document.
+        this.removeDocumentSymbols(ctx, document.uri);
+
+        const symbols = this.extractSymbols(document);
+        const names = new Set<string>();
+
+        for (const sym of symbols) {
+            names.add(sym.name);
+            ctx.globalSymbols.set(sym.name, sym);
         }
+
+        ctx.fileSymbols.set(document.uri, names);
+        ctx.lastModified = Date.now();
     }
 
-    /**
-     * Associate file with project
-     */
-    private associateFileWithProject(document: TextDocument): void {
-        const uri = document.uri;
-        const filePath = URI.parse(uri).fsPath;
+    private removeDocumentSymbols(ctx: ProjectContext, documentUri: string): void {
+        const names = ctx.fileSymbols.get(documentUri);
+        if (!names) return;
 
-        // Find projects that contain this file
-        for (const [projectUri, project] of this.projects) {
-            const projectFiles = extractProjectFiles(project.project);
-
-            if (projectFiles.some(file => filePath.includes(file) || file.includes(filePath))) {
-                this.fileToProject.set(uri, projectUri);
-                project.includedFiles.set(uri, document);
-
-                // Parse file symbols and add to project global symbol table
-                this.parseFileSymbols(document, project.globalSymbols);
-                break;
+        for (const name of names) {
+            const existing = ctx.globalSymbols.get(name);
+            if (existing && existing.file === documentUri) {
+                ctx.globalSymbols.delete(name);
             }
         }
+
+        ctx.fileSymbols.delete(documentUri);
     }
 
-    /**
-     * Remove file from project
-     */
-    private removeFileFromProjects(uri: string): void {
-        const projectUri = this.fileToProject.get(uri);
-        if (projectUri) {
-            const project = this.projects.get(projectUri);
-            if (project) {
-                project.includedFiles.delete(uri);
-                this.fileToProject.delete(uri);
-
-                // Remove this file's symbols from global symbols
-                this.removeFileSymbols(uri, project.globalSymbols);
-            }
-        }
-    }
-
-    /**
-     * Parse project included files
-     */
-    private async parseProjectIncludes(project: ProjectContext): Promise<void> {
-        const includeDirectories = getProjectIncludeDirectories(project.project);
-
-        // Here should implement asynchronous file reading, but since in language server,
-        // we need to read files through workspace functions
-        // temporarily leave empty, waiting for specific file reading implementation
-    }
-
-    /**
-     * Parse file symbols
-     */
-    private parseFileSymbols(document: TextDocument, globalSymbols: Map<string, any>): void {
+    private extractSymbols(document: TextDocument): Array<{ name: string; type: string; file: string; line: number; definition: string } > {
         const content = document.getText();
         const lines = content.split('\n');
+        const out: Array<{ name: string; type: string; file: string; line: number; definition: string } > = [];
 
         for (let i = 0; i < lines.length; i++) {
-            const line = lines[i].trim();
+            const raw = lines[i];
+            const line = raw.trim();
 
-            // Parse procedure definition
-            if (line.startsWith('Procedure') || line.startsWith('Procedure.')) {
-                const match = line.match(/(?:Procedure|Procedure\.\w+)\s+(\w+)\s*\(/);
-                if (match) {
-                    const procName = match[1];
-                    globalSymbols.set(procName, {
-                        type: 'procedure',
-                        file: document.uri,
-                        line: i,
-                        definition: line
-                    });
-                }
+            // Procedure definitions
+            const procMatch = line.match(/^(?:Procedure(?:\.\w+)?)\s+(\w+)\s*\(/i);
+            if (procMatch) {
+                out.push({
+                    name: procMatch[1],
+                    type: 'procedure',
+                    file: document.uri,
+                    line: i,
+                    definition: raw,
+                });
+                continue;
             }
 
-            // Parse variable declaration
-            if (line.startsWith('Global') || line.startsWith('Define')) {
-                const match = line.match(/(?:Global|Define)\s+(\w+)/);
-                if (match) {
-                    const varName = match[1];
-                    globalSymbols.set(varName, {
-                        type: 'variable',
-                        file: document.uri,
-                        line: i,
-                        definition: line
-                    });
-                }
+            // Macro definitions
+            const macroMatch = line.match(/^Macro\s+(\w+)\b/i);
+            if (macroMatch) {
+                out.push({
+                    name: macroMatch[1],
+                    type: 'macro',
+                    file: document.uri,
+                    line: i,
+                    definition: raw,
+                });
+                continue;
             }
 
-            // Parse constant definition
-            if (line.startsWith('#')) {
-                const match = line.match(/#\s*(\w+)\s*=/);
-                if (match) {
-                    const constName = match[1];
-                    globalSymbols.set(constName, {
-                        type: 'constant',
-                        file: document.uri,
-                        line: i,
-                        definition: line
-                    });
-                }
+            // Constants: #NAME = ...
+            const constMatch = line.match(/^#\s*([a-zA-Z_][a-zA-Z0-9_]*\$?)\s*=/);
+            if (constMatch) {
+                out.push({
+                    name: constMatch[1],
+                    type: 'constant',
+                    file: document.uri,
+                    line: i,
+                    definition: raw,
+                });
+                continue;
             }
 
-            // Parse structure definition
-            if (line.startsWith('Structure')) {
-                const match = line.match(/Structure\s+(\w+)/);
-                if (match) {
-                    const structName = match[1];
-                    globalSymbols.set(structName, {
-                        type: 'structure',
-                        file: document.uri,
-                        line: i,
-                        definition: line
-                    });
-                }
+            // Structures
+            const structMatch = line.match(/^Structure\s+(\w+)\b/i);
+            if (structMatch) {
+                out.push({
+                    name: structMatch[1],
+                    type: 'structure',
+                    file: document.uri,
+                    line: i,
+                    definition: raw,
+                });
+                continue;
             }
 
-            // Parse interface definition
-            if (line.startsWith('Interface')) {
-                const match = line.match(/Interface\s+(\w+)/);
-                if (match) {
-                    const interfaceName = match[1];
-                    globalSymbols.set(interfaceName, {
-                        type: 'interface',
-                        file: document.uri,
-                        line: i,
-                        definition: line
-                    });
-                }
-            }
-
-            // Parse enumeration definition
-            if (line.startsWith('Enumeration')) {
-                const match = line.match(/Enumeration\s+(\w+)/);
-                if (match) {
-                    const enumName = match[1];
-                    globalSymbols.set(enumName, {
-                        type: 'enumeration',
-                        file: document.uri,
-                        line: i,
-                        definition: line
-                    });
-                }
+            // Globals
+            const globalMatch = line.match(/^(?:Global|Define)\s+(\w+)\b/i);
+            if (globalMatch) {
+                out.push({
+                    name: globalMatch[1],
+                    type: 'variable',
+                    file: document.uri,
+                    line: i,
+                    definition: raw,
+                });
             }
         }
-    }
 
-    /**
-     * Remove file symbols from global symbols
-     */
-    private removeFileSymbols(uri: string, globalSymbols: Map<string, any>): void {
-        for (const [symbolName, symbol] of globalSymbols) {
-            if (symbol.file === uri) {
-                globalSymbols.delete(symbolName);
-            }
-        }
-    }
-
-    /**
-     * Update project symbols
-     */
-    private updateProjectSymbols(document: TextDocument): void {
-        const projectUri = this.fileToProject.get(document.uri);
-        if (projectUri) {
-            const project = this.projects.get(projectUri);
-            if (project) {
-                // Remove old symbols
-                this.removeFileSymbols(document.uri, project.globalSymbols);
-
-                // Add new symbols
-                this.parseFileSymbols(document, project.globalSymbols);
-
-                project.lastModified = Date.now();
-            }
-        }
-    }
-
-    /**
-     * Get the project that the file belongs to
-     */
-    public getFileProject(uri: string): ProjectContext | null {
-        const projectUri = this.fileToProject.get(uri);
-        return projectUri ? this.projects.get(projectUri) || null : null;
-    }
-
-    /**
-     * Get the project's global symbols
-     */
-    public getProjectSymbols(uri: string): Map<string, any> | null {
-        const project = this.getFileProject(uri);
-        return project ? project.globalSymbols : null;
-    }
-
-    /**
-     * Find symbol definition
-     */
-    public findSymbolDefinition(symbolName: string, uri: string): any | null {
-        const symbols = this.getProjectSymbols(uri);
-        if (symbols) {
-            return symbols.get(symbolName) || null;
-        }
-        return null;
-    }
-
-    /**
-     * Get all projects
-     */
-    public getAllProjects(): ProjectContext[] {
-        return Array.from(this.projects.values());
-    }
-
-    /**
-     * Get project file path list
-     */
-    public getProjectFiles(): string[] {
-        return Array.from(this.projects.keys());
-    }
-
-    /**
-     * Check if file belongs to a project
-     */
-    public isFileInProject(uri: string): boolean {
-        return this.fileToProject.has(uri);
+        return out;
     }
 }

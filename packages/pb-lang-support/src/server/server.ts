@@ -115,6 +115,23 @@ connection.onInitialize((params: InitializeParams) => {
     // Initialize the Project Manager
     projectManager = new ProjectManager(connection);
 
+    // Bridge notifications from the VS Code extension host (pb-project-files)
+    connection.onNotification('purebasic/projectContext', payload => {
+        try {
+            projectManager.setActiveContext(payload);
+        } catch (err) {
+            connection.console.error(`Failed to apply projectContext payload: ${err}`);
+        }
+    });
+
+    connection.onNotification('purebasic/fileProject', payload => {
+        try {
+            projectManager.setFileProjectMapping(payload);
+        } catch (err) {
+            connection.console.error(`Failed to apply fileProject payload: ${err}`);
+        }
+    });
+
     const result: InitializeResult = {
         capabilities: serverCapabilities
     };

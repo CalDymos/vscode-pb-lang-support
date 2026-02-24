@@ -5,6 +5,20 @@ import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } f
 let client: LanguageClient;
 let debugChannel: vscode.OutputChannel;
 
+interface PbProjectFilesApi {
+    version: 1;
+    getActiveContextPayload(): {
+        projectFile?: string;
+        projectDir?: string;
+        projectName?: string;
+        targetName?: string;
+        includeDirs?: string[];
+        projectFiles?: string[];
+    };
+    getProjectForFile(fileUri: vscode.Uri): { projectFile: string; projectDir: string } | undefined;
+    onDidChangeActiveContext: vscode.Event<any>;
+}
+
 export function activate(context: vscode.ExtensionContext) {
     console.log('PureBasic extension is now active!');
 
@@ -13,6 +27,7 @@ export function activate(context: vscode.ExtensionContext) {
         console.log('Server path:', serverPath);
 
         // Check if server file exists
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
         const fs = require('fs');
         if (!fs.existsSync(serverPath)) {
             console.error('Server file does not exist:', serverPath);
@@ -38,7 +53,8 @@ export function activate(context: vscode.ExtensionContext) {
             ],
             synchronize: {
                 configurationSection: 'purebasic',
-                fileEvents: vscode.workspace.createFileSystemWatcher('**/*.{pb,pbi,pbp}')
+                // Only PureBasic source files are relevant for the language server.
+                fileEvents: vscode.workspace.createFileSystemWatcher('**/*.{pb,pbi}')
             }
         };
 
@@ -52,25 +68,115 @@ export function activate(context: vscode.ExtensionContext) {
         // Register commands
         registerCommands(context);
 
-        // Add startup status listener
+        // Start the language server.
         console.log('Starting Language Server...');
-        client.start().then(() => {
-            console.log('PureBasic Language Server is ready!');
-            vscode.window.showInformationMessage('PureBasic Language Server is ready!');
-
-            // Setup debug output channel
-            debugChannel = vscode.window.createOutputChannel('PureBasic (Debug)');
-            debugChannel.appendLine('PureBasic debug channel initialized.');
-        }).catch((error: any) => {
+        try {
+            client.start();
+        } catch (error) {
             console.error('Language Server failed to start:', error);
-            vscode.window.showErrorMessage('PureBasic Language Server failed to start: ' + error.message);
-        });
+            const msg = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage('PureBasic Language Server failed to start: ' + msg);
+            return;
+        }
 
+        // Some vscode-languageclient type declarations (depending on the build setup) may not expose onReady().
+        // Use a runtime check to stay compatible.
+        const onReadyFn = (client as any).onReady as undefined | (() => Promise<void>);
+        const readyPromise = typeof onReadyFn === 'function' ? onReadyFn.call(client) : Promise.resolve();
+
+        void readyPromise
+            .then(() => {
+                console.log('PureBasic Language Server is ready!');
+                vscode.window.showInformationMessage('PureBasic Language Server is ready!');
+
+                // Setup debug output channel
+                debugChannel = vscode.window.createOutputChannel('PureBasic (Debug)');
+                debugChannel.appendLine('PureBasic debug channel initialized.');
+
+                // Setup pb-project-files bridge (optional extension).
+                void setupProjectFilesBridge(context);
+            })
+            .catch((error: any) => {
+                console.error('Language Server failed to become ready:', error);
+                vscode.window.showErrorMessage(
+                    'PureBasic Language Server failed to start: ' + (error?.message ?? String(error))
+                );
+            });
     } catch (error) {
         console.error('Error activating extension:', error);
         const errorMessage = error instanceof Error ? error.message : String(error);
         vscode.window.showErrorMessage('Failed to activate PureBasic extension: ' + errorMessage);
     }
+}
+
+async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promise<void> {
+    const ext = vscode.extensions.getExtension('CalDymos.pb-project-files');
+    if (!ext) {
+        return;
+    }
+
+    let api: PbProjectFilesApi | undefined;
+    try {
+        api = (await ext.activate()) as PbProjectFilesApi | undefined;
+    } catch {
+        // Optional integration: ignore activation failures to keep pb-lang-support fully functional.
+        return;
+    }
+    if (!api || api.version !== 1) {
+        return;
+    }
+
+    const sendProjectContext = () => {
+        const ctx = api.getActiveContextPayload();
+        client.sendNotification('purebasic/projectContext', {
+            version: 1,
+            projectFileUri: ctx.projectFile ? vscode.Uri.file(ctx.projectFile).toString() : undefined,
+            projectDir: ctx.projectDir,
+            projectName: ctx.projectName,
+            targetName: ctx.targetName,
+            includeDirs: ctx.includeDirs ?? [],
+            projectFiles: ctx.projectFiles ?? [],
+        });
+    };
+
+    const computeScope = (projectDir: string, filePath: string): 'internal' | 'external' => {
+        const rel = path.relative(projectDir, filePath);
+        return rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? 'internal' : 'external';
+    };
+
+    const sendFileProject = (doc: vscode.TextDocument, isClosed = false) => {
+        if (doc.uri.scheme !== 'file') return;
+        const proj = isClosed ? undefined : api.getProjectForFile(doc.uri);
+        client.sendNotification('purebasic/fileProject', {
+            version: 1,
+            documentUri: doc.uri.toString(),
+            projectFileUri: proj?.projectFile ? vscode.Uri.file(proj.projectFile).toString() : undefined,
+            scope: proj?.projectDir ? computeScope(proj.projectDir, doc.uri.fsPath) : undefined,
+        });
+    };
+
+    // Initial sync.
+    sendProjectContext();
+    for (const doc of vscode.workspace.textDocuments) {
+        sendFileProject(doc);
+    }
+
+    const subs: vscode.Disposable[] = [];
+
+    subs.push(
+        api.onDidChangeActiveContext(() => {
+            sendProjectContext();
+            const ed = vscode.window.activeTextEditor;
+            if (ed) sendFileProject(ed.document);
+        }),
+        vscode.workspace.onDidOpenTextDocument(doc => sendFileProject(doc)),
+        vscode.workspace.onDidCloseTextDocument(doc => sendFileProject(doc, true)),
+        vscode.window.onDidChangeActiveTextEditor(ed => {
+            if (ed) sendFileProject(ed.document);
+        })
+    );
+
+    context.subscriptions.push(...subs);
 }
 
 function registerCommands(context: vscode.ExtensionContext) {
@@ -87,7 +193,10 @@ function registerCommands(context: vscode.ExtensionContext) {
                 await client.start();
                 vscode.window.showInformationMessage('PureBasic Language Server restarted successfully!');
             } catch (error) {
-                vscode.window.showErrorMessage('Failed to restart PureBasic Language Server: ' + (error instanceof Error ? error.message : String(error)));
+                vscode.window.showErrorMessage(
+                    'Failed to restart PureBasic Language Server: ' +
+                        (error instanceof Error ? error.message : String(error))
+                );
             }
         }
     });
@@ -100,7 +209,9 @@ function registerCommands(context: vscode.ExtensionContext) {
                 vscode.window.showInformationMessage('Symbol cache cleared successfully!');
             }
         } catch (error) {
-            vscode.window.showErrorMessage('Failed to clear symbol cache: ' + (error instanceof Error ? error.message : String(error)));
+            vscode.window.showErrorMessage(
+                'Failed to clear symbol cache: ' + (error instanceof Error ? error.message : String(error))
+            );
         }
     });
 
@@ -111,7 +222,9 @@ function registerCommands(context: vscode.ExtensionContext) {
             try {
                 await vscode.commands.executeCommand('editor.action.formatDocument');
             } catch (error) {
-                vscode.window.showErrorMessage('Failed to format document: ' + (error instanceof Error ? error.message : String(error)));
+                vscode.window.showErrorMessage(
+                    'Failed to format document: ' + (error instanceof Error ? error.message : String(error))
+                );
             }
         } else {
             vscode.window.showWarningMessage('No PureBasic document active');
@@ -123,7 +236,9 @@ function registerCommands(context: vscode.ExtensionContext) {
         try {
             await vscode.commands.executeCommand('workbench.action.showAllSymbols');
         } catch (error) {
-            vscode.window.showErrorMessage('Failed to show symbols: ' + (error instanceof Error ? error.message : String(error)));
+            vscode.window.showErrorMessage(
+                'Failed to show symbols: ' + (error instanceof Error ? error.message : String(error))
+            );
         }
     });
 
@@ -134,15 +249,7 @@ function registerCommands(context: vscode.ExtensionContext) {
         clearSymbolCache,
         formatDocument,
         findSymbols
-    );
-}
-
-function formatBytes(bytes: number): string {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        );
 }
 
 export function deactivate(): Thenable<void> | undefined {

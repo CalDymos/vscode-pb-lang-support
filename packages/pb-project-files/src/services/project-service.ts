@@ -4,18 +4,32 @@ import * as path from 'path';
 import {
     parsePbpProjectText,
     pickTarget,
+    getProjectIncludeDirectories,
+    getProjectSourceFiles,
+    getProjectIncludeFiles,
     type PbpProject,
     type PbpTarget,
 } from '@caldymos/pb-project-core';
 
-import type { PbProjectContext, PbProjectContextPayload, PbProjectFilesApi } from '../api';
+import type { PbFileProjectPayload, PbProjectContext, PbProjectContextPayload, PbProjectFilesApi, ProjectScope } from '../api';
 
 const DEFAULT_PBP_GLOB = '**/*.pbp';
 const DEFAULT_EXCLUDE_GLOB = '**/{node_modules,.git}/**';
 
+const WSKEY_ACTIVE_PROJECT = 'pbProjectFiles.activeProjectFile';
+const WSKEY_ACTIVE_TARGET = 'pbProjectFiles.activeTargetName';
+
 function normalizeFsPath(fsPath: string): string {
     const p = path.normalize(fsPath);
     return process.platform === 'win32' ? p.toLowerCase() : p;
+}
+
+function classifyScope(projectDir: string, filePath: string): ProjectScope {
+    const proj = normalizeFsPath(projectDir);
+    const file = normalizeFsPath(filePath);
+    if (!proj) return 'external';
+    const rel = path.relative(proj, file);
+    return rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? 'internal' : 'external';
 }
 
 function formatStatusBarText(ctx: PbProjectContextPayload): string {
@@ -26,7 +40,12 @@ function formatStatusBarText(ctx: PbProjectContextPayload): string {
 
 export class ProjectService implements vscode.Disposable {
     private readonly projects = new Map<string, PbpProject>();
+
+    /** Maps normalized absolute fsPath -> normalized .pbp fsPath */
     private readonly fileToProject = new Map<string, string>();
+
+    /** Cached per project (keyed by normalized .pbp fsPath) */
+    private readonly projectMeta = new Map<string, { includeDirs: string[]; projectFiles: string[] }>();
 
     private activeProjectFile?: string;
     private activeTargetName?: string;
@@ -67,6 +86,12 @@ export class ProjectService implements vscode.Disposable {
     }
 
     public async initialize(): Promise<void> {
+        // Restore persisted state first.
+        const persistedProject = this.context.workspaceState.get<string>(WSKEY_ACTIVE_PROJECT);
+        const persistedTarget = this.context.workspaceState.get<string>(WSKEY_ACTIVE_TARGET);
+        this.activeProjectFile = persistedProject ? normalizeFsPath(persistedProject) : undefined;
+        this.activeTargetName = persistedTarget ?? undefined;
+
         await this.refresh();
         await this.syncActiveContextFromEditor();
         this.installWatchers();
@@ -87,16 +112,38 @@ export class ProjectService implements vscode.Disposable {
     }
 
     public getActiveContextPayload(): PbProjectContextPayload {
+        const proj = this.activeProjectFile ? this.projects.get(this.activeProjectFile) : undefined;
+        const meta = this.activeProjectFile ? this.projectMeta.get(this.activeProjectFile) : undefined;
         return {
-            projectFile: this.activeProjectFile,
+            projectFile: proj?.projectFile ?? this.activeProjectFile,
+            projectDir: proj?.projectDir,
+            projectName: proj?.config?.name,
             targetName: this.activeTargetName,
+            includeDirs: meta?.includeDirs ?? [],
+            projectFiles: meta?.projectFiles ?? [],
         };
     }
 
     public getProjectForFile(fileUri: vscode.Uri): PbpProject | undefined {
         const fsPath = normalizeFsPath(fileUri.fsPath);
+
+        // If the file is a .pbp, it is its own project key.
+        if (fsPath.toLowerCase().endsWith('.pbp')) {
+            return this.projects.get(fsPath);
+        }
+
         const projFile = this.fileToProject.get(fsPath);
-        return projFile ? this.projects.get(projFile) : undefined;
+        if (projFile) return this.projects.get(projFile);
+
+        // Fallback: best matching project root containment
+        const best = this.findBestProjectByRoot(fsPath);
+        if (best) {
+            // Cache the result for faster subsequent lookups.
+            this.fileToProject.set(fsPath, best);
+            return this.projects.get(best);
+        }
+
+        return undefined;
     }
 
     public async refresh(): Promise<void> {
@@ -104,12 +151,14 @@ export class ProjectService implements vscode.Disposable {
 
         this.projects.clear();
         this.fileToProject.clear();
+        this.projectMeta.clear();
 
         for (const uri of pbpUris) {
             const parsed = await this.tryParseProject(uri);
             if (!parsed) continue;
             const key = normalizeFsPath(parsed.projectFile);
             this.projects.set(key, parsed);
+            this.projectMeta.set(key, this.computeProjectMeta(parsed));
         }
 
         this.rebuildFileToProjectMap();
@@ -128,6 +177,8 @@ export class ProjectService implements vscode.Disposable {
                 this.activeTargetName = proj ? this.getActiveTarget(proj)?.name : undefined;
             }
         }
+
+        await this.persistActiveState();
 
         this.updateStatusBar();
         this.emitActiveContextChanged();
@@ -180,6 +231,7 @@ export class ProjectService implements vscode.Disposable {
         if (!picked) return;
 
         this.activeTargetName = picked.targetName;
+        await this.persistActiveState();
         this.updateStatusBar();
         this.emitActiveContextChanged();
     }
@@ -190,10 +242,18 @@ export class ProjectService implements vscode.Disposable {
         if (!proj) return;
 
         this.activeProjectFile = key;
-        this.activeTargetName = this.getActiveTarget(proj)?.name;
+        // Keep a previously selected target if still present; otherwise pick default.
+        const t = this.getActiveTarget(proj);
+        this.activeTargetName = t?.name;
 
+        await this.persistActiveState();
         this.updateStatusBar();
         this.emitActiveContextChanged();
+    }
+
+    private async persistActiveState(): Promise<void> {
+        await this.context.workspaceState.update(WSKEY_ACTIVE_PROJECT, this.activeProjectFile);
+        await this.context.workspaceState.update(WSKEY_ACTIVE_TARGET, this.activeTargetName);
     }
 
     private getActiveTarget(project: PbpProject): PbpTarget | undefined {
@@ -206,14 +266,55 @@ export class ProjectService implements vscode.Disposable {
         return t ?? project.targets?.[0];
     }
 
+    private computeProjectMeta(project: PbpProject): { includeDirs: string[]; projectFiles: string[] } {
+        const includeDirs = [...new Set((getProjectIncludeDirectories(project) ?? []).filter(Boolean))];
+
+        const src = (getProjectSourceFiles(project) ?? []).filter(Boolean);
+        const inc = (getProjectIncludeFiles(project) ?? []).filter(Boolean);
+        const projectFiles = [...new Set([...src, ...inc])]
+            .filter(p => p.toLowerCase().endsWith('.pb') || p.toLowerCase().endsWith('.pbi'))
+            .map(p => path.resolve(p));
+
+        return { includeDirs, projectFiles };
+    }
+
     private rebuildFileToProjectMap(): void {
         for (const proj of this.projects.values()) {
             const projKey = normalizeFsPath(proj.projectFile);
+
+            // Project file itself.
+            this.fileToProject.set(projKey, projKey);
+
             for (const f of proj.files ?? []) {
                 if (!f?.fsPath) continue;
                 this.fileToProject.set(normalizeFsPath(f.fsPath), projKey);
             }
+
+            // Also map all derived project files (even if not in proj.files).
+            const meta = this.projectMeta.get(projKey);
+            for (const filePath of meta?.projectFiles ?? []) {
+                this.fileToProject.set(normalizeFsPath(filePath), projKey);
+            }
         }
+    }
+
+    private findBestProjectByRoot(fileFsPath: string): string | undefined {
+        let bestKey: string | undefined;
+        let bestLen = -1;
+
+        for (const [projKey, proj] of this.projects) {
+            const projDir = proj.projectDir;
+            if (!projDir) continue;
+            const scope = classifyScope(projDir, fileFsPath);
+            if (scope !== 'internal') continue;
+            const len = normalizeFsPath(projDir).length;
+            if (len > bestLen) {
+                bestLen = len;
+                bestKey = projKey;
+            }
+        }
+
+        return bestKey;
     }
 
     private async syncActiveContextFromEditor(): Promise<void> {
@@ -259,10 +360,12 @@ export class ProjectService implements vscode.Disposable {
         }
 
         this.projects.set(key, parsed);
+        this.projectMeta.set(key, this.computeProjectMeta(parsed));
         this.rebuildFileToProjectMap();
 
         if (this.activeProjectFile === key) {
             this.activeTargetName = this.getActiveTarget(parsed)?.name;
+            await this.persistActiveState();
         }
 
         this.updateStatusBar();
@@ -272,11 +375,13 @@ export class ProjectService implements vscode.Disposable {
     private onPbpFileDeleted(uri: vscode.Uri): void {
         const key = normalizeFsPath(uri.fsPath);
         this.projects.delete(key);
+        this.projectMeta.delete(key);
         this.rebuildFileToProjectMap();
 
         if (this.activeProjectFile === key) {
             this.activeProjectFile = undefined;
             this.activeTargetName = undefined;
+            void this.persistActiveState();
         }
 
         this.updateStatusBar();
@@ -300,5 +405,19 @@ export class ProjectService implements vscode.Disposable {
 
     private emitActiveContextChanged(): void {
         this.onDidChangeActiveContextEmitter.fire(this.getActiveContextPayload());
+    }
+
+    /**
+     * Helper used by external consumers that want file->project mapping payload.
+     */
+    public buildFileProjectPayload(document: vscode.TextDocument): PbFileProjectPayload {
+        const proj = this.getProjectForFile(document.uri);
+        const projectFileUri = proj ? vscode.Uri.file(proj.projectFile).toString() : undefined;
+        const scope = proj?.projectDir ? classifyScope(proj.projectDir, document.uri.fsPath) : undefined;
+        return {
+            documentUri: document.uri.toString(),
+            projectFileUri,
+            scope,
+        };
     }
 }
