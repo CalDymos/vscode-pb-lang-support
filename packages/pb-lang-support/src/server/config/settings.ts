@@ -1,5 +1,5 @@
 /**
- * Language Server 设置配置
+ * Language Server settings configuration
  */
 
 export interface PureBasicSettings {
@@ -15,58 +15,58 @@ export interface PureBasicSettings {
 }
 
 export interface FormattingSettings {
-    /** 是否启用格式化 */
+    /** Whether to enable formatting */
     enabled: boolean;
-    /** 缩进大小 */
+    /** Indentation size */
     indentSize: number;
-    /** Tab大小 */
+    /** Tab size */
     tabSize: number;
-    /** 是否插入空格 */
+    /** Whether to insert spaces */
     insertSpaces: boolean;
-    /** 是否删除尾部空格 */
+    /** Whether to remove trailing whitespace */
     trimTrailingWhitespace: boolean;
-    /** 是否删除末尾换行 */
+    /** Whether to remove final newlines */
     trimFinalNewlines: boolean;
 }
 
 export interface CompletionSettings {
-    /** 触发字符 */
+    /** Trigger characters */
     triggerCharacters: string[];
-    /** 是否启用自动闭合 */
+    /** Whether to enable auto-closing */
     autoClosingPairs: boolean;
-    /** 是否在输入时建议 */
+    /** Whether to suggest on input */
     suggestOnType: boolean;
 }
 
 export interface LintingSettings {
-    /** 是否启用语义验证 */
+    /** Whether to enable semantic validation */
     enableSemanticValidation: boolean;
-    /** 是否检查未使用变量 */
+    /** Whether to check unused variables */
     checkUnusedVariables: boolean;
-    /** 是否检查未定义符号 */
+    /** Whether to check undefined symbols */
     checkUndefinedSymbols: boolean;
-    /** 是否启用代码操作 */
+    /** Whether to enable code actions */
     enableCodeActions: boolean;
 }
 
 export interface SymbolsSettings {
-    /** 是否启用工作区符号 */
+    /** Whether to enable workspace symbols */
     enableWorkspaceSymbols: boolean;
-    /** 是否启用符号缓存 */
+    /** Whether to enable symbol caching */
     cacheEnabled: boolean;
-    /** 缓存大小 */
+    /** Cache size */
     cacheSize: number;
 }
 
 export interface PerformanceSettings {
-    /** 是否启用增量解析 */
+    /** Whether to enable incremental parsing */
     enableIncrementalParsing: boolean;
-    /** 最大文件大小 */
+    /** Maximum file size */
     maxFileSize: number;
 }
 
 /**
- * 默认设置
+ * Default settings
  */
 export const defaultSettings: PureBasicSettings = {
     maxNumberOfProblems: 100,
@@ -104,6 +104,6 @@ export const defaultSettings: PureBasicSettings = {
 };
 
 /**
- * 全局设置（当没有工作区配置时使用）
+ * Global settings (used when there is no workspace configuration)
  */
 export let globalSettings: PureBasicSettings = defaultSettings;

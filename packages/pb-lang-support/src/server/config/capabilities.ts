@@ -1,5 +1,5 @@
 /**
- * Language Server 能力配置
+ * Language Server capabilities configuration
  */
 
 import {
@@ -9,7 +9,7 @@ import {
 } from 'vscode-languageserver/node';
 
 /**
- * 服务器能力配置
+ * Server capabilities configuration
  */
 export const serverCapabilities: ServerCapabilities = {
     textDocumentSync: TextDocumentSyncKind.Incremental,

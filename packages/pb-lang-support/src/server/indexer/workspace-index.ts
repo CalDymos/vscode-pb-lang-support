@@ -2,18 +2,18 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { uriToFsPath } from '../utils/fs-utils';
 
-// 简易工作区文件索引，仅维护 .pb/.pbi 文件列表（缓存）
+// Simple workspace file index, only maintain .pb/.pbi file list (cache)
 
 let roots: string[] = [];
 let cachedFiles: string[] = [];
 let lastBuild = 0;
 
-const MAX_FILES = 1000; // 防止扫描过多文件
-const REBUILD_INTERVAL_MS = 5000; // 最小重建间隔
+const MAX_FILES = 1000; // Prevent scanning too many files
+const REBUILD_INTERVAL_MS = 5000; // Minimum rebuild interval
 
 export function setWorkspaceRoots(uris: string[]) {
   roots = uris.map(uriToFsPath).filter(Boolean);
-  // 强制触发重建
+  // Force trigger rebuild
   lastBuild = 0;
 }
 
@@ -52,7 +52,7 @@ function walk(dir: string, out: string[], seen: Set<string>) {
   for (const e of entries) {
     const p = path.join(dir, e.name);
     if (e.isDirectory()) {
-      if (e.name.startsWith('.')) continue; // 跳过隐藏目录
+      if (e.name.startsWith('.')) continue; // Skip hidden directories
       walk(p, out, seen);
       if (out.length >= MAX_FILES) return;
     } else if (e.isFile()) {
