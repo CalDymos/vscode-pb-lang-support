@@ -1,6 +1,6 @@
 export * from "./pbp/parser";
 export * from "./pbp/model";
-// TODO: export * from "./pbp/targetPick";
-// TODO: export * from "./pbp/resolve";
-// TODO: export * from "./pbp/validation";
+export * from "./pbp/targetPick";
+export * from "./pbp/resolve";
+export * from "./pbp/validation";
 // TODO: export * from "./pbp/writer";

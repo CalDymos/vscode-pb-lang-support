@@ -34,6 +34,47 @@ export type {
     PbpTargetValue,
 } from './model';
 
+import { resolveProjectPath } from './resolve';
+
+// --------------------------------------------------------------------------------------
+// Regex constants
+//
+// Note: Any regex used with .exec() in a loop must be cloned per use because RegExp objects
+// with the global flag keep state via lastIndex.
+// --------------------------------------------------------------------------------------
+
+const RX_XML_PROJECT_HEADER = /<\?xml\b[\s\S]*?<project\b/i;
+
+const RX_CONFIG_OPTIONS_NAME = /<options\b[^>]*\bname="([^"]*)"[^>]*\/>/i;
+const RX_CONFIG_COMMENT = /<comment\b[^>]*>([\s\S]*?)<\/comment>/i;
+
+const RX_DATA_EXPLORER = /<explorer\b([^>]*)\/?>/i;
+const RX_DATA_LOG = /<log\b([^>]*)\/?>/i;
+const RX_DATA_LASTOPEN = /<lastopen\b([^>]*)\/?>/i;
+
+const RX_FILE_ENTRY = /<file\b[^>]*\bname="([^"]+)"[^>]*>([\s\S]*?)<\/file>/gi;
+const RX_FILE_ENTRY_SELF_CLOSED = /<file\b[^>]*\bname="([^"]+)"[^>]*\/>/gi;
+const RX_FILE_CONFIG = /<config\b([^>]*)\/>/i;
+
+const RX_LIB_VALUE = /<library\b[^>]*\bvalue="([^"]*)"[^>]*\/>/gi;
+const RX_LIB_KEY = /<key\b[^>]*\bname="Library\d+"[^>]*>\s*([\s\S]*?)\s*<\/key>/gi;
+
+const RX_TARGET = /<target\b([^>]*)>([\s\S]*?)<\/target>/gi;
+const RX_TARGET_COMPILER = /<compiler\b([^>]*)\/>/i;
+const RX_TARGET_COMMANDLINE_TEXT = /<commandline\b[^>]*>([\s\S]*?)<\/commandline>/i;
+const RX_TARGET_PURIFIER = /<purifier\b([^>]*)\/>/i;
+const RX_TARGET_OPTIONS = /<options\b([^>]*)\/>/i;
+const RX_TARGET_FORMAT = /<format\b([^>]*)\/>/i;
+const RX_TARGET_ICON = /<icon\b([^>]*)>([\s\S]*?)<\/icon>/i;
+
+const RX_TARGET_CONSTANTS_SECTION = /<constants\b[^>]*>([\s\S]*?)<\/constants>/i;
+const RX_TARGET_CONSTANT = /<constant\b([^>]*)\/>/gi;
+
+const RX_VALUE_ATTR_TEMPLATE = `<__TAG__\\b[^>]*\\bvalue="([^"]*)"[^>]*\\/>`; // Usage: new RegExp(RX_VALUE_ATTR_TEMPLATE.replace('__TAG__', escapeRegExp(tagName)), 'i');
+const RX_VALUE_ATTR_FLAGS = 'i';
+const RX_SECTION_TEMPLATE = `<section\\b[^>]*\\bname="__NAME__"[^>]*>([\\s\\S]*?)<\\/section>`; // Usage: new RegExp(RX_SECTION_TEMPLATE.replace('__NAME__', escapeRegExp(sectionName)), 'i');
+const RX_SECTION_FLAGS = 'i';
+
 /**
  * Parse a PureBasic project file (.pbp).
  *
@@ -45,41 +86,11 @@ export function parsePbpProjectText(content: string, projectFileFsPath: string, 
     const projectDir = path.dirname(projectFileFsPath);
 
     // Fast path: XML format
-    if (/<\?xml\b[\s\S]*?<project\b/i.test(normalized)) {
+    if (RX_XML_PROJECT_HEADER.test(normalized)) {
         return parseXmlProject(normalized, projectFileFsPath, projectDir);
     }
 
     return null;
-}
-
-export function selectDefaultTarget(project: PbpProject): PbpTarget | null {
-    const explicitDefault = project.targets.find(t => t.enabled && t.isDefault);
-    if (explicitDefault) return explicitDefault;
-    const firstEnabled = project.targets.find(t => t.enabled);
-    return firstEnabled ?? null;
-}
-
-export function getProjectSourceFiles(project: PbpProject): string[] {
-    return project.files
-        .map(f => f.fsPath)
-        .filter(p => p.toLowerCase().endsWith('.pb'));
-}
-
-export function getProjectIncludeFiles(project: PbpProject): string[] {
-    return project.files
-        .map(f => f.fsPath)
-        .filter(p => p.toLowerCase().endsWith('.pbi'));
-}
-
-export function getProjectIncludeDirectories(project: PbpProject): string[] {
-    const dirs = new Set<string>();
-    dirs.add(project.projectDir);
-
-    for (const inc of getProjectIncludeFiles(project)) {
-        dirs.add(path.dirname(inc));
-    }
-
-    return Array.from(dirs);
 }
 
 /**
@@ -114,8 +125,8 @@ function parseProjectConfig(content: string): PbpConfig {
         };
     }
 
-    const name = configSection.match(/<options\b[^>]*\bname="([^"]*)"[^>]*\/>/i);
-    const comment = configSection.match(/<comment\b[^>]*>([\s\S]*?)<\/comment>/i);
+    const name = configSection.match(RX_CONFIG_OPTIONS_NAME);
+    const comment = configSection.match(RX_CONFIG_COMMENT);
 
     return {
         name: (name?.[1] ?? '').trim(),
@@ -129,13 +140,13 @@ function parseProjectData(content: string): PbpData {
     const dataSection = extractSection(content, 'data');
     if (!dataSection) return {};
 
-    const explorerMatch = dataSection.match(/<explorer\b([^>]*)\/?>/i);
+    const explorerMatch = dataSection.match(RX_DATA_EXPLORER);
     const explorerAttrs = explorerMatch ? parseAttributes(explorerMatch[1] ?? '') : undefined;
 
-    const logMatch = dataSection.match(/<log\b([^>]*)\/?>/i);
+    const logMatch = dataSection.match(RX_DATA_LOG);
     const logAttrs = logMatch ? parseAttributes(logMatch[1] ?? '') : undefined;
 
-    const lastOpenMatch = dataSection.match(/<lastopen\b([^>]*)\/?>/i);
+    const lastOpenMatch = dataSection.match(RX_DATA_LASTOPEN);
     const lastopenAttrs = lastOpenMatch ? parseAttributes(lastOpenMatch[1] ?? '') : undefined;
 
     const explorer = explorerAttrs ? {
@@ -165,13 +176,13 @@ function parseProjectFiles(content: string, projectDir: string): PbpFileEntry[] 
     const result: PbpFileEntry[] = [];
 
     // Normal <file name="..."><...></file>
-    const fileRe = /<file\b[^>]*\bname="([^"]+)"[^>]*>([\s\S]*?)<\/file>/gi;
+    const fileRe = RX_FILE_ENTRY;
     let m: RegExpExecArray | null;
     while ((m = fileRe.exec(filesSection)) !== null) {
         const rawPath = (m[1] ?? '').trim();
         const body = m[2] ?? '';
 
-        const configMatch = body.match(/<config\b([^>]*)\/>/i);
+        const configMatch = body.match(RX_FILE_CONFIG);
         const cfg = configMatch ? parseBooleanAttributes(configMatch[1] ?? '') : undefined;
 
         result.push({
@@ -182,7 +193,7 @@ function parseProjectFiles(content: string, projectDir: string): PbpFileEntry[] 
     }
 
     // Self-closed <file name="..."/>
-    const fileSelfRe = /<file\b[^>]*\bname="([^"]+)"[^>]*\/>/gi;
+    const fileSelfRe = RX_FILE_ENTRY_SELF_CLOSED;
     while ((m = fileSelfRe.exec(filesSection)) !== null) {
         const rawPath = (m[1] ?? '').trim();
         // Avoid duplicates when both regex hit the same entry (shouldn't happen, but be defensive)
@@ -206,14 +217,14 @@ function parseProjectLibraries(content: string): string[] {
 
     const libs: string[] = [];
 
-    const valueRe = /<library\b[^>]*\bvalue="([^"]*)"[^>]*\/>/gi;
+    const valueRe = RX_LIB_VALUE;
     let m: RegExpExecArray | null;
     while ((m = valueRe.exec(section)) !== null) {
         const v = decodeXmlEntities((m[1] ?? '').trim());
         if (v) libs.push(v);
     }
 
-    const keyRe = /<key\b[^>]*\bname="Library\d+"[^>]*>\s*([\s\S]*?)\s*<\/key>/gi;
+    const keyRe = RX_LIB_KEY;
     while ((m = keyRe.exec(section)) !== null) {
         const v = decodeXmlEntities((m[1] ?? '').trim());
         if (v) libs.push(v);
@@ -237,7 +248,7 @@ function parseProjectTargets(content: string, projectDir: string): PbpTarget[] {
 
     const result: PbpTarget[] = [];
 
-    const targetRe = /<target\b([^>]*)>([\s\S]*?)<\/target>/gi;
+    const targetRe = RX_TARGET;
     let m: RegExpExecArray | null;
     while ((m = targetRe.exec(targetsSection)) !== null) {
         const attrs = parseAttributes(m[1] ?? '');
@@ -253,29 +264,29 @@ function parseProjectTargets(content: string, projectDir: string): PbpTarget[] {
         const outputRaw = extractValueAttr(body, 'outputfile');
         const exeRaw = extractValueAttr(body, 'executable');
 
-        const compilerMatch = body.match(/<compiler\b([^>]*)\/>/i);
+        const compilerMatch = body.match(RX_TARGET_COMPILER);
         const compilerAttrs = compilerMatch ? parseAttributes(compilerMatch[1] ?? '') : undefined;
         const compilerVersion = (compilerAttrs?.['version'] ?? '').trim() || undefined;
 
         const commandLineRaw = extractValueAttr(body, 'commandline');
-        const commandLineTextMatch = !commandLineRaw ? body.match(/<commandline\b[^>]*>([\s\S]*?)<\/commandline>/i) : null;
+        const commandLineTextMatch = !commandLineRaw ? body.match(RX_TARGET_COMMANDLINE_TEXT) : null;
         const commandLine = (commandLineRaw || decodeXmlEntities((commandLineTextMatch?.[1] ?? '').trim())) || undefined;
 
         const subsystemRaw = extractValueAttr(body, 'subsystem');
         const subsystem = subsystemRaw ? subsystemRaw : undefined;
 
-        const purifierMatch = body.match(/<purifier\b([^>]*)\/>/i);
+        const purifierMatch = body.match(RX_TARGET_PURIFIER);
         const purifierAttrs = purifierMatch ? parseAttributes(purifierMatch[1] ?? '') : undefined;
         const purifierEnabled = purifierAttrs ? parseBool(purifierAttrs['enable']) : false;
         const purifierGranularity = purifierAttrs?.['granularity'];
 
-        const optMatch = body.match(/<options\b([^>]*)\/>/i);
+        const optMatch = body.match(RX_TARGET_OPTIONS);
         const options = optMatch ? parseBooleanAttributes(optMatch[1] ?? '') : {};
 
-        const fmtMatch = body.match(/<format\b([^>]*)\/>/i);
+        const fmtMatch = body.match(RX_TARGET_FORMAT);
         const format = fmtMatch ? parseAttributes(fmtMatch[1] ?? '') : undefined;
 
-        const iconMatch = body.match(/<icon\b([^>]*)>([\s\S]*?)<\/icon>/i);
+        const iconMatch = body.match(RX_TARGET_ICON);
         const iconAttrs = iconMatch ? parseAttributes(iconMatch[1] ?? '') : undefined;
         const iconText = iconMatch ? decodeXmlEntities((iconMatch[2] ?? '').trim()) : '';
 
@@ -319,13 +330,13 @@ function parseProjectTargets(content: string, projectDir: string): PbpTarget[] {
 }
 
 function parseTargetConstants(targetBody: string): Array<{ enabled: boolean; value: string }> {
-    const constantsSectionMatch = targetBody.match(/<constants\b[^>]*>([\s\S]*?)<\/constants>/i);
+    const constantsSectionMatch = targetBody.match(RX_TARGET_CONSTANTS_SECTION);
     if (!constantsSectionMatch) return [];
 
     const constantsBody = constantsSectionMatch[1] ?? '';
     const result: Array<{ enabled: boolean; value: string }> = [];
 
-    const constRe = /<constant\b([^>]*)\/>/gi;
+    const constRe = RX_TARGET_CONSTANT;
     let m: RegExpExecArray | null;
     while ((m = constRe.exec(constantsBody)) !== null) {
         const attrs = parseAttributes(m[1] ?? '');
@@ -340,53 +351,19 @@ function parseTargetConstants(targetBody: string): Array<{ enabled: boolean; val
 }
 
 function extractValueAttr(targetBody: string, tagName: string): string {
-    const re = new RegExp(`<${tagName}\\b[^>]*\\bvalue="([^"]*)"[^>]*\\/>`, 'i');
+    const re = new RegExp(RX_VALUE_ATTR_TEMPLATE.replace('__TAG__', escapeRegExp(tagName)), RX_VALUE_ATTR_FLAGS);
     const m = targetBody.match(re);
     return decodeXmlEntities((m?.[1] ?? '').trim());
 }
 
 function extractSection(content: string, sectionName: string): string | null {
-    const re = new RegExp(`<section\\b[^>]*\\bname="${escapeRegExp(sectionName)}"[^>]*>([\\s\\S]*?)<\\/section>`, 'i');
+    const re = new RegExp(RX_SECTION_TEMPLATE.replace('__NAME__', escapeRegExp(sectionName)), RX_SECTION_FLAGS);
     const m = content.match(re);
     return m ? (m[1] ?? '') : null;
 }
 
 function normalizeNewlines(content: string): string {
     return content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-}
-
-function resolveProjectPath(projectDir: string, rawPath: string): string {
-    const p = normalizeRawProjectPath(rawPath);
-    if (!p) return '';
-
-    if (isAbsoluteCrossPlatform(p)) {
-        return p;
-    }
-
-    return path.normalize(path.join(projectDir, p));
-}
-
-function normalizeRawProjectPath(rawPath: string): string {
-    let p = rawPath.trim();
-    if (!p) return '';
-
-    // Strip leading ./ or .\\
-    p = p.replace(/^\.\/[\\/]/, '');
-    p = p.replace(/^\.\\/, '');
-
-    // Keep the original separator style but normalize for path.join()
-    p = p.replace(/[\\/]+/g, path.sep);
-    return p;
-}
-
-function isAbsoluteCrossPlatform(p: string): boolean {
-    // POSIX absolute
-    if (p.startsWith('/')) return true;
-    // UNC path
-    if (p.startsWith('\\\\')) return true;
-    // Windows drive path
-    if (/^[a-zA-Z]:[\\/]/.test(p)) return true;
-    return path.isAbsolute(p);
 }
 
 function parseBool(v: string | undefined): boolean {
