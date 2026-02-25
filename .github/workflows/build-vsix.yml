@@ -11,8 +11,9 @@ on:
   push:
     tags:
       - "suite-v*"
-      - "pb-lang-support-v*"
-      - "pb-forms-editor-v*"
+      - "lang-v*"
+      - "forms-v*"
+      - "pbp-v*"
 
 permissions:
   contents: read
@@ -23,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pkg: [pb-lang-support, pb-forms-editor]
+        pkg: [pb-lang-support, pb-forms-editor, pb-project-files]
 
     steps:
       - name: Checkout
