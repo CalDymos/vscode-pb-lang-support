@@ -40,6 +40,9 @@ jobs:
       - name: Install dependencies (workspaces)
         run: npm ci
 
+      - name: Build pb-project-core
+        run: npm -w packages/pb-project-core run build
+
       - name: Compile
         run: npm -w packages/${{ matrix.pkg }} run compile
 
