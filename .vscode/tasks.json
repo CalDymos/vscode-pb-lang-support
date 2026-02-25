@@ -2,9 +2,9 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "compile pb-lang-support",
+            "label": "compile pb-project-core",
             "type": "shell",
-            "command": "npm -w packages/pb-lang-support run compile",
+            "command": "npm -w packages/pb-project-core run build",
             "options": {
                 "shell": {
                     "executable": "C:\\Windows\\System32\\cmd.exe",
@@ -16,15 +16,40 @@
             }
         },
         {
-        "label": "compile pb-project-files",
-        "type": "shell",
-        "command": "npm -w packages/pb-project-files run compile",
-        "options": {
-            "shell": {
-            "executable": "C:\\Windows\\System32\\cmd.exe",
-            "args": ["/d", "/c"]
-            }
-        }
+            "label": "compile pb-lang-support",
+            "type": "shell",
+            "command": "npm -w packages/pb-lang-support run compile",
+            "options": {
+                "shell": {
+                    "executable": "C:\\Windows\\System32\\cmd.exe",
+                    "args": [
+                        "/d",
+                        "/c"
+                    ]
+                }
+            },
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "compile pb-project-core"
+            ]
+        },
+        {
+            "label": "compile pb-project-files",
+            "type": "shell",
+            "command": "npm -w packages/pb-project-files run compile",
+            "options": {
+                "shell": {
+                    "executable": "C:\\Windows\\System32\\cmd.exe",
+                    "args": [
+                        "/d",
+                        "/c"
+                    ]
+                }
+            },
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "compile pb-project-core"
+            ]
         },
         {
             "label": "compile pb-forms-editor",
@@ -41,23 +66,24 @@
             }
         },
         {
-        "label": "compile all",
-        "dependsOrder": "sequence",
-        "dependsOn": [
-            "compile pb-lang-support",
-            "compile pb-project-files",
-            "compile pb-forms-editor"
-        ],
-        "group": "build"
+            "label": "compile all",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "compile pb-project-core",
+                "compile pb-lang-support",
+                "compile pb-project-files",
+                "compile pb-forms-editor"
+            ],
+            "group": "build"
         },
         {
-        "label": "compile lang + project-files",
-        "dependsOrder": "sequence",
-        "dependsOn": [
-            "compile pb-lang-support",
-            "compile pb-project-files"
-        ],
-        "group": "build"
+            "label": "compile lang + project-files",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "compile pb-lang-support",
+                "compile pb-project-files"
+            ],
+            "group": "build"
         },
         {
             "label": "pack pb-lang-support",
@@ -82,6 +108,19 @@
             ],
             "options": {
                 "cwd": "${workspaceFolder}/packages/pb-forms-editor"
+            },
+            "group": "build"
+        },
+        {
+            "label": "pack pb-project-files",
+            "type": "shell",
+            "command": "npx",
+            "args": [
+                "vsce",
+                "package"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/packages/pb-project-files"
             },
             "group": "build"
         }
