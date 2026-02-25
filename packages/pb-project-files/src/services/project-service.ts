@@ -70,6 +70,13 @@ export class ProjectService implements vscode.Disposable {
                 void this.syncActiveContextFromEditor();
             })
         );
+
+        // Keep project discovery in sync for multi-root workspaces.
+        this.disposables.push(
+            vscode.workspace.onDidChangeWorkspaceFolders(() => {
+                void this.refresh();
+            })
+        );
     }
 
     public getApi(): PbProjectFilesApi {
