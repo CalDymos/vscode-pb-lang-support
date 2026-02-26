@@ -2,7 +2,7 @@
   "name": "pb-project-files",
   "displayName": "PureBasic Project Files",
   "description": "Workspace project/target management for PureBasic (.pbp) projects",
-  "version": "0.2.2",
+  "version": "0.2.4",
   "publisher": "CalDymos",
   "author": {
     "name": "CalDymos"
