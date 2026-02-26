@@ -291,6 +291,13 @@ function findConstantReference(
     const idx = lowerLine.indexOf(searchName);
     if (idx === -1) { return null; }
 
+    // Skip if match is inside an inline comment
+    if (line.substring(0, idx).includes(';')) { return null; }
+
+    // Skip if match is inside a string literal
+    const quoteCount = (line.substring(0, idx).match(/"/g) || []).length;
+    if (quoteCount % 2 === 1) { return null; }
+
     const afterIdx = idx + searchName.length;
     const hasDollar = lowerLine[afterIdx] === '$';
     const nextChar = lowerLine[afterIdx + (hasDollar ? 1 : 0)];
