@@ -181,17 +181,15 @@ export function handleDocumentSymbol(
             const displayName = returnType ? `${name}() : ${returnType}` : `${name}()`;
             const nameStart = safeIndexOf(line, name);
             const selectionRange = createSafeRange(i, nameStart, name.length, line.length);
-            const blockRange: Range = {
-                start: { line: i, character: 0 },
-                end: { line: i, character: line.length }
-            };
+            const blockRange = createLineRange(i, line.length);
 
             currentProcedure = {
                 name: displayName,
                 kind: SymbolKind.Function,
                 range: blockRange,
                 selectionRange,
-                children: []
+                children: [],
+                detail: 'Procedure'
             };
 
             if (currentModule) {
@@ -216,16 +214,14 @@ export function handleDocumentSymbol(
             const displayName = returnType ? `${name}() : ${returnType}` : `${name}()`;
             const nameStart = safeIndexOf(line, name);
             const selectionRange = createSafeRange(i, nameStart, name.length, line.length);
-            const blockRange: Range = {
-                start: { line: i, character: 0 },
-                end: { line: i, character: line.length }
-            };
+            const declarationRange = createLineRange(i, line.length);
 
             const declareSymbol: DocumentSymbol = {
                 name: displayName,
                 kind: SymbolKind.Function,
-                range: blockRange,
-                selectionRange
+                range: declarationRange,
+                selectionRange,
+                detail: 'Declare'
             };
 
             if (currentModule) {
@@ -242,16 +238,14 @@ export function handleDocumentSymbol(
             const name = constMatch[1];
             const hashStart = safeIndexOf(line, `#${name}`);
             const selectionRange = createSafeRange(i, hashStart + 1, name.length, line.length); // only NAME / NAME$
-            const blockRange: Range = {
-                start: { line: i, character: 0 },
-                end: { line: i, character: line.length }
-            };
+            const declarationRange = createLineRange(i, line.length);
 
             const constSymbol: DocumentSymbol = {
                 name: `#${name}`,
                 kind: SymbolKind.Constant,
-                range: blockRange,
-                selectionRange
+                range: declarationRange,
+                selectionRange,
+                detail: 'Constant'
             };
 
             if (currentEnumeration) {
@@ -373,6 +367,13 @@ function createSafeRange(line: number, startChar: number, length: number, lineLe
     return {
         start: { line, character: safeStart },
         end: { line, character: safeEnd }
+    };
+}
+
+function createLineRange(line: number, lineLength: number): Range {
+    return {
+        start: { line, character: 0 },
+        end: { line, character: Math.max(0, lineLength) }
     };
 }
 
