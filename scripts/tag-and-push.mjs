@@ -29,10 +29,12 @@ function tagAndPush(tag, message) {
 const rootPkg = readJson("package.json");
 const formsPkg = readJson("packages/pb-forms-editor/package.json");
 const langPkg = readJson("packages/pb-lang-support/package.json");
+const pbpPkg = readJson("packages/pb-project-files/package.json");
 
 const suiteVer = rootPkg.version;
 const formsVer = formsPkg.version;
 const langVer = langPkg.version;
+const pbpVer = pbpPkg.version;
 
 const mode = process.argv[2] ?? "all";
 
@@ -41,18 +43,22 @@ switch (mode) {
     tagAndPush(`suite-v${suiteVer}`, `suite v${suiteVer}`);
     break;
   case "forms":
-    tagAndPush(`pb-forms-editor-v${formsVer}`, `pb-forms-editor v${formsVer}`);
+    tagAndPush(`forms-v${formsVer}`, `forms v${formsVer}`);
     break;
   case "lang":
-    tagAndPush(`pb-lang-support-v${langVer}`, `pb-lang-support v${langVer}`);
+    tagAndPush(`lang-v${langVer}`, `lang v${langVer}`);
+    break;
+  case "pbp":
+    tagAndPush(`pbp-v${pbpVer}`, `pbp v${pbpVer}`);
     break;
   case "all":
     tagAndPush(`suite-v${suiteVer}`, `suite v${suiteVer}`);
-    tagAndPush(`pb-forms-editor-v${formsVer}`, `pb-forms-editor v${formsVer}`);
-    tagAndPush(`pb-lang-support-v${langVer}`, `pb-lang-support v${langVer}`);
+    tagAndPush(`forms-v${formsVer}`, `forms v${formsVer}`);
+    tagAndPush(`lang-v${langVer}`, `lang v${langVer}`);
+    tagAndPush(`pbp-v${pbpVer}`, `pbp v${pbpVer}`);
     break;
   default:
     console.error(`Unknown mode: ${mode}`);
-    console.error(`Usage: node scripts/tag-and-push.mjs [all|suite|forms|lang]`);
+    console.error(`Usage: node scripts/tag-and-push.mjs [all|suite|forms|lang|pbp]`);
     process.exit(1);
 }

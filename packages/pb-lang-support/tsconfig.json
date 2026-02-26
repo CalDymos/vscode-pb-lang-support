@@ -47,6 +47,5 @@
     "src/debug-adapter/**"
   ],
   "include": [
-    "src/**/*"
-  ]
+    "src/**/*"]
 }

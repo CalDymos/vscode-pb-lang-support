@@ -33,7 +33,7 @@ export function handleDefinition(
     }
 
     // 收集可搜索文档：当前 + 已打开 + 递归包含
-    const searchDocs = collectSearchDocuments(document, allDocuments);
+    const searchDocs = collectSearchDocuments(document, allDocuments, projectManager);
 
     // 查找定义
     const definitions: Location[] = [];
@@ -590,6 +590,7 @@ function findStructureMemberDefinition(
 function collectSearchDocuments(
     document: TextDocument,
     allDocuments: Map<string, TextDocument>,
+    projectManager?: any,
     maxDepth = 3
 ): Map<string, TextDocument> {
     const result = new Map<string, TextDocument>();
@@ -604,7 +605,8 @@ function collectSearchDocuments(
     addDoc(document);
     for (const [, doc] of allDocuments) addDoc(doc);
 
-    const queue: Array<{ uri: string; depth: number }> = [{ uri: document.uri, depth: 0 }];
+    const rootDocUri = document.uri;
+    const queue: Array<{ uri: string; depth: number }> = [{ uri: rootDocUri, depth: 0 }];
 
     while (queue.length) {
         const { uri, depth } = queue.shift()!;
@@ -617,7 +619,10 @@ function collectSearchDocuments(
         const lines = text.split('\n');
 
         // 维护当前IncludePath搜索目录（最新优先）
-        const includeDirs: string[] = [];
+        // Seed with project include directories from pb-project-files if available.
+        const includeDirs: string[] = typeof projectManager?.getIncludeDirsForDocument === 'function'
+            ? (projectManager.getIncludeDirsForDocument(uri) ?? []).slice()
+            : [];
 
         for (const line of lines) {
             // IncludePath 指令
@@ -656,8 +661,15 @@ function collectSearchDocuments(
     }
     // 增加工作区文件（限制数量），避免遗漏未打开文件
     try {
-        const files = getWorkspaceFiles();
-        for (const fsPath of files) {
+        // Prefer project file list (pbp-derived) over a full workspace scan.
+        let files: string[] | undefined;
+        if (typeof projectManager?.getProjectFilesForDocument === 'function') {
+            const projectFiles = projectManager.getProjectFilesForDocument(rootDocUri);
+            files = Array.isArray(projectFiles) && projectFiles.length > 0 ? projectFiles : undefined;
+        }
+
+        const filesToScan = files ?? getWorkspaceFiles();
+        for (const fsPath of filesToScan) {
             const incUri = fsPathToUri(fsPath);
             if (result.has(incUri)) continue;
             const content = readFileIfExistsSync(fsPath);

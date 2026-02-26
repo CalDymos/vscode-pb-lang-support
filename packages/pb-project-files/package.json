@@ -1,0 +1,80 @@
+{
+  "name": "pb-project-files",
+  "displayName": "PureBasic Project Files",
+  "description": "Workspace project/target management for PureBasic (.pbp) projects",
+  "version": "0.2.1",
+  "publisher": "CalDymos",
+  "author": {
+    "name": "CalDymos"
+  },
+  "icon": "icon.png",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CalDymos/vscode-pb-lang-suite.git"
+  },
+  "bugs": {
+    "url": "https://github.com/CalDymos/vscode-pb-lang-suite/issues"
+  },
+  "homepage": "https://github.com/CalDymos/vscode-pb-lang-suite#readme",
+  "keywords": [
+    "purebasic",
+    "pbp",
+    "project",
+    "targets"
+  ],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "workspaceContains:**/*.pbp"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "pbProjectFiles.pickProject",
+        "title": "PureBasic: Select Active Project",
+        "category": "PureBasic"
+      },
+      {
+        "command": "pbProjectFiles.pickTarget",
+        "title": "PureBasic: Select Active Target",
+        "category": "PureBasic"
+      },
+      {
+        "command": "pbProjectFiles.refresh",
+        "title": "PureBasic: Refresh Projects",
+        "category": "PureBasic"
+      }
+    ],
+    "customEditors": [
+      {
+        "viewType": "pbProjectFiles.pbpEditor",
+        "displayName": "PureBasic Project",
+        "selector": [
+          {
+            "filenamePattern": "*.pbp"
+          }
+        ],
+        "priority": "default"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -w -p ./"
+  },
+  "dependencies": {
+    "@caldymos/pb-project-core": "file:../pb-project-core"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.1",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.9.2"
+  },
+  "extensionDependencies": []
+}

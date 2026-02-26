@@ -1,6 +1,6 @@
 # PureBasic Forms Editor for VSCode
 
-[![pb-forms-editor](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=pb-forms-editor-v*&label=pb-forms-editor)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)
+[![pb-forms-editor](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=forms-v*&label=forms)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)
 
 A Visual Studio Code extension that provides a lightweight editor workflow for PureBasic **Form Designer** blocks, including safe patching of gadget/window coordinates after drag operations.
 
@@ -27,9 +27,13 @@ A Visual Studio Code extension that provides a lightweight editor workflow for P
 ## Related Extensions
 
 - **PureBasic Language Support** – Syntax highlighting, snippets, and language tooling  
-  [![pb-lang-support](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=pb-lang-support-v*&label=pb-lang-support)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)  
+  [![pb-lang-support](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=lang-v*&label=lang)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)  
   **Repo:** [PureBasic Language Service Extension](https://github.com/CalDymos/vscode-pb-lang-suite/tree/main/packages/pb-lang-support)
 
+- **PureBasic Project File Support**
+  [![pb-project-files](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=pbp-v*&label=pbp)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)  
+  **Repo:** [PureBasic Project File Support Extension](https://github.com/CalDymos/vscode-pb-lang-suite/tree/main/packages/pb-project-files)
+  
 ## Installation
 
 ### Development Version

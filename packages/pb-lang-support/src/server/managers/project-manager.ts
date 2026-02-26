@@ -1,366 +1,298 @@
 /**
- * PureBasic Project Manager
- * 管理项目文件和跨文件符号解析
+ * PureBasic Project Context Manager
+ *
+ * This manager intentionally does NOT perform workspace-wide discovery or .pbp parsing.
+ * It consumes project/target information from the extension host (pb-project-files) via
+ * LSP notifications and provides a lightweight per-project symbol aggregation.
  */
 
-import { TextDocument } from 'vscode-languageserver-textdocument';
-import { URI } from 'vscode-uri';
 import { Connection } from 'vscode-languageserver/node';
-import {
-    parseProjectFile,
-    ProjectFile,
-    ParsedProject,
-    isProjectFile,
-    extractProjectFiles,
-    getProjectIncludeDirectories
-} from '../parsers/project-parser';
+import { TextDocument } from 'vscode-languageserver-textdocument';
+
+export interface ProjectContextLspPayload {
+    version: 1;
+
+    projectFileUri?: string;
+    projectDir?: string;
+    projectName?: string;
+
+    targetName?: string;
+
+    includeDirs?: string[];
+    projectFiles?: string[];
+}
+
+export interface FileProjectLspPayload {
+    version: 1;
+
+    documentUri: string;
+    projectFileUri?: string;
+    scope?: 'internal' | 'external';
+}
 
 export interface ProjectContext {
-    projectFile: string;
-    project: ProjectFile;
-    includedFiles: Map<string, TextDocument>;
+    projectFileUri: string;
+    projectDir?: string;
+    projectName?: string;
+
+    targetName?: string;
+
+    includeDirs: string[];
+    projectFiles: Set<string>;
+
     globalSymbols: Map<string, any>;
+    fileSymbols: Map<string, Set<string>>;
+
     lastModified: number;
 }
 
 export class ProjectManager {
-    private projects: Map<string, ProjectContext> = new Map();
-    private fileToProject: Map<string, string> = new Map();
-    private workspaceRoot: string = '';
-    private connection: Connection;
+    private readonly projects = new Map<string, ProjectContext>();
+    private readonly fileToProject = new Map<string, string>();
+    private readonly fileScope = new Map<string, 'internal' | 'external'>();
 
-    constructor(connection: Connection, workspaceRoot: string = '') {
-        this.connection = connection;
-        this.workspaceRoot = workspaceRoot;
-    }
+    private activeProjectFileUri?: string;
+    private activeTargetName?: string;
 
-    /**
-     * 设置工作区根目录
-     */
-    public setWorkspaceRoot(root: string): void {
-        this.workspaceRoot = root;
-    }
+    public constructor(private readonly connection: Connection) {}
 
-    /**
-     * 处理文档打开事件
-     */
-    public onDocumentOpen(document: TextDocument): void {
-        if (isProjectFile(document)) {
-            this.loadProject(document);
-        } else {
-            this.associateFileWithProject(document);
+    public setActiveContext(payload: ProjectContextLspPayload): void {
+        if (!payload || payload.version !== 1) return;
+
+        this.activeProjectFileUri = payload.projectFileUri;
+        this.activeTargetName = payload.targetName;
+
+        if (!payload.projectFileUri) return;
+
+        const ctx = this.getOrCreateProject(payload.projectFileUri);
+        ctx.projectDir = payload.projectDir;
+        ctx.projectName = payload.projectName;
+        ctx.targetName = payload.targetName;
+
+        if (Array.isArray(payload.includeDirs)) {
+            ctx.includeDirs = payload.includeDirs.filter(Boolean);
         }
-    }
 
-    /**
-     * 处理文档关闭事件
-     */
-    public onDocumentClose(document: TextDocument): void {
-        const uri = document.uri;
-
-        // 如果是项目文件，卸载项目
-        if (isProjectFile(document)) {
-            this.unloadProject(uri);
-        } else {
-            // 从项目的包含文件中移除
-            this.removeFileFromProjects(uri);
+        if (Array.isArray(payload.projectFiles)) {
+            ctx.projectFiles = new Set(payload.projectFiles.filter(Boolean));
         }
+
+        ctx.lastModified = Date.now();
     }
 
-    /**
-     * 处理文档内容变更
-     */
-    public onDocumentChange(document: TextDocument): void {
-        if (isProjectFile(document)) {
-            // 项目文件变更，重新加载
-            this.reloadProject(document);
+    public setFileProjectMapping(payload: FileProjectLspPayload): void {
+        if (!payload || payload.version !== 1) return;
+
+        if (payload.scope === 'internal' || payload.scope === 'external') {
+            this.fileScope.set(payload.documentUri, payload.scope);
         } else {
-            // 普通文件变更，更新相关项目的符号
-            this.updateProjectSymbols(document);
+            this.fileScope.delete(payload.documentUri);
         }
-    }
 
-    /**
-     * 加载项目文件
-     */
-    private loadProject(document: TextDocument): void {
-        const uri = document.uri;
-        const parsedProject = parseProjectFile(document);
-
-        if (!parsedProject) {
-            this.connection.console.error(`Failed to parse project file: ${uri}`);
+        if (!payload.projectFileUri) {
+            this.fileToProject.delete(payload.documentUri);
             return;
         }
 
-        const projectContext: ProjectContext = {
-            projectFile: uri,
-            project: parsedProject.project,
-            includedFiles: new Map(),
+        this.fileToProject.set(payload.documentUri, payload.projectFileUri);
+        this.getOrCreateProject(payload.projectFileUri).lastModified = Date.now();
+    }
+    public onDocumentOpen(document: TextDocument): void {
+        this.updateProjectSymbols(document);
+    }
+
+    public onDocumentChange(document: TextDocument): void {
+        this.updateProjectSymbols(document);
+    }
+
+    public onDocumentClose(document: TextDocument): void {
+        const projectKey = this.getProjectKeyForDocument(document.uri);
+
+        // Keep the maps bounded to currently open documents.
+        this.fileToProject.delete(document.uri);
+        this.fileScope.delete(document.uri);
+        if (!projectKey) return;
+
+        const ctx = this.projects.get(projectKey);
+        if (!ctx) return;
+
+        this.removeDocumentSymbols(ctx, document.uri);
+        ctx.lastModified = Date.now();
+    }
+
+    /**
+     * Returns include directories for the project associated with the given document.
+     */
+    public getIncludeDirsForDocument(documentUri: string): string[] {
+        const projectKey = this.getProjectKeyForDocument(documentUri);
+        const ctx = projectKey ? this.projects.get(projectKey) : undefined;
+        return ctx?.includeDirs ?? [];
+    }
+
+    /**
+     * Returns the project-related file list for the project associated with the given document.
+     */
+    public getProjectFilesForDocument(documentUri: string): string[] {
+        const projectKey = this.getProjectKeyForDocument(documentUri);
+        const ctx = projectKey ? this.projects.get(projectKey) : undefined;
+        return ctx ? Array.from(ctx.projectFiles) : [];
+    }
+
+    /**
+     * Lookup a symbol in the project that contains the given document.
+     */
+    public findSymbolDefinition(symbolName: string, documentUri: string): any | null {
+        const projectKey = this.getProjectKeyForDocument(documentUri);
+        if (!projectKey) return null;
+
+        const ctx = this.projects.get(projectKey);
+        if (!ctx) return null;
+
+        return ctx.globalSymbols.get(symbolName) || null;
+    }
+
+    private getProjectKeyForDocument(documentUri: string): string | undefined {
+        const mapped = this.fileToProject.get(documentUri);
+        if (mapped) return mapped;
+
+        if (this.fileScope.get(documentUri) === 'external') {
+            return undefined;
+        }
+
+        return this.activeProjectFileUri;
+    }
+
+    private getOrCreateProject(projectFileUri: string): ProjectContext {
+        const existing = this.projects.get(projectFileUri);
+        if (existing) return existing;
+
+        const ctx: ProjectContext = {
+            projectFileUri,
+            includeDirs: [],
+            projectFiles: new Set(),
             globalSymbols: new Map(),
-            lastModified: Date.now()
+            fileSymbols: new Map(),
+            lastModified: Date.now(),
         };
 
-        this.projects.set(uri, projectContext);
-
-        // 解析项目中的包含文件
-        this.parseProjectIncludes(projectContext);
-
-        this.connection.console.log(`Loaded project: ${parsedProject.project.name} (${uri})`);
+        this.projects.set(projectFileUri, ctx);
+        return ctx;
     }
 
-    /**
-     * 重新加载项目文件
-     */
-    private reloadProject(document: TextDocument): void {
-        const uri = document.uri;
-        const existingProject = this.projects.get(uri);
-
-        if (existingProject) {
-            this.unloadProject(uri);
+    private updateProjectSymbols(document: TextDocument): void {
+        // Do not attempt to parse .pbp XML as PureBasic source.
+        if (document.uri.toLowerCase().endsWith('.pbp')) {
+            return;
         }
 
-        this.loadProject(document);
-    }
+        const projectKey = this.getProjectKeyForDocument(document.uri);
+        if (!projectKey) return;
 
-    /**
-     * 卸载项目
-     */
-    private unloadProject(uri: string): void {
-        const project = this.projects.get(uri);
-        if (project) {
-            // 清理文件到项目的映射
-            for (const [fileUri, projectUri] of this.fileToProject) {
-                if (projectUri === uri) {
-                    this.fileToProject.delete(fileUri);
-                }
-            }
+        const ctx = this.getOrCreateProject(projectKey);
 
-            this.projects.delete(uri);
-            this.connection.console.log(`Unloaded project: ${uri}`);
+        // Replace symbols from this document.
+        this.removeDocumentSymbols(ctx, document.uri);
+
+        const symbols = this.extractSymbols(document);
+        const names = new Set<string>();
+
+        for (const sym of symbols) {
+            names.add(sym.name);
+            ctx.globalSymbols.set(sym.name, sym);
         }
+
+        ctx.fileSymbols.set(document.uri, names);
+        ctx.lastModified = Date.now();
     }
 
-    /**
-     * 将文件关联到项目
-     */
-    private associateFileWithProject(document: TextDocument): void {
-        const uri = document.uri;
-        const filePath = URI.parse(uri).fsPath;
+    private removeDocumentSymbols(ctx: ProjectContext, documentUri: string): void {
+        const names = ctx.fileSymbols.get(documentUri);
+        if (!names) return;
 
-        // 查找包含此文件的项目
-        for (const [projectUri, project] of this.projects) {
-            const projectFiles = extractProjectFiles(project.project);
-
-            if (projectFiles.some(file => filePath.includes(file) || file.includes(filePath))) {
-                this.fileToProject.set(uri, projectUri);
-                project.includedFiles.set(uri, document);
-
-                // 解析文件符号并添加到项目全局符号表
-                this.parseFileSymbols(document, project.globalSymbols);
-                break;
+        for (const name of names) {
+            const existing = ctx.globalSymbols.get(name);
+            if (existing && existing.file === documentUri) {
+                ctx.globalSymbols.delete(name);
             }
         }
+
+        ctx.fileSymbols.delete(documentUri);
     }
 
-    /**
-     * 从项目中移除文件
-     */
-    private removeFileFromProjects(uri: string): void {
-        const projectUri = this.fileToProject.get(uri);
-        if (projectUri) {
-            const project = this.projects.get(projectUri);
-            if (project) {
-                project.includedFiles.delete(uri);
-                this.fileToProject.delete(uri);
-
-                // 从全局符号中移除该文件的符号
-                this.removeFileSymbols(uri, project.globalSymbols);
-            }
-        }
-    }
-
-    /**
-     * 解析项目包含文件
-     */
-    private async parseProjectIncludes(project: ProjectContext): Promise<void> {
-        const includeDirectories = getProjectIncludeDirectories(project.project);
-
-        // 这里应该实现异步文件读取，但由于在language server中，
-        // 我们需要通过workspace功能来读取文件
-        // 暂时留空，等待具体的文件读取实现
-    }
-
-    /**
-     * 解析文件符号
-     */
-    private parseFileSymbols(document: TextDocument, globalSymbols: Map<string, any>): void {
+    private extractSymbols(document: TextDocument): Array<{ name: string; type: string; file: string; line: number; definition: string } > {
         const content = document.getText();
         const lines = content.split('\n');
+        const out: Array<{ name: string; type: string; file: string; line: number; definition: string } > = [];
 
         for (let i = 0; i < lines.length; i++) {
-            const line = lines[i].trim();
+            const raw = lines[i];
+            const line = raw.trim();
 
-            // 解析过程定义
-            if (line.startsWith('Procedure') || line.startsWith('Procedure.')) {
-                const match = line.match(/(?:Procedure|Procedure\.\w+)\s+(\w+)\s*\(/);
-                if (match) {
-                    const procName = match[1];
-                    globalSymbols.set(procName, {
-                        type: 'procedure',
-                        file: document.uri,
-                        line: i,
-                        definition: line
-                    });
-                }
+            // Procedure definitions
+            const procMatch = line.match(/^(?:Procedure(?:\.\w+)?)\s+(\w+)\s*\(/i);
+            if (procMatch) {
+                out.push({
+                    name: procMatch[1],
+                    type: 'procedure',
+                    file: document.uri,
+                    line: i,
+                    definition: raw,
+                });
+                continue;
             }
 
-            // 解析变量声明
-            if (line.startsWith('Global') || line.startsWith('Define')) {
-                const match = line.match(/(?:Global|Define)\s+(\w+)/);
-                if (match) {
-                    const varName = match[1];
-                    globalSymbols.set(varName, {
-                        type: 'variable',
-                        file: document.uri,
-                        line: i,
-                        definition: line
-                    });
-                }
+            // Macro definitions
+            const macroMatch = line.match(/^Macro\s+(\w+)\b/i);
+            if (macroMatch) {
+                out.push({
+                    name: macroMatch[1],
+                    type: 'macro',
+                    file: document.uri,
+                    line: i,
+                    definition: raw,
+                });
+                continue;
             }
 
-            // 解析常量定义
-            if (line.startsWith('#')) {
-                const match = line.match(/#\s*(\w+)\s*=/);
-                if (match) {
-                    const constName = match[1];
-                    globalSymbols.set(constName, {
-                        type: 'constant',
-                        file: document.uri,
-                        line: i,
-                        definition: line
-                    });
-                }
+            // Constants: #NAME = ...
+            const constMatch = line.match(/^#\s*([a-zA-Z_][a-zA-Z0-9_]*\$?)\s*=/);
+            if (constMatch) {
+                out.push({
+                    name: constMatch[1],
+                    type: 'constant',
+                    file: document.uri,
+                    line: i,
+                    definition: raw,
+                });
+                continue;
             }
 
-            // 解析结构定义
-            if (line.startsWith('Structure')) {
-                const match = line.match(/Structure\s+(\w+)/);
-                if (match) {
-                    const structName = match[1];
-                    globalSymbols.set(structName, {
-                        type: 'structure',
-                        file: document.uri,
-                        line: i,
-                        definition: line
-                    });
-                }
+            // Structures
+            const structMatch = line.match(/^Structure\s+(\w+)\b/i);
+            if (structMatch) {
+                out.push({
+                    name: structMatch[1],
+                    type: 'structure',
+                    file: document.uri,
+                    line: i,
+                    definition: raw,
+                });
+                continue;
             }
 
-            // 解析接口定义
-            if (line.startsWith('Interface')) {
-                const match = line.match(/Interface\s+(\w+)/);
-                if (match) {
-                    const interfaceName = match[1];
-                    globalSymbols.set(interfaceName, {
-                        type: 'interface',
-                        file: document.uri,
-                        line: i,
-                        definition: line
-                    });
-                }
-            }
-
-            // 解析枚举定义
-            if (line.startsWith('Enumeration')) {
-                const match = line.match(/Enumeration\s+(\w+)/);
-                if (match) {
-                    const enumName = match[1];
-                    globalSymbols.set(enumName, {
-                        type: 'enumeration',
-                        file: document.uri,
-                        line: i,
-                        definition: line
-                    });
-                }
+            // Globals
+            const globalMatch = line.match(/^(?:Global|Define)\s+(\w+)\b/i);
+            if (globalMatch) {
+                out.push({
+                    name: globalMatch[1],
+                    type: 'variable',
+                    file: document.uri,
+                    line: i,
+                    definition: raw,
+                });
             }
         }
-    }
 
-    /**
-     * 从全局符号中移除文件符号
-     */
-    private removeFileSymbols(uri: string, globalSymbols: Map<string, any>): void {
-        for (const [symbolName, symbol] of globalSymbols) {
-            if (symbol.file === uri) {
-                globalSymbols.delete(symbolName);
-            }
-        }
-    }
-
-    /**
-     * 更新项目符号
-     */
-    private updateProjectSymbols(document: TextDocument): void {
-        const projectUri = this.fileToProject.get(document.uri);
-        if (projectUri) {
-            const project = this.projects.get(projectUri);
-            if (project) {
-                // 移除旧的符号
-                this.removeFileSymbols(document.uri, project.globalSymbols);
-
-                // 添加新的符号
-                this.parseFileSymbols(document, project.globalSymbols);
-
-                project.lastModified = Date.now();
-            }
-        }
-    }
-
-    /**
-     * 获取文件所属项目
-     */
-    public getFileProject(uri: string): ProjectContext | null {
-        const projectUri = this.fileToProject.get(uri);
-        return projectUri ? this.projects.get(projectUri) || null : null;
-    }
-
-    /**
-     * 获取项目的全局符号
-     */
-    public getProjectSymbols(uri: string): Map<string, any> | null {
-        const project = this.getFileProject(uri);
-        return project ? project.globalSymbols : null;
-    }
-
-    /**
-     * 查找符号定义
-     */
-    public findSymbolDefinition(symbolName: string, uri: string): any | null {
-        const symbols = this.getProjectSymbols(uri);
-        if (symbols) {
-            return symbols.get(symbolName) || null;
-        }
-        return null;
-    }
-
-    /**
-     * 获取所有项目
-     */
-    public getAllProjects(): ProjectContext[] {
-        return Array.from(this.projects.values());
-    }
-
-    /**
-     * 获取项目文件路径列表
-     */
-    public getProjectFiles(): string[] {
-        return Array.from(this.projects.keys());
-    }
-
-    /**
-     * 检查文件是否属于某个项目
-     */
-    public isFileInProject(uri: string): boolean {
-        return this.fileToProject.has(uri);
+        return out;
     }
 }

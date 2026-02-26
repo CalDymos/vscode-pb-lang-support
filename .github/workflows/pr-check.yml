@@ -3,7 +3,8 @@ name: PR Check (Monorepo)
 on:
   pull_request:
     branches: [devel, main]
-
+    types: [opened, synchronize, reopened]
+    
 permissions:
   contents: read
 
@@ -14,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pkg: [pb-lang-support, pb-forms-editor]
+        pkg: [pb-lang-support, pb-forms-editor, pb-project-files]
 
     steps:
       - name: Checkout
@@ -28,6 +29,9 @@ jobs:
       - name: Install dependencies (workspaces)
         run: npm ci
 
+      - name: Build pb-project-core
+        run: npm -w packages/pb-project-core run build
+        
       - name: Compile
         run: npm -w packages/${{ matrix.pkg }} run compile
 
@@ -86,12 +90,13 @@ jobs:
             #### Packages
             - pb-lang-support
             - pb-forms-editor
+            - pb-project-files
 
             #### Checks Performed
-            - TypeScript compilation (both)
-            - VSIX packaging smoke-test (both)
+            - TypeScript compilation (all)
+            - VSIX packaging smoke-test (all)
             - Bundle build (pb-lang-support only)
-            - Test run (pb-lang-support only; only if packages/pb-lang-support/test/** exists)
+            - Test run (pb-lang-support & pb-project-files & pb-forms-editor; only if packages/pb-lang-support/test/** exists)
 
             ${success ? "All checks passed successfully.\nThe extensions are buildable and package correctly." : "One or more checks failed. Please review the workflow logs."}
 

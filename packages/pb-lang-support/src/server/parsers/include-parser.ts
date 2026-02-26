@@ -1,6 +1,6 @@
 /**
  * PureBasic Include File Parser
- * 解析XIncludeFile指令和包含文件
+ * Parse XIncludeFile directives and include files
  */
 
 import { TextDocument } from 'vscode-languageserver-textdocument';
@@ -21,7 +21,7 @@ export interface IncludeAnalysis {
 }
 
 /**
- * 解析文档中的XIncludeFile指令
+ * Parse XIncludeFile directives in document
  */
 export function parseIncludeFiles(document: TextDocument, baseDirectory: string = ''): IncludeAnalysis {
     const content = document.getText();
@@ -38,7 +38,7 @@ export function parseIncludeFiles(document: TextDocument, baseDirectory: string 
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
 
-        // 解析XIncludeFile指令
+        // Parse XIncludeFile directive
         const includeMatch = line.match(/XIncludeFile\s+["']([^"']+)["']/);
         if (includeMatch) {
             const includePath = includeMatch[1];
@@ -55,7 +55,7 @@ export function parseIncludeFiles(document: TextDocument, baseDirectory: string 
             dependencies.get(currentFile)!.push(resolvedPath);
         }
 
-        // 解析Include指令（兼容旧语法）
+        // Parse IncludeFile directive (compatible with old syntax)
         const oldIncludeMatch = line.match(/IncludeFile\s+["']([^"']+)["']/);
         if (oldIncludeMatch) {
             const includePath = oldIncludeMatch[1];
@@ -72,7 +72,7 @@ export function parseIncludeFiles(document: TextDocument, baseDirectory: string 
             dependencies.get(currentFile)!.push(resolvedPath);
         }
 
-        // 解析条件包含
+        // Parse conditional includes
         const conditionalMatch = line.match(/If\s+\w+\s*:\s*XIncludeFile\s+["']([^"']+)["']/);
         if (conditionalMatch) {
             const includePath = conditionalMatch[1];
@@ -90,7 +90,7 @@ export function parseIncludeFiles(document: TextDocument, baseDirectory: string 
         }
     }
 
-    // 检测循环依赖
+    // Detect circular dependencies
     detectCircularDependencies(dependencies, circularDependencies);
 
     return {
@@ -102,7 +102,7 @@ export function parseIncludeFiles(document: TextDocument, baseDirectory: string 
 }
 
 /**
- * 解析包含文件的内容并提取符号
+ * Parse content of included files and extract symbols
  */
 export function parseIncludedSymbols(document: TextDocument): Map<string, any> {
     const symbols = new Map<string, any>();
@@ -112,7 +112,7 @@ export function parseIncludedSymbols(document: TextDocument): Map<string, any> {
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
 
-        // 解析过程定义
+        // Parse procedure definition
         if (line.startsWith('Procedure') || line.startsWith('Procedure.')) {
             const procMatch = line.match(/(?:Procedure|Procedure\.\w+)\s+(\w+)\s*\(/);
             if (procMatch) {
@@ -127,7 +127,7 @@ export function parseIncludedSymbols(document: TextDocument): Map<string, any> {
             }
         }
 
-        // 解析变量声明（在包含文件中通常是全局的）
+        // Parse variable declaration (usually global in include files)
         if (line.startsWith('Global') || line.startsWith('Define')) {
             const varMatch = line.match(/(?:Global|Define)\s+(\w+)/);
             if (varMatch) {
@@ -157,7 +157,7 @@ export function parseIncludedSymbols(document: TextDocument): Map<string, any> {
             }
         }
 
-        // 解析结构定义
+        // Parse structure definition
         if (line.startsWith('Structure')) {
             const structMatch = line.match(/Structure\s+(\w+)/);
             if (structMatch) {
@@ -170,7 +170,7 @@ export function parseIncludedSymbols(document: TextDocument): Map<string, any> {
                     exported: true
                 });
 
-                // 解析结构成员
+                // Parse structure members
                 const members = parseStructureMembers(lines, i + 1);
                 for (const member of members) {
                     const memberKey = `${structName}.${member.name}`;
@@ -186,7 +186,7 @@ export function parseIncludedSymbols(document: TextDocument): Map<string, any> {
             }
         }
 
-        // 解析接口定义
+        // Parse interface definition
         if (line.startsWith('Interface')) {
             const interfaceMatch = line.match(/Interface\s+(\w+)/);
             if (interfaceMatch) {
@@ -199,7 +199,7 @@ export function parseIncludedSymbols(document: TextDocument): Map<string, any> {
                     exported: true
                 });
 
-                // 解析接口方法
+                // Parse interface methods
                 const methods = parseInterfaceMethods(lines, i + 1);
                 for (const method of methods) {
                     const methodKey = `${interfaceName}::${method.name}`;
@@ -215,7 +215,7 @@ export function parseIncludedSymbols(document: TextDocument): Map<string, any> {
             }
         }
 
-        // 解析枚举定义
+        // Parse enumeration definition
         if (line.startsWith('Enumeration')) {
             const enumMatch = line.match(/Enumeration\s+(\w+)/);
             if (enumMatch) {
@@ -228,7 +228,7 @@ export function parseIncludedSymbols(document: TextDocument): Map<string, any> {
                     exported: true
                 });
 
-                // 解析枚举值
+                // Parse enumeration values
                 const values = parseEnumerationValues(lines, i + 1);
                 for (const value of values) {
                     const valueKey = `${enumName}.${value.name}`;
@@ -244,7 +244,7 @@ export function parseIncludedSymbols(document: TextDocument): Map<string, any> {
             }
         }
 
-        // 解析宏定义
+        // Parse macro definition
         if (line.startsWith('Macro')) {
             const macroMatch = line.match(/Macro\s+(\w+)\s*\(/);
             if (macroMatch) {
@@ -264,7 +264,7 @@ export function parseIncludedSymbols(document: TextDocument): Map<string, any> {
 }
 
 /**
- * 解析结构成员
+ * Parse structure members
  */
 function parseStructureMembers(lines: string[], startLine: number): Array<{name: string, line: number, definition: string}> {
     const members: Array<{name: string, line: number, definition: string}> = [];
@@ -276,7 +276,7 @@ function parseStructureMembers(lines: string[], startLine: number): Array<{name:
             break;
         }
 
-        // 解析成员定义
+        // Parse member definition
         const memberMatch = line.match(/(\w+)\s*[.:].+/);
         if (memberMatch) {
             members.push({
@@ -291,7 +291,7 @@ function parseStructureMembers(lines: string[], startLine: number): Array<{name:
 }
 
 /**
- * 解析接口方法
+ * Parse interface methods
  */
 function parseInterfaceMethods(lines: string[], startLine: number): Array<{name: string, line: number, definition: string}> {
     const methods: Array<{name: string, line: number, definition: string}> = [];
@@ -303,7 +303,7 @@ function parseInterfaceMethods(lines: string[], startLine: number): Array<{name:
             break;
         }
 
-        // 解析方法定义
+        // Parse method definition
         const methodMatch = line.match(/(\w+)\s*\(/);
         if (methodMatch) {
             methods.push({
@@ -318,7 +318,7 @@ function parseInterfaceMethods(lines: string[], startLine: number): Array<{name:
 }
 
 /**
- * 解析枚举值
+ * Parse enumeration values
  */
 function parseEnumerationValues(lines: string[], startLine: number): Array<{name: string, line: number, definition: string}> {
     const values: Array<{name: string, line: number, definition: string}> = [];
@@ -330,7 +330,7 @@ function parseEnumerationValues(lines: string[], startLine: number): Array<{name
             break;
         }
 
-        // 解析枚举值定义
+        // Parse enumeration value definition
         const valueMatch = line.match(/#\s*(\w+)\s*=/);
         if (valueMatch) {
             values.push({
@@ -345,7 +345,7 @@ function parseEnumerationValues(lines: string[], startLine: number): Array<{name
 }
 
 /**
- * 解析包含文件路径
+ * Parse include file path
  */
 function resolveIncludePath(includePath: string, baseDirectory: string): string {
     if (includePath.startsWith('./') || includePath.startsWith('.\\')) {
@@ -353,7 +353,7 @@ function resolveIncludePath(includePath: string, baseDirectory: string): string 
     }
 
     if (baseDirectory && !includePath.includes('/') && !includePath.includes('\\')) {
-        // 简单的文件名，添加到基础目录
+        // Simple file name, add to base directory
         return `${baseDirectory}${includePath}`;
     }
 
@@ -361,21 +361,21 @@ function resolveIncludePath(includePath: string, baseDirectory: string): string 
 }
 
 /**
- * 检查是否是条件包含
+ * Check if it is conditional include
  */
 function isConditionalInclude(line: string): boolean {
     return line.startsWith('If') || line.includes('CompilerIf');
 }
 
 /**
- * 检查是否是导出的符号
+ * Check if it is exported symbol
  */
 function isExportedSymbol(line: string): boolean {
     return line.includes('Export') || line.includes('Public');
 }
 
 /**
- * 检测循环依赖
+ * Detect circular dependencies
  */
 function detectCircularDependencies(dependencies: Map<string, string[]>, circularDependencies: string[]): void {
     const visited = new Set<string>();
@@ -383,7 +383,7 @@ function detectCircularDependencies(dependencies: Map<string, string[]>, circula
 
     function dfs(node: string): boolean {
         if (recursionStack.has(node)) {
-            // 发现循环依赖
+            // Found circular dependency
             const cycle = Array.from(recursionStack).slice(recursionStack.has(node) ? Array.from(recursionStack).indexOf(node) : 0);
             cycle.push(node);
             circularDependencies.push(cycle.join(' -> '));
@@ -414,7 +414,7 @@ function detectCircularDependencies(dependencies: Map<string, string[]>, circula
 }
 
 /**
- * 获取包含文件的所有依赖（递归）
+ * Get all dependencies of include files (recursively)
  */
 export function getAllIncludeDependencies(document: TextDocument, baseDirectory: string = ''): string[] {
     const analysis = parseIncludeFiles(document, baseDirectory);
@@ -437,7 +437,7 @@ export function getAllIncludeDependencies(document: TextDocument, baseDirectory:
 }
 
 /**
- * 验证包含文件是否存在
+ * Validate if include files exist
  */
 export function validateIncludeFiles(document: TextDocument, baseDirectory: string = '', existingFiles: Set<string>): string[] {
     const analysis = parseIncludeFiles(document, baseDirectory);

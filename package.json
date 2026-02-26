@@ -4,7 +4,7 @@
   "workspaces": [
     "packages/*"
   ],
-  "version": "0.3.14",
+  "version": "0.5.4",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -16,22 +16,34 @@
     "url": "https://github.com/CalDymos/vscode-pb-lang-suite.git"
   },
   "scripts": {
+    "w:core": "npm -w packages/pb-project-core",
     "w:lang": "npm -w packages/pb-lang-support",
     "w:forms": "npm -w packages/pb-forms-editor",
-    "c:l": "npm run -w packages/pb-lang-support compile",
-    "c:f": "npm run -w packages/pb-forms-editor compile",
-    "c": "npm run c:l && npm run c:f",
-    "vsix:l": "npm -w packages/pb-lang-support run compile && npm -w packages/pb-lang-support run webpack:prod && cd packages/pb-lang-support && npx @vscode/vsce package --no-dependencies -o ../../pb-lang-support.vsix",
-    "vsix:f": "npm -w packages/pb-forms-editor run compile && cd packages/pb-forms-editor && npx @vscode/vsce package --no-dependencies -o ../../pb-forms-editor.vsix",
-    "vsix": "npm run vsix:l && npm run vsix:f",
+    "w:pbp": "npm -w packages/pb-project-files",
+    "c:core": "npm -w packages/pb-project-core run build",
+    "c:lang": "npm run c:core && npm run -w packages/pb-lang-support compile",
+    "c:forms": "npm run -w packages/pb-forms-editor compile",
+    "c:pbp": "npm run c:core && npm -w packages/pb-project-files run compile",
+    "c": "npm run c:core && npm run c:lang && npm run c:forms && npm run c:pbp",
+    "vsix:lang": "npm run c:core && npm -w packages/pb-lang-support run compile && npm -w packages/pb-lang-support run webpack:prod && cd packages/pb-lang-support && npx @vscode/vsce package --no-dependencies -o ../../pb-lang-support.vsix",
+    "vsix:forms": "npm -w packages/pb-forms-editor run compile && cd packages/pb-forms-editor && npx @vscode/vsce package --no-dependencies -o ../../pb-forms-editor.vsix",
+    "vsix:pbp": "npm run c:core && npm -w packages/pb-project-files run compile && cd packages/pb-project-files && npx @vscode/vsce package -o ../../pb-project-files.vsix",
+    "vsix": "npm run vsix:lang && npm run vsix:forms && npm run vsix:pbp",
     "v:patch": "npm version patch --no-git-tag-version",
-    "v:patch:l": "npm version patch -w packages/pb-lang-support --no-git-tag-version",
-    "v:patch:f": "npm version patch -w packages/pb-forms-editor --no-git-tag-version",
-    "v:patch:all": "npm run v:patch && npm run v:patch:f && npm run v:patch:l",
+    "v:patch:lang": "npm version patch -w packages/pb-lang-support --no-git-tag-version",
+    "v:patch:forms": "npm version patch -w packages/pb-forms-editor --no-git-tag-version",
+    "v:patch:pbp": "npm version patch -w packages/pb-project-files --no-git-tag-version",
+    "v:patch:core": "npm version patch -w packages/pb-project-core --no-git-tag-version",
+    "v:minor": "npm version minor --no-git-tag-version",
+    "v:minor:lang": "npm version minor -w packages/pb-lang-support --no-git-tag-version",
+    "v:minor:forms": "npm version minor -w packages/pb-forms-editor --no-git-tag-version",
+    "v:minor:pbp": "npm version minor -w packages/pb-project-files --no-git-tag-version",
+    "v:minor:core": "npm version minor -w packages/pb-project-core --no-git-tag-version",
     "t:all": "node scripts/tag-and-push.mjs all",
     "t:suite": "node scripts/tag-and-push.mjs suite",
     "t:forms": "node scripts/tag-and-push.mjs forms",
     "t:lang": "node scripts/tag-and-push.mjs lang",
+    "t:pbp": "node scripts/tag-and-push.mjs pbp",
     "backmerge": "node scripts/backmerge-main-into-devel.mjs"
   }
 }

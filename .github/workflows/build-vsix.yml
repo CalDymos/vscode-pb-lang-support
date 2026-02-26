@@ -11,8 +11,9 @@ on:
   push:
     tags:
       - "suite-v*"
-      - "pb-lang-support-v*"
-      - "pb-forms-editor-v*"
+      - "lang-v*"
+      - "forms-v*"
+      - "pbp-v*"
 
 permissions:
   contents: read
@@ -23,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pkg: [pb-lang-support, pb-forms-editor]
+        pkg: [pb-lang-support, pb-forms-editor, pb-project-files]
 
     steps:
       - name: Checkout
@@ -39,6 +40,9 @@ jobs:
 
       - name: Install dependencies (workspaces)
         run: npm ci
+
+      - name: Build pb-project-core
+        run: npm -w packages/pb-project-core run build
 
       - name: Compile
         run: npm -w packages/${{ matrix.pkg }} run compile

@@ -76,6 +76,41 @@ import { ProjectManager } from './managers/project-manager';
 // Create connection
 const connection = createConnection(ProposedFeatures.all);
 
+
+function safeStringify(value: unknown): string {
+    try {
+        return JSON.stringify(value);
+    } catch {
+        return String(value);
+    }
+}
+
+function safeErrorSummary(err: unknown): { type: string; name?: string; message: string; code?: string } {
+    if (err instanceof Error) {
+        return { type: 'Error', name: err.name, message: err.message };
+    }
+
+    if (err && typeof err === 'object') {
+        const anyErr = err as { name?: unknown; message?: unknown; code?: unknown };
+        const name = typeof anyErr.name === 'string' ? anyErr.name : undefined;
+        const message = typeof anyErr.message === 'string' ? anyErr.message : safeStringify(err);
+        const code = typeof anyErr.code === 'string' ? anyErr.code : undefined;
+        return { type: 'object', name, message, code };
+    }
+
+    return { type: typeof err, message: String(err) };
+}
+
+function logLspError(message: string, err: unknown, meta: Record<string, unknown> = {}): void {
+    const entry = {
+        level: 'error',
+        message,
+        ...meta,
+        error: safeErrorSummary(err),
+    };
+    connection.console.error(safeStringify(entry));
+}
+
 // Initialize error handler
 const errorHandler = initializeErrorHandler(connection);
 
@@ -114,6 +149,23 @@ connection.onInitialize((params: InitializeParams) => {
 
     // Initialize the Project Manager
     projectManager = new ProjectManager(connection);
+
+    // Bridge notifications from the VS Code extension host (pb-project-files)
+    connection.onNotification('purebasic/projectContext', payload => {
+        try {
+            projectManager.setActiveContext(payload);
+        } catch (err) {
+            logLspError('Failed to apply projectContext payload', err, { notification: 'purebasic/projectContext' });
+        }
+    });
+
+    connection.onNotification('purebasic/fileProject', payload => {
+        try {
+            projectManager.setFileProjectMapping(payload);
+        } catch (err) {
+            logLspError('Failed to apply fileProject payload', err, { notification: 'purebasic/fileProject' });
+        }
+    });
 
     const result: InitializeResult = {
         capabilities: serverCapabilities
@@ -158,7 +210,7 @@ connection.onRequest('purebasic/clearSymbolCache', () => {
         connection.console.log('PureBasic: symbol cache cleared by client request');
         return true;
     } catch (err) {
-        connection.console.error(`Failed to clear symbol cache: ${err}`);
+        logLspError('Failed to clear symbol cache', err, { request: 'purebasic/clearSymbolCache' });
         return false;
     }
 });
@@ -306,7 +358,7 @@ connection.onDocumentSymbol((params: DocumentSymbolParams) => {
     try {
         return handleDocumentSymbol(params, document);
     } catch (error) {
-        connection.console.error(`Document symbol error: ${error}`);
+        logLspError('Document symbol error', error, { uri: params.textDocument.uri });
         return [];
     }
 });
@@ -321,7 +373,7 @@ connection.onHover((params: HoverParams): Hover | null => {
     try {
         return handleHover(params, document, documentCache);
     } catch (error) {
-        connection.console.error(`Hover error: ${error}`);
+        logLspError('Hover error', error, { uri: params.textDocument.uri });
         return null;
     }
 });
@@ -336,7 +388,7 @@ connection.onDefinition((params: DefinitionParams): Location[] => {
     try {
         return handleDefinition(params, document, documentCache, projectManager);
     } catch (error) {
-        connection.console.error(`Definition error: ${error}`);
+        logLspError('Definition error', error, { uri: params.textDocument.uri });
         return [];
     }
 });
@@ -351,7 +403,7 @@ connection.onReferences((params: ReferenceParams): Location[] => {
     try {
         return handleReferences(params, document, documentCache);
     } catch (error) {
-        connection.console.error(`References error: ${error}`);
+        logLspError('References error', error, { uri: params.textDocument.uri });
         return [];
     }
 });
@@ -411,7 +463,7 @@ connection.onSignatureHelp((params: TextDocumentPositionParams) => {
     try {
         return handleSignatureHelp(params, document, documentCache);
     } catch (error) {
-        connection.console.error(`Signature help error: ${error}`);
+        logLspError('Signature help error', error, { uri: params.textDocument.uri });
         return null;
     }
 });
@@ -426,7 +478,7 @@ connection.onPrepareRename((params: PrepareRenameParams) => {
     try {
         return handlePrepareRename(params, document, documentCache);
     } catch (error) {
-        connection.console.error(`Prepare rename error: ${error}`);
+        logLspError('Prepare rename error', error, { uri: params.textDocument.uri });
         return null;
     }
 });
@@ -441,7 +493,7 @@ connection.onRenameRequest((params: RenameParams): WorkspaceEdit | null => {
     try {
         return handleRename(params, document, documentCache);
     } catch (error) {
-        connection.console.error(`Rename error: ${error}`);
+        logLspError('Rename error', error, { uri: params.textDocument.uri });
         return null;
     }
 });
@@ -456,7 +508,7 @@ connection.onDocumentFormatting((params: DocumentFormattingParams): TextEdit[] =
     try {
         return handleDocumentFormatting(params, document);
     } catch (error) {
-        connection.console.error(`Document formatting error: ${error}`);
+        logLspError('Document formatting error', error, { uri: params.textDocument.uri });
         return [];
     }
 });
@@ -471,7 +523,7 @@ connection.onDocumentRangeFormatting((params: DocumentRangeFormattingParams): Te
     try {
         return handleDocumentRangeFormatting(params, document);
     } catch (error) {
-        connection.console.error(`Range formatting error: ${error}`);
+        logLspError('Range formatting error', error, { uri: params.textDocument.uri });
         return [];
     }
 });

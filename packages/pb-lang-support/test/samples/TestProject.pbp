@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project xmlns="http://www.purebasic.com/namespace" version="1.0" creator="PureBasic 6.30 (Windows - x86)">
+  <section name="config">
+    <options closefiles="1" openmode="0" name="New Test Project"/>
+    <comment>This is a Test File for Project Parsing</comment>
+  </section>
+  <section name="data">
+    <explorer view="D:\Documents\PureBasic\Projects\" pattern="0"/>
+    <log show="1"/>
+    <lastopen date="2026-02-25 13:32" user="thiemann" host="FS-PC-CAD-RT"/>
+  </section>
+  <section name="files">
+    <file name="test_basic.pb">
+      <config load="0" scan="1" panel="1" warn="1" lastopen="1" sortindex="1" panelstate="+"/>
+      <fingerprint md5="a3fdf5522927a8058024c907ca344208"/>
+    </file>
+    <file name="Untitled-1.pb">
+      <config load="0" scan="1" panel="1" warn="1" lastopen="0" sortindex="999" panelstate="+"/>
+      <fingerprint md5="8cdbca8ac491ce39c6757bd1e0d8e8f1"/>
+    </file>
+  </section>
+  <section name="targets">
+    <target name="Standard-Ziel" enabled="1" default="1">
+      <inputfile value="test_basic.pb"/>
+      <outputfile value=""/>
+      <options xpskin="1" dpiaware="1" debug="1" optimizer="0"/>
+      <temporaryexe value="source"/>
+      <compilecount enable="1" value="0"/>
+      <buildcount enable="1" value="0"/>
+    </target>
+  </section>
+</project>
