@@ -39,8 +39,8 @@ export function handleDocumentSymbol(
         const moduleMatch = trimmedLine.match(/^Module\s+(\w+)\b/i);
         if (moduleMatch) {
             const name = moduleMatch[1];
-            const nameStart = Math.max(0, line.indexOf(name));
-            const selectionRange = createRange(i, nameStart, name.length);
+            const nameStart = safeIndexOf(line, name);
+            const selectionRange = createSafeRange(i, nameStart, name.length, line.length);
             const blockRange: Range = {
                 start: { line: i, character: 0 },
                 end: { line: i, character: line.length }
@@ -83,8 +83,8 @@ export function handleDocumentSymbol(
         const structMatch = trimmedLine.match(/^Structure\s+(\w+)\b/i);
         if (structMatch) {
             const name = structMatch[1];
-            const nameStart = Math.max(0, line.indexOf(name));
-            const selectionRange = createRange(i, nameStart, name.length);
+            const nameStart = safeIndexOf(line, name);
+            const selectionRange = createSafeRange(i, nameStart, name.length, line.length);
             const blockRange: Range = {
                 start: { line: i, character: 0 },
                 end: { line: i, character: line.length }
@@ -117,8 +117,8 @@ export function handleDocumentSymbol(
         const interfaceMatch = trimmedLine.match(/^Interface\s+(\w+)\b/i);
         if (interfaceMatch) {
             const name = interfaceMatch[1];
-            const nameStart = Math.max(0, line.indexOf(name));
-            const selectionRange = createRange(i, nameStart, name.length);
+            const nameStart = safeIndexOf(line, name);
+            const selectionRange = createSafeRange(i, nameStart, name.length, line.length);
             const blockRange: Range = {
                 start: { line: i, character: 0 },
                 end: { line: i, character: line.length }
@@ -144,8 +144,8 @@ export function handleDocumentSymbol(
         const enumMatch = trimmedLine.match(/^Enumeration\s+(\w+)?\b/i);
         if (enumMatch) {
             const name = enumMatch[1] || 'Anonymous';
-            const nameStart = enumMatch[1] ? Math.max(0, line.indexOf(enumMatch[1])) : 0;
-            const selectionRange = createRange(i, nameStart, (enumMatch[1] || '').length || line.trim().length);
+            const nameStart = enumMatch[1] ? safeIndexOf(line, enumMatch[1]) : 0;
+            const selectionRange = createSafeRange(i, nameStart, (enumMatch[1] || '').length || line.trim().length, line.length);
             const blockRange: Range = {
                 start: { line: i, character: 0 },
                 end: { line: i, character: line.length }
@@ -179,8 +179,8 @@ export function handleDocumentSymbol(
             const returnType = procMatch[1];
             const name = procMatch[2];
             const displayName = returnType ? `${name}() : ${returnType}` : `${name}()`;
-            const nameStart = Math.max(0, line.indexOf(name));
-            const selectionRange = createRange(i, nameStart, name.length);
+            const nameStart = safeIndexOf(line, name);
+            const selectionRange = createSafeRange(i, nameStart, name.length, line.length);
             const blockRange: Range = {
                 start: { line: i, character: 0 },
                 end: { line: i, character: line.length }
@@ -215,7 +215,7 @@ export function handleDocumentSymbol(
             const name = declareMatch[2];
             const displayName = returnType ? `${name}() : ${returnType}` : `${name}()`;
             const nameStart = safeIndexOf(line, name);
-            const selectionRange = createRange(i, nameStart, name.length);
+            const selectionRange = createSafeRange(i, nameStart, name.length, line.length);
             const blockRange: Range = {
                 start: { line: i, character: 0 },
                 end: { line: i, character: line.length }
@@ -241,7 +241,7 @@ export function handleDocumentSymbol(
         if (constMatch) {
             const name = constMatch[1];
             const hashStart = safeIndexOf(line, `#${name}`);
-            const selectionRange = createRange(i, hashStart + 1, name.length); // only NAME / NAME$
+            const selectionRange = createSafeRange(i, hashStart + 1, name.length, line.length); // only NAME / NAME$
             const blockRange: Range = {
                 start: { line: i, character: 0 },
                 end: { line: i, character: line.length }
@@ -272,7 +272,7 @@ export function handleDocumentSymbol(
             const type = globalMatch[3] || 'unknown';
             const displayName = `${name} : ${type}`;
             const nameStart = safeIndexOf(line, name);
-            const selectionRange = createRange(i, nameStart, name.length);
+            const selectionRange = createSafeRange(i, nameStart, name.length, line.length);
 
             const blockRange: Range = {
                 start: { line: i, character: 0 },
@@ -303,7 +303,7 @@ export function handleDocumentSymbol(
                 const type = memberMatch[2] || 'unknown';
                 const displayName = `${name} : ${type}`;
                 const nameStart = safeIndexOf(line, name);
-                const selectionRange = createRange(i, nameStart, name.length);
+                const selectionRange = createSafeRange(i, nameStart, name.length, line.length);
 
                 const blockRange: Range = {
                     start: { line: i, character: 0 },
@@ -330,7 +330,7 @@ export function handleDocumentSymbol(
                 const type = localVarMatch[3] || 'unknown';
                 const displayName = `${name} : ${type}`;
                 const nameStart = safeIndexOf(line, name);
-                const selectionRange = createRange(i, nameStart, name.length);
+                const selectionRange = createSafeRange(i, nameStart, name.length, line.length);
 
                 const blockRange: Range = {
                     start: { line: i, character: 0 },
@@ -366,10 +366,13 @@ export function handleDocumentSymbol(
 /**
  * Creates a range object
  */
-function createRange(line: number, startChar: number, length: number): Range {
+function createSafeRange(line: number, startChar: number, length: number, lineLength: number): Range {
+    const safeStart = Math.max(0, Math.min(startChar, lineLength));
+    const safeEnd = Math.max(safeStart, Math.min(safeStart + Math.max(0, length), lineLength));
+
     return {
-        start: { line, character: startChar },
-        end: { line, character: startChar + length }
+        start: { line, character: safeStart },
+        end: { line, character: safeEnd }
     };
 }
 
