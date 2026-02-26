@@ -233,11 +233,11 @@ export function handleDocumentSymbol(
         }
 
         // Constant definitions
-        const constMatch = trimmedLine.match(/^#([a-zA-Z_][a-zA-Z0-9_]*\$?)\s*=/);
+        const constMatch = trimmedLine.match(/^#([a-zA-Z_][a-zA-Z0-9_]*\$?)\s*=/); // only NAME / NAME$ allowed as constant names
         if (constMatch) {
             const name = constMatch[1];
             const hashStart = safeIndexOf(line, `#${name}`);
-            const selectionRange = createSafeRange(i, hashStart + 1, name.length, line.length); // only NAME / NAME$
+            const selectionRange = createSafeRange(i, hashStart + 1, name.length, line.length); 
             const declarationRange = createLineRange(i, line.length);
 
             const constSymbol: DocumentSymbol = {
@@ -348,11 +348,9 @@ export function handleDocumentSymbol(
     updateSymbolRanges(symbols, lines);
     sortSymbolsStable(symbols);
 
-    /* for Debug output only
+    if (process.env.NODE_ENV === 'development') {
     console.log('symbols.length', symbols.length);
-    if (symbols.length > 0) {
-        console.log('first symbol', symbols[0].name, symbols[0].range, symbols[0].selectionRange);
-    }*/
+    }
     
     return symbols;
 }
@@ -383,37 +381,30 @@ function createLineRange(line: number, lineLength: number): Range {
 function updateSymbolRanges(symbols: DocumentSymbol[], lines: string[]) {
     for (const symbol of symbols) {
         if (symbol.kind === SymbolKind.Module) {
-            // Find the corresponding EndModule
-            const startLine = symbol.range.start.line;
-            for (let i = startLine + 1; i < lines.length; i++) {
-                if (lines[i].trim().match(/^EndModule\b/i)) {
-                    symbol.range.end = { line: i, character: lines[i].length };
-                    break;
-                }
-            }
-        } else if (symbol.kind === SymbolKind.Function) {
-            // Find the corresponding EndProcedure
-            const startLine = symbol.range.start.line;
-            for (let i = startLine + 1; i < lines.length; i++) {
-                if (lines[i].trim().match(/^EndProcedure\b/i)) {
-                    symbol.range.end = { line: i, character: lines[i].length };
-                    break;
-                }
-            }
+            updateSymbolEnd(symbol, lines, /^EndModule\b/i);
         } else if (symbol.kind === SymbolKind.Struct) {
-            // Find the corresponding EndStructure
-            const startLine = symbol.range.start.line;
-            for (let i = startLine + 1; i < lines.length; i++) {
-                if (lines[i].trim().match(/^EndStructure\b/i)) {
-                    symbol.range.end = { line: i, character: lines[i].length };
-                    break;
-                }
-            }
+            updateSymbolEnd(symbol, lines, /^EndStructure\b/i);
+        } else if (symbol.kind === SymbolKind.Interface) {
+            updateSymbolEnd(symbol, lines, /^EndInterface\b/i);
+        } else if (symbol.kind === SymbolKind.Enum) {
+            updateSymbolEnd(symbol, lines, /^EndEnumeration\b/i);
+        } else if (symbol.kind === SymbolKind.Function && symbol.detail !== 'Declare') {
+            updateSymbolEnd(symbol, lines, /^EndProcedure\b/i);
         }
 
         // Recursively update sub-symbols
         if (symbol.children && symbol.children.length > 0) {
             updateSymbolRanges(symbol.children, lines);
+        }
+    }
+}
+
+function updateSymbolEnd(symbol: DocumentSymbol, lines: string[], endPattern: RegExp) {
+    const startLine = symbol.range.start.line;
+    for (let i = startLine + 1; i < lines.length; i++) {
+        if (lines[i].trim().match(endPattern)) {
+            symbol.range.end = { line: i, character: lines[i].length };
+            return;
         }
     }
 }
