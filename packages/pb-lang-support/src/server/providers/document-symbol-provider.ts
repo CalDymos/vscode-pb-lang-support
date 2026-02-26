@@ -349,10 +349,6 @@ export function handleDocumentSymbol(
     // Update the scope to include the entire definition
     updateSymbolRanges(symbols, lines, nonExpandableSymbols);
     sortSymbolsStable(symbols);
-
-    if (process.env.NODE_ENV === 'development') {
-    console.log('symbols.length', symbols.length);
-    }
     
     return symbols;
 }
