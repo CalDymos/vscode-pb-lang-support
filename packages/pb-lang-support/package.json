@@ -35,7 +35,9 @@
     "Other"
   ],
   "activationEvents": [
-    "onLanguage:purebasic"
+    "onLanguage:purebasic",
+    "onDebugResolve:purebasic",
+    "onDebugAdapterProtocolTracker:purebasic"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -277,6 +279,7 @@
     "test:coverage": "jest --coverage"
   },
   "dependencies": {
+    "@vscode/debugadapter": "^1.68.0",
     "vscode-languageclient": "^9.0.1",
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "^1.0.1",

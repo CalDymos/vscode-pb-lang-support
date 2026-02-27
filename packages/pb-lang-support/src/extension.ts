@@ -95,6 +95,9 @@ export function activate(context: vscode.ExtensionContext) {
         // Register commands
         registerCommands(context);
 
+        // Register debug configuration provider
+        registerDebugProvider(context);
+
         // Start the language server.
         console.log('Starting Language Server...');
         try {
@@ -204,6 +207,35 @@ async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promis
     );
 
     context.subscriptions.push(...subs);
+}
+
+function registerDebugProvider(context: vscode.ExtensionContext): void {
+    context.subscriptions.push(
+        vscode.debug.registerDebugConfigurationProvider('purebasic', {
+            resolveDebugConfiguration(
+                _folder: vscode.WorkspaceFolder | undefined,
+                config: vscode.DebugConfiguration,
+            ): vscode.ProviderResult<vscode.DebugConfiguration> {
+                // If launched via F5 with no launch.json, supply defaults
+                if (!config.type && !config.request && !config.name) {
+                    const editor = vscode.window.activeTextEditor;
+                    if (editor && editor.document.languageId === 'purebasic') {
+                        config.type        = 'purebasic';
+                        config.name        = 'Debug PureBasic';
+                        config.request     = 'launch';
+                        config.program     = editor.document.fileName;
+                        config.stopOnEntry = false;
+                    }
+                }
+                if (!config.program) {
+                    return vscode.window.showInformationMessage(
+                        'Cannot find a PureBasic file to debug. Open a .pb file first.',
+                    ).then(() => undefined);
+                }
+                return config;
+            },
+        }),
+    );
 }
 
 function registerCommands(context: vscode.ExtensionContext) {
