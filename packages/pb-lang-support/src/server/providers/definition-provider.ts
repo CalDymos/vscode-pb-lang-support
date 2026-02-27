@@ -36,7 +36,7 @@ export function handleDefinition(
     // Collect searchable documents: current + opened + recursively included
     const searchDocs = collectSearchDocuments(document, allDocuments, projectManager);
 
-    // 查找定义
+    // Find definitions
     const definitions: Location[] = [];
 
     // Struct member access: var\\member → jump to structure member definition
@@ -86,11 +86,11 @@ export function handleDefinition(
         );
         definitions.push(...moduleSymbolDefs);
     } else {
-        // 首先在项目符号中查找
+        // First search in project symbols
         if (projectManager) {
             const projectSymbol = projectManager.findSymbolDefinition(word, document.uri);
             if (projectSymbol) {
-                // 将项目符号转换为Location
+                // Convert project symbol to Location
                 try {
                     const lines = projectSymbol.file.split('\n');
                     const definitionLine = lines[projectSymbol.line] || '';
@@ -110,7 +110,7 @@ export function handleDefinition(
             }
         }
 
-        // 常规查找：遍历所有搜索文档
+        // Regular search: traverse all search documents
         for (const doc of searchDocs.values()) {
             const docDefinitions = findDefinitionsInDocument(doc, word);
             definitions.push(...docDefinitions);
@@ -143,7 +143,7 @@ function getModuleFunctionFromPosition(text: string, position: Position): {
     const moduleMatch = fullContext.match(/(\w+)::(\w+)/);
 
     if (moduleMatch) {
-        // 检查光标是否在这个模块调用上
+        // Check if cursor is on this module call
         const matchStart = line.indexOf(moduleMatch[0]);
         const matchEnd = matchStart + moduleMatch[0].length;
 
@@ -177,7 +177,7 @@ function findModuleFunctionDefinition(
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
 
-            // 检查模块开始
+            // Check module start
             const moduleMatch = line.match(new RegExp(`^Module\\s+${moduleName}\\b`, 'i'));
             if (moduleMatch) {
                 inModule = true;
@@ -185,15 +185,15 @@ function findModuleFunctionDefinition(
                 continue;
             }
 
-            // 检查模块结束
+            // Check module end
             if (line.match(/^EndModule\b/i)) {
                 inModule = false;
                 continue;
             }
 
-            // 在模块内查找函数定义
+            // Find function definition inside module
             if (inModule) {
-                const procMatch = line.match(new RegExp(`^Procedure(?:\\.\\w+)?\\s+(${functionName})\\s*\\(`, 'i'));
+                const procMatch = line.match(new RegExp(`^Procedure(?:C|DLL|CDLL)?(?:\\.\\w+)?\\s+(${functionName})\\s*\\(`, 'i'));
                 if (procMatch) {
                     const startChar = lines[i].indexOf(procMatch[1]);
                     definitions.push({
@@ -223,13 +223,13 @@ function findDefinitionsInIncludes(
     const text = document.getText();
     const lines = text.split('\n');
 
-    // 查找IncludeFile语句
+    // Find IncludeFile statements
     for (const line of lines) {
         const includeMatch = line.match(/IncludeFile\s+"([^"]+)"/i);
         if (includeMatch) {
             const includePath = includeMatch[1];
 
-            // 在已加载的文档中查找对应的包含文件
+            // Find corresponding included file in loaded documents
             for (const [uri, doc] of allDocuments) {
                 if (uri.includes(includePath.replace(/\\/g, '/')) ||
                     uri.endsWith(includePath.split(/[\\\/]/).pop() || '')) {
@@ -255,16 +255,16 @@ function getWordAtPosition(text: string, position: Position): string | null {
     const line = lines[position.line];
     const char = position.character;
 
-    // 查找单词边界（支持::语法）
+    // Find word boundaries (support :: syntax)
     let start = char;
     let end = char;
 
-    // 向前查找单词开始
+    // Search forward for word start
     while (start > 0 && /[a-zA-Z0-9_:]/.test(line[start - 1])) {
         start--;
     }
 
-    // 向后查找单词结束
+    // Search backward for word end
     while (end < line.length && /[a-zA-Z0-9_:]/.test(line[end])) {
         end++;
     }
@@ -275,16 +275,16 @@ function getWordAtPosition(text: string, position: Position): string | null {
 
     const fullWord = line.substring(start, end);
 
-    // 处理模块调用语法 Module::Function
+    // Handle module call syntax Module::Function
     if (fullWord.includes('::')) {
         const parts = fullWord.split('::');
         if (parts.length === 2) {
-            // 检查光标在模块名还是函数名上
+            // Check if cursor is on module name or function name
             const moduleEnd = start + parts[0].length;
             if (char <= moduleEnd) {
-                return parts[0]; // 返回模块名
+                return parts[0]; // Return module name
             } else {
-                return parts[1]; // 返回函数名
+                return parts[1]; // Return function name
             }
         }
     }
@@ -303,8 +303,8 @@ function findDefinitionsInDocument(document: TextDocument, word: string): Locati
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
 
-        // 查找过程定义
-        const procMatch = line.match(new RegExp(`^Procedure(?:\\.\\w+)?\\s+(${word})\\s*\\(`, 'i'));
+        // Find procedure definition
+        const procMatch = line.match(new RegExp(`^Procedure(?:C|DLL|CDLL)?(?:\\.\\w+)?\\s+(${word})\\s*\\(`, 'i'));
         if (procMatch) {
             const startChar = lines[i].indexOf(procMatch[1]);
             definitions.push({
@@ -316,7 +316,7 @@ function findDefinitionsInDocument(document: TextDocument, word: string): Locati
             });
         }
 
-        // 查找结构体定义
+        // Find structure definition
         const structMatch = line.match(new RegExp(`^Structure\\s+(${word})\\b`, 'i'));
         if (structMatch) {
             const startChar = lines[i].indexOf(structMatch[1]);
@@ -329,7 +329,7 @@ function findDefinitionsInDocument(document: TextDocument, word: string): Locati
             });
         }
 
-        // 查找接口定义
+        // Find interface definition
         const interfaceMatch = line.match(new RegExp(`^Interface\\s+(${word})\\b`, 'i'));
         if (interfaceMatch) {
             const startChar = lines[i].indexOf(interfaceMatch[1]);
@@ -342,7 +342,7 @@ function findDefinitionsInDocument(document: TextDocument, word: string): Locati
             });
         }
 
-        // 查找枚举定义
+        // Find enumeration definition
         const enumMatch = line.match(new RegExp(`^Enumeration\\s+(${word})\\b`, 'i'));
         if (enumMatch) {
             const startChar = lines[i].indexOf(enumMatch[1]);
@@ -355,7 +355,7 @@ function findDefinitionsInDocument(document: TextDocument, word: string): Locati
             });
         }
 
-        // 查找模块定义
+        // Find module definition
         const moduleMatch = line.match(new RegExp(`^Module\\s+(${word})\\b`, 'i'));
         if (moduleMatch) {
             const startChar = lines[i].indexOf(moduleMatch[1]);
@@ -381,7 +381,7 @@ function findDefinitionsInDocument(document: TextDocument, word: string): Locati
             });
         }
 
-        // 查找变量定义（Global, Protected, Static等）
+        // Find variable definitions (Global, Protected, Static, etc.)
         const varMatch = line.match(new RegExp(`^(Global|Protected|Static|Define|Dim)\\s+([^\\s,]+\\s+)?\\*?(${word})(?:\\.\\w+|\\[|\\s|$)`, 'i'));
         if (varMatch) {
             const fullLine = lines[i];
@@ -411,7 +411,7 @@ function getModuleSymbolFromPosition(text: string, position: Position): { module
     const beforeCursor = line.substring(0, char);
     const afterCursor = line.substring(char);
     const full = beforeCursor + afterCursor;
-    // 优先匹配常量形式
+    // Prefer matching constant form
     let m = full.match(/(\w+)::#(\w+)/);
     if (m) {
         const start = line.indexOf(m[0]);
@@ -611,7 +611,7 @@ function collectSearchDocuments(
             const ip = line.match(/^\s*IncludePath\s+\"([^\"]+)\"/i);
             if (ip) {
                 const dir = normalizeDirPath(uri, ip[1]);
-                // 最新的放到前面
+                // Newest first
                 if (!includeDirs.includes(dir)) includeDirs.unshift(dir);
                 continue;
             }
@@ -643,7 +643,7 @@ function collectSearchDocuments(
     }
     // Add workspace files (with limit) to avoid missing unopened files
     try {
-        // Prefer project file list (pbp-derived) over a full workspace scan.
+        // Prefer project file list (pbp-derived) over a full workspace scan
         let files: string[] | undefined;
         if (typeof projectManager?.getProjectFilesForDocument === 'function') {
             const projectFiles = projectManager.getProjectFilesForDocument(rootDocUri);
@@ -660,7 +660,9 @@ function collectSearchDocuments(
                 result.set(incUri, tempDoc);
             }
         }
-    } catch {}
+    } catch (error) {
+        // Ignore errors during workspace scanning
+    }
 
     return result;
 }
