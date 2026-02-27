@@ -13,6 +13,7 @@ import {
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { analyzeScopesAndVariables } from '../utils/scope-manager';
+import { parsePureBasicConstantDefinition, parsePureBasicConstantDeclaration } from '../utils/constants';
 
 /**
  * 准备重命名 - 检查是否可以重命名
@@ -141,18 +142,23 @@ export function handleRename(
 }
 
 /**
- * 获取位置处的单词
+ * Get the word at the specified position
  */
 function getWordAtPosition(line: string, character: number): string | null {
     let start = character;
     let end = character;
 
-    // 向前查找单词开始
-    while (start > 0 && /[a-zA-Z0-9_]/.test(line[start - 1])) {
+    // Search forward to find word start
+    while (start > 0 && /[a-zA-Z0-9_:]/.test(line[start - 1])) {
         start--;
     }
 
-    // 向后查找单词结束
+    // Include leading '#' if present (PureBasic constant prefix)
+    if (start > 0 && line[start - 1] === '#') {
+        start--;
+    }
+
+    // Search backward to find word end
     while (end < line.length && /[a-zA-Z0-9_]/.test(line[end])) {
         end++;
     }
@@ -186,14 +192,14 @@ function getWordRange(line: string, character: number): Range {
 }
 
 /**
- * 检查是否是有效的标识符
+ * Check whether it is a valid identifier
  */
 function isValidIdentifier(name: string): boolean {
-    return /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name);
+    return /^[a-zA-Z_][a-zA-Z0-9_]*\$?$/.test(name);
 }
 
 /**
- * 检查是否是可重命名的符号
+ * Check whether it is a renameable symbol
  */
 function isRenameableSymbol(
     word: string,
@@ -250,15 +256,8 @@ function isUserDefinedSymbol(
             }
 
             // Check constant definitions
-            function escapeRegExp(text: string): string {
-                return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            }
-
-            const baseWord = word.endsWith('$') ? word.slice(0, -1) : word;
-            const safeWord = escapeRegExp(baseWord);
-
-            const constMatch = line.match(new RegExp(`^#(${safeWord}\\$?)\\s*=`, 'i'));
-            if (constMatch) {
+            const constMatch = parsePureBasicConstantDefinition(line) || parsePureBasicConstantDeclaration(line);
+            if (constMatch && normalizeConstantName(constMatch.name) === normalizeConstantName(word)) {
                 return true;
             }
 
@@ -307,7 +306,7 @@ function getModuleCallFromPosition(line: string, character: number): {
 }
 
 /**
- * 处理模块函数重命名
+ * Handling Module Function Renaming
  */
 function handleModuleFunctionRename(
     moduleName: string,
@@ -318,16 +317,19 @@ function handleModuleFunctionRename(
 ): WorkspaceEdit | null {
     const edits: Array<{ uri: string; range: Range }> = [];
     const searchDocuments = [document, ...Array.from(documentCache.values())];
+    const safeModule = escapeRegExp(moduleName);
+    const safeFn = escapeRegExp(functionName);
 
     for (const doc of searchDocuments) {
         const text = doc.getText();
         const lines = text.split('\n');
+        let inModule = false;
 
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
 
-            // 查找模块调用 Module::Function
-            const moduleCallRegex = new RegExp(`\\b${moduleName}::${functionName}\\b`, 'gi');
+            // Find module call Module::Function
+            const moduleCallRegex = new RegExp(`\\b${safeModule}::${safeFn}\\b`, 'gi');
             let match;
             while ((match = moduleCallRegex.exec(line)) !== null) {
                 const functionStart = match.index + moduleName.length + 2; // +2 for '::'
@@ -340,9 +342,8 @@ function handleModuleFunctionRename(
                 });
             }
 
-            // 查找模块内的函数定义
-            let inModule = false;
-            const moduleStartMatch = line.match(new RegExp(`^\\s*Module\\s+${moduleName}\\b`, 'i'));
+            // Track module scope to find procedure definitions inside the module
+            const moduleStartMatch = line.match(new RegExp(`^\\s*Module\\s+${safeModule}\\b`, 'i'));
             if (moduleStartMatch) {
                 inModule = true;
             }
@@ -351,8 +352,9 @@ function handleModuleFunctionRename(
                 inModule = false;
             }
 
+            // Find Procedure definition inside module
             if (inModule) {
-                const procMatch = line.match(new RegExp(`^\\s*Procedure(?:\\.\\w+)?\\s+(${functionName})\\s*\\(`, 'i'));
+                const procMatch = line.match(new RegExp(`^\\s*Procedure(?:\\.\\w+)?\\s+(${safeFn})\\s*\\(`, 'i'));
                 if (procMatch) {
                     const startChar = line.indexOf(procMatch[1]);
                     edits.push({
@@ -446,6 +448,8 @@ function handleModuleSymbolRename(
 ): WorkspaceEdit | null {
     const changes: { [uri: string]: TextEdit[] } = {};
     const searchDocuments = [document, ...Array.from(documentCache.values())];
+    const safeModule = escapeRegExp(moduleName);
+    const safeIdent = escapeRegExp(ident);
 
     for (const doc of searchDocuments) {
         const text = doc.getText();
@@ -457,7 +461,7 @@ function handleModuleSymbolRename(
             const trimmed = raw.trim();
 
             // 使用处：Module::ident / Module::#ident
-            const re = new RegExp(`\\b${moduleName}::#?${ident}\\b`, 'g');
+            const re = new RegExp(`\\b${safeModule}::#?${safeIdent}\\b`, 'g');
             let m: RegExpExecArray | null;
             while ((m = re.exec(raw)) !== null) {
                 const identStart = m.index + moduleName.length + 2 + (raw[m.index + moduleName.length + 2] === '#' ? 1 : 0);
@@ -465,11 +469,16 @@ function handleModuleSymbolRename(
             }
 
             // 声明：Structure/Interface/Enumeration/常量名
+            const constMatch = parsePureBasicConstantDefinition(trimmed) || parsePureBasicConstantDeclaration(trimmed);
+            if (constMatch && normalizeConstantName(constMatch.name) === normalizeConstantName(ident)) {
+                const startChar = raw.indexOf('#' + constMatch.name) + 1;
+                edits.push({ range: { start: { line: i, character: startChar }, end: { line: i, character: startChar + constMatch.name.length } }, newText: newName });
+                continue;
+            }
             const defMatchers = [
-                new RegExp(`^Structure\\s+(${ident})\\b`, 'i'),
-                new RegExp(`^Interface\\s+(${ident})\\b`, 'i'),
-                new RegExp(`^Enumeration\\s+(${ident})\\b`, 'i'),
-                new RegExp(`^#(${ident})\\b`, 'i')
+                new RegExp(`^Structure\\s+(${safeIdent})\\b`, 'i'),
+                new RegExp(`^Interface\\s+(${safeIdent})\\b`, 'i'),
+                new RegExp(`^Enumeration\\s+(${safeIdent})\\b`, 'i'),
             ];
             for (const r of defMatchers) {
                 const mm = trimmed.match(r);
@@ -525,6 +534,14 @@ function getStructAccessFromLine(line: string, character: number): { varName: st
         }
     }
     return null;
+}
+
+function escapeRegExp(text: string): string {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizeConstantName(name: string): string {
+    return name.replace(/\$$/, '').toLowerCase();
 }
 
 function getVariableStructureAt(document: TextDocument, lineNumber: number, varName: string): string | null {

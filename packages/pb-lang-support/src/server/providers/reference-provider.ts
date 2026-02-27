@@ -1,6 +1,6 @@
 /**
- * 引用提供者
- * 为PureBasic提供查找引用功能
+ * Reference provider
+ * Provides find references functionality for PureBasic
  */
 
 import {
@@ -11,9 +11,10 @@ import {
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { readFileIfExistsSync, resolveIncludePath, fsPathToUri, normalizeDirPath } from '../utils/fs-utils';
 import { getWorkspaceFiles } from '../indexer/workspace-index';
+import { parsePureBasicConstantDefinition} from '../utils/constants';
 
 /**
- * 处理引用请求
+ * Handle references request
  */
 export function handleReferences(
     params: ReferenceParams,
@@ -23,22 +24,22 @@ export function handleReferences(
     const text = document.getText();
     const position = params.position;
 
-    // 获取当前位置的单词
+    // Get word at current position
     const word = getWordAtPosition(text, position);
     if (!word) {
         return [];
     }
 
-    // 收集可搜索文档：当前 + 已打开 + 递归包含
+    // Collect searchable documents: current + opened + recursive includes
     const searchDocs = collectSearchDocuments(document, allDocuments);
 
-    // 查找引用
+    // Find references
     const references: Location[] = [];
 
-    // 处理模块调用语法（函数）
+    // Handle module call syntax (functions)
     const moduleMatch = getModuleFunctionFromPosition(text, position);
     if (moduleMatch) {
-        // 查找模块函数的所有引用
+        // Find all references for module function
         const moduleReferences = findModuleFunctionReferences(
             moduleMatch.moduleName,
             moduleMatch.functionName,
@@ -47,7 +48,7 @@ export function handleReferences(
         );
         references.push(...moduleReferences);
     } else {
-        // 处理模块符号（常量/结构/接口/枚举）：Module::Name 或 Module::#CONST
+        // Handle module symbols (constants/structures/interfaces/enumerations): Module::Name or Module::#CONST
         const modSym = getModuleSymbolFromPosition(text, position);
         if (modSym) {
             const modSymRefs = findModuleSymbolReferences(
@@ -59,7 +60,7 @@ export function handleReferences(
             references.push(...modSymRefs);
             return references;
         }
-        // 常规引用查找：遍历所有搜索文档
+        // Regular reference finding: traverse all search documents
         for (const doc of searchDocs.values()) {
             const docReferences = findReferencesInDocument(doc, word, params.context.includeDeclaration);
             references.push(...docReferences);
@@ -70,7 +71,7 @@ export function handleReferences(
 }
 
 /**
- * 获取位置处的单词（支持模块语法 Module::Function）
+ * Get word at position (support module syntax Module::Function)
  */
 function getWordAtPosition(text: string, position: Position): string | null {
     const lines = text.split('\n');
@@ -81,16 +82,16 @@ function getWordAtPosition(text: string, position: Position): string | null {
     const line = lines[position.line];
     const char = position.character;
 
-    // 查找单词边界（支持::语法）
+    // Find word boundary (support :: syntax)
     let start = char;
     let end = char;
 
-    // 向前查找单词开始
+    // Search forward to find word start
     while (start > 0 && /[a-zA-Z0-9_:]/.test(line[start - 1])) {
         start--;
     }
 
-    // 向后查找单词结束
+    // Search backward to find word end
     while (end < line.length && /[a-zA-Z0-9_:]/.test(line[end])) {
         end++;
     }
@@ -101,16 +102,16 @@ function getWordAtPosition(text: string, position: Position): string | null {
 
     const fullWord = line.substring(start, end);
 
-    // 处理模块调用语法 Module::Function
+    // Handle module call syntax Module::Function
     if (fullWord.includes('::')) {
         const parts = fullWord.split('::');
         if (parts.length === 2) {
-            // 检查光标在模块名还是函数名上
+            // Check if cursor is on module name or function name
             const moduleEnd = start + parts[0].length;
             if (char <= moduleEnd) {
-                return parts[0]; // 返回模块名
+                return parts[0]; // Return module name
             } else {
-                return parts[1]; // 返回函数名
+                return parts[1]; // Return function name
             }
         }
     }
@@ -119,7 +120,7 @@ function getWordAtPosition(text: string, position: Position): string | null {
 }
 
 /**
- * 获取模块函数调用信息
+ * Get module function call information
  */
 function getModuleFunctionFromPosition(text: string, position: Position): {
     moduleName: string;
@@ -133,7 +134,7 @@ function getModuleFunctionFromPosition(text: string, position: Position): {
     const line = lines[position.line];
     const char = position.character;
 
-    // 查找模块调用语法 Module::Function
+    // Find module call syntax Module::Function
     const beforeCursor = line.substring(0, char);
     const afterCursor = line.substring(char);
 
@@ -141,7 +142,7 @@ function getModuleFunctionFromPosition(text: string, position: Position): {
     const moduleMatch = fullContext.match(/(\w+)::(\w+)/);
 
     if (moduleMatch) {
-        // 检查光标是否在这个模块调用上
+        // Check if cursor is on this module call
         const matchStart = line.indexOf(moduleMatch[0]);
         const matchEnd = matchStart + moduleMatch[0].length;
 
@@ -157,7 +158,7 @@ function getModuleFunctionFromPosition(text: string, position: Position): {
 }
 
 /**
- * 查找模块函数的所有引用
+ * Find all references for module function
  */
 function findModuleFunctionReferences(
     moduleName: string,
@@ -166,29 +167,25 @@ function findModuleFunctionReferences(
     includeDeclaration: boolean
 ): Location[] {
     const references: Location[] = [];
+    const safeModule = escapeRegExp(moduleName);
+    const safeFn = escapeRegExp(functionName);
+
     for (const doc of searchDocs.values()) {
         const text = doc.getText();
         const lines = text.split('\n');
+        let inModule = false;
 
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
 
-            // 查找模块调用 Module::Function
-            const moduleCallRegex = new RegExp(`\\b${moduleName}::${functionName}\\b`, 'gi');
+            // Find module call Module::Function
+            const moduleCallRegex = new RegExp(`\\b${safeModule}::${safeFn}\\b`, 'gi');
             let match;
             while ((match = moduleCallRegex.exec(line)) !== null) {
-                // 跳过注释中的匹配
-                if (line.substring(0, match.index).includes(';')) {
-                    continue;
-                }
-
-                // 跳过字符串中的匹配
-                const beforeMatch = line.substring(0, match.index);
-                const quoteCount = (beforeMatch.match(/"/g) || []).length;
-                if (quoteCount % 2 === 1) {
-                    continue;
-                }
-
+                const before = line.substring(0, match.index);
+                if (before.includes(';')) { continue; }
+                const quoteCount = (before.match(/"/g) || []).length;
+                if (quoteCount % 2 === 1) { continue; }
                 references.push({
                     uri: doc.uri,
                     range: {
@@ -198,31 +195,26 @@ function findModuleFunctionReferences(
                 });
             }
 
-            // 如果包含声明，在模块内查找函数定义
-            if (includeDeclaration) {
-                // 额外：在同文档内寻找定义段
-                let inModule = false;
-                const moduleStartMatch = line.match(new RegExp(`^\\s*Module\\s+${moduleName}\\b`, 'i'));
-                if (moduleStartMatch) {
-                    inModule = true;
-                }
+            // Track module scope for definition search
+            if (line.match(new RegExp(`^\\s*Module\\s+${safeModule}\\b`, 'i'))) {
+                inModule = true;
+            }
+            if (line.match(/^\s*EndModule\b/i)) {
+                inModule = false;
+            }
 
-                if (line.match(/^\s*EndModule\b/i)) {
-                    inModule = false;
-                }
-
-                if (inModule) {
-                    const procMatch = line.match(new RegExp(`^\\s*Procedure(?:\\.\\w+)?\\s+(${functionName})\\s*\\(`, 'i'));
-                    if (procMatch) {
-                        const startChar = line.indexOf(procMatch[1]);
-                        references.push({
-                            uri: doc.uri,
-                            range: {
-                                start: { line: i, character: startChar },
-                                end: { line: i, character: startChar + functionName.length }
-                            }
-                        });
-                    }
+            // Find Procedure definition inside module
+            if (includeDeclaration && inModule) {
+                const procMatch = line.match(new RegExp(`^\\s*Procedure(?:\\.\\w+)?\\s+(${safeFn})\\s*\\(`, 'i'));
+                if (procMatch) {
+                    const startChar = line.indexOf(procMatch[1]);
+                    references.push({
+                        uri: doc.uri,
+                        range: {
+                            start: { line: i, character: startChar },
+                            end: { line: i, character: startChar + functionName.length }
+                        }
+                    });
                 }
             }
         }
@@ -232,7 +224,7 @@ function findModuleFunctionReferences(
 }
 
 /**
- * 在文档中查找引用
+ * Search for references in the document
  */
 function findReferencesInDocument(
     document: TextDocument,
@@ -242,135 +234,168 @@ function findReferencesInDocument(
     const text = document.getText();
     const lines = text.split('\n');
     const references: Location[] = [];
+    const isConstant = word.startsWith('#');
 
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         const trimmedLine = line.trim();
 
-        // 如果包含声明，查找定义
-        if (includeDeclaration) {
-            // 查找过程定义
-            const procMatch = trimmedLine.match(new RegExp(`^Procedure(?:\\.\\w+)?\\s+(${word})\\s*\\(`, 'i'));
-            if (procMatch) {
-                const startChar = line.indexOf(procMatch[1]);
-                references.push({
-                    uri: document.uri,
-                    range: {
-                        start: { line: i, character: startChar },
-                        end: { line: i, character: startChar + word.length }
-                    }
-                });
-            }
-
-            // 查找结构体定义
-            const structMatch = trimmedLine.match(new RegExp(`^Structure\\s+(${word})\\b`, 'i'));
-            if (structMatch) {
-                const startChar = line.indexOf(structMatch[1]);
-                references.push({
-                    uri: document.uri,
-                    range: {
-                        start: { line: i, character: startChar },
-                        end: { line: i, character: startChar + word.length }
-                    }
-                });
-            }
-
-            // 查找接口定义
-            const ifaceMatch = trimmedLine.match(new RegExp(`^Interface\\s+(${word})\\b`, 'i'));
-            if (ifaceMatch) {
-                const startChar = line.indexOf(ifaceMatch[1]);
-                references.push({
-                    uri: document.uri,
-                    range: {
-                        start: { line: i, character: startChar },
-                        end: { line: i, character: startChar + word.length }
-                    }
-                });
-            }
-
-            // 查找枚举定义
-            const enumMatch = trimmedLine.match(new RegExp(`^Enumeration\\s+(${word})\\b`, 'i'));
-            if (enumMatch) {
-                const startChar = line.indexOf(enumMatch[1]);
-                references.push({
-                    uri: document.uri,
-                    range: {
-                        start: { line: i, character: startChar },
-                        end: { line: i, character: startChar + word.length }
-                    }
-                });
-            }
-
-            // Look up constant definitions
-            function escapeRegExp(text: string): string {
-                return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            }
-
-            // Normalize: NAME should also match NAME$
-            const baseWord = word.endsWith('$') ? word.slice(0, -1) : word;
-            const safeWord = escapeRegExp(baseWord);
-
-            const constMatch = trimmedLine.match(new RegExp(`^#(${safeWord}\\$?)\\s*=`, 'i'));
-            if (constMatch) {
-                const matchedName = constMatch[1];
-                const startChar = line.indexOf('#') + 1;
-
-                references.push({
-                    uri: document.uri,
-                    range: {
-                        start: { line: i, character: startChar },
-                        end: { line: i, character: startChar + matchedName.length }
-                    }
-                });
-            }
-
-
-            // Look up variable definitions
-            const varMatch = trimmedLine.match(new RegExp(`^(Global|Protected|Static|Define|Dim)\\s+([^\\s,]+\\s+)?\\*?(${word})(?:\\.\\w+|\\[|\\s|$)`, 'i'));
-            if (varMatch) {
-                const varName = varMatch[3];
-                const startChar = line.indexOf(varName, line.indexOf(varMatch[1]));
-                references.push({
-                    uri: document.uri,
-                    range: {
-                        start: { line: i, character: startChar },
-                        end: { line: i, character: startChar + word.length }
-                    }
-                });
-            }
+        // Skip comment lines
+        if (trimmedLine.startsWith(';')) {
+            continue;
         }
 
-        // 查找使用/引用
-        const wordRegex = new RegExp(`\\b${word}\\b`, 'gi');
-        let match;
-        while ((match = wordRegex.exec(line)) !== null) {
-            // 跳过注释中的匹配
-            if (line.substring(0, match.index).includes(';')) {
-                continue;
-            }
-
-            // 跳过字符串中的匹配
-            const beforeMatch = line.substring(0, match.index);
-            const quoteCount = (beforeMatch.match(/"/g) || []).length;
-            if (quoteCount % 2 === 1) {
-                continue;
-            }
-
-            references.push({
-                uri: document.uri,
-                range: {
-                    start: { line: i, character: match.index },
-                    end: { line: i, character: match.index + word.length }
+        if (isConstant) {
+            // Constants: search all occurrences (definition + usage)
+            const baseName = normalizeConstantName(word.replace(/^#/, ''));
+            const ref = findConstantReference(line, i, baseName, document.uri);
+            if (ref) {
+                const isDef = parsePureBasicConstantDefinition(trimmedLine) !== null;
+                if (!isDef || includeDeclaration) {
+                    references.push(ref);
                 }
-            });
+            }
+            continue;
         }
+
+        // Non-constants: find definitions if requested
+        if (includeDeclaration) {
+            const defRef = findDefinitionReference(line, trimmedLine, i, word, document.uri);
+            if (defRef) {
+                references.push(defRef);
+                continue; // Definition found, skip usage search for this line
+            }
+        }
+
+        // Find usages (non-constants)
+        references.push(...findUsageReference(line, i, word, document.uri));
     }
 
     return references;
 }
 
 /**
- * 获取模块符号（函数以外，如常量/结构/接口/枚举）的调用位置
+ * Find a constant reference (#NAME or #NAME$) in a line.
+ */
+function findConstantReference(
+    line: string,
+    lineIndex: number,
+    baseName: string,
+    uri: string
+): Location | null {
+    const searchName = '#' + baseName;
+    const lowerLine = line.toLowerCase();
+    const idx = lowerLine.indexOf(searchName);
+    if (idx === -1) { return null; }
+
+    // Skip if match is inside an inline comment
+    if (line.substring(0, idx).includes(';')) { return null; }
+
+    // Skip if match is inside a string literal
+    const quoteCount = (line.substring(0, idx).match(/"/g) || []).length;
+    if (quoteCount % 2 === 1) { return null; }
+
+    const afterIdx = idx + searchName.length;
+    const hasDollar = lowerLine[afterIdx] === '$';
+    const nextChar = lowerLine[afterIdx + (hasDollar ? 1 : 0)];
+    if (nextChar && /[a-z0-9_$]/.test(nextChar)) { return null; } // not a word boundary
+
+    const startChar = idx + 1; // skip #
+    const matchLength = baseName.length + (hasDollar ? 1 : 0);
+    return {
+        uri,
+        range: {
+            start: { line: lineIndex, character: startChar },
+            end: { line: lineIndex, character: startChar + matchLength }
+        }
+    };
+}
+
+/**
+ * Find a symbol definition (Procedure, Structure, Interface, Enumeration, Variable) in a line.
+ */
+function findDefinitionReference(
+    line: string,
+    trimmedLine: string,
+    lineIndex: number,
+    word: string,
+    uri: string
+): Location | null {
+    const safeWord = escapeRegExp(word);
+    const patterns = [
+        new RegExp(`^Procedure(?:\\.\\w+)?\\s+(${safeWord})\\s*\\(`, 'i'),
+        new RegExp(`^Structure\\s+(${safeWord})\\b`, 'i'),
+        new RegExp(`^Interface\\s+(${safeWord})\\b`, 'i'),
+        new RegExp(`^Enumeration\\s+(${safeWord})\\b`, 'i'),
+        new RegExp(`^(?:Global|Protected|Static|Define|Dim)\\s+(?:\\w+\\s+)?\\*?(${safeWord})(?:\\.\\w+|\\[|\\s|$)`, 'i'),
+    ];
+
+    for (const pattern of patterns) {
+        const match = trimmedLine.match(pattern);
+        if (match) {
+            const startChar = line.indexOf(match[1]);
+            return {
+                uri,
+                range: {
+                    start: { line: lineIndex, character: startChar },
+                    end: { line: lineIndex, character: startChar + word.length }
+                }
+            };
+        }
+    }
+    return null;
+}
+
+/**
+ * Returns the index of the first ';' that is not inside a string literal,
+ * or -1 if the line has no effective comment.
+ */
+function getCommentStart(line: string): number {
+    let inString = false;
+    for (let i = 0; i < line.length; i++) {
+        if (line[i] === '"') { inString = !inString; }
+        if (!inString && line[i] === ';') { return i; }
+    }
+    return -1;
+}
+
+
+/**
+ * Find a word usage in a line, skipping comments and strings.
+ */
+function findUsageReference(
+    line: string,
+    lineIndex: number,
+    word: string,
+    uri: string
+): Location [] {
+    const results: Location[] = [];
+    const safeWord = escapeRegExp(word);
+    const wordRegex = new RegExp(`\\b${safeWord}\\b`, 'gi');
+    const commentStart = getCommentStart(line);
+
+    let match: RegExpExecArray | null;
+    while ((match = wordRegex.exec(line)) !== null) {
+        // Skip if inside or after a comment
+        if (commentStart !== -1 && match.index >= commentStart) { break; }
+
+        // Skip if inside a string literal
+        const quoteCount = (line.substring(0, match.index).match(/"/g) || []).length;
+        if (quoteCount % 2 === 1) { continue; }
+
+        results.push({
+            uri,
+            range: {
+                start: { line: lineIndex, character: match.index },
+                end: { line: lineIndex, character: match.index + word.length }
+            }
+        });
+    }
+    return results;
+}
+
+/**
+ * Get module symbol (other than functions, such as constants/structures/interfaces/enumerations) call position
  */
 function getModuleSymbolFromPosition(text: string, position: Position): { moduleName: string; ident: string } | null {
     const lines = text.split('\n');
@@ -396,7 +421,7 @@ function getModuleSymbolFromPosition(text: string, position: Position): { module
 }
 
 /**
- * 查找模块中的常量/结构/接口/枚举引用
+ * Find constants/structures/interfaces/enumerations references in module
  */
 function findModuleSymbolReferences(
     moduleName: string,
@@ -405,38 +430,77 @@ function findModuleSymbolReferences(
     includeDeclaration: boolean
 ): Location[] {
     const refs: Location[] = [];
+    const safeModule = escapeRegExp(moduleName);
+    const safeIdent = escapeRegExp(ident);
+
     for (const doc of searchDocs.values()) {
         const text = doc.getText();
         const lines = text.split('\n');
+
         for (let i = 0; i < lines.length; i++) {
             const raw = lines[i];
-            // Module::ident 或 Module::#ident
-            const re = new RegExp(`\\b${moduleName}::#?${ident}\\b`, 'g');
+
+            // Find usages: Module::ident or Module::#ident
+            const re = new RegExp(`\\b${safeModule}::#?${safeIdent}\\b`, 'gi');
             let m: RegExpExecArray | null;
             while ((m = re.exec(raw)) !== null) {
-                // 跳过注释/字符串
+                // Skip comments
                 const before = raw.substring(0, m.index);
-                if (before.includes(';')) continue;
-                const quoteCount = (before.match(/\"/g) || []).length;
-                if (quoteCount % 2 === 1) continue;
-                refs.push({ uri: doc.uri, range: { start: { line: i, character: m.index + moduleName.length + 2 + (raw[m.index + moduleName.length + 2] === '#' ? 1 : 0) }, end: { line: i, character: m.index + m[0].length } } });
+                if (before.includes(';')) { continue; }
+                // Skip strings
+                const quoteCount = (before.match(/"/g) || []).length;
+                if (quoteCount % 2 === 1) { continue; }
+
+                // startChar points to the ident, skipping 'Module::' and optional '#'
+                const prefixLen = moduleName.length + 2; // 'Module::'
+                const hasHash = raw[m.index + prefixLen] === '#';
+                const startChar = m.index + prefixLen + (hasHash ? 1 : 0);
+
+                refs.push({
+                    uri: doc.uri,
+                    range: {
+                        start: { line: i, character: startChar },
+                        end: { line: i, character: m.index + m[0].length }
+                    }
+                });
             }
 
-            if (!includeDeclaration) continue;
-            // 声明区内的定义（DeclareModule / Module）
+            if (!includeDeclaration) { continue; }
+
+            // Find definitions (within DeclareModule / Module block)
             const trimmed = raw.trim();
-            // 只要匹配定义行
+
+            // Constant definition
+            const constMatch = parsePureBasicConstantDefinition(trimmed);
+            if (constMatch && normalizeConstantName(constMatch.name) === normalizeConstantName(ident)) {
+                const startChar = raw.indexOf('#' + constMatch.name) + 1;
+                refs.push({
+                    uri: doc.uri,
+                    range: {
+                        start: { line: i, character: startChar },
+                        end: { line: i, character: startChar + constMatch.name.length }
+                    }
+                });
+                continue;
+            }
+
+            // Structure, Interface, Enumeration definitions
             const defMatchers = [
-                new RegExp(`^Structure\\s+(${ident})\\b`, 'i'),
-                new RegExp(`^Interface\\s+(${ident})\\b`, 'i'),
-                new RegExp(`^Enumeration\\s+(${ident})\\b`, 'i'),
-                new RegExp(`^#(${ident})\\b`, 'i')
+                new RegExp(`^Structure\\s+(${safeIdent})\\b`, 'i'),
+                new RegExp(`^Interface\\s+(${safeIdent})\\b`, 'i'),
+                new RegExp(`^Enumeration\\s+(${safeIdent})\\b`, 'i'),
             ];
             for (const r of defMatchers) {
                 const mm = trimmed.match(r);
                 if (mm) {
                     const startChar = raw.indexOf(mm[1]);
-                    refs.push({ uri: doc.uri, range: { start: { line: i, character: startChar }, end: { line: i, character: startChar + ident.length } } });
+                    refs.push({
+                        uri: doc.uri,
+                        range: {
+                            start: { line: i, character: startChar },
+                            end: { line: i, character: startChar + ident.length }
+                        }
+                    });
                     break;
                 }
             }
@@ -445,8 +509,16 @@ function findModuleSymbolReferences(
     return refs;
 }
 
+function normalizeConstantName(name: string): string {
+    return name.replace(/\$$/, '').toLowerCase();
+}
+
+function escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
- * 收集搜索文档：当前 + 打开 + 递归包含
+ * Collect search documents: current + open + recursive includes
  */
 function collectSearchDocuments(
     document: TextDocument,
@@ -477,11 +549,11 @@ function collectSearchDocuments(
         const text = baseDoc.getText();
         const lines = text.split('\n');
 
-        // 维护当前IncludePath搜索目录（最新优先）
+        // Maintain current IncludePath search directory (latest first)
         const includeDirs: string[] = [];
 
         for (const line of lines) {
-            // IncludePath 指令
+            // IncludePath directive
             const ip = line.match(/^\s*IncludePath\s+\"([^\"]+)\"/i);
             if (ip) {
                 const dir = normalizeDirPath(uri, ip[1]);
@@ -513,7 +585,7 @@ function collectSearchDocuments(
             }
         }
     }
-    // 加入工作区文件（有限制），用于更完整的引用搜索
+    // Include workspace files (limited), for more complete reference searching
     try {
         const files = getWorkspaceFiles();
         for (const fsPath of files) {

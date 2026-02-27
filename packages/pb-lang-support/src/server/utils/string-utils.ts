@@ -61,3 +61,25 @@ export function isPositionInString(line: string, position: number): boolean {
 
     return inString;
 }
+
+/**
+ * Strips inline comments (;...) outside of string literals.
+ * Handles both double-quoted strings ("...") and single-char literals ('x').
+ */
+export function stripInlineComment(value: string): string {
+    let inDoubleString = false;
+    let inCharLiteral = false;
+
+    for (let i = 0; i < value.length; i++) {
+        const char = value[i];
+
+        if (char === '"' && !inCharLiteral) {
+            inDoubleString = !inDoubleString;
+        } else if (char === "'" && !inDoubleString) {
+            inCharLiteral = !inCharLiteral;
+        } else if (char === ';' && !inDoubleString && !inCharLiteral) {
+            return value.substring(0, i);
+        }
+    }
+    return value;
+}

@@ -1,6 +1,6 @@
 /**
- * 模块解析工具
- * 负责解析PureBasic模块和IncludeFile引用
+ * Module Parsing Tool
+ * Responsible for parsing PureBasic modules and IncludeFile references
  */
 
 import * as path from 'path';
@@ -9,6 +9,7 @@ import { resolveIncludePath, readFileIfExistsSync, normalizeDirPath } from './fs
 import { readFileCached } from './file-cache';
 import { generateHash } from './hash-utils';
 import { withErrorHandling, getErrorHandler } from './error-handler';
+import { parsePureBasicConstantDeclaration } from './constants';
 
 export interface ModuleFunction {
     name: string;
@@ -63,12 +64,12 @@ export function parseIncludeFiles(document: any, documentCache: Map<string, any>
             continue;
         }
 
-        // 匹配 IncludeFile/XIncludeFile（支持 "..." 或 <...> 语法）
+        // Matches IncludeFile/XIncludeFile (supports "..." or <...> syntax)
         const m = line.match(/^\s*(?:X?IncludeFile)\s+[\"<]([^\"<>]+)[\">]/i);
         if (!m) continue;
 
         const inc = m[1];
-        // 先按原样解析
+        // (Parsed as-is for now)
         let fullPath = resolveIncludePath(document.uri, inc, includeDirs);
         // 若未指定扩展名，尝试追加 .pbi
         if (!fullPath && !path.extname(inc)) {
@@ -363,9 +364,9 @@ function extractModuleExports(text: string, moduleName: string): {
                 continue;
             }
 
-            const constMatch = line.match(/^#([a-zA-Z_][a-zA-Z0-9_]*\$?)\s*(?:=\s*(.+))?/);
+            const constMatch = parsePureBasicConstantDeclaration(line);
             if (constMatch) {
-                constants.push({ name: constMatch[1], value: constMatch[2] });
+                constants.push({ name: constMatch.name, value: constMatch.value });
                 continue;
             }
 

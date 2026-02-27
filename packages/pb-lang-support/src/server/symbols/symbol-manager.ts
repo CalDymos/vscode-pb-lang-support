@@ -8,18 +8,28 @@ import { symbolCache } from './symbol-cache';
 import { generateHash } from '../utils/hash-utils';
 import { optimizedSymbolParser } from './optimized-symbol-parser';
 import { ParsedDocument } from './optimized-symbol-parser';
+import { parsePureBasicConstantDefinition } from '../utils/constants';
+import { stripInlineComment } from '../utils/string-utils';
 
 /**
- * 解析文档中的符号（性能优化版本）
- * @deprecated 使用 optimizedSymbolParser.parseDocumentSymbols 替代
+ * Parse symbols in a document (performance-optimized version)
+ * @deprecated Use optimizedSymbolParser.parseDocumentSymbols instead
  */
 export function parseDocumentSymbols(uri: string, text: string): void {
-    // 跳过.pbp项目文件的符号解析（它们是XML格式，不是PureBasic代码）
+    // Skip symbol resolution for .pbp project files (they are XML format, not PureBasic code)
+    /* is no longer needed, since package.jso only contains         
+        "extensions": [
+          ".pb",
+          ".pbi"
+        ], 
+    
     if (uri.endsWith('.pbp')) {
         return;
-    }
+    } 
+    
+    */
 
-    // 使用优化的解析器
+    // Using an optimized parser
     optimizedSymbolParser.parseDocumentSymbols(uri, text).catch(error => {
         console.error('Symbol parsing error:', error);
         // 降级到基本解析
@@ -45,7 +55,7 @@ function parseDocumentSymbolsFallback(uri: string, text: string): void {
                 kind: SymbolKind.Procedure,
                 range: {
                     start: { line: i, character: 0 },
-                    end: { line: i, character: line.length }
+                    end: { line: i, character: lines[i].length }
                 },
                 detail: procMatch[1] ? `Procedure.${procMatch[1]}` : 'Procedure',
                 documentation: `Procedure definition: ${procMatch[2]}${procMatch[1] ? ` (returns ${procMatch[1]})` : ''}`
@@ -60,7 +70,7 @@ function parseDocumentSymbolsFallback(uri: string, text: string): void {
                 kind: SymbolKind.Structure,
                 range: {
                     start: { line: i, character: 0 },
-                    end: { line: i, character: line.length }
+                    end: { line: i, character: lines[i].length }
                 },
                 detail: 'Structure',
                 documentation: `Structure definition: ${structMatch[1]}`
@@ -75,7 +85,7 @@ function parseDocumentSymbolsFallback(uri: string, text: string): void {
                 kind: SymbolKind.Interface,
                 range: {
                     start: { line: i, character: 0 },
-                    end: { line: i, character: line.length }
+                    end: { line: i, character: lines[i].length }
                 },
                 detail: 'Interface',
                 documentation: `Interface definition: ${interfaceMatch[1]}`
@@ -90,7 +100,7 @@ function parseDocumentSymbolsFallback(uri: string, text: string): void {
                 kind: SymbolKind.Enumeration,
                 range: {
                     start: { line: i, character: 0 },
-                    end: { line: i, character: line.length }
+                    end: { line: i, character: lines[i].length }
                 },
                 detail: 'Enumeration',
                 documentation: `Enumeration definition: ${enumMatch[1]}`
@@ -105,7 +115,7 @@ function parseDocumentSymbolsFallback(uri: string, text: string): void {
                 kind: SymbolKind.Module,
                 range: {
                     start: { line: i, character: 0 },
-                    end: { line: i, character: line.length }
+                    end: { line: i, character: lines[i].length }
                 },
                 detail: 'DeclareModule',
                 documentation: `DeclareModule definition: ${declareModuleMatch[1]}`
@@ -120,7 +130,7 @@ function parseDocumentSymbolsFallback(uri: string, text: string): void {
                 kind: SymbolKind.Module,
                 range: {
                     start: { line: i, character: 0 },
-                    end: { line: i, character: line.length }
+                    end: { line: i, character: lines[i].length }
                 },
                 detail: 'Module',
                 documentation: `Module definition: ${moduleMatch[1]}`
@@ -128,17 +138,18 @@ function parseDocumentSymbolsFallback(uri: string, text: string): void {
         }
 
         // Parsing constant definitions
-        const constMatch = line.match(/^#([a-zA-Z_][a-zA-Z0-9_]*\$?)\s*=\s*([^;]*)/);
+        const constMatch = parsePureBasicConstantDefinition(line);
         if (constMatch) {
+            const value = stripInlineComment(constMatch?.value ?? '').trimEnd();
             symbols.push({
-                name: constMatch[1],
+                name: constMatch.name,
                 kind: SymbolKind.Constant,
                 range: {
                     start: { line: i, character: 0 },
-                    end: { line: i, character: line.length }
+                    end: { line: i, character: lines[i].length }
                 },
                 detail: 'Constant',
-                documentation: `Constant definition: #${constMatch[1]} = ${constMatch[2].trim()}`
+                documentation: `Constant definition: #${constMatch.name} = ${(value || '').trim()}`
             });
         }
 
@@ -150,7 +161,7 @@ function parseDocumentSymbolsFallback(uri: string, text: string): void {
                 kind: SymbolKind.Variable,
                 range: {
                     start: { line: i, character: 0 },
-                    end: { line: i, character: line.length }
+                    end: { line: i, character: lines[i].length }
                 },
                 detail: `Variable.${varMatch[2]}`,
                 documentation: `Variable definition: ${varMatch[1]}.${varMatch[2]}`
@@ -165,7 +176,7 @@ function parseDocumentSymbolsFallback(uri: string, text: string): void {
                 kind: SymbolKind.Variable,
                 range: {
                     start: { line: i, character: 0 },
-                    end: { line: i, character: line.length }
+                    end: { line: i, character: lines[i].length }
                 },
                 detail: 'Array',
                 documentation: `Array definition: ${arrayMatch[1]}(${arrayMatch[2]})`
@@ -180,7 +191,7 @@ function parseDocumentSymbolsFallback(uri: string, text: string): void {
                 kind: SymbolKind.Variable,
                 range: {
                     start: { line: i, character: 0 },
-                    end: { line: i, character: line.length }
+                    end: { line: i, character: lines[i].length }
                 },
                 detail: 'List',
                 documentation: `List definition: NewList ${listMatch[1]}.${listMatch[2]}`
@@ -250,17 +261,18 @@ function parseSingleSymbol(line: string, lineIndex: number): PureBasicSymbol | n
     }
 
     // Parsing constant definitions
-    const constMatch = line.match(/^#([a-zA-Z_][a-zA-Z0-9_]*\$?)\s*=\s*([^;]*)/);
+    const constMatch = parsePureBasicConstantDefinition(line);
     if (constMatch) {
+        const value = stripInlineComment(constMatch?.value ?? '').trimEnd();
         return {
-            name: constMatch[1],
+            name: constMatch.name,
             kind: SymbolKind.Constant,
             range: {
                 start: { line: lineIndex, character: 0 },
                 end: { line: lineIndex, character: line.length }
             },
             detail: 'Constant',
-            documentation: `Constant definition: #${constMatch[1]} = ${constMatch[2].trim()}`
+            documentation: `Constant definition: #${constMatch.name} = ${value.trim()}`
         };
     }
 

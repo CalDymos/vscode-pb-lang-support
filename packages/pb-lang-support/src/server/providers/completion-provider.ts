@@ -1,6 +1,6 @@
 /**
- * 代码补全提供者
- * 为PureBasic提供智能代码补全功能
+ * Code completion provider
+ * Provides intelligent code completion functionality for PureBasic
  */
 
 import {
@@ -13,7 +13,7 @@ import {
 import {
     keywords, types, allBuiltInFunctions, arrayFunctions, listFunctions, mapFunctions,
     windowsApiFunctions, graphicsFunctions, networkFunctions, databaseFunctions, threadFunctions,
-    zeroParamBuiltInFunctions
+    zeroParamBuiltInFunctions, parsePureBasicConstantDefinition
 } from '../utils/constants';
 import { getModuleFunctionCompletions as getModuleFunctions, getAvailableModules, getModuleExports } from '../utils/module-resolver';
 import { analyzeScopesAndVariables, getActiveUsedModules } from '../utils/scope-manager';
@@ -22,7 +22,7 @@ import * as fs from 'fs';
 import { withErrorHandling, withAsyncErrorHandling, getErrorHandler } from '../utils/error-handler';
 
 /**
- * 处理代码补全请求
+ * Handle code completion requests
  */
 export function handleCompletion(
     params: CompletionParams,
@@ -49,10 +49,10 @@ function handleCompletionInternal(
     const currentLine = lines[position.line] || '';
     const linePrefix = currentLine.substring(0, position.character);
 
-    // 获取触发补全的上下文
+    // Get the context that triggers completion
     const context = getTriggerContext(linePrefix);
 
-    // 结构体成员访问补全 var\member
+    // Structure member access completion var\member
     if (context.isAfterStructAccess) {
         const documentText = document.getText();
         const scopeAnalysis = analyzeScopesAndVariables(documentText, position.line);
@@ -83,7 +83,7 @@ function handleCompletionInternal(
         return { isIncomplete: false, items };
     }
 
-    // 常量上下文（以 # 开头）：仅补全常量
+    // Constant context (starting with #): only complete constants
     if (context.isConstantContext) {
         const items: CompletionItem[] = [];
         const docSymbols = extractDocumentSymbols(document, documentCache);
@@ -100,7 +100,7 @@ function handleCompletionInternal(
                 });
             }
         });
-        // UseModule 导出的常量
+        // UseModule exported constants
         const usedModules2 = getActiveUsedModules(document.getText(), position.line);
         usedModules2.forEach(mod => {
             const ex = getModuleExports(mod, document, documentCache);
@@ -122,7 +122,7 @@ function handleCompletionInternal(
         return { isIncomplete: false, items };
     }
 
-    // 检查是否是模块调用 Module::
+    // Check if it's a module call Module::
     if (context.isAfterModuleOperator) {
         const exports = getModuleExports(context.moduleName, document, documentCache);
         const funcFiltered = context.isModuleConstantContext ? [] : (context.moduleMemberPrefix
@@ -136,7 +136,7 @@ function handleCompletionInternal(
             : exports.structures);
 
         const items: CompletionItem[] = [];
-        // 函数
+        // Functions
         items.push(...funcFiltered.map((func, index) => ({
             label: func.name,
             kind: CompletionItemKind.Function,
@@ -149,7 +149,7 @@ function handleCompletionInternal(
                 ? { command: 'editor.action.triggerParameterHints', title: 'Trigger Parameter Hints' }
                 : undefined
         })));
-        // 常量（使用 #Name 形式）
+        // Constants (using #Name format)
         items.push(...constFiltered.map((c, index) => ({
             label: `#${c.name}`,
             kind: CompletionItemKind.Constant,
@@ -159,7 +159,7 @@ function handleCompletionInternal(
             insertText: `#${c.name}`,
             insertTextFormat: InsertTextFormat.PlainText
         })));
-        // 结构/类型
+        // Structures/Types
         items.push(...structFiltered.map((s, index) => ({
             label: s.name,
             kind: CompletionItemKind.Class,
@@ -169,7 +169,7 @@ function handleCompletionInternal(
             insertText: s.name,
             insertTextFormat: InsertTextFormat.PlainText
         })));
-        // 接口
+        // Interfaces
         const ifaceFiltered = (exports.interfaces || []).filter(ifc =>
             context.isModuleConstantContext ? false : (!context.moduleMemberPrefix || ifc.name.toLowerCase().startsWith(context.moduleMemberPrefix.toLowerCase()))
         );
@@ -182,7 +182,7 @@ function handleCompletionInternal(
             insertText: it.name,
             insertTextFormat: InsertTextFormat.PlainText
         })));
-        // 枚举名（作为类型/分组名）
+        // Enumeration names (as types/group names)
         const enumFiltered = (exports.enumerations || []).filter(en =>
             context.isModuleConstantContext ? false : (!context.moduleMemberPrefix || en.name.toLowerCase().startsWith(context.moduleMemberPrefix.toLowerCase()))
         );
@@ -199,11 +199,11 @@ function handleCompletionInternal(
         return { isIncomplete: false, items };
     }
 
-    // 使用作用域管理器获取当前可见的变量
+    // Use scope manager to get currently visible variables
     const documentText = document.getText();
     const scopeAnalysis = analyzeScopesAndVariables(documentText, position.line);
 
-    // 添加当前作用域中可见的变量
+    // Add visible variables in the current scope
     scopeAnalysis.availableVariables.forEach((variable, index) => {
         if (variable.name.toLowerCase().startsWith(context.prefix.toLowerCase())) {
             let detail = variable.type;
@@ -222,10 +222,10 @@ function handleCompletionInternal(
         }
     });
 
-    // 从当前文档和所有文档中提取过程和常量（不受作用域限制）
+    // Extract procedures and constants from current and all documents (not scope-restricted)
     const documentSymbols = extractDocumentSymbols(document, documentCache);
 
-    // 添加文档中定义的过程/函数
+    // Add procedures/functions defined in document
     documentSymbols.procedures.forEach((proc, index) => {
         if (proc.name.toLowerCase().startsWith(context.prefix.toLowerCase())) {
             completionItems.push({
@@ -243,7 +243,7 @@ function handleCompletionInternal(
         }
     });
 
-    // 添加常量（常量通常是全局的）
+    // Add constants (constants are usually global)
     documentSymbols.constants.forEach((constant, index) => {
         if (constant.name.toLowerCase().startsWith(context.prefix.toLowerCase())) {
             completionItems.push({
@@ -256,7 +256,7 @@ function handleCompletionInternal(
         }
     });
 
-    // 添加关键字补全
+    // Add keyword completion
     keywords.forEach((keyword, index) => {
         if (keyword.toLowerCase().startsWith(context.prefix.toLowerCase())) {
             completionItems.push({
@@ -269,7 +269,7 @@ function handleCompletionInternal(
         }
     });
 
-    // 添加类型补全
+    // Add type completion
     types.forEach((type, index) => {
         if (type.toLowerCase().startsWith(context.prefix.toLowerCase())) {
             completionItems.push({
@@ -282,7 +282,7 @@ function handleCompletionInternal(
         }
     });
 
-    // 添加结构体/接口/枚举名（从文档/包含中解析的定义名）
+    // Add structures/interfaces/enumeration names (definition names parsed from documents/includes)
     documentSymbols.structures.forEach((s, index) => {
         if (s.name.toLowerCase().startsWith(context.prefix.toLowerCase())) {
             completionItems.push({
@@ -317,12 +317,12 @@ function handleCompletionInternal(
         }
     });
 
-    // UseModule 感知：为已导入模块的函数提供补全（无需 Module::）
+    // UseModule aware: provide completion for functions of imported modules (no Module:: needed)
     const usedModules = getActiveUsedModules(documentText, position.line);
     const pushedLabels = new Set<string>(completionItems.map(i => i.label));
     usedModules.forEach((mod) => {
         const ex = getModuleExports(mod, document, documentCache);
-        // 函数
+        // Functions
         ex.functions.forEach((func, idx) => {
             if (func.name.toLowerCase().startsWith(context.prefix.toLowerCase())) {
                 const key = `${func.name}`;
@@ -342,7 +342,7 @@ function handleCompletionInternal(
                 });
             }
         });
-        // 结构名（类型）
+        // Structure names (types)
         ex.structures.forEach((s, idx) => {
             if (s.name.toLowerCase().startsWith(context.prefix.toLowerCase())) {
                 const key = `${s.name}`;
@@ -359,7 +359,7 @@ function handleCompletionInternal(
                 });
             }
         });
-        // 接口
+        // Interfaces
         (ex.interfaces || []).forEach((it, idx) => {
             if (it.name.toLowerCase().startsWith(context.prefix.toLowerCase())) {
                 const key = `${it.name}`;
@@ -376,7 +376,7 @@ function handleCompletionInternal(
                 });
             }
         });
-        // 枚举名
+        // Enumeration names
         (ex.enumerations || []).forEach((en, idx) => {
             if (en.name.toLowerCase().startsWith(context.prefix.toLowerCase())) {
                 const key = `${en.name}`;
@@ -395,7 +395,7 @@ function handleCompletionInternal(
         });
     });
 
-    // 添加模块名称补全
+    // Add module name completion
     const availableModules = getAvailableModules(document, documentCache);
     availableModules.forEach((module, index) => {
         if (module.toLowerCase().startsWith(context.prefix.toLowerCase())) {
@@ -411,15 +411,15 @@ function handleCompletionInternal(
         }
     });
 
-    // 添加内置函数补全
+    // Add built-in function completion
     allBuiltInFunctions.forEach((func, index) => {
         if (func.toLowerCase().startsWith(context.prefix.toLowerCase())) {
-            // 大多数内置函数都有参数，所以只插入函数名和左括号
-            // 让VS Code自动显示参数提示
+            // Most built-in functions have parameters, so only insert function name and left parenthesis
+            // Let VS Code automatically show parameter hints
             const hasZeroParams = zeroParamBuiltInFunctions.includes(func);
             const insertText = hasZeroParams ? `${func}()` : `${func}(`;
 
-            // 确定函数类型
+            // Determine function type
             let functionType = 'PureBasic Built-in Function';
             let documentation = `PureBasic built-in function: ${func}()`;
 
@@ -462,7 +462,7 @@ function handleCompletionInternal(
         }
     });
 
-    // 添加代码片段
+    // Add code snippets
     const snippets = [
         {
             label: 'if',
@@ -547,7 +547,7 @@ function handleCompletionInternal(
 }
 
 /**
- * 获取触发补全的上下文
+ * Get the context that triggers completion
  */
 function getTriggerContext(linePrefix: string): {
     prefix: string;
@@ -564,11 +564,11 @@ function getTriggerContext(linePrefix: string): {
     structVarName: string;
     structMemberPrefix: string;
 } {
-    // 检查是否在字符串中
+    // Check if in string
     const quoteCount = (linePrefix.match(/"/g) || []).length;
     const isInString = quoteCount % 2 === 1;
 
-    // 检查是否在点后面 (成员访问)
+    // Check if after period (member access)
     const isAfterDot = linePrefix.trim().endsWith('.');
 
     // Check if it follows the module operator: Module:: or Module::# or Module:: prefix
@@ -585,13 +585,13 @@ function getTriggerContext(linePrefix: string): {
     const isConstantContext = !!constMatch && !isAfterModuleOperator; // Non-module #
     const constPrefix = constMatch ? constMatch[1] : '';
 
-    // 检查是否为结构体成员访问 var\member
+    // Check if for structure member access var\member
     const structMatch = linePrefix.match(/([A-Za-z_][A-Za-z0-9_]*|\*[A-Za-z_][A-Za-z0-9_]*)(?:\([^)]*\))?\\(\w*)$/);
     const isAfterStructAccess = !!structMatch;
     const structVarName = structMatch ? structMatch[1] : '';
     const structMemberPrefix = structMatch ? structMatch[2] : '';
 
-    // 获取当前单词前缀
+    // Get current word prefix
     const match = linePrefix.match(/([a-zA-Z_][a-zA-Z0-9_]*)$/);
     const prefix = match ? match[1] : '';
 
@@ -612,27 +612,27 @@ function getTriggerContext(linePrefix: string): {
     };
 }
 
-// 提取基础类型名（去除指针/数组/标注）
+// Get base type name (remove pointers/arrays/annotations)
 function getBaseType(typeStr: string): string {
     if (!typeStr) return '';
-    // 去掉后缀注释，如 " (array)", " (pointer)"
+    // Remove suffix comments, e.g. " (array)", " (pointer)"
     const cleaned = typeStr.split(' ')[0];
-    // 处理 *Type
+    // Handle *Type
     const noPtr = cleaned.startsWith('*') ? cleaned.substring(1) : cleaned;
-    // 处理 Type[]
+    // Handle Type[]
     const arrIdx = noPtr.indexOf('[');
     const base = arrIdx > -1 ? noPtr.substring(0, arrIdx) : noPtr;
-    // 过滤内置短类型（i,s,f等），只对结构体名（通常是驼峰）有意义
+    // Filter built-in short types (i,s,f, etc.), only meaningful for structure names (usually camelCase)
     return base;
 }
 
-// 构建结构体索引：结构体名 -> 成员列表
+// Build structure index: structure name -> member list
 function buildStructureIndex(document: any, documentCache: Map<string, any>): Map<string, Array<{name: string; type?: string}>> {
     const map = new Map<string, Array<{name: string; type?: string}>>();
 
     const pushMember = (structName: string, member: {name: string; type?: string}) => {
         const list = map.get(structName) || [];
-        // 去重同名
+        // Deduplicate by name
         if (!list.some(m => m.name === member.name)) list.push(member);
         map.set(structName, list);
     };
@@ -658,13 +658,13 @@ function buildStructureIndex(document: any, documentCache: Map<string, any>): Ma
         }
     };
 
-    // 当前文档
+    // Current document
     addFromText(document.getText());
-    // 已打开文档
+    // Open documents
     for (const [uri, doc] of documentCache) {
         if (uri !== document.uri) addFromText(doc.getText());
     }
-    // Include 文件
+    // Include files
     try {
         const includes = parseIncludeFiles(document, documentCache);
         for (const file of includes) {
@@ -677,7 +677,7 @@ function buildStructureIndex(document: any, documentCache: Map<string, any>): Ma
 
 
 /**
- * 从文档中提取符号信息
+ * Extract symbol information from document
  */
 function extractDocumentSymbols(document: any, documentCache: Map<string, any>) {
     const symbols = {
@@ -688,10 +688,10 @@ function extractDocumentSymbols(document: any, documentCache: Map<string, any>) 
         enumerations: [] as Array<{name: string}>
     };
 
-    // 分析当前文档
+    // Analyze current document
     analyzeDocumentSymbols(document, symbols);
 
-    // 分析缓存中的其他文档
+    // Analyze other documents in cache
     for (const [uri, doc] of documentCache) {
         if (uri !== document.uri) {
             analyzeDocumentSymbols(doc, symbols);
@@ -702,7 +702,7 @@ function extractDocumentSymbols(document: any, documentCache: Map<string, any>) 
 }
 
 /**
- * 分析文档中的符号
+ * Analyze symbols in document
  */
 function analyzeDocumentSymbols(document: any, symbols: any) {
     const text = document.getText();
@@ -711,15 +711,15 @@ function analyzeDocumentSymbols(document: any, symbols: any) {
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
 
-        // 查找过程定义
+        // Look for procedure definition
         const procMatch = line.match(/^Procedure(?:\.(\w+))?\s+(\w+)\s*\(([^)]*)\)/i);
         if (procMatch) {
             const returnType = procMatch[1] || '';
             const name = procMatch[2];
             const params = procMatch[3] || '';
             const signature = returnType ? `.${returnType} ${name}(${params})` : `${name}(${params})`;
-            // 对于有参数的函数，只插入函数名和左括号，让VS Code触发参数提示
-            // 对于无参数的函数，插入完整的函数调用
+            // For functions with parameters, only insert function name and left parenthesis, let VS Code trigger parameter hints
+            // For functions without parameters, insert the complete function call
             const insertText = params ? `${name}(` : `${name}()`;
 
             symbols.procedures.push({
@@ -730,26 +730,26 @@ function analyzeDocumentSymbols(document: any, symbols: any) {
         }
 
         // Look up constant definitions
-        const constMatch = line.match(/^#([a-zA-Z_][a-zA-Z0-9_]*\$?)\s*=\s*(.+)?/i);
+        const constMatch = parsePureBasicConstantDefinition(line);
         if (constMatch) {
-            const name = constMatch[1];
-            const value = constMatch[2];
+            const name = constMatch.name;
+            const value = constMatch.value;
             symbols.constants.push({ name, value });
         }
 
-        // 查找结构体定义
+        // Look for structure definition
         const structMatch = line.match(/^Structure\s+(\w+)\b/i);
         if (structMatch) {
             symbols.structures.push({ name: structMatch[1] });
         }
 
-        // 查找接口定义
+        // Look for interface definition
         const ifaceMatch = line.match(/^Interface\s+(\w+)\b/i);
         if (ifaceMatch) {
             symbols.interfaces.push({ name: ifaceMatch[1] });
         }
 
-        // 查找枚举定义
+        // Look for enumeration definition
         const enumMatch = line.match(/^Enumeration\s+(\w+)\b/i);
         if (enumMatch) {
             symbols.enumerations.push({ name: enumMatch[1] });
@@ -758,9 +758,9 @@ function analyzeDocumentSymbols(document: any, symbols: any) {
 }
 
 /**
- * 解析补全项目的详细信息
+ * Resolve additional information for completion items
  */
 export function handleCompletionResolve(item: CompletionItem): CompletionItem {
-    // 可以在这里添加更详细的文档或插入文本
+    // Can add more detailed documentation or insert text here
     return item;
 }

@@ -8,7 +8,7 @@
   <section name="data">
     <explorer view="D:\Documents\PureBasic\Projects\" pattern="0"/>
     <log show="1"/>
-    <lastopen date="2026-02-25 13:32" user="thiemann" host="FS-PC-CAD-RT"/>
+    <lastopen date="2026-02-26 15:00" user="th" host="RT"/>
   </section>
   <section name="files">
     <file name="test_basic.pb">

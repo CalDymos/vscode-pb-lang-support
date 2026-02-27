@@ -12,6 +12,7 @@ import {
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { analyzeScopesAndVariables } from '../utils/scope-manager';
 import { getModuleExports } from '../utils/module-resolver';
+import { parsePureBasicConstantDefinition} from '../utils/constants';
 
 /**
  * Handle hover requests
@@ -106,6 +107,11 @@ function getModuleExportHover(
     }
     return null;
 }
+
+function normalizeConstantName(name: string): string {
+    return name.replace(/\$$/, '').toLowerCase();
+}
+
 
 function getStructAccessFromPosition(line: string, character: number): { varName: string; memberName: string } | null {
     const re = /(\w+)\\(\w+)/g;
@@ -318,25 +324,16 @@ function findSymbolInfo(
                 };
             }
 
-            // Look up constant definitions (#NAME = ... or #NAME$ = ...)
-            function escapeRegExp(text: string): string {
-                return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            }
-
-            // Normalize: allow looking up NAME -> matches NAME$
-            const baseWord = word.endsWith('$') ? word.slice(0, -1) : word;
-            const safeWord = escapeRegExp(baseWord);
-            
-            const constMatch = line.match(new RegExp(`^#(${safeWord}\\$?)\\s*=\\s*(.+)`, 'i'));
-            if (constMatch) {
-                const matchedName = constMatch[1];
-                const value = constMatch[2];
+            // Look up only constant definitions (#NAME = ... or #NAME$ = ...)
+            const constMatch = parsePureBasicConstantDefinition(line);
+            if (constMatch && normalizeConstantName(constMatch.name) === normalizeConstantName(word)) {
+                const value = constMatch.value ?? '';
 
                 return {
                     type: 'constant',
-                    name: matchedName,
+                    name: constMatch.name,
                     value,
-                    documentation: `Constant with value: ${value}`
+                    documentation: value ? `Constant with value: ${value}` : 'Constant definition'
                 };
             }
 

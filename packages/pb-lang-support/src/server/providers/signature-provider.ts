@@ -155,6 +155,10 @@ function findFunctionDefinition(
     return getBuiltInFunctionSignature(functionName);
 }
 
+function escapeRegExp(text: string): string {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
  * 在文档中搜索函数定义
  */
@@ -168,12 +172,13 @@ function searchFunctionInDocument(
 } | null {
     const text = document.getText();
     const lines = text.split('\n');
+    const safeFunction = escapeRegExp(functionName);
 
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
 
         // 匹配过程定义
-        const procMatch = line.match(new RegExp(`^Procedure(?:\\.(\\w+))?\\s+(${functionName})\\s*\\(([^)]*)\\)`, 'i'));
+        const procMatch = line.match(new RegExp(`^Procedure(?:\\.(\\w+))?\\s+(${safeFunction})\\s*\\(([^)]*)\\)`, 'i'));
         if (procMatch) {
             const returnType = procMatch[1] || '';
             const name = procMatch[2];
@@ -210,15 +215,17 @@ function parseParameters(paramsText: string): ParameterInformation[] {
     for (const param of paramList) {
         const trimmedParam = param.trim();
         if (trimmedParam) {
-            // 解析参数名和类型
-            const match = trimmedParam.match(/(\*?)(\w+)(?:\.(\w+))?/);
+            // Analyze parameter names and types
+            const match = trimmedParam.match(/^(Array|List|Map\s+)?(\*?)(\w+)(?:\.(\w+))?(?:\(\d*\))?/i);
             if (match) {
-                const isPointer = match[1];
-                const name = match[2];
-                const type = match[3] || 'unknown';
-
-                const label = `${isPointer}${name}.${type}`;
-                const documentation = `Parameter: ${name} (${type})`;
+                const keyword = match[1] ? match[1].trim() + ' ' : '';
+                const isPointer = match[2];
+                const name = match[3];
+                const type = match[4] || 'unknown';
+                const label = `${keyword}${isPointer}${name}.${type}`;
+                const documentation = keyword
+                    ? `Parameter: ${name} (${type}) [${keyword.trim()}]`
+                    : `Parameter: ${name} (${type})`;
 
                 parameters.push({
                     label,

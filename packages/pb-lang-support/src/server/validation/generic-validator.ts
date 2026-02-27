@@ -5,7 +5,7 @@
 
 import { DiagnosticSeverity } from 'vscode-languageserver/node';
 import { ValidatorFunction } from './types';
-import { keywords, builtInFunctions } from '../utils/constants';
+import { keywords, builtInFunctions, parsePureBasicConstantDefinition } from '../utils/constants';
 
 /**
  * Validates generic syntax rules
@@ -17,9 +17,9 @@ export const validateGeneric: ValidatorFunction = (
     context,
     diagnostics
 ) => {
-    // Validate constant definitions
-    if (line.startsWith('#')) {
-        const constMatch = line.match(/^#([a-zA-Z_][a-zA-Z0-9_]*\$?)\s*=\s*(.+)/);
+    // Validate constant definition syntax (e.g., #NAME = value)
+    if (line.startsWith('#') && !line.includes('::')) {
+        const constMatch = parsePureBasicConstantDefinition(line);
         if (line.includes('=') && !constMatch) {
             diagnostics.push({
                 severity: DiagnosticSeverity.Error,

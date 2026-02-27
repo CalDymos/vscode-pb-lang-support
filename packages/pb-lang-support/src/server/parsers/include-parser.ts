@@ -5,6 +5,7 @@
 
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { URI } from 'vscode-uri';
+import { parsePureBasicConstantDefinition } from '../utils/constants';
 
 export interface IncludeFile {
     filePath: string;
@@ -144,9 +145,9 @@ export function parseIncludedSymbols(document: TextDocument): Map<string, any> {
 
         // Parsing constant definitions
         if (line.startsWith('#')) {
-            const constMatch = line.match(/#\s*([a-zA-Z_][a-zA-Z0-9_]*\$?)\s*=/);
+            const constMatch = parsePureBasicConstantDefinition(line);
             if (constMatch) {
-                const constName = constMatch[1];
+                const constName = constMatch.name;
                 symbols.set(constName, {
                     type: 'constant',
                     file: document.uri,
@@ -331,10 +332,10 @@ function parseEnumerationValues(lines: string[], startLine: number): Array<{name
         }
 
         // Parse enumeration value definition
-        const valueMatch = line.match(/#\s*(\w+)\s*=/);
+        const valueMatch = parsePureBasicConstantDefinition(line);
         if (valueMatch) {
             values.push({
-                name: valueMatch[1],
+                name: valueMatch.name,
                 line: i,
                 definition: line
             });

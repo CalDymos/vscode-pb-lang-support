@@ -13,6 +13,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { readFileIfExistsSync, resolveIncludePath, fsPathToUri, normalizeDirPath } from '../utils/fs-utils';
 import { getWorkspaceFiles } from '../indexer/workspace-index';
 import { analyzeScopesAndVariables } from '../utils/scope-manager';
+import { parsePureBasicConstantDefinition, parsePureBasicConstantDeclaration } from '../utils/constants';
 
 /**
  * Handle definition requests
@@ -367,24 +368,15 @@ function findDefinitionsInDocument(document: TextDocument, word: string): Locati
             });
         }
 
-        // Look up constant definitions
-        function escapeRegExp(text: string): string {
-            return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        }
-
-        const baseWord = word.endsWith('$') ? word.slice(0, -1) : word;
-        const safeWord = escapeRegExp(baseWord);
-
-        const constMatch = line.match(new RegExp(`^#(${safeWord}\\$?)\\s*=`, 'i'));
-        if (constMatch) {
+        // Look up only constant definitions (#NAME = ... or #NAME$ = ...)
+        const constMatch = parsePureBasicConstantDefinition(line);
+        if (constMatch && normalizeConstantName(constMatch.name) === normalizeConstantName(word)) {
             const startChar = lines[i].indexOf('#') + 1;
-            const matchedName = constMatch[1];
-
             definitions.push({
                 uri: document.uri,
                 range: {
                     start: { line: i, character: startChar },
-                    end: { line: i, character: startChar + matchedName.length }
+                    end: { line: i, character: startChar + constMatch.name.length }
                 }
             });
         }
@@ -461,17 +453,10 @@ function findModuleSymbolDefinition(
 
             // Search for constant, structure, interface, and enumeration names in DeclareModule
             if (inDeclare) {
-                const constMatch = line.match(new RegExp(`^#(${ident}\\$?)\\b`, 'i'));
-                if (constMatch) {
-                    const matchedName = constMatch[1];
-                    const startChar = raw.indexOf('#' + matchedName) + 1;
-                    defs.push({
-                        uri: doc.uri,
-                        range: {
-                            start: { line: i, character: startChar },
-                            end: { line: i, character: startChar + matchedName.length }
-                        }
-                    });
+                const constMatch = parsePureBasicConstantDefinition(line) || parsePureBasicConstantDeclaration(line);
+                if (constMatch && normalizeConstantName(constMatch.name) === normalizeConstantName(ident)) {
+                    const startChar = raw.indexOf('#' + constMatch.name) + 1;
+                    defs.push({ uri: doc.uri, range: { start: { line: i, character: startChar }, end: { line: i, character: startChar + constMatch.name.length } } });
                 }
                 const structMatch = line.match(new RegExp(`^Structure\\s+(${ident})\\b`, 'i'));
                 if (structMatch) {
@@ -492,17 +477,10 @@ function findModuleSymbolDefinition(
 
             // Constants/structures are also permitted in modules (less common, but for error tolerance)
             if (inModule) {
-                const constMatch = line.match(new RegExp(`^#(${ident}\\$?)\\b`, 'i'));
-                if (constMatch) {
-                    const matchedName = constMatch[1];
-                    const startChar = raw.indexOf('#' + matchedName) + 1;
-                    defs.push({
-                        uri: doc.uri,
-                        range: {
-                            start: { line: i, character: startChar },
-                            end: { line: i, character: startChar + matchedName.length }
-                        }
-                    });
+                const constMatch = parsePureBasicConstantDefinition(line) || parsePureBasicConstantDeclaration(line);
+                if (constMatch && normalizeConstantName(constMatch.name) === normalizeConstantName(ident)) {
+                    const startChar = raw.indexOf('#' + constMatch.name) + 1;
+                    defs.push({ uri: doc.uri, range: { start: { line: i, character: startChar }, end: { line: i, character: startChar + constMatch.name.length } } });
                 }
                 const structMatch = line.match(new RegExp(`^Structure\\s+(${ident})\\b`, 'i'));
                 if (structMatch) {
@@ -513,6 +491,10 @@ function findModuleSymbolDefinition(
         }
     }
     return defs;
+}
+
+function normalizeConstantName(name: string): string {
+    return name.replace(/\$$/, '').toLowerCase();
 }
 
 /**
