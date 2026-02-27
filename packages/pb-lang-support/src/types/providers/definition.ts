@@ -1,5 +1,5 @@
 /**
- * 定义提供者相关类型定义
+ * Definition provider related type definitions
  */
 
 import { TextDocument, Position, Range, Definition, Location } from 'vscode-languageserver';
@@ -7,250 +7,250 @@ import { CancellationToken } from '../utils/generics';
 import { Result, AsyncResult } from '../utils/generics';
 import { PureBasicSymbol } from '../core/symbol';
 
-/** 定义上下文 */
+/** Definition context */
 export interface DefinitionContext {
-    /** 文档位置 */
+    /** Document position */
     position: Position;
-    /** 文档 */
+    /** Document */
     document: TextDocument;
-    /** 词汇 */
+    /** Word */
     word: string;
-    /** 行文本 */
+    /** Line text */
     lineText: string;
-    /** 前缀文本 */
+    /** Prefix text */
     prefix: string;
-    /** 后缀文本 */
+    /** Suffix text */
     suffix: string;
-    /** 范围 */
+    /** Range */
     range: Range;
-    /** 是否在字符串中 */
+    /** Whether in string */
     inString: boolean;
-    /** 是否在注释中 */
+    /** Whether in comment */
     inComment: boolean;
-    /** 作用域 */
+    /** Scope */
     scope?: DefinitionScope;
 }
 
-/** 定义作用域 */
+/** Definition scope */
 export interface DefinitionScope {
-    /** 当前模块 */
+    /** Current module */
     module?: string;
-    /** 当前过程 */
+    /** Current procedure */
     procedure?: string;
-    /** 可见符号 */
+    /** Visible symbols */
     visibleSymbols: PureBasicSymbol[];
-    /** 导入符号 */
+    /** Imported symbols */
     importedSymbols: PureBasicSymbol[];
-    /** 全局符号 */
+    /** Global symbols */
     globalSymbols: PureBasicSymbol[];
 }
 
-/** 扩展的位置定义 */
+/** Extended location definition */
 export interface ExtendedLocation extends Location {
-    /** 符号信息 */
+    /** Symbol information */
     symbol?: PureBasicSymbol;
-    /** 置信度 */
+    /** Confidence */
     confidence?: number;
-    /** 来源 */
+    /** Source */
     source?: DefinitionSource;
-    /** 相关位置 */
+    /** Related locations */
     relatedLocations?: ExtendedLocation[];
-    /** 文档 */
+    /** Documentation */
     documentation?: string;
 }
 
-/** 定义来源 */
+/** Definition source */
 export enum DefinitionSource {
-    /** 本地定义 */
+    /** Local definition */
     Local = 'local',
-    /** 全局定义 */
+    /** Global definition */
     Global = 'global',
-    /** 系统定义 */
+    /** System definition */
     System = 'system',
-    /** 库定义 */
+    /** Library definition */
     Library = 'library',
-    /** 外部定义 */
+    /** External definition */
     External = 'external',
-    /** 推断定义 */
+    /** Inferred definition */
     Inferred = 'inferred',
-    /** 缓存定义 */
+    /** Cached definition */
     Cached = 'cached'
 }
 
-/** 定义提供者 */
+/** Definition provider */
 export interface DefinitionProvider {
-    /** 提供者名称 */
+    /** Provider name */
     name: string;
-    /** 提供定义 */
+    /** Provide definition */
     provideDefinition(
         document: TextDocument,
         position: Position,
         context: DefinitionContext,
         token: CancellationToken
     ): AsyncResult<ExtendedLocation[], Error>;
-    /** 提供类型定义 */
+    /** Provide type definition */
     provideTypeDefinition?(
         document: TextDocument,
         position: Position,
         context: DefinitionContext,
         token: CancellationToken
     ): AsyncResult<ExtendedLocation[], Error>;
-    /** 提供实现定义 */
+    /** Provide implementation definition */
     provideImplementation?(
         document: TextDocument,
         position: Position,
         context: DefinitionContext,
         token: CancellationToken
     ): AsyncResult<ExtendedLocation[], Error>;
-    /** 是否支持给定文档 */
+    /** Whether supports given document */
     supports(document: TextDocument): boolean;
-    /** 获取优先级 */
+    /** Get priority */
     getPriority?(context: DefinitionContext): number;
-    /** 重置状态 */
+    /** Reset state */
     reset?(): void;
 }
 
-/** 定义解析器 */
+/** Definition resolver */
 export interface DefinitionResolver {
-    /** 解析器名称 */
+    /** Resolver name */
     name: string;
-    /** 解析类型 */
+    /** Resolution type */
     type: DefinitionType;
-    /** 解析定义 */
+    /** Resolve definition */
     resolve(
         document: TextDocument,
         position: Position,
         context: DefinitionContext,
         token: CancellationToken
     ): AsyncResult<ExtendedLocation[], Error>;
-    /** 是否支持给定位置 */
+    /** Whether supports given position */
     supports(context: DefinitionContext): boolean;
-    /** 获取优先级 */
+    /** Get priority */
     getPriority(): number;
 }
 
-/** 定义类型 */
+/** Definition type */
 export enum DefinitionType {
-    /** 变量定义 */
+    /** Variable */
     Variable = 'variable',
-    /** 函数定义 */
+    /** Function */
     Function = 'function',
-    /** 过程定义 */
+    /** Procedure */
     Procedure = 'procedure',
-    /** 结构定义 */
+    /** Structure */
     Structure = 'structure',
-    /** 接口定义 */
+    /** Interface */
     Interface = 'interface',
-    /** 类定义 */
+    /** Class */
     Class = 'class',
-    /** 模块定义 */
+    /** Module */
     Module = 'module',
-    /** 常量定义 */
+    /** Constant */
     Constant = 'constant',
-    /** 类型定义 */
+    /** Type */
     Type = 'type',
-    /** 枚举定义 */
+    /** Enum */
     Enum = 'enum',
-    /** 键字定义 */
+    /** Keyword */
     Keyword = 'keyword',
-    /** 系统API定义 */
+    /** System API */
     SystemAPI = 'system-api',
-    /** 库函数定义 */
+    /** Library function */
     LibraryFunction = 'library-function'
 }
 
-/** 定义配置 */
+/** Definition config */
 export interface DefinitionConfig {
-    /** 是否启用 */
+    /** Whether enabled */
     enabled: boolean;
-    /** 最大结果数 */
+    /** Maximum results */
     maxResults: number;
-    /** 启用缓存 */
+    /** Enable cache */
     enableCache: boolean;
-    /** 缓存大小 */
+    /** Cache size */
     cacheSize: number;
-    /** 缓存过期时间（毫秒） */
+    /** Cache TTL (milliseconds) */
     cacheTTL: number;
-    /** 启用并行解析 */
+    /** Enable parallel resolution */
     enableParallel: boolean;
-    /** 最大并行数 */
+    /** Maximum parallel */
     maxParallel: number;
-    /** 超时时间（毫秒） */
+    /** Timeout (milliseconds) */
     timeout: number;
-    /** 提供者配置 */
+    /** Provider configuration */
     providers: DefinitionProviderConfig[];
 }
 
-/** 定义提供者配置 */
+/** Definition provider config */
 export interface DefinitionProviderConfig {
-    /** 提供者名称 */
+    /** Provider name */
     name: string;
-    /** 是否启用 */
+    /** Whether enabled */
     enabled: boolean;
-    /** 优先级 */
+    /** Priority */
     priority: number;
-    /** 语言 */
+    /** Languages */
     languages?: string[];
-    /** 文件模式 */
+    /** File patterns */
     filePatterns?: string[];
-    /** 作用域 */
+    /** Scopes */
     scopes?: string[];
-    /** 配置选项 */
+    /** Configuration options */
     options?: Record<string, unknown>;
 }
 
-/** 定义统计 */
+/** Definition statistics */
 export interface DefinitionStats {
-    /** 请求总数 */
+    /** Total requests */
     totalRequests: number;
-    /** 成功请求数 */
+    /** Successful requests */
     successfulRequests: number;
-    /** 失败请求数 */
+    /** Failed requests */
     failedRequests: number;
-    /** 平均响应时间 */
+    /** Average response time */
     averageResponseTime: number;
-    /** 平均结果数 */
+    /** Average results per request */
     averageResultsPerRequest: number;
-    /** 缓存命中率 */
+    /** Cache hit rate */
     cacheHitRate: number;
-    /** 按提供者统计 */
+    /** By provider statistics */
     byProvider: Record<string, DefinitionProviderStats>;
-    /** 按类型统计 */
+    /** By type statistics */
     byType: Record<string, number>;
 }
 
-/** 定义提供者统计 */
+/** Definition provider statistics */
 export interface DefinitionProviderStats {
-    /** 提供者名称 */
+    /** Provider name */
     name: string;
-    /** 请求数 */
+    /** Requests */
     requests: number;
-    /** 成功数 */
+    /** Successful */
     successful: number;
-    /** 失败数 */
+    /** Failed */
     failed: number;
-    /** 平均时间 */
+    /** Average time */
     averageTime: number;
-    /** 平均结果数 */
+    /** Average results */
     averageResults: number;
-    /** 缓存命中率 */
+    /** Cache hit rate */
     cacheHitRate: number;
 }
 
-/** 定义缓存项 */
+/** Definition cache item */
 export interface DefinitionCacheItem {
-    /** 键 */
+    /** Key */
     key: string;
-    /** 位置 */
+    /** Locations */
     locations: ExtendedLocation[];
-    /** 上下文 */
+    /** Context */
     context: DefinitionContext;
-    /** 过期时间 */
+    /** Expires at */
     expiresAt: number;
-    /** 创建时间 */
+    /** Created at */
     createdAt: number;
-    /** 使用次数 */
+    /** Use count */
     useCount: number;
-    /** 最后使用时间 */
+    /** Last used */
     lastUsed: number;
 }
