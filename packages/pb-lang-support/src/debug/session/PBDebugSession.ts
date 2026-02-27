@@ -193,6 +193,7 @@ export class PBDebugSession extends DebugSession {
       this.transport.on('message', (msg: CommandInfo) => this.onMessage(msg));
       this.transport.on('error',   (err: Error) => this.log(`Transport(${this.transportKind}) error: ${err.message}`));
       this.transport.on('log',     (msg: string) => this.log(`[Transport] ${msg}`));
+      this.transport.on('traceLog', (msg: string) => { if (this.trace) { this.logInternal(`[Transport] ${msg}`); } });
       this.transport.on('end', () => {
         if (!this.state.isTerminated()) {
           this.state.transition('terminated');
@@ -1558,5 +1559,11 @@ export class PBDebugSession extends DebugSession {
     }
     process.stderr.write(`[PBDebugSession] ${msg}\n`);
     this.sendEvent(new OutputEvent(`[Debug] ${msg}\n`, 'console'));
+  }
+
+  // internal Log method, only process.stderr, never OutputEvent
+  private logInternal(msg: string): void {
+    if (!this.trace) { return; }
+    process.stderr.write(`[PBDebugSession] ${msg}\n`);
   }
 }

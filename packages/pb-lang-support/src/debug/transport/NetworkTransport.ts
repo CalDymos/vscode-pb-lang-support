@@ -261,15 +261,16 @@ export class NetworkTransport extends EventEmitter implements IDebugTransport {
 
   private handleBinaryData(chunk: Buffer): void {
     this.log(`Received ${chunk.length} bytes binary data`);
+
     if (chunk.length > 0) {
-      this.log(`Raw hex: ${chunk.slice(0, Math.min(40, chunk.length)).toString('hex')}`);
+      this.traceLog(`Raw hex: ${chunk.slice(0, Math.min(40, chunk.length)).toString('hex')}`);
     }
     
     const messages = this.binaryBuffer.append(chunk);
     this.log(`Parsed ${messages.length} binary messages`);
     
     for (const msg of messages) {
-      this.log(`Emitting message: cmd=${msg.command}, value1=${msg.value1}, value2=${msg.value2}`);
+      this.traceLog(`Emitting message: cmd=${msg.command}, value1=${msg.value1}, value2=${msg.value2}`);
       this.emit('message', msg);
     }
   }
@@ -310,5 +311,14 @@ export class NetworkTransport extends EventEmitter implements IDebugTransport {
 
   private log(msg: string): void {
     this.emit('log', msg);
+  }
+
+    /**
+   * Emit diagnostic data that may contain protocol payload bytes (hex dumps,
+   * raw field values). Listeners must route this exclusively to internal logs
+   * (e.g. process.stderr) and never into user-facing OutputEvent channels.
+   */
+  private traceLog(msg: string): void {
+    this.emit('traceLog', msg);
   }
 }

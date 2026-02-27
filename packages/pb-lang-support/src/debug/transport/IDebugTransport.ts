@@ -15,6 +15,7 @@ export interface IDebugTransport extends EventEmitter {
   on(event: 'connected' | 'end', listener: () => void): this;
   on(event: 'error', listener: (err: Error) => void): this;
   on(event: 'log', listener: (msg: string) => void): this;
+  on(event: 'traceLog', listener: (msg: string) => void): this; // // for payload-sensitive data → only process.stderr
   
   /**
    * Optional: Connect after listen (used for FIFO transport)
