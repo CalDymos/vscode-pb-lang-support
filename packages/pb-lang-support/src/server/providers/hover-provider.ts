@@ -13,6 +13,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { analyzeScopesAndVariables } from '../utils/scope-manager';
 import { getModuleExports } from '../utils/module-resolver';
 import { parsePureBasicConstantDefinition} from '../utils/constants';
+import { stripInlineComment } from '@utils/string-utils';
 
 /**
  * Handle hover requests
@@ -327,7 +328,7 @@ function findSymbolInfo(
             // Look up only constant definitions (#NAME = ... or #NAME$ = ...)
             const constMatch = parsePureBasicConstantDefinition(line);
             if (constMatch && normalizeConstantName(constMatch.name) === normalizeConstantName(word)) {
-                const value = constMatch.value ?? '';
+                const value = stripInlineComment(constMatch.value?.trim() ?? '').trim();
 
                 return {
                     type: 'constant',

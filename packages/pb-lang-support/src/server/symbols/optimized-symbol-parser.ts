@@ -6,6 +6,7 @@
 import { PureBasicSymbol, SymbolKind } from './types';
 import { symbolCache } from './symbol-cache';
 import { parsePureBasicConstantDefinition } from '../utils/constants';
+import { stripInlineComment } from '@utils/string-utils';
 
 export interface ParsedDocument {
     symbols: PureBasicSymbol[];
@@ -337,6 +338,7 @@ export class OptimizedSymbolParser {
             // Parsing constant definitions
             const constMatch = parsePureBasicConstantDefinition(line);
             if (constMatch) {
+                const value = stripInlineComment(constMatch.value?.trim() ?? '').trim();
                 symbols.push({
                     name: constMatch.name,
                     kind: SymbolKind.Constant,
@@ -345,7 +347,7 @@ export class OptimizedSymbolParser {
                         end: { line: i, character: line.length }
                     },
                     detail: 'Constant',
-                    documentation: `Constant definition: #${constMatch.name} = ${(constMatch.value || '').trim()}`
+                    documentation: `Constant definition: #${constMatch.name} = ${value}`
                 });
             }
 

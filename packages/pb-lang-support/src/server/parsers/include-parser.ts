@@ -6,6 +6,7 @@
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { URI } from 'vscode-uri';
 import { parsePureBasicConstantDefinition } from '../utils/constants';
+import { stripInlineComment } from '@utils/string-utils';
 
 export interface IncludeFile {
     filePath: string;

@@ -15,6 +15,7 @@ import {
     windowsApiFunctions, graphicsFunctions, networkFunctions, databaseFunctions, threadFunctions,
     zeroParamBuiltInFunctions, parsePureBasicConstantDefinition
 } from '../utils/constants';
+import { stripInlineComment } from '@utils/string-utils';
 import { getModuleFunctionCompletions as getModuleFunctions, getAvailableModules, getModuleExports } from '../utils/module-resolver';
 import { analyzeScopesAndVariables, getActiveUsedModules } from '../utils/scope-manager';
 import { parseIncludeFiles } from '../utils/module-resolver';
@@ -733,7 +734,7 @@ function analyzeDocumentSymbols(document: any, symbols: any) {
         const constMatch = parsePureBasicConstantDefinition(line);
         if (constMatch) {
             const name = constMatch.name;
-            const value = constMatch.value;
+            const value = stripInlineComment(constMatch.value?.trim() ?? '').trim();
             symbols.constants.push({ name, value });
         }
 

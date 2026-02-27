@@ -7,25 +7,7 @@ import { DiagnosticSeverity } from 'vscode-languageserver/node';
 import { ValidationContext, ValidatorFunction } from './types';
 import { isValidType } from '../utils/constants';
 import { validateParameters } from './parameter-validator';
-
-/**
- * Helper function to strip comments from a line, considering string literals
- * In PureBasic, ';' starts a comment unless it's inside a string literal
- */
-const stripComment = (srcLine: string): string => {
-    let inString = false;
-    for (let i = 0; i < srcLine.length; i++) {
-        const ch = srcLine[i];
-        if (ch === '"') {
-            inString = !inString;
-            continue;
-        }
-        if (!inString && ch === ';') {
-            return srcLine.substring(0, i);
-        }
-    }
-    return srcLine;
-};
+import { stripInlineComment } from '../utils/string-utils';
 
 /**
  * Validate procedure related syntax
@@ -57,7 +39,7 @@ export const validateProcedure: ValidatorFunction = (
             });
         } else {
             const [, returnType, procName] = headerMatch;
-            const codeLine = stripComment(line);
+            const codeLine = stripInlineComment(line);
             context.procedureStack.push({ name: procName, line: lineNum });
 
             // Validate return type
@@ -74,11 +56,13 @@ export const validateProcedure: ValidatorFunction = (
                 });
             }
 
-            // Validate parameter syntax: support nested parentheses such as "()" in parameters like List/Array/Map
-            const openIdx = codeLine.indexOf('(');
-            const closeIdx = codeLine.lastIndexOf(')');
+            // Parameter syntax validation: Supports nested parentheses such as "()"" within parameters like List/Array/Map
+            // First remove inline comments to prevent parentheses within comments from interfering with parameter parsing
+            const lineWithoutComment = stripInlineComment(codeLine);
+            const openIdx = lineWithoutComment.indexOf('(');
+            const closeIdx = lineWithoutComment.lastIndexOf(')');
             if (openIdx !== -1 && closeIdx !== -1 && closeIdx > openIdx) {
-                const params = codeLine.substring(openIdx + 1, closeIdx);
+                const params = lineWithoutComment.substring(openIdx + 1, closeIdx);
                 if (params.trim().length > 0) {
                     validateParameters(params, lineNum, originalLine, diagnostics);
                 }
