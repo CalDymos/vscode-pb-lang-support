@@ -264,6 +264,101 @@
         "language": "purebasic",
         "path": "./snippets/purebasic.json"
       }
+    ],
+    "debuggers": [
+      {
+        "type": "purebasic",
+        "label": "PureBasic",
+        "runtime": "node",
+        "program": "./out/debug/debugAdapter.js",
+        "languages": [
+          "purebasic"
+        ],
+        "configurationAttributes": {
+          "launch": {
+            "required": [
+              "program"
+            ],
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "Absolute path to the PureBasic executable or compiled binary.",
+                "default": "${file}"
+              },
+              "compiler": {
+                "type": "string",
+                "description": "Path to pbcompiler executable (platform-specific; default: 'pbcompiler' on PATH).",
+                "default": "pbcompiler"
+              },
+              "transport": {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "pipe",
+                  "network",
+                  "fifo",
+                  "native"
+                ],
+                "description": "Debugger transport mode. auto = Windows uses pipe, Linux/macOS uses fifo. fifo = named pipes (Linux/macOS only).",
+                "default": "auto"
+              },
+              "debugHost": {
+                "type": "string",
+                "description": "Host used for network debugger transport.",
+                "default": "127.0.0.1"
+              },
+              "debugPort": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 65535,
+                "description": "Port used for network debugger transport (0 = random free port).",
+                "default": 0
+              },
+              "debugPassword": {
+                "type": "string",
+                "description": "Optional password for PureBasic network debugger transport."
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "description": "Automatically stop at the first line of the program.",
+                "default": true
+              },
+              "trace": {
+                "type": "boolean",
+                "description": "Enable verbose adapter trace logging (written to stderr).",
+                "default": false
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "purebasic",
+            "request": "launch",
+            "name": "Debug PureBasic",
+            "program": "${file}",
+            "stopOnEntry": true
+          }
+        ],
+        "configurationSnippets": [
+          {
+            "label": "PureBasic: Debug Current File",
+            "description": "Debug the current PureBasic file.",
+            "body": {
+              "type": "purebasic",
+              "request": "launch",
+              "name": "Debug PureBasic",
+              "program": "^\"${1:\\${file}}\"",
+              "stopOnEntry": true
+            }
+          }
+        ]
+      }
+    ],
+    "breakpoints": [
+      {
+        "language": "purebasic"
+      }
     ]
   },
   "scripts": {

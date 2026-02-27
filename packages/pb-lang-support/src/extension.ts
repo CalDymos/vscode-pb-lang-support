@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from 'vscode-languageclient/node';
+import { PureBasicDebugAdapterDescriptorFactory } from './debug/debugAdapterDescriptorFactory';
+
 
 let client: LanguageClient;
 let debugChannel: vscode.OutputChannel;
@@ -220,10 +222,10 @@ function registerDebugProvider(context: vscode.ExtensionContext): void {
                 if (!config.type && !config.request && !config.name) {
                     const editor = vscode.window.activeTextEditor;
                     if (editor && editor.document.languageId === 'purebasic') {
-                        config.type        = 'purebasic';
-                        config.name        = 'Debug PureBasic';
-                        config.request     = 'launch';
-                        config.program     = editor.document.fileName;
+                        config.type = 'purebasic';
+                        config.name = 'Debug PureBasic';
+                        config.request = 'launch';
+                        config.program = editor.document.fileName;
                         config.stopOnEntry = false;
                     }
                 }
@@ -235,6 +237,13 @@ function registerDebugProvider(context: vscode.ExtensionContext): void {
                 return config;
             },
         }),
+    );
+
+    context.subscriptions.push(
+        vscode.debug.registerDebugAdapterDescriptorFactory(
+            'purebasic',
+            new PureBasicDebugAdapterDescriptorFactory(context),
+        ),
     );
 }
 
@@ -311,7 +320,7 @@ function registerCommands(context: vscode.ExtensionContext) {
         clearSymbolCache,
         formatDocument,
         findSymbols
-        );
+    );
 }
 
 export function deactivate(): Thenable<void> | undefined {
