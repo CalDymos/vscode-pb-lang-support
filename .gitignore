@@ -77,10 +77,6 @@ webpack-cache/
 .env.test.local
 .env.production.local
 
-# Claude Code development files - exclude from repository
-.claude/
-CLAUDE.md
-
 # VSCode extension development
 *.vsix-manifest
 publish/
@@ -103,7 +99,4 @@ jest-stare/
 # Yarn Integrity file
 .yarn-integrity
 
-
-agents.md
-codebuddy.md
-Includes
+.tmp
