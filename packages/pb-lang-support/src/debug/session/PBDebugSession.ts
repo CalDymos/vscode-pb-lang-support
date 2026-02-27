@@ -882,18 +882,25 @@ export class PBDebugSession extends DebugSession {
       return Promise.resolve();
     }
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(
-        () => {
-          this.log(`waitForConnection: TIMEOUT after ${timeoutMs}ms`);
-          reject(new Error('Timed out waiting for PureBasic program to connect'));
-        },
-        timeoutMs,
-      );
-      this.transport!.once('connected', () => {
+      let settled = false;
+
+      const onConnected = () => {
+        if (settled) { return; }
+        settled = true;
         this.log('waitForConnection: connected event received');
         clearTimeout(timer);
         resolve();
-      });
+      };
+
+      const timer = setTimeout(() => {
+        if (settled) { return; }
+        settled = true;
+        this.transport!.off('connected', onConnected);
+        this.log(`waitForConnection: TIMEOUT after ${timeoutMs}ms`);
+        reject(new Error('Timed out waiting for PureBasic program to connect'));
+      }, timeoutMs);
+
+      this.transport!.once('connected', onConnected);
     });
   }
 
