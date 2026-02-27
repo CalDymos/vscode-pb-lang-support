@@ -1,5 +1,5 @@
 import { CommandInfo } from '../types/debugTypes';
-import { deserialize, HEADER_SIZE } from '../protocol/CommandInfo';
+import { deserialize, HEADER_SIZE, MAX_DATA_SIZE } from '../protocol/CommandInfo';
 
 /**
  * Accumulates raw bytes from a stream and extracts complete CommandInfo frames.
@@ -15,6 +15,17 @@ export class MessageBuffer {
 
     while (this.buffer.length >= HEADER_SIZE) {
       const dataSize = this.buffer.readUInt32LE(4);
+
+      // Reject malformed frames with an oversized or impossible dataSize.
+      // Clears the buffer to avoid getting stuck on a corrupted stream.
+      if (dataSize > MAX_DATA_SIZE) {
+        console.error(
+          `[MessageBuffer] Malformed frame rejected: dataSize=${dataSize} exceeds MAX_DATA_SIZE=${MAX_DATA_SIZE}. Clearing buffer.`
+        );
+        this.clear();
+        break;
+      }
+
       const totalSize = HEADER_SIZE + dataSize;
 
       if (this.buffer.length < totalSize) {
