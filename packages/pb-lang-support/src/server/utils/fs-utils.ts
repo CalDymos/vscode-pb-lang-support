@@ -71,7 +71,9 @@ export function resolveIncludePath(
   // Build allowed root directories for path traversal protection
   const allowedRoots: string[] = [fromDir];
   if (workspaceRoot) {
-    allowedRoots.push(workspaceRoot);
+    // Canonicalize the workspace root exactly as setWorkspaceRoots() does,
+    // so isPathAllowed() comparisons are consistent (no trailing-sep mismatch).
+    allowedRoots.push(path.resolve(workspaceRoot));
   }
   for (const dir of includeDirs) {
     if (dir) allowedRoots.push(path.normalize(dir));
