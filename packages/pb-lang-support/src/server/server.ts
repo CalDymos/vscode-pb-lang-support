@@ -34,10 +34,10 @@ import { serverCapabilities } from './config/capabilities';
 import { defaultSettings, globalSettings, PureBasicSettings } from './config/settings';
 
 // Import validator
-import { validateDocument } from './validation/validator';
+import { initValidator, validateDocument } from './validation/validator';
 
 // Import code completion provider
-import { handleCompletion, handleCompletionResolve } from './providers/completion-provider';
+import { initCompletionProvider, handleCompletion, handleCompletionResolve } from './providers/completion-provider';
 
 // Import definition and reference providers
 import { handleDefinition } from './providers/definition-provider';
@@ -57,7 +57,7 @@ import { handlePrepareRename, handleRename } from './providers/rename-provider';
 import { handleDocumentFormatting, handleDocumentRangeFormatting } from './providers/formatting-provider';
 
 // Import symbol management
-import { parseDocumentSymbols } from './symbols/symbol-manager';
+import { initSymbolManager, parseDocumentSymbols } from './symbols/symbol-manager';
 import { setWorkspaceRoots } from './indexer/workspace-index';
 import { symbolCache } from './symbols/symbol-cache';
 import { SymbolInformation, SymbolKind as LSPSymbolKind, WorkspaceSymbolParams } from 'vscode-languageserver/node';
@@ -72,6 +72,10 @@ import { initializeErrorHandler } from './utils/error-handler';
 
 // Import project manager
 import { ProjectManager } from './managers/project-manager';
+
+// Import for Wire up LSP logging
+import { initFileCache }        from './utils/file-cache';
+import { initModuleResolver }   from './utils/module-resolver';
 
 // Create connection
 const connection = createConnection(ProposedFeatures.all);
@@ -113,6 +117,16 @@ function logLspError(message: string, err: unknown, meta: Record<string, unknown
 
 // Initialize error handler
 const errorHandler = initializeErrorHandler(connection);
+
+// Wire up LSP logging for modules without direct connection access
+const lspErrorLog = (msg: string, err?: unknown) =>
+    logLspError(msg, err ?? new Error('unknown'));
+
+initFileCache(lspErrorLog);
+initModuleResolver(lspErrorLog);
+initSymbolManager(lspErrorLog);
+initValidator(lspErrorLog);
+initCompletionProvider(lspErrorLog);
 
 // Create document manager
 const documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
@@ -193,13 +207,19 @@ connection.onInitialized(async () => {
                 const folders = await connection.workspace.getWorkspaceFolders();
                 const uris = (folders || []).map(f => f.uri);
                 setWorkspaceRoots(uris);
-            } catch {}
+            } catch (error) {
+                connection.console.error('Failed to update workspace folders');
+                logLspError(`Failed to update workspace folders`, error); // secure internal log
+            }
         });
         // Initialize workspace root
         connection.workspace.getWorkspaceFolders().then(folders => {
             const uris = (folders || []).map(f => f.uri);
             setWorkspaceRoots(uris);
-        }).catch(() => {});
+        }).catch(error => {
+            connection.console.error('Failed to update workspace folders');
+            logLspError(`Failed to update workspace folders`, error); // secure internal log
+        });
     }
 });
 

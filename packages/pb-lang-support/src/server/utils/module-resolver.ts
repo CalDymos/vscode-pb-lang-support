@@ -4,12 +4,26 @@
  */
 
 import * as path from 'path';
-import * as fs from 'fs';
-import { resolveIncludePath, readFileIfExistsSync, normalizeDirPath } from './fs-utils';
+import { TextDocument } from 'vscode-languageserver-textdocument';
+import { resolveIncludePath, readFileIfExistsSync, normalizeDirPath, tryRealpath } from './fs-utils';
+import { getWorkspaceRootForUri } from '../indexer/workspace-index';
 import { readFileCached } from './file-cache';
 import { generateHash } from './hash-utils';
-import { withErrorHandling, getErrorHandler } from './error-handler';
 import { parsePureBasicConstantDeclaration } from './constants';
+import { escapeRegExp} from '../utils/string-utils';
+
+type LogFn = (message: string, err?: unknown) => void;
+
+/** No-op until initModuleResolver() is called. */
+let internalLog: LogFn = () => { /* uninitialized */ };
+
+/**
+ * Must be called once during server startup to wire up LSP logging.
+ * Until called, errors are silently swallowed.
+ */
+export function initModuleResolver(logFn: LogFn): void {
+    internalLog = logFn;
+}
 
 export interface ModuleFunction {
     name: string;
@@ -30,33 +44,33 @@ export interface ModuleInfo {
 }
 
 /**
- * 解析文档中的IncludeFile引用
+ * Parses IncludeFile references from the given document.
  */
-const includeCache = new WeakMap<any, { hash: string; files: string[] }>();
+const includeCache = new WeakMap<TextDocument, { hash: string; files: string[] }>();
 
-export function parseIncludeFiles(document: any, documentCache: Map<string, any>): string[] {
+export function parseIncludeFiles(document: TextDocument, documentCache: Map<string, TextDocument>): string[] {
     const includeFiles: string[] = [];
     const text = document.getText();
     const lines = text.split('\n');
 
-    // 使用文档内容哈希做缓存
+    // Cache lookup based on document content hash
     try {
         const h = generateHash(text);
         const cached = includeCache.get(document);
         if (cached && cached.hash === h) {
             return cached.files.slice();
         }
-        // 继续解析，完成后写入缓存
-        // 注意：下方 return 前会写入缓存
+        // Continue parsing; cache will be written before returning below
     } catch {}
 
-    // 当前的 IncludePath 列表（最新的优先）
+    // Current IncludePath list (most recently seen first)
     const includeDirs: string[] = [];
+    const workspaceRoot = getWorkspaceRootForUri(document.uri);
 
     for (const raw of lines) {
         const line = raw.trim();
 
-        // 处理 IncludePath 指令
+        // Handle IncludePath directive
         const ip = line.match(/^IncludePath\s+\"([^\"]+)\"/i);
         if (ip) {
             const dir = normalizeDirPath(document.uri, ip[1]);
@@ -70,10 +84,10 @@ export function parseIncludeFiles(document: any, documentCache: Map<string, any>
 
         const inc = m[1];
         // (Parsed as-is for now)
-        let fullPath = resolveIncludePath(document.uri, inc, includeDirs);
-        // 若未指定扩展名，尝试追加 .pbi
+        let fullPath = resolveIncludePath(document.uri, inc, includeDirs, workspaceRoot);
+        // If no extension was specified, retry with .pbi appended
         if (!fullPath && !path.extname(inc)) {
-            fullPath = resolveIncludePath(document.uri, `${inc}.pbi`, includeDirs);
+            fullPath = resolveIncludePath(document.uri, `${inc}.pbi`, includeDirs, workspaceRoot);
         }
         if (fullPath) includeFiles.push(fullPath);
     }
@@ -86,44 +100,49 @@ export function parseIncludeFiles(document: any, documentCache: Map<string, any>
 }
 
 /**
- * 从文件路径读取文档内容
+ * Reads document content from a filesystem path.
  */
 function readDocumentFromPath(filePath: string): string | null {
     try {
-        // 优先使用缓存读取（基于 mtime）
-        const cached = readFileCached(filePath);
+        // Resolve symlinks before reading: resolveIncludePath() already returns a
+        // real path, but we re-resolve here as defense-in-depth against any future
+        // call sites that may pass a non-resolved path. This also ensures the cache
+        // is always keyed on the real path, preventing stale cache entries for
+        // symlinks whose targets change.
+        const realPath = tryRealpath(filePath);
+        const cached = readFileCached(realPath);
         if (cached != null) return cached;
-        return readFileIfExistsSync(filePath);
+        return readFileIfExistsSync(realPath);
     } catch (error) {
-        console.error(`Error reading file ${filePath}:`, error);
+        internalLog(`Error reading file ${filePath}:`, error);
         return null;
     }
 }
 
 /**
- * 解析模块函数补全
+ * Returns function completions exported by the given module.
  */
 export function getModuleFunctionCompletions(
     moduleName: string,
-    document: any,
-    documentCache: Map<string, any>
+    document: TextDocument,
+    documentCache: Map<string, TextDocument>
 ): ModuleFunction[] {
     const functions: ModuleFunction[] = [];
 
-    // 收集所有要搜索的文档
+    // Collect all documents to search
     const searchDocuments: Array<{text: string, uri?: string}> = [];
 
-    // 添加当前文档
+    // Add the current document
     searchDocuments.push({ text: document.getText(), uri: document.uri });
 
-    // 添加缓存中的文档
+    // Add documents from the cache
     for (const [uri, doc] of documentCache) {
         if (uri !== document.uri) {
             searchDocuments.push({ text: doc.getText(), uri });
         }
     }
 
-    // 解析IncludeFile并添加到搜索文档中
+    // Parse IncludeFile references and add their content to the search set
     const includeFiles = parseIncludeFiles(document, documentCache);
     for (const includeFile of includeFiles) {
         const content = readDocumentFromPath(includeFile);
@@ -132,41 +151,29 @@ export function getModuleFunctionCompletions(
         }
     }
 
-    // 在所有文档中搜索模块
+    // Search all collected documents for the module
     for (const doc of searchDocuments) {
         const moduleFunctions = extractModuleFunctions(doc.text, moduleName);
         functions.push(...moduleFunctions);
     }
 
-    // 去重（根据函数名）
-    const uniqueFunctions = functions.reduce((acc, current) => {
-        const existing = acc.find(f => f.name === current.name);
-        if (!existing) {
-            acc.push(current);
+    // Deduping (by function name) - Implemented using Map for O(n) complexity
+    const uniqueFunctionsMap = new Map<string, ModuleFunction>();
+    for (const func of functions) {
+        if (!uniqueFunctionsMap.has(func.name)) {
+            uniqueFunctionsMap.set(func.name, func);
         }
-        return acc;
-    }, [] as ModuleFunction[]);
-
-    return uniqueFunctions;
+    }
+    return Array.from(uniqueFunctionsMap.values());
 }
 
-// 错误处理包装器
-const safeGetModuleFunctionCompletions = (moduleName: string, document: any, documentCache: Map<string, any>) => {
-    try {
-        return getModuleFunctionCompletions(moduleName, document, documentCache);
-    } catch (error) {
-        console.error('Module function completion error:', error);
-        return [];
-    }
-};
-
 /**
- * 获取模块导出（函数/常量/结构）
+ * Returns all exports (functions, constants, structures) of the given module.
  */
 export function getModuleExports(
     moduleName: string,
-    document: any,
-    documentCache: Map<string, any>
+    document: TextDocument,
+    documentCache: Map<string, TextDocument>
 ): ModuleInfo {
     const info: ModuleInfo = {
         name: moduleName,
@@ -177,7 +184,7 @@ export function getModuleExports(
         enumerations: []
     };
 
-    // 收集搜索文档
+    // Collect documents to search
     const searchDocuments: Array<{text: string, uri?: string}> = [];
     searchDocuments.push({ text: document.getText(), uri: document.uri });
     for (const [uri, doc] of documentCache) {
@@ -196,7 +203,7 @@ export function getModuleExports(
 
     for (const doc of searchDocuments) {
         const mod = extractModuleExports(doc.text, moduleName);
-        // 合并，按名称去重
+        // Merge results, deduplicating by name
         for (const f of mod.functions) {
             if (!info.functions.some(x => x.name === f.name)) info.functions.push(f);
         }
@@ -218,11 +225,12 @@ export function getModuleExports(
 }
 
 /**
- * 从文档文本中提取指定模块的函数
+ * Extracts functions of the given module from document text.
  */
 function extractModuleFunctions(text: string, moduleName: string): ModuleFunction[] {
     const functions: ModuleFunction[] = [];
     const lines = text.split('\n');
+    const safeModuleName = escapeRegExp(moduleName);
 
     let inDeclareModule = false;
     let inModule = false;
@@ -230,21 +238,26 @@ function extractModuleFunctions(text: string, moduleName: string): ModuleFunctio
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
 
-        // 检查DeclareModule开始
-        const declareModuleMatch = line.match(new RegExp(`^DeclareModule\\s+${moduleName}\\b`, 'i'));
+        // Skip comment lines
+        if (line.startsWith(';')) {
+            continue;
+        }
+
+        // Check for DeclareModule start
+        const declareModuleMatch = line.match(new RegExp(`^DeclareModule\\s+${safeModuleName}\\b`, 'i'));
         if (declareModuleMatch) {
             inDeclareModule = true;
             continue;
         }
 
-        // 检查Module开始
-        const moduleStartMatch = line.match(new RegExp(`^Module\\s+${moduleName}\\b`, 'i'));
+        // Check for Module start
+        const moduleStartMatch = line.match(new RegExp(`^Module\\s+${safeModuleName}\\b`, 'i'));
         if (moduleStartMatch) {
             inModule = true;
             continue;
         }
 
-        // 检查模块结束
+        // Check for module end
         if (line.match(/^EndDeclareModule\b/i)) {
             inDeclareModule = false;
             continue;
@@ -255,7 +268,7 @@ function extractModuleFunctions(text: string, moduleName: string): ModuleFunctio
             continue;
         }
 
-        // 在DeclareModule中查找Declare声明
+        // Search for Declare statements inside DeclareModule
         if (inDeclareModule) {
             const declareMatch = line.match(/^Declare(?:\.(\w+))?\s+(\w+)\s*\(([^)]*)\)/i);
             if (declareMatch) {
@@ -280,7 +293,7 @@ function extractModuleFunctions(text: string, moduleName: string): ModuleFunctio
             }
         }
 
-        // 在Module中查找Procedure定义
+        // Search for Procedure definitions inside Module
         if (inModule) {
             const procMatch = line.match(/^Procedure(?:\.(\w+))?\s+(\w+)\s*\(([^)]*)\)/i);
             if (procMatch) {
@@ -310,7 +323,7 @@ function extractModuleFunctions(text: string, moduleName: string): ModuleFunctio
 }
 
 /**
- * 提取模块导出（声明部分与实现部分）
+ * Extracts module exports from document text (both DeclareModule and Module sections).
  */
 function extractModuleExports(text: string, moduleName: string): {
     functions: ModuleFunction[];
@@ -324,6 +337,7 @@ function extractModuleExports(text: string, moduleName: string): {
     const structures: Array<{name: string}> = [];
     const interfaces: Array<{name: string}> = [];
     const enumerations: Array<{name: string}> = [];
+    const safeModuleName = escapeRegExp(moduleName);
 
     const lines = text.split('\n');
     let inDeclareModule = false;
@@ -333,16 +347,21 @@ function extractModuleExports(text: string, moduleName: string): {
         const raw = lines[i];
         const line = raw.trim();
 
-        // 声明和实现范围
-        const declStart = line.match(new RegExp(`^DeclareModule\\s+${moduleName}\\b`, 'i'));
+        // Skip comment lines
+        if (line.startsWith(';')) {
+            continue;
+        }
+
+        // Track DeclareModule and Module scope boundaries
+        const declStart = line.match(new RegExp(`^DeclareModule\\s+${safeModuleName}\\b`, 'i'));
         if (declStart) { inDeclareModule = true; continue; }
         if (line.match(/^EndDeclareModule\b/i)) { inDeclareModule = false; continue; }
 
-        const modStart = line.match(new RegExp(`^Module\\s+${moduleName}\\b`, 'i'));
+        const modStart = line.match(new RegExp(`^Module\\s+${safeModuleName}\\b`, 'i'));
         if (modStart) { inModule = true; continue; }
         if (line.match(/^EndModule\b/i)) { inModule = false; continue; }
 
-        // 声明区：导出函数声明、常量、结构定义
+        // DeclareModule section: collect exported function declarations, constants, and structures
         if (inDeclareModule) {
             const declareMatch = line.match(/^Declare(?:\.(\w+))?\s+(\w+)\s*\(([^)]*)\)/i);
             if (declareMatch) {
@@ -389,7 +408,7 @@ function extractModuleExports(text: string, moduleName: string): {
             }
         }
 
-        // 实现区：收集实际实现（补全函数参数/返回值）
+        // Module section: collect implementations (override/supplement matching declarations)
         if (inModule) {
             const procMatch = line.match(/^Procedure(?:\.(\w+))?\s+(\w+)\s*\(([^)]*)\)/i);
             if (procMatch) {
@@ -400,7 +419,7 @@ function extractModuleExports(text: string, moduleName: string): {
                     ? `Procedure.${returnType} ${functionName}(${params})`
                     : `Procedure ${functionName}(${params})`;
                 const insertText = params.trim() ? `${functionName}(` : `${functionName}()`;
-                // 覆盖/补充同名声明
+                // Override or supplement a matching declaration with the full implementation
                 const idx = functions.findIndex(f => f.name === functionName);
                 const item = {
                     name: functionName,
@@ -419,26 +438,26 @@ function extractModuleExports(text: string, moduleName: string): {
 }
 
 /**
- * 获取所有可用的模块
+ * Returns all module names referenced in the document and its includes.
  */
 export function getAvailableModules(
-    document: any,
-    documentCache: Map<string, any>
+    document: TextDocument,
+    documentCache: Map<string, TextDocument>
 ): string[] {
     const modules: Set<string> = new Set();
     const searchDocuments: Array<{text: string}> = [];
 
-    // 添加当前文档
+    // Add the current document
     searchDocuments.push({ text: document.getText() });
 
-    // 添加缓存中的文档
+    // Add documents from the cache
     for (const [uri, doc] of documentCache) {
         if (uri !== document.uri) {
             searchDocuments.push({ text: doc.getText() });
         }
     }
 
-    // 解析IncludeFile并添加到搜索文档中
+    // Parse IncludeFile references and add their content to the search set
     const includeFiles = parseIncludeFiles(document, documentCache);
     for (const includeFile of includeFiles) {
         const content = readDocumentFromPath(includeFile);
@@ -447,7 +466,7 @@ export function getAvailableModules(
         }
     }
 
-    // 在所有文档中搜索模块
+    // Search all collected documents for module names
     for (const doc of searchDocuments) {
         const foundModules = extractModuleNames(doc.text);
         foundModules.forEach(m => modules.add(m));
@@ -457,7 +476,7 @@ export function getAvailableModules(
 }
 
 /**
- * 从文档文本中提取模块名称
+ * Extracts all module names (DeclareModule and Module) from document text.
  */
 function extractModuleNames(text: string): string[] {
     const modules: string[] = [];
@@ -466,13 +485,18 @@ function extractModuleNames(text: string): string[] {
     for (const line of lines) {
         const trimmedLine = line.trim();
 
-        // 匹配 DeclareModule ModuleName
+        // Skip comment lines
+        if (trimmedLine.startsWith(';')) {
+            continue;
+        }
+
+        // Match DeclareModule ModuleName
         const declareMatch = trimmedLine.match(/^DeclareModule\s+(\w+)/i);
         if (declareMatch) {
             modules.push(declareMatch[1]);
         }
 
-        // 匹配 Module ModuleName
+        // Match Module ModuleName
         const moduleMatch = trimmedLine.match(/^Module\s+(\w+)/i);
         if (moduleMatch) {
             modules.push(moduleMatch[1]);

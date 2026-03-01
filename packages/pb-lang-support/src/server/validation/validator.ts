@@ -15,6 +15,19 @@ import { validateUnclosedStructures } from './unclosed-structure-validator';
 import { withErrorHandling, getErrorHandler } from '../utils/error-handler';
 import { stripInlineComment } from '../utils/string-utils';
 
+type LogFn = (message: string, err?: unknown) => void;
+
+/** No-op until initValidator() is called. */
+let internalLog: LogFn = () => { /* uninitialized */ };
+
+/**
+ * Must be called once during server startup to wire up LSP logging.
+ * Until called, errors are silently swallowed.
+ */
+export function initValidator(logFn: LogFn): void {
+    internalLog = logFn;
+}
+
 /**
  * Create a new validation context
  */
@@ -41,7 +54,7 @@ export function validateDocument(text: string): Diagnostic[] {
     try {
         return validateDocumentInternal(text);
     } catch (error) {
-        console.error('Document validation error:', error);
+        internalLog('Document validation error:', error);
         return [];
     }
 }

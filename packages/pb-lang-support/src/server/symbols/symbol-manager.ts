@@ -11,6 +11,19 @@ import { ParsedDocument } from './optimized-symbol-parser';
 import { parsePureBasicConstantDefinition } from '../utils/constants';
 import { stripInlineComment } from '../utils/string-utils';
 
+type LogFn = (message: string, err?: unknown) => void;
+
+/** No-op until initSymbolManager() is called. */
+let internalLog: LogFn = () => { /* uninitialized */ };
+
+/**
+ * Must be called once during server startup to wire up LSP logging.
+ * Until called, errors are silently swallowed.
+ */
+export function initSymbolManager(logFn: LogFn): void {
+    internalLog = logFn;
+}
+
 /**
  * Parse symbols in a document (performance-optimized version)
  * @deprecated Use optimizedSymbolParser.parseDocumentSymbols instead
@@ -31,7 +44,7 @@ export function parseDocumentSymbols(uri: string, text: string): void {
 
     // Using an optimized parser
     optimizedSymbolParser.parseDocumentSymbols(uri, text).catch(error => {
-        console.error('Symbol parsing error:', error);
+        internalLog('Symbol parsing error:', error);
         // 降级到基本解析
         parseDocumentSymbolsFallback(uri, text);
     });
@@ -207,76 +220,10 @@ function parseDocumentSymbolsFallback(uri: string, text: string): void {
 }
 
 /**
- * 增量更新文档符号（性能优化版本）
- */
-export async function updateDocumentSymbolsIncrementally(uri: string, text: string, oldText: string): Promise<void> {
-    try {
-        await optimizedSymbolParser.updateDocumentSymbolsIncrementally(uri, text, oldText);
-    } catch (error) {
-        console.error('Incremental symbol update error:', error);
-        // 降级到完整重新解析
-        parseDocumentSymbols(uri, text);
-    }
-}
-
-/**
  * 批量解析多个文档（性能优化）
  */
 export async function parseMultipleDocuments(documents: Array<{ uri: string; text: string }>): Promise<Map<string, ParsedDocument>> {
     return await optimizedSymbolParser.parseMultipleDocuments(documents);
-}
-
-/**
- * 解析单个符号（用于增量更新）
- */
-function parseSingleSymbol(line: string, lineIndex: number): PureBasicSymbol | null {
-    // 解析过程定义
-    const procMatch = line.match(/^Procedure\s*(?:\.(\w+))?\s*([a-zA-Z_][a-zA-Z0-9_]*)/);
-    if (procMatch) {
-        return {
-            name: procMatch[2],
-            kind: SymbolKind.Procedure,
-            range: {
-                start: { line: lineIndex, character: 0 },
-                end: { line: lineIndex, character: line.length }
-            },
-            detail: procMatch[1] ? `Procedure.${procMatch[1]}` : 'Procedure',
-            documentation: `Procedure definition: ${procMatch[2]}`
-        };
-    }
-
-    // 解析结构定义
-    const structMatch = line.match(/^Structure\s+([a-zA-Z_][a-zA-Z0-9_]*)/);
-    if (structMatch) {
-        return {
-            name: structMatch[1],
-            kind: SymbolKind.Structure,
-            range: {
-                start: { line: lineIndex, character: 0 },
-                end: { line: lineIndex, character: line.length }
-            },
-            detail: 'Structure',
-            documentation: `Structure definition: ${structMatch[1]}`
-        };
-    }
-
-    // Parsing constant definitions
-    const constMatch = parsePureBasicConstantDefinition(line);
-    if (constMatch) {
-        const value = stripInlineComment(constMatch?.value ?? '').trim();
-        return {
-            name: constMatch.name,
-            kind: SymbolKind.Constant,
-            range: {
-                start: { line: lineIndex, character: 0 },
-                end: { line: lineIndex, character: line.length }
-            },
-            detail: 'Constant',
-            documentation: `Constant definition: #${constMatch.name} = ${value}`
-        };
-    }
-
-    return null;
 }
 
 /**

@@ -11,6 +11,7 @@ import {
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { parsePureBasicConstantDefinition } from '../utils/constants';
+import { safeIndexOf } from '../utils/string-utils';
 
 /**
  * Handle document symbol requests
@@ -408,6 +409,9 @@ function updateSymbolEnd(symbol: DocumentSymbol, lines: string[], endPattern: Re
             return;
         }
     }
+    // If no end marker is found, default to the end of the file or the first line
+    const endLine = Math.max(startLine, lines.length - 1);
+    symbol.range.end = { line: endLine, character: lines[endLine]?.length || 0 };
 }
 
 function sortSymbolsStable(list: DocumentSymbol[]) {
@@ -421,13 +425,4 @@ function sortSymbolsStable(list: DocumentSymbol[]) {
     for (const s of list) {
         if (s.children?.length) sortSymbolsStable(s.children);
     }
-}
-
-/**
- * Returns a safe index for range calculations.
- * Falls back to 0 if the substring cannot be found.
- */
-function safeIndexOf(haystack: string, needle: string): number {
-    const idx = haystack.indexOf(needle);
-    return idx >= 0 ? idx : 0;
 }

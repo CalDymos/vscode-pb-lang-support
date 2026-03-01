@@ -13,7 +13,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { analyzeScopesAndVariables } from '../utils/scope-manager';
 import { getModuleExports } from '../utils/module-resolver';
 import { parsePureBasicConstantDefinition} from '../utils/constants';
-import { stripInlineComment } from '../utils/string-utils';
+import { stripInlineComment, escapeRegExp } from '../utils/string-utils';
 
 /**
  * Handle hover requests
@@ -27,7 +27,7 @@ export function handleHover(
     const text = document.getText();
     const lines = text.split('\n');
 
-    if (position.line >= lines.length) {
+    if (position.line < 0 || position.line >= lines.length) {
         return null;
     }
 
@@ -200,6 +200,8 @@ function getModuleFunctionHover(
     documentCache: Map<string, TextDocument>
 ): Hover | null {
     const searchDocuments = [document, ...Array.from(documentCache.values())];
+    const safeModuleName = escapeRegExp(moduleName);
+    const safeFunctionName = escapeRegExp(functionName);
 
     for (const doc of searchDocuments) {
         const text = doc.getText();
@@ -210,7 +212,7 @@ function getModuleFunctionHover(
             const line = lines[i].trim();
 
             // Check module start
-            const moduleStartMatch = line.match(new RegExp(`^Module\\s+${moduleName}\\b`, 'i'));
+            const moduleStartMatch = line.match(new RegExp(`^Module\\s+${safeModuleName}\\b`, 'i'));
             if (moduleStartMatch) {
                 inModule = true;
                 continue;
@@ -224,7 +226,7 @@ function getModuleFunctionHover(
 
             // Look for function definition inside module
             if (inModule) {
-                const procMatch = line.match(new RegExp(`^Procedure(?:\\.(\\w+))?\\s+(${functionName})\\s*\\(([^)]*)\\)`, 'i'));
+                const procMatch = line.match(new RegExp(`^Procedure(?:\\.(\\w+))?\\s+(${safeFunctionName})\\s*\\(([^)]*)\\)`, 'i'));
                 if (procMatch) {
                     const returnType = procMatch[1] || 'void';
                     const params = procMatch[3] || '';
@@ -273,6 +275,7 @@ function findSymbolInfo(
     documentCache: Map<string, TextDocument>
 ): any | null {
     const searchDocuments = [document, ...Array.from(documentCache.values())];
+    const safeWord = escapeRegExp(word);
 
     for (const doc of searchDocuments) {
         const text = doc.getText();
@@ -282,7 +285,7 @@ function findSymbolInfo(
             const line = lines[i].trim();
 
             // Look for procedure definition
-            const procMatch = line.match(new RegExp(`^Procedure(?:\\.(\\w+))?\\s+(${word})\\s*\\(([^)]*)\\)`, 'i'));
+            const procMatch = line.match(new RegExp(`^Procedure(?:\\.(\\w+))?\\s+(${safeWord})\\s*\\(([^)]*)\\)`, 'i'));
             if (procMatch) {
                 const returnType = procMatch[1] || 'void';
                 const params = procMatch[3] || '';
@@ -310,7 +313,7 @@ function findSymbolInfo(
             }
 
             // Look for variable definition
-            const varMatch = line.match(new RegExp(`^(Global|Protected|Static|Define|Dim)\\s+(?:\\w+\\s+)?(\\*?${word})(?:\\.(\\w+))?`, 'i'));
+            const varMatch = line.match(new RegExp(`^(Global|Protected|Static|Define|Dim)\\s+(?:\\w+\\s+)?(\\*?${safeWord})(?:\\.(\\w+))?`, 'i'));
             if (varMatch) {
                 const scope = varMatch[1];
                 const varName = varMatch[2];
@@ -339,7 +342,7 @@ function findSymbolInfo(
             }
 
             // Find structure definitions
-            const structMatch = line.match(new RegExp(`^Structure\\s+(${word})\\b`, 'i'));
+            const structMatch = line.match(new RegExp(`^Structure\\s+(${safeWord})\\b`, 'i'));
             if (structMatch) {
                 return {
                     type: 'structure',
@@ -349,7 +352,7 @@ function findSymbolInfo(
             }
 
             // Look for interface definition
-            const ifaceMatch = line.match(new RegExp(`^Interface\\s+(${word})\\b`, 'i'));
+            const ifaceMatch = line.match(new RegExp(`^Interface\\s+(${safeWord})\\b`, 'i'));
             if (ifaceMatch) {
                 return {
                     type: 'interface',
@@ -359,7 +362,7 @@ function findSymbolInfo(
             }
 
             // Look for enumeration definition
-            const enumMatch = line.match(new RegExp(`^Enumeration\\s+(${word})\\b`, 'i'));
+            const enumMatch = line.match(new RegExp(`^Enumeration\\s+(${safeWord})\\b`, 'i'));
             if (enumMatch) {
                 return {
                     type: 'enumeration',

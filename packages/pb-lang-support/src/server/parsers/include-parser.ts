@@ -2,11 +2,11 @@
  * PureBasic Include File Parser
  * Parse XIncludeFile directives and include files
  */
-
+import * as fs from 'fs';
+import * as path from 'path';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { URI } from 'vscode-uri';
 import { parsePureBasicConstantDefinition } from '../utils/constants';
-import { stripInlineComment } from '../utils/string-utils';
 
 export interface IncludeFile {
     filePath: string;
@@ -37,14 +37,36 @@ export function parseIncludeFiles(document: TextDocument, baseDirectory: string 
     const currentFile = URI.parse(document.uri).fsPath;
     dependencies.set(currentFile, []);
 
+    // Collect IncludePath directives so that relative paths
+    // are resolved correctly – analogous to collectSearchDocuments in definition-provider.
+    // Latest entries first (unshift), as later IncludePath specifications may take precedence.
+    const includeDirs: string[] = baseDirectory ? [baseDirectory] : [];
+
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
 
+        // Skip comment lines
+        if (line.startsWith(';')) {
+            continue;
+        }
+
+        // Process IncludePath directives.
+        // PureBasic syntax is `IncludePath "directory"` – only double quotation marks.
+        const includePathMatch = line.match(/^IncludePath\s+"([^"]+)"/i);
+        if (includePathMatch) {
+            const dir = includePathMatch[1].replace(/\\/g, '/').replace(/\/?$/, '/');
+            if (!includeDirs.includes(dir)) {
+                includeDirs.unshift(dir);
+            }
+            continue;
+        }
+
         // Parse XIncludeFile directive
-        const includeMatch = line.match(/XIncludeFile\s+["']([^"']+)["']/);
+        // PureBasic syntax is `IncludePath "directory"` – only double quotation marks.
+        const includeMatch = line.match(/^XIncludeFile\s+"([^"]+)"/i);
         if (includeMatch) {
             const includePath = includeMatch[1];
-            const resolvedPath = resolveIncludePath(includePath, baseDirectory);
+            const resolvedPath = resolveIncludePath(includePath, includeDirs);
 
             const includeFile: IncludeFile = {
                 filePath: includePath,
@@ -57,11 +79,11 @@ export function parseIncludeFiles(document: TextDocument, baseDirectory: string 
             dependencies.get(currentFile)!.push(resolvedPath);
         }
 
-        // Parse IncludeFile directive (compatible with old syntax)
-        const oldIncludeMatch = line.match(/IncludeFile\s+["']([^"']+)["']/);
+        // Parse IncludeFile directive
+        const oldIncludeMatch = line.match(/^IncludeFile\s+"([^"]+)"/i);
         if (oldIncludeMatch) {
             const includePath = oldIncludeMatch[1];
-            const resolvedPath = resolveIncludePath(includePath, baseDirectory);
+            const resolvedPath = resolveIncludePath(includePath, includeDirs);
 
             const includeFile: IncludeFile = {
                 filePath: includePath,
@@ -74,11 +96,13 @@ export function parseIncludeFiles(document: TextDocument, baseDirectory: string 
             dependencies.get(currentFile)!.push(resolvedPath);
         }
 
-        // Parse conditional includes
-        const conditionalMatch = line.match(/If\s+\w+\s*:\s*XIncludeFile\s+["']([^"']+)["']/);
+        // Parse conditional includes (Single-line form)
+        // NOTE: Multi-line compiler if blocks are not conceptually covered in full here
+        // – this requires state tracking. The isConditional flag
+        const conditionalMatch = line.match(/^If\s+\w+\s*:\s*XIncludeFile\s+"([^"]+)"/i);
         if (conditionalMatch) {
             const includePath = conditionalMatch[1];
-            const resolvedPath = resolveIncludePath(includePath, baseDirectory);
+            const resolvedPath = resolveIncludePath(includePath, includeDirs);
 
             const includeFile: IncludeFile = {
                 filePath: includePath,
@@ -114,9 +138,14 @@ export function parseIncludedSymbols(document: TextDocument): Map<string, any> {
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
 
+        // Skip comment lines
+        if (line.startsWith(';')) {
+            continue;
+        }
+
         // Parse procedure definition
-        if (line.startsWith('Procedure') || line.startsWith('Procedure.')) {
-            const procMatch = line.match(/(?:Procedure|Procedure\.\w+)\s+(\w+)\s*\(/);
+        if (/^Procedure(?:C|DLL|CDLL)?(?:\.\w+)?\s+\w+\s*\(/i.test(line)) {
+            const procMatch = line.match(/^Procedure(?:C|DLL|CDLL)?(?:\.\w+)?\s+(\w+)\s*\(/i);
             if (procMatch) {
                 const procName = procMatch[1];
                 symbols.set(procName, {
@@ -129,11 +158,30 @@ export function parseIncludedSymbols(document: TextDocument): Map<string, any> {
             }
         }
 
+        // Parse Prototype and PrototypeC
+        if (/^Prototype(?:C)?(?:\.\w+)?\s+\w+\s*\(/i.test(line)) {
+            const protoMatch = line.match(/^Prototype(?:C)?(?:\.\w+)?\s+(\w+)\s*\(/i);
+            if (protoMatch) {
+                const protoName = protoMatch[1];
+                symbols.set(protoName, {
+                    type: 'prototype',
+                    file: document.uri,
+                    line: i,
+                    definition: line,
+                    exported: isExportedSymbol(line)
+                });
+            }
+        }
+
         // Parse variable declaration (usually global in include files)
-        if (line.startsWith('Global') || line.startsWith('Define')) {
-            const varMatch = line.match(/(?:Global|Define)\s+(\w+)/);
-            if (varMatch) {
-                const varName = varMatch[1];
+        const scopeHeadMatch = line.match(/^(Global|Protected|Static|Define|Dim|Shared)\s+(?:(?:NewList|NewMap|NewArray)\s+)?/i);
+        if (scopeHeadMatch) {
+            const keywordEnd = scopeHeadMatch[0].length;
+            const remaining = line.substring(keywordEnd);
+            const nameRe = /(?:^|,)\s*\*?(\w+)(?=\.|[\[(\s,]|$)/g;
+            let nm: RegExpExecArray | null;
+            while ((nm = nameRe.exec(remaining)) !== null) {
+                const varName = nm[1];
                 symbols.set(varName, {
                     type: 'variable',
                     file: document.uri,
@@ -160,8 +208,8 @@ export function parseIncludedSymbols(document: TextDocument): Map<string, any> {
         }
 
         // Parse structure definition
-        if (line.startsWith('Structure')) {
-            const structMatch = line.match(/Structure\s+(\w+)/);
+        if (line.match(/^Structure\s+\w+/i)) {
+            const structMatch = line.match(/^Structure\s+(\w+)/i);
             if (structMatch) {
                 const structName = structMatch[1];
                 symbols.set(structName, {
@@ -172,7 +220,6 @@ export function parseIncludedSymbols(document: TextDocument): Map<string, any> {
                     exported: true
                 });
 
-                // Parse structure members
                 const members = parseStructureMembers(lines, i + 1);
                 for (const member of members) {
                     const memberKey = `${structName}.${member.name}`;
@@ -189,8 +236,8 @@ export function parseIncludedSymbols(document: TextDocument): Map<string, any> {
         }
 
         // Parse interface definition
-        if (line.startsWith('Interface')) {
-            const interfaceMatch = line.match(/Interface\s+(\w+)/);
+        if (line.match(/^Interface\s+\w+/i)) {
+            const interfaceMatch = line.match(/^Interface\s+(\w+)/i);
             if (interfaceMatch) {
                 const interfaceName = interfaceMatch[1];
                 symbols.set(interfaceName, {
@@ -201,7 +248,6 @@ export function parseIncludedSymbols(document: TextDocument): Map<string, any> {
                     exported: true
                 });
 
-                // Parse interface methods
                 const methods = parseInterfaceMethods(lines, i + 1);
                 for (const method of methods) {
                     const methodKey = `${interfaceName}::${method.name}`;
@@ -217,9 +263,9 @@ export function parseIncludedSymbols(document: TextDocument): Map<string, any> {
             }
         }
 
-        // Parse enumeration definition
-        if (line.startsWith('Enumeration')) {
-            const enumMatch = line.match(/Enumeration\s+(\w+)/);
+        /// Parse Enumeration / EnumerationBinary definition
+        if (line.match(/^Enumeration(?:Binary)?\b/i)) {
+            const enumMatch = line.match(/^Enumeration(?:Binary)?\s+(\w+)/i);
             if (enumMatch) {
                 const enumName = enumMatch[1];
                 symbols.set(enumName, {
@@ -230,7 +276,6 @@ export function parseIncludedSymbols(document: TextDocument): Map<string, any> {
                     exported: true
                 });
 
-                // Parse enumeration values
                 const values = parseEnumerationValues(lines, i + 1);
                 for (const value of values) {
                     const valueKey = `${enumName}.${value.name}`;
@@ -246,9 +291,9 @@ export function parseIncludedSymbols(document: TextDocument): Map<string, any> {
             }
         }
 
-        // Parse macro definition
-        if (line.startsWith('Macro')) {
-            const macroMatch = line.match(/Macro\s+(\w+)\s*\(/);
+        // Parse Macro definition
+        if (line.match(/^Macro\s+\w+/i)) {
+            const macroMatch = line.match(/^Macro\s+(\w+)/i);
             if (macroMatch) {
                 const macroName = macroMatch[1];
                 symbols.set(macroName, {
@@ -274,15 +319,30 @@ function parseStructureMembers(lines: string[], startLine: number): Array<{name:
     for (let i = startLine; i < lines.length; i++) {
         const line = lines[i].trim();
 
-        if (line === 'EndStructure') {
+        if (/^EndStructure\b/i.test(line)) {
             break;
         }
 
-        // Parse member definition
-        const memberMatch = line.match(/(\w+)\s*[.:].+/);
-        if (memberMatch) {
+        // Skip comment lines inside structure
+        if (line.startsWith(';')) {
+            continue;
+        }
+
+        // [Pointer-Member + Anker]:
+        const memberMatch = line.match(/^\*?(\w+)(?:\s*[.:].+|\s*\[)/);
+        if (memberMatch && !/^(?:Array|List|Map)\s/i.test(line)) {
             members.push({
                 name: memberMatch[1],
+                line: i,
+                definition: line
+            });
+        }
+
+        // Array/List/Map-Member in Structures
+        const collectionMemberMatch = line.match(/^(?:Array|List|Map)\s+\*?(\w+)\s*[.:]/i);
+        if (collectionMemberMatch) {
+            members.push({
+                name: collectionMemberMatch[1],
                 line: i,
                 definition: line
             });
@@ -301,12 +361,17 @@ function parseInterfaceMethods(lines: string[], startLine: number): Array<{name:
     for (let i = startLine; i < lines.length; i++) {
         const line = lines[i].trim();
 
-        if (line === 'EndInterface') {
+        if (/^EndInterface\b/i.test(line)) {
             break;
         }
 
-        // Parse method definition
-        const methodMatch = line.match(/(\w+)\s*\(/);
+        // Skip comment lines inside interface
+        if (line.startsWith(';')) {
+            continue;
+        }
+
+        // Interface methods always have a parameter list (even if it is empty).
+        const methodMatch = line.match(/^(\w+)\s*\(/);
         if (methodMatch) {
             methods.push({
                 name: methodMatch[1],
@@ -328,11 +393,17 @@ function parseEnumerationValues(lines: string[], startLine: number): Array<{name
     for (let i = startLine; i < lines.length; i++) {
         const line = lines[i].trim();
 
-        if (line === 'EndEnumeration') {
+        if (/^EndEnumeration\b/i.test(line)) {
             break;
         }
 
-        // Parse enumeration value definition
+        // Skip comment lines inside enumeration
+        if (line.startsWith(';')) {
+            continue;
+        }
+
+        // Enumeration values are constants of the form #Name or #Name = Value.
+        // parsePureBasicConstantDefinition expects a line beginning with ‘#’.
         const valueMatch = parsePureBasicConstantDefinition(line);
         if (valueMatch) {
             values.push({
@@ -347,19 +418,32 @@ function parseEnumerationValues(lines: string[], startLine: number): Array<{name
 }
 
 /**
- * Parse include file path
+ * Resolve include file path considering IncludePath directories
+ * Uses fs.existsSync to verify candidates actually exist on disk.
  */
-function resolveIncludePath(includePath: string, baseDirectory: string): string {
-    if (includePath.startsWith('./') || includePath.startsWith('.\\')) {
-        includePath = includePath.substring(2);
+function resolveIncludePath(includePath: string, includeDirs: string[]): string {
+    // Normalize path separators to forward slashes
+    const normalized = includePath.replace(/\\/g, '/');
+
+    // Absolute path: return directly (normalize separators only)
+    if (normalized.startsWith('/') || /^[A-Za-z]:[\\/]/.test(normalized)) {
+        return path.normalize(normalized);
     }
 
-    if (baseDirectory && !includePath.includes('/') && !includePath.includes('\\')) {
-        // Simple file name, add to base directory
-        return `${baseDirectory}${includePath}`;
+    // Relative path: strip leading ./ or ../
+    // path.resolve handles both forms correctly per-directory below,
+    // but we keep normalize() for the fallback at the end.
+
+    // Iterate through all IncludePath directories (newest first → highest priority)
+    for (const dir of includeDirs) {
+        const candidate = path.resolve(dir, includePath);
+        if (fs.existsSync(candidate)) {
+            return candidate;
+        }
     }
 
-    return includePath;
+    // Fallback: Return normalized path (no directory prefix possible)
+    return path.normalize(includePath);
 }
 
 /**
@@ -383,17 +467,19 @@ function detectCircularDependencies(dependencies: Map<string, string[]>, circula
     const visited = new Set<string>();
     const recursionStack = new Set<string>();
 
-    function dfs(node: string): boolean {
+    function dfs(node: string): void {
         if (recursionStack.has(node)) {
-            // Found circular dependency
-            const cycle = Array.from(recursionStack).slice(recursionStack.has(node) ? Array.from(recursionStack).indexOf(node) : 0);
+            // Cycle found: reconstruct path from first occurrence to current node
+            const stackArr = Array.from(recursionStack);
+            const cycleStart = stackArr.indexOf(node);
+            const cycle = stackArr.slice(cycleStart);
             cycle.push(node);
             circularDependencies.push(cycle.join(' -> '));
-            return true;
+            return;
         }
 
         if (visited.has(node)) {
-            return false;
+            return;
         }
 
         visited.add(node);
@@ -405,7 +491,6 @@ function detectCircularDependencies(dependencies: Map<string, string[]>, circula
         }
 
         recursionStack.delete(node);
-        return false;
     }
 
     for (const [node] of dependencies) {

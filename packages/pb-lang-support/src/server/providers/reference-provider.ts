@@ -10,8 +10,9 @@ import {
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { readFileIfExistsSync, resolveIncludePath, fsPathToUri, normalizeDirPath } from '../utils/fs-utils';
-import { getWorkspaceFiles } from '../indexer/workspace-index';
+import { getWorkspaceFiles, getWorkspaceRootForUri  } from '../indexer/workspace-index';
 import { parsePureBasicConstantDefinition} from '../utils/constants';
+import { escapeRegExp} from '../utils/string-utils';
 
 /**
  * Handle references request
@@ -198,9 +199,11 @@ function findModuleFunctionReferences(
             // Track module scope for definition search
             if (line.match(new RegExp(`^\\s*Module\\s+${safeModule}\\b`, 'i'))) {
                 inModule = true;
+                continue;
             }
             if (line.match(/^\s*EndModule\b/i)) {
                 inModule = false;
+                continue;
             }
 
             // Find Procedure definition inside module
@@ -438,14 +441,14 @@ function findModuleSymbolReferences(
         const lines = text.split('\n');
 
         for (let i = 0; i < lines.length; i++) {
-            const raw = lines[i];
+            const line = lines[i];
 
             // Find usages: Module::ident or Module::#ident
             const re = new RegExp(`\\b${safeModule}::#?${safeIdent}\\b`, 'gi');
             let m: RegExpExecArray | null;
-            while ((m = re.exec(raw)) !== null) {
+            while ((m = re.exec(line)) !== null) {
                 // Skip comments
-                const before = raw.substring(0, m.index);
+                const before = line.substring(0, m.index);
                 if (before.includes(';')) { continue; }
                 // Skip strings
                 const quoteCount = (before.match(/"/g) || []).length;
@@ -453,7 +456,7 @@ function findModuleSymbolReferences(
 
                 // startChar points to the ident, skipping 'Module::' and optional '#'
                 const prefixLen = moduleName.length + 2; // 'Module::'
-                const hasHash = raw[m.index + prefixLen] === '#';
+                const hasHash = line[m.index + prefixLen] === '#';
                 const startChar = m.index + prefixLen + (hasHash ? 1 : 0);
 
                 refs.push({
@@ -468,12 +471,14 @@ function findModuleSymbolReferences(
             if (!includeDeclaration) { continue; }
 
             // Find definitions (within DeclareModule / Module block)
-            const trimmed = raw.trim();
+            const trimmed = line.trim();
 
             // Constant definition
             const constMatch = parsePureBasicConstantDefinition(trimmed);
             if (constMatch && normalizeConstantName(constMatch.name) === normalizeConstantName(ident)) {
-                const startChar = raw.indexOf('#' + constMatch.name) + 1;
+                const constIndex = line.indexOf('#' + constMatch.name);
+                if (constIndex === -1) continue;
+                const startChar = constIndex + 1
                 refs.push({
                     uri: doc.uri,
                     range: {
@@ -493,7 +498,7 @@ function findModuleSymbolReferences(
             for (const r of defMatchers) {
                 const mm = trimmed.match(r);
                 if (mm) {
-                    const startChar = raw.indexOf(mm[1]);
+                    const startChar = line.indexOf(mm[1]);
                     refs.push({
                         uri: doc.uri,
                         range: {
@@ -513,10 +518,6 @@ function normalizeConstantName(name: string): string {
     return name.replace(/\$$/, '').toLowerCase();
 }
 
-function escapeRegExp(value: string): string {
-    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 /**
  * Collect search documents: current + open + recursive includes
  */
@@ -525,6 +526,7 @@ function collectSearchDocuments(
     allDocuments: Map<string, TextDocument>,
     maxDepth = 3
 ): Map<string, TextDocument> {
+    const workspaceRoot = getWorkspaceRootForUri(document.uri);
     const result = new Map<string, TextDocument>();
     const visited = new Set<string>();
 
@@ -564,7 +566,7 @@ function collectSearchDocuments(
             const m = line.match(/^\s*(?:X?IncludeFile)\s+\"([^\"]+)\"/i);
             if (!m) continue;
             const inc = m[1];
-            const fsPath = resolveIncludePath(uri, inc, includeDirs);
+            const fsPath = resolveIncludePath(uri, inc, includeDirs, workspaceRoot);
             if (!fsPath) continue;
             const incUri = fsPathToUri(fsPath);
             if (result.has(incUri)) {

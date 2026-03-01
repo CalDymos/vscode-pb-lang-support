@@ -60,6 +60,11 @@ export function analyzeScopesAndVariables(text: string, currentLine: number): {
         const line = lines[i].trim();
         const originalLine = lines[i];
 
+        // Skip comment lines
+        if (line.startsWith(';')) {
+            continue;
+        }
+
         // 检查作用域开始
         const scopeStart = detectScopeStart(line, i);
         if (scopeStart) {
@@ -76,8 +81,9 @@ export function analyzeScopesAndVariables(text: string, currentLine: number): {
             }
         }
 
-        // 解析变量定义
+        // Parsing variable definitions 
         const currentScope = scopeStack[scopeStack.length - 1];
+        if (!currentScope) continue; // skip processing if no scope is available
         const variablesInLine = parseVariablesInLine(line, i, currentScope);
         variables.push(...variablesInLine);
 
