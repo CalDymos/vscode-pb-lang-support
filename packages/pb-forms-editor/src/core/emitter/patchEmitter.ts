@@ -5,6 +5,13 @@ import { ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, ToolBarE
 
 type PbCall = ReturnType<typeof scanCalls>[number];
 
+/**
+ * Escape special characters in regular expressions
+ */
+function escapeRegExp(text: string): string {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function stableKey(assignedVar: string | undefined, params: string[]): string | undefined {
   if (params.length < 1) return undefined;
 
@@ -360,10 +367,6 @@ function findProcedureBlock(document: vscode.TextDocument, line: number): LineBl
     }
   }
   return undefined;
-}
-
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function parseProcedureName(line: string): { name: string; nameStart: number; nameEnd: number } | undefined {

@@ -90,7 +90,7 @@ export function validateParameters(
 
         if (!isValid) {
             let paramStart = originalLine.indexOf(param);
-            if (paramStart < 0) paramStart = 0;
+            if (paramStart < 0) continue;
             diagnostics.push({
                 severity: DiagnosticSeverity.Error,
                 range: {

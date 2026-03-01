@@ -6,6 +6,8 @@ Global window.i = 0
 Global event.i = 0
 Global message.s = "Hello, PureBasic!"
 
+Global vrt.i, tzu.l, *pluf
+
 ; Data type test
 Global integerVar.i = 42
 Global stringVar.s = "Test String"

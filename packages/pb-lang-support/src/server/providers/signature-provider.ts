@@ -12,6 +12,7 @@ import {
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { getModuleFunctionCompletions as getModuleFunctions } from '../utils/module-resolver';
 import { getActiveUsedModules } from '../utils/scope-manager';
+import { escapeRegExp} from '../utils/string-utils';
 
 /**
  * 处理签名帮助请求
@@ -153,10 +154,6 @@ function findFunctionDefinition(
 
     // 检查是否是内置函数
     return getBuiltInFunctionSignature(functionName);
-}
-
-function escapeRegExp(text: string): string {
-    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**

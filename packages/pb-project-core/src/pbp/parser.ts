@@ -75,6 +75,13 @@ const RX_VALUE_ATTR_FLAGS = 'i';
 const RX_SECTION_TEMPLATE = `<section\\b[^>]*\\bname="__NAME__"[^>]*>([\\s\\S]*?)<\\/section>`; // Usage: new RegExp(RX_SECTION_TEMPLATE.replace('__NAME__', escapeRegExp(sectionName)), 'i');
 const RX_SECTION_FLAGS = 'i';
 
+/**
+ * Escape special characters in regular expressions
+ */
+function escapeRegExp(text: string): string {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function cloneGlobalRegex(re: RegExp): RegExp {
     return new RegExp(re.source, re.flags);
 }
@@ -409,8 +416,4 @@ function decodeXmlEntities(s: string): string {
         .replace(/&lt;/g, '<')
         .replace(/&gt;/g, '>')
         .replace(/&amp;/g, '&');
-}
-
-function escapeRegExp(s: string): string {
-    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
