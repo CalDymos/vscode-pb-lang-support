@@ -45,7 +45,19 @@ function evictOldestIfNeeded(): void {
     }
 }
 
-export function readFileCached(filePath: string): string | null {
+export type FileCacheResult = {
+    content: string;
+    mtimeMs: number;
+};
+
+/**
+ * Reads a file with mtime-based caching.
+ * Returns `{ content, mtimeMs }` or `null` when the file cannot be read.
+ *
+ * Callers that only need to detect changes can compare `mtimeMs` without
+ * re-hashing the content.
+ */
+export function readFileCachedWithMtime(filePath: string): FileCacheResult | null {
     try {
         const stat = fs.statSync(filePath);
         const mtimeMs = stat.mtimeMs;
@@ -54,22 +66,26 @@ export function readFileCached(filePath: string): string | null {
 
         if (cached && cached.mtimeMs === mtimeMs) {
             cached.lastAccess = now;
-            return cached.content;
+            return { content: cached.content, mtimeMs };
         }
 
         // Only evict when adding a new entry;
-        // overwriting a stale entry keeps size constant
+        // overwriting a stale entry keeps size constant.
         if (!cached) {
             evictOldestIfNeeded();
         }
 
         const content = fs.readFileSync(filePath, 'utf8');
         fileCache.set(filePath, { mtimeMs, content, lastAccess: now });
-        return content;
+        return { content, mtimeMs };
     } catch (err) {
         internalLog('[file-cache] Failed to read file', err);
         return null;
     }
+}
+
+export function readFileCached(filePath: string): string | null {
+    return readFileCachedWithMtime(filePath)?.content ?? null;
 }
 
 export function clearFileCache(): void {

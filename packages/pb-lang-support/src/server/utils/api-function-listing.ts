@@ -11,7 +11,7 @@
  *   AcceptEx (sListenSocket, sAcceptSocket, ...) ;handles async incoming connections
  */
 
-import { readFileCached } from './file-cache';
+import { readFileCachedWithMtime } from './file-cache';
 import { simpleHash } from './hash-utils';
 
 export interface ApiFunctionEntry {
@@ -123,6 +123,8 @@ function parseApiFunctionLine(line: string): ApiFunctionEntry | null {
 export class ApiFunctionListing {
   private filePath = '';
   private sourceHash = 0;
+  /** mtime of the file version currently reflected in the cache. */
+  private lastMtimeMs = -1;
 
   private entries: ApiFunctionEntry[] = [];
   private byNameLower = new Map<string, ApiFunctionEntry>();
@@ -141,8 +143,9 @@ export class ApiFunctionListing {
   /**
    * (Re)load the listing file.
    *
-   * This method is cheap to call: it uses an mtime-based file cache and an internal
-   * content hash to avoid reparsing unchanged content.
+   * Hot-path optimised: returns immediately (O(1)) when the file's mtime is
+   * unchanged. `simpleHash` is only computed after an mtime change is detected,
+   * and a full `rebuild()` only runs when the content hash also differs.
    */
   public load(filePath: string): ApiLoadResult {
     const nextPath = (filePath ?? '').trim();
@@ -155,11 +158,18 @@ export class ApiFunctionListing {
       return { loaded: false, changed: wasLoaded || pathChanged, entryCount: 0 };
     }
 
-    const content = readFileCached(this.filePath);
-    if (content == null) {
+    const result = readFileCachedWithMtime(this.filePath);
+    if (result == null) {
       const wasLoaded = this.entries.length > 0;
       this.clear();
       return { loaded: false, changed: wasLoaded || pathChanged, entryCount: 0 };
+    }
+
+    const { content, mtimeMs } = result;
+
+    // Fast path: mtime unchanged → file content is identical, no hashing needed.
+    if (!pathChanged && mtimeMs === this.lastMtimeMs) {
+      return { loaded: true, changed: false, entryCount: this.entries.length };
     }
 
     const normalized = normalizeListingText(content);
@@ -167,9 +177,12 @@ export class ApiFunctionListing {
     const contentChanged = hash !== this.sourceHash;
 
     if (!pathChanged && !contentChanged) {
+      // mtime changed but content hash is identical (e.g. touch); update mtime.
+      this.lastMtimeMs = mtimeMs;
       return { loaded: true, changed: false, entryCount: this.entries.length };
     }
 
+    this.lastMtimeMs = mtimeMs;
     this.sourceHash = hash;
     this.rebuild(normalized);
     return { loaded: true, changed: true, entryCount: this.entries.length };
@@ -217,6 +230,7 @@ export class ApiFunctionListing {
 
   private clear(): void {
     this.sourceHash = 0;
+    this.lastMtimeMs = -1;
     this.entries = [];
     this.byNameLower.clear();
     this.byFirstCharLower.clear();
