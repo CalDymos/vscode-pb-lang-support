@@ -1,7 +1,7 @@
 {
   "name": "pb-lang-support",
   "displayName": "PureBasic Language Services",
-  "description": "PureBasic language support for Visual Studio Code with syntax highlighting, language server, and development tools",
+  "description": "%extension.description%",
   "version": "0.10.9",
   "publisher": "CalDymos",
   "author": {
@@ -43,7 +43,7 @@
   "contributes": {
     "themes": [
       {
-        "label": "PureBasic (Constants Highlight)",
+        "label": "%theme.constantsHighlight.label%",
         "uiTheme": "vs-dark",
         "path": "./themes/purebasic-constants-color-theme.json"
       }
@@ -55,57 +55,57 @@
           "type": "number",
           "default": 100,
           "minimum": 0,
-          "description": "Maximum number of problems (diagnostics) reported per file."
+          "description": "%config.purebasic.maxNumberOfProblems.description%"
         },
         "purebasic.enableValidation": {
           "type": "boolean",
           "default": true,
-          "description": "Enable real-time syntax validation."
+          "description": "%config.purebasic.enableValidation.description%"
         },
         "purebasic.enableCompletion": {
           "type": "boolean",
           "default": true,
-          "description": "Enable IntelliSense completion."
+          "description": "%config.purebasic.enableCompletion.description%"
         },
         "purebasic.validationDelay": {
           "type": "number",
           "default": 500,
           "minimum": 0,
-          "description": "Debounce delay (ms) before validating documents."
+          "description": "%config.purebasic.validationDelay.description%"
         },
         "purebasic.formatting.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable code formatting."
+          "description": "%config.purebasic.formatting.enabled.description%"
         },
         "purebasic.formatting.indentSize": {
           "type": "number",
           "default": 4,
           "minimum": 1,
           "maximum": 8,
-          "description": "Number of spaces for indentation."
+          "description": "%config.purebasic.formatting.indentSize.description%"
         },
         "purebasic.formatting.tabSize": {
           "type": "number",
           "default": 4,
           "minimum": 1,
           "maximum": 8,
-          "description": "Number of spaces per tab."
+          "description": "%config.purebasic.formatting.tabSize.description%"
         },
         "purebasic.formatting.insertSpaces": {
           "type": "boolean",
           "default": true,
-          "description": "Insert spaces instead of tabs."
+          "description": "%config.purebasic.formatting.insertSpaces.description%"
         },
         "purebasic.formatting.trimTrailingWhitespace": {
           "type": "boolean",
           "default": true,
-          "description": "Remove trailing whitespace on format."
+          "description": "%config.purebasic.formatting.trimTrailingWhitespace.description%"
         },
         "purebasic.formatting.trimFinalNewlines": {
           "type": "boolean",
           "default": true,
-          "description": "Remove final newlines on format."
+          "description": "%config.purebasic.formatting.trimFinalNewlines.description%"
         },
         "purebasic.completion.triggerCharacters": {
           "type": "array",
@@ -114,92 +114,92 @@
             "(",
             "["
           ],
-          "description": "Characters that trigger automatic completion."
+          "description": "%config.purebasic.completion.triggerCharacters.description%"
         },
         "purebasic.completion.autoClosingPairs": {
           "type": "boolean",
           "default": true,
-          "description": "Enable auto-closing of brackets and quotes."
+          "description": "%config.purebasic.completion.autoClosingPairs.description%"
         },
         "purebasic.completion.suggestOnType": {
           "type": "boolean",
           "default": true,
-          "description": "Show suggestions while typing."
+          "description": "%config.purebasic.completion.suggestOnType.description%"
         },
         "purebasic.linting.enableSemanticValidation": {
           "type": "boolean",
           "default": true,
-          "description": "Enable semantic validation beyond syntax."
+          "description": "%config.purebasic.linting.enableSemanticValidation.description%"
         },
         "purebasic.linting.checkUnusedVariables": {
           "type": "boolean",
           "default": true,
-          "description": "Check for unused variables and procedures."
+          "description": "%config.purebasic.linting.checkUnusedVariables.description%"
         },
         "purebasic.linting.checkUndefinedSymbols": {
           "type": "boolean",
           "default": true,
-          "description": "Check for undefined symbols and references."
+          "description": "%config.purebasic.linting.checkUndefinedSymbols.description%"
         },
         "purebasic.linting.enableCodeActions": {
           "type": "boolean",
           "default": true,
-          "description": "Enable code actions and quick fixes."
+          "description": "%config.purebasic.linting.enableCodeActions.description%"
         },
         "purebasic.symbols.enableWorkspaceSymbols": {
           "type": "boolean",
           "default": true,
-          "description": "Enable workspace-wide symbol search."
+          "description": "%config.purebasic.symbols.enableWorkspaceSymbols.description%"
         },
         "purebasic.symbols.cacheEnabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable symbol caching for better performance."
+          "description": "%config.purebasic.symbols.cacheEnabled.description%"
         },
         "purebasic.symbols.cacheSize": {
           "type": "number",
           "default": 1000,
           "minimum": 100,
           "maximum": 10000,
-          "description": "Maximum number of symbols to cache."
+          "description": "%config.purebasic.symbols.cacheSize.description%"
         },
         "purebasic.performance.enableIncrementalParsing": {
           "type": "boolean",
           "default": true,
-          "description": "Enable incremental parsing for better performance with large files."
+          "description": "%config.purebasic.performance.enableIncrementalParsing.description%"
         },
         "purebasic.performance.maxFileSize": {
           "type": "number",
           "default": 1048576,
           "minimum": 102400,
-          "description": "Maximum file size in bytes for processing (default: 1MB)."
+          "description": "%config.purebasic.performance.maxFileSize.description%"
         }
       }
     },
     "commands": [
       {
         "command": "purebasic.showDiagnostics",
-        "title": "PureBasic: Show Diagnostics",
+        "title": "%command.showDiagnostics.title%",
         "category": "PureBasic"
       },
       {
         "command": "purebasic.restartLanguageServer",
-        "title": "PureBasic: Restart Language Server",
+        "title": "%command.restartLanguageServer.title%",
         "category": "PureBasic"
       },
       {
         "command": "purebasic.clearSymbolCache",
-        "title": "PureBasic: Clear Symbol Cache",
+        "title": "%command.clearSymbolCache.title%",
         "category": "PureBasic"
       },
       {
         "command": "purebasic.formatDocument",
-        "title": "PureBasic: Format Document",
+        "title": "%command.formatDocument.title%",
         "category": "PureBasic"
       },
       {
         "command": "purebasic.findSymbols",
-        "title": "PureBasic: Find Symbols in Workspace",
+        "title": "%command.findSymbols.title%",
         "category": "PureBasic"
       }
     ],
@@ -282,12 +282,12 @@
             "properties": {
               "program": {
                 "type": "string",
-                "description": "Absolute path to the PureBasic executable or compiled binary.",
+                "description": "%debugger.launch.program.description%",
                 "default": "${file}"
               },
               "compiler": {
                 "type": "string",
-                "description": "Path to pbcompiler executable (platform-specific; default: 'pbcompiler' on PATH).",
+                "description": "%debugger.launch.compiler.description%",
                 "default": "pbcompiler"
               },
               "transport": {
@@ -299,33 +299,33 @@
                   "fifo",
                   "native"
                 ],
-                "description": "Debugger transport mode. auto = Windows uses pipe, Linux/macOS uses fifo. fifo = named pipes (Linux/macOS only).",
+                "description": "%debugger.launch.transport.description%",
                 "default": "auto"
               },
               "debugHost": {
                 "type": "string",
-                "description": "Host used for network debugger transport.",
+                "description": "%debugger.launch.debugHost.description%",
                 "default": "127.0.0.1"
               },
               "debugPort": {
                 "type": "number",
                 "minimum": 0,
                 "maximum": 65535,
-                "description": "Port used for network debugger transport (0 = random free port).",
+                "description": "%debugger.launch.debugPort.description%",
                 "default": 0
               },
               "debugPassword": {
                 "type": "string",
-                "description": "Optional password for PureBasic network debugger transport."
+                "description": "%debugger.launch.debugPassword.description%"
               },
               "stopOnEntry": {
                 "type": "boolean",
-                "description": "Automatically stop at the first line of the program.",
+                "description": "%debugger.launch.stopOnEntry.description%",
                 "default": true
               },
               "trace": {
                 "type": "boolean",
-                "description": "Enable verbose adapter trace logging (written to stderr).",
+                "description": "%debugger.launch.trace.description%",
                 "default": false
               }
             }
@@ -335,19 +335,19 @@
           {
             "type": "purebasic",
             "request": "launch",
-            "name": "Debug PureBasic",
+            "name": "%debugger.initialConfiguration.debugPureBasic.name%",
             "program": "${file}",
             "stopOnEntry": true
           }
         ],
         "configurationSnippets": [
           {
-            "label": "PureBasic: Debug Current File",
-            "description": "Debug the current PureBasic file.",
+            "label": "%debugger.configurationSnippet.debugCurrentFile.label%",
+            "description": "%debugger.configurationSnippet.debugCurrentFile.description%",
             "body": {
               "type": "purebasic",
               "request": "launch",
-              "name": "Debug PureBasic",
+              "name": "%debugger.initialConfiguration.debugPureBasic.name%",
               "program": "^\"${1:\\${file}}\"",
               "stopOnEntry": true
             }
