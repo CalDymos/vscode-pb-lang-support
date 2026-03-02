@@ -76,6 +76,7 @@
         "purebasic.apiFunctionListingPath": {
           "type": "string",
           "default": "",
+          "scope": "machine",
           "description": "%config.purebasic.apiFunctionListingPath.description%"
         },
         "purebasic.formatting.enabled": {
