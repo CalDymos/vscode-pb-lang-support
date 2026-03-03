@@ -6,6 +6,7 @@
 */
 
 import * as vscode from 'vscode';
+import * as path from 'path';
 
 import { parsePbpProjectText, writePbpProjectText, type PbpProject, type PbpTarget } from '@caldymos/pb-project-core';
 
@@ -109,6 +110,7 @@ function renderHtml(webview: vscode.Webview, document: vscode.TextDocument, proj
     activeTab: 'project',
     activeTargetIndex: 0,
     activeTargetTab: 'compiler',
+    activeFileIndex: -1, 
   };
 
   function $(id) { return document.getElementById(id); }
@@ -233,7 +235,7 @@ function renderHtml(webview: vscode.Webview, document: vscode.TextDocument, proj
     setDirtyModel(true);
   }
 
-  function renderProjectOptions() {
+function renderProjectOptions() {
     const el = $('page-project');
     el.innerHTML = '';
 
@@ -248,39 +250,60 @@ function renderHtml(webview: vscode.Webview, document: vscode.TextDocument, proj
 
     const cfg = state.project.config;
 
-    const wrap = document.createElement('div');
-    wrap.className = 'panel';
-    wrap.innerHTML = \`
+    const infoPanel = document.createElement('fieldset');
+    infoPanel.innerHTML = \`
+      <legend>Project Info</legend>
       <div class="grid2">
-        <label>Project name</label>
+        <label>Project File</label>
+        <input type="text" value="\${esc(initial.fsPath)}" readonly style="opacity:0.65;" />
+
+        <label>Project Name</label>
         <input id="cfgName" type="text" />
 
-        <label>Close all sources when closing the project</label>
-        <input id="cfgCloseFiles" type="checkbox" />
-
-        <label>Open mode (numeric)</label>
-        <input id="cfgOpenMode" type="number" min="0" step="1" />
-
-        <label>Comment</label>
+        <label>Comments</label>
         <textarea id="cfgComment"></textarea>
       </div>
-      <div class="muted" style="margin-top:8px;">Note: Open mode mapping depends on the PureBasic version/IDE settings.</div>
     \`;
+    el.appendChild(infoPanel);
 
-    el.appendChild(wrap);
+    const loadPanel = document.createElement('fieldset');
+    loadPanel.style.marginTop = '12px';
+    loadPanel.innerHTML = \`
+      <legend>Loading Options</legend>
+
+      <div style="margin-bottom:6px;">
+        <label><input id="cfgCloseFiles" type="checkbox" style="margin-right:6px;">Close all sources when closing the project</label>
+      </div>
+
+      <div style="margin-top:10px; margin-bottom:4px;">When opening the project…</div>
+      <div id="openModeRadios">
+        \${[
+          'load all sources that were open last time',
+          'load all sources of the project',
+          "load only sources marked in 'Project Files'",
+          'load only the main file of the default target',
+          'load no files',
+        ].map((label, i) => \`<div><label><input type="radio" name="openmode" value="\${i}" style="margin-right:6px;">\${label}</label></div>\`).join('')}
+      </div>
+    \`;
+    el.appendChild(loadPanel);
 
     $('cfgName').value = cfg.name ?? '';
-    $('cfgCloseFiles').checked = !!cfg.closefiles;
-    $('cfgOpenMode').value = String(cfg.openmode ?? 0);
     $('cfgComment').value = cfg.comment ?? '';
+    $('cfgCloseFiles').checked = !!cfg.closefiles;
+
+    const currentMode = String(cfg.openmode ?? 0);
+    for (const radio of document.querySelectorAll('input[name="openmode"]')) {
+      radio.checked = radio.value === currentMode;
+      radio.addEventListener('change', (e) => updateConfigField('openmode', parseIntSafe(e.target.value)));
+    }
 
     $('cfgName').addEventListener('input', (e) => updateConfigField('name', e.target.value));
-    $('cfgCloseFiles').addEventListener('change', (e) => updateConfigField('closefiles', e.target.checked));
-    $('cfgOpenMode').addEventListener('input', (e) => updateConfigField('openmode', parseIntSafe(e.target.value)));
     $('cfgComment').addEventListener('input', (e) => updateConfigField('comment', e.target.value));
+    $('cfgCloseFiles').addEventListener('change', (e) => updateConfigField('closefiles', e.target.checked));
   }
 
-  function renderFiles() {
+function renderFiles() {
     const el = $('page-files');
     el.innerHTML = '';
 
@@ -290,68 +313,135 @@ function renderHtml(webview: vscode.Webview, document: vscode.TextDocument, proj
     }
 
     const files = state.project.files ?? [];
-    const panel = document.createElement('div');
-    panel.className = 'panel';
 
-    const rows = files.map((f, idx) => {
-      const c = f.config || {};
-      return \`
-        <tr>
-          <td title="\${esc(f.fsPath || '')}">\${esc(f.rawPath)}</td>
-          <td><input type="checkbox" data-file="\${idx}" data-k="load" \${c.load ? 'checked' : ''}></td>
-          <td><input type="checkbox" data-file="\${idx}" data-k="scan" \${c.scan ? 'checked' : ''}></td>
-          <td><input type="checkbox" data-file="\${idx}" data-k="panel" \${c.panel ? 'checked' : ''}></td>
-          <td><input type="checkbox" data-file="\${idx}" data-k="warn" \${c.warn ? 'checked' : ''}></td>
-          <td><input type="number" style="width:90px" data-file="\${idx}" data-k="sortindex" value="\${esc(c.sortindex ?? '')}"></td>
-          <td><input type="text" style="width:90px" data-file="\${idx}" data-k="panelstate" value="\${esc(c.panelstate ?? '')}"></td>
-        </tr>\`;
-    }).join('');
-
-    panel.innerHTML = \`
-      <div class="muted" style="margin-bottom:8px;">Edits update &lt;file&gt; &lt;config .../&gt; attributes.</div>
-      <table>
-        <thead>
-          <tr>
-            <th>Filename</th>
-            <th>Load</th>
-            <th>Scan</th>
-            <th>Panel</th>
-            <th>Warn</th>
-            <th>SortIndex</th>
-            <th>PanelState</th>
-          </tr>
-        </thead>
-        <tbody>
-          \${rows || '<tr><td colspan="7"><em>No files listed.</em></td></tr>'}
-        </tbody>
-      </table>
+    // Toolbar
+    const toolbar = document.createElement('div');
+    toolbar.className = 'btnrow';
+    toolbar.style.marginBottom = '8px';
+    toolbar.innerHTML = \`
+      <button class="btn" id="fileAdd">Add</button>
+      <button class="btn" id="fileRemove">Remove</button>
     \`;
+    el.appendChild(toolbar);
 
-    el.appendChild(panel);
+    // File list
+    const listPanel = document.createElement('div');
+    listPanel.className = 'panel';
+    listPanel.style.cssText = 'min-height:160px; max-height:320px; overflow-y:auto; padding:4px;';
 
-    for (const input of panel.querySelectorAll('input')) {
-      input.addEventListener('change', (e) => {
-        const idx = parseInt(e.target.dataset.file, 10);
-        const k = e.target.dataset.k;
-        const f = state.project.files[idx];
-        if (!f.config) f.config = {};
-        if (!f.config.attrs) f.config.attrs = {};
+    const ul = document.createElement('ul');
+    ul.id = 'fileList';
+    ul.style.cssText = 'list-style:none; margin:0; padding:0;';
+    listPanel.appendChild(ul);
+    el.appendChild(listPanel);
 
-        if (e.target.type === 'checkbox') {
-          f.config[k] = e.target.checked;
-          f.config.attrs[k] = e.target.checked ? '1' : '0';
-        } else if (e.target.type === 'number') {
-          const v = parseIntSafe(e.target.value);
-          f.config[k] = v;
-          f.config.attrs[k] = String(v);
-        } else {
-          f.config[k] = e.target.value;
-          f.config.attrs[k] = e.target.value;
+    // Detail panel
+    const detail = document.createElement('div');
+    detail.id = 'fileDetail';
+    detail.className = 'panel';
+    detail.style.marginTop = '8px';
+    el.appendChild(detail);
+
+    function renderList() {
+      ul.innerHTML = '';
+
+      if (files.length === 0) {
+        const li = document.createElement('li');
+        li.style.cssText = 'padding:4px 8px; opacity:0.6;';
+        li.textContent = 'No files listed.';
+        ul.appendChild(li);
+        return;
+      }
+
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        const li = document.createElement('li');
+        li.textContent = f.rawPath;
+        li.title = f.fsPath || f.rawPath;
+        li.dataset.idx = String(i);
+        li.style.cssText = 'padding:4px 8px; cursor:pointer; border-radius:3px;';
+
+        if (i === state.activeFileIndex) {
+          li.style.background = 'var(--vscode-list-activeSelectionBackground)';
+          li.style.color = 'var(--vscode-list-activeSelectionForeground)';
         }
 
-        setDirtyModel(true);
-      });
+        li.addEventListener('click', () => {
+          state.activeFileIndex = i;
+          renderList();
+          renderDetail();
+        });
+        ul.appendChild(li);
+      }
     }
+
+    function renderDetail() {
+      detail.innerHTML = '';
+      const idx = state.activeFileIndex;
+
+      if (idx < 0 || idx >= files.length) {
+        detail.innerHTML = \`<span class="muted">Select a file to edit its options.</span>\`;
+        return;
+      }
+
+      const f = files[idx];
+      if (!f.config) f.config = {};
+
+      detail.innerHTML = \`
+        <div style="margin-bottom:10px; font-weight:600; word-break:break-all;">\${esc(f.rawPath)}</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+          <label><input type="checkbox" id="fLoad" style="margin-right:6px;">Load file when opening the project</label>
+          <label><input type="checkbox" id="fScan" style="margin-right:6px;">Scan file for Autocomplete</label>
+          <label><input type="checkbox" id="fWarn" style="margin-right:6px;">Display a warning if file changed</label>
+          <label><input type="checkbox" id="fPanel" style="margin-right:6px;">Show file in the Project panel</label>
+        </div>
+      \`;
+
+      $('fLoad').checked  = !!f.config.load;
+      $('fScan').checked  = !!f.config.scan;
+      $('fWarn').checked  = !!f.config.warn;
+      $('fPanel').checked = !!f.config.panel;
+
+      function updateFlag(key, val) {
+        if (!f.config) f.config = {};
+        if (!f.config.attrs) f.config.attrs = {};
+        f.config[key] = val;
+        f.config.attrs[key] = val ? '1' : '0';
+        setDirtyModel(true);
+      }
+
+      $('fLoad').addEventListener('change',  (e) => updateFlag('load',  e.target.checked));
+      $('fScan').addEventListener('change',  (e) => updateFlag('scan',  e.target.checked));
+      $('fWarn').addEventListener('change',  (e) => updateFlag('warn',  e.target.checked));
+      $('fPanel').addEventListener('change', (e) => updateFlag('panel', e.target.checked));
+    }
+
+    $('fileAdd').addEventListener('click', () => {
+      vscode.postMessage({ type: 'pickFile' });
+    });
+
+    $('fileRemove').addEventListener('click', () => {
+      const idx = state.activeFileIndex;
+      if (idx < 0 || idx >= files.length) return;
+      files.splice(idx, 1);
+      state.activeFileIndex = Math.min(idx, files.length - 1);
+      if (files.length === 0) state.activeFileIndex = -1;
+      setDirtyModel(true);
+      renderList();
+      renderDetail();
+    });
+
+    // Handle filePicked response from extension
+    window._filePickedHandler = (rawPath, fsPath) => {
+      if (!state.project.files) state.project.files = [];
+      state.project.files.push({ rawPath, fsPath: fsPath ?? '' });
+      state.activeFileIndex = state.project.files.length - 1;
+      setDirtyModel(true);
+      renderFiles();
+    };
+
+    renderList();
+    renderDetail();
   }
 
   function renderLibraries() {
@@ -1097,6 +1187,12 @@ function renderHtml(webview: vscode.Webview, document: vscode.TextDocument, proj
       state.errorText = msg.errorText ?? null;
       renderAll();
     }
+
+    if (msg.type === 'filePicked') {
+      if (typeof window._filePickedHandler === 'function') {
+        window._filePickedHandler(msg.rawPath, msg.fsPath);
+      }
+    }
   });
 
   bindTabs();
@@ -1187,6 +1283,24 @@ export class PbpEditorProvider implements vscode.CustomTextEditorProvider {
                 await replaceDocumentText(document, xml);
                 await document.save();
                 void webviewPanel.webview.postMessage({ type: 'saved', errorText: null });
+                return;
+            }
+
+            if (msg.type === 'pickFile') {
+                const projectDir = path.dirname(document.uri.fsPath);
+                const uris = await vscode.window.showOpenDialog({
+                    canSelectMany: false,
+                    defaultUri: vscode.Uri.file(projectDir),
+                    filters: { 'PureBasic Files': ['pb', 'pbi', 'pbf', 'pbh'] },
+                });
+                if (!uris || uris.length === 0) return;
+                const picked = uris[0];
+                const rawPath = path.relative(projectDir, picked.fsPath);
+                void webviewPanel.webview.postMessage({
+                    type: 'filePicked',
+                    rawPath,
+                    fsPath: picked.fsPath,
+                });
                 return;
             }
         });
