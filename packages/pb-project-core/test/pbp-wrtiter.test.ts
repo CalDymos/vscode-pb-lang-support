@@ -214,4 +214,87 @@ describe('PBP writer', () => {
 
         expect(xml1).toBe(xml2);
     });
+
+    test('roundtrip: preserves target versioninfo/resources/watchlist and omits absent sections', () => {
+        const projectFile = path.resolve('tmp', 'demo', 'GenPOST32.pbp');
+
+        const xmlIn = `<?xml version="1.0" encoding="UTF-8"?>
+
+<project xmlns="http://www.purebasic.com/namespace" version="1.0" creator="PureBasic 6.30 (Windows - x86)">
+  <section name="config">
+    <options closefiles="1" openmode="0" name="GenPost32"/>
+  </section>
+  <section name="data">
+    <log show="1"/>
+  </section>
+  <section name="files">
+    <file name="main.pb">
+      <config load="0" scan="1" panel="1" warn="1" lastopen="0" sortindex="999" panelstate="+"/>
+      <fingerprint md5="ede812c520ffc17161708a524bc8cfee"/>
+    </file>
+  </section>
+  <section name="targets">
+    <target name="Standard-Ziel" enabled="1" default="1">
+      <inputfile value="main.pb"/>
+      <outputfile value="..\\build\\GenPost32.exe"/>
+      <compiler version="PureBasic 6.30 (Windows - x86)"/>
+      <executable value="..\\build\\GenPost32.exe"/>
+      <options onerror="1" debug="1" optimizer="1"/>
+      <purifier enable="0" granularity="1,1,1,1"/>
+      <temporaryexe value="source"/>
+      <icon enable="1">icon1.ico</icon>
+      <warnings custom="1" type="display"/>
+      <compilecount enable="1" value="2907"/>
+      <buildcount enable="1" value="140"/>
+      <versioninfo enable="1">
+        <field0 value="0,7,%COMPILECOUNT,%BUILDCOUNT"/>
+        <field2 value="BYTE RANGER Software"/>
+        <field16 value="VFT_APP"/>
+      </versioninfo>
+      <resources>
+        <resource value="resources\\windows\\manifest\\resource.rc"/>
+      </resources>
+      <watchlist>GL::bSearchDlgOpen</watchlist>
+    </target>
+  </section>
+</project>
+`;
+
+        const parsed1 = parsePbpProjectText(xmlIn, projectFile);
+        expect(parsed1).not.toBeNull();
+        if (!parsed1) return;
+
+        expect(parsed1.meta?.projectAttrs?.xmlns).toBe('http://www.purebasic.com/namespace');
+        expect(parsed1.meta?.presentSections?.libraries).toBe(false);
+
+        // Config: comment element is absent
+        expect(parsed1.config.commentPresent).toBe(false);
+        expect(parsed1.config.openmode).toBe(0);
+
+        // Target extras
+        expect(parsed1.targets).toHaveLength(1);
+        const t1 = parsed1.targets[0];
+        expect(t1.targetAttrs?.directory).toBeUndefined();
+        expect(t1.warnings?.custom).toBe(true);
+        expect(t1.warnings?.type).toBe('display');
+        expect(t1.versionInfo?.enabled).toBe(true);
+        expect(t1.versionInfo?.fields.map(f => f.id)).toEqual(['field0', 'field2', 'field16']);
+        expect(t1.resources?.items).toEqual(['resources\\windows\\manifest\\resource.rc']);
+        expect(t1.watchList).toBe('GL::bSearchDlgOpen');
+
+        const xmlOut = writePbpProjectText(parsed1, { newline: '\n' });
+        expect(xmlOut).toContain('<project xmlns="http://www.purebasic.com/namespace" version="1.0" creator="PureBasic 6.30 (Windows - x86)">');
+        expect(xmlOut).not.toContain('<section name="libraries">');
+        expect(xmlOut).not.toContain('<comment>');
+        expect(xmlOut).not.toContain('directory=""');
+
+        const parsed2 = parsePbpProjectText(xmlOut, projectFile);
+        expect(parsed2).not.toBeNull();
+        if (!parsed2) return;
+
+        const t2 = parsed2.targets[0];
+        expect(t2.versionInfo?.fields.map(f => f.id)).toEqual(['field0', 'field2', 'field16']);
+        expect(t2.resources?.items).toEqual(['resources\\windows\\manifest\\resource.rc']);
+        expect(t2.watchList).toBe('GL::bSearchDlgOpen');
+    });
 });

@@ -33,7 +33,7 @@ export interface WritePbpOptions {
  * modeled by this library: config, data, files, targets, libraries.
  */
 export function writePbpProjectText(
-    project: Pick<PbpProject, 'config' | 'data' | 'files' | 'targets' | 'libraries'>,
+    project: Pick<PbpProject, 'meta' | 'config' | 'data' | 'files' | 'targets' | 'libraries'>,
     options: WritePbpOptions = {}
 ): string {
     const newline = options.newline ?? '\n';
@@ -45,12 +45,18 @@ export function writePbpProjectText(
         lines.push('<?xml version="1.0" encoding="UTF-8"?>');
     }
 
-    lines.push('<project>');
-    writeConfigSection(lines, indent, project.config);
-    writeDataSection(lines, indent, project.data);
-    writeFilesSection(lines, indent, project.files ?? []);
-    writeTargetsSection(lines, indent, project.targets ?? []);
-    writeLibrariesSection(lines, indent, project.libraries ?? []);
+    const rootAttrs = project.meta?.projectAttrs;
+    const rootPairs = rootAttrs && Object.keys(rootAttrs).length > 0 ? sortProjectAttrs(rootAttrs) : undefined;
+    lines.push(`<project${rootPairs ? renderAttrs(rootPairs) : ''}>`);
+
+    const present = project.meta?.presentSections;
+    if (present?.config !== false) writeConfigSection(lines, indent, project.config);
+    if (present?.data !== false) writeDataSection(lines, indent, project.data);
+    if (present?.files !== false) writeFilesSection(lines, indent, project.files ?? []);
+    if (present?.targets !== false) writeTargetsSection(lines, indent, project.targets ?? []);
+
+    const shouldWriteLibraries = (project.libraries ?? []).length > 0 || present?.libraries !== false;
+    if (shouldWriteLibraries) writeLibrariesSection(lines, indent, project.libraries ?? []);
     lines.push('</project>');
 
     return lines.join(newline) + newline;
@@ -63,15 +69,19 @@ export function writePbpProjectText(
 function writeConfigSection(lines: string[], indent: string, cfg: PbpProject['config']): void {
     lines.push(`${indent}<section name="config">`);
 
-    const optionAttrs: Array<[string, string]> = [
-        ['name', cfg?.name ?? ''],
-        ['closefiles', bool01(cfg?.closefiles)],
-        ['openmode', bool01(!!(cfg && (cfg.openmode ?? 0) !== 0))],
-    ];
+    const merged: Record<string, string> = { ...(cfg?.optionsAttrs ?? {}) };
+    merged['name'] = cfg?.name ?? '';
+    merged['closefiles'] = bool01(!!cfg?.closefiles);
+    merged['openmode'] = String(cfg?.openmode ?? 0);
+
+    const optionAttrs = sortStableStringAttrs(merged, ['name', 'closefiles', 'openmode']);
     lines.push(`${indent}${indent}<options${renderAttrs(optionAttrs)}/>`);
 
     const comment = cfg?.comment ?? '';
-    lines.push(`${indent}${indent}<comment>${escapeXmlText(comment)}</comment>`);
+    const shouldWriteComment = !!cfg?.commentPresent || comment.length > 0;
+    if (shouldWriteComment) {
+        lines.push(`${indent}${indent}<comment>${escapeXmlText(comment)}</comment>`);
+    }
     lines.push(`${indent}</section>`);
 }
 
@@ -111,14 +121,45 @@ function writeFilesSection(lines: string[], indent: string, files: PbpFileEntry[
         const fileNameAttr = escapeXmlAttr(rawPath);
 
         const cfg = f?.config;
-        const cfgKeys = cfg ? Object.keys(cfg).filter(k => (cfg as any)[k] !== undefined) : [];
-        if (!cfg || cfgKeys.length === 0) {
+        const cfgMetaAttrs = f?.meta?.configAttrs;
+        const fingerprintAttrs = f?.meta?.fingerprintAttrs;
+
+        // Merge raw config attributes (if present) with the modeled boolean flags.
+        // Boolean flags always win to keep edits consistent.
+        const mergedCfg: Record<string, string> = {};
+        if (cfgMetaAttrs) {
+            for (const [k, v] of Object.entries(cfgMetaAttrs)) {
+                mergedCfg[k] = v ?? '';
+            }
+        }
+
+        if (cfg) {
+            if (cfg.load !== undefined) mergedCfg['load'] = bool01(!!cfg.load);
+            if (cfg.scan !== undefined) mergedCfg['scan'] = bool01(!!cfg.scan);
+            if (cfg.panel !== undefined) mergedCfg['panel'] = bool01(!!cfg.panel);
+            if (cfg.warn !== undefined) mergedCfg['warn'] = bool01(!!cfg.warn);
+        }
+
+        const hasCfg = Object.keys(mergedCfg).length > 0;
+        const hasFp = !!fingerprintAttrs && Object.keys(fingerprintAttrs).length > 0;
+
+        if (!hasCfg && !hasFp) {
             lines.push(`${indent}${indent}<file name="${fileNameAttr}"/>`);
             continue;
         }
 
         lines.push(`${indent}${indent}<file name="${fileNameAttr}">`);
-        lines.push(`${indent}${indent}${indent}<config${renderBooleanAttrs(cfg as Record<string, boolean>)}/>`);
+
+        if (hasCfg) {
+            const attrs = sortStableStringAttrs(mergedCfg, ['load', 'scan', 'panel', 'warn', 'lastopen', 'sortindex', 'panelstate']);
+            lines.push(`${indent}${indent}${indent}<config${renderAttrs(attrs)}/>`);
+        }
+
+        if (hasFp && fingerprintAttrs) {
+            const attrs = sortStableStringAttrs(fingerprintAttrs);
+            lines.push(`${indent}${indent}${indent}<fingerprint${renderAttrs(attrs)}/>`);
+        }
+
         lines.push(`${indent}${indent}</file>`);
     }
 
@@ -136,47 +177,88 @@ function writeTargetsSection(lines: string[], indent: string, targets: PbpTarget
 }
 
 function writeTarget(lines: string[], indent: string, t: PbpTarget): void {
-    const tAttrs: Array<[string, string]> = [
-        ['name', t?.name ?? ''],
-        ['enabled', bool01(!!t?.enabled)],
-        ['default', bool01(!!t?.isDefault)],
-        ['directory', t?.directory ?? ''],
-    ];
+    const mergedAttrs: Record<string, string> = { ...(t?.targetAttrs ?? {}) };
+    mergedAttrs['name'] = t?.name ?? '';
+    mergedAttrs['enabled'] = bool01(!!t?.enabled);
+    mergedAttrs['default'] = bool01(!!t?.isDefault);
 
+    const dir = (t?.directory ?? '').trim();
+    if (dir) mergedAttrs['directory'] = dir;
+    else delete mergedAttrs['directory'];
+
+    const tAttrs = sortStableStringAttrs(mergedAttrs, ['name', 'enabled', 'default', 'directory']);
     lines.push(`${indent}${indent}<target${renderAttrs(tAttrs)}>`);
 
     const inner = `${indent}${indent}${indent}`;
     lines.push(`${inner}<inputfile${renderAttrs([['value', t?.inputFile?.rawPath ?? '']])}/>`);
     lines.push(`${inner}<outputfile${renderAttrs([['value', t?.outputFile?.rawPath ?? '']])}/>`);
+    if (t.compilerVersion) lines.push(`${inner}<compiler${renderAttrs([['version', t.compilerVersion]])}/>`);
     lines.push(`${inner}<executable${renderAttrs([['value', t?.executable?.rawPath ?? '']])}/>`);
 
-    if (t.compilerVersion) {
-        lines.push(`${inner}<compiler${renderAttrs([['version', t.compilerVersion]])}/>`);
-    }
-    if (t.commandLine) {
-        lines.push(`${inner}<commandline${renderAttrs([['value', t.commandLine]])}/>`);
-    }
-    if (t.subsystem) {
-        lines.push(`${inner}<subsystem${renderAttrs([['value', t.subsystem]])}/>`);
-    }
+    if (t.commandLine) lines.push(`${inner}<commandline${renderAttrs([['value', t.commandLine]])}/>`);
+    if (t.subsystem) lines.push(`${inner}<subsystem${renderAttrs([['value', t.subsystem]])}/>`);
+
+    const optAttrs = (t.optionAttrs && Object.keys(t.optionAttrs).length > 0)
+        ? sortStableStringAttrs(t.optionAttrs)
+        : (t.options && Object.keys(t.options).length > 0)
+            ? sortStableStringAttrs(Object.fromEntries(Object.entries(t.options).map(([k, v]) => [k, bool01(!!v)])))
+            : undefined;
+    if (optAttrs && optAttrs.length > 0) lines.push(`${inner}<options${renderAttrs(optAttrs)}/>`);
+
     if (t.purifier) {
         const attrs: Array<[string, string]> = [['enable', bool01(!!t.purifier.enabled)]];
         if (t.purifier.granularity) attrs.push(['granularity', t.purifier.granularity]);
         lines.push(`${inner}<purifier${renderAttrs(attrs)}/>`);
     }
 
-    if (t.options && Object.keys(t.options).length > 0) {
-        lines.push(`${inner}<options${renderBooleanAttrs(t.options)}/>`);
-    }
-
-    if (t.format && Object.keys(t.format).length > 0) {
-        const attrs: Array<[string, string]> = sortKeyedAttrs(t.format);
-        lines.push(`${inner}<format${renderAttrs(attrs)}/>`);
-    }
+    if (t.temporaryExe) lines.push(`${inner}<temporaryexe${renderAttrs([['value', t.temporaryExe]])}/>`);
 
     if (t.icon && t.icon.rawPath) {
         const attrs: Array<[string, string]> = [['enable', bool01(!!t.icon.enabled)]];
         lines.push(`${inner}<icon${renderAttrs(attrs)}>${escapeXmlText(t.icon.rawPath)}</icon>`);
+    }
+
+    if (t.warnings) {
+        const merged: Record<string, string> = { ...(t.warnings.attrs ?? {}) };
+        if (t.warnings.custom !== undefined) merged['custom'] = bool01(!!t.warnings.custom);
+        if (t.warnings.type !== undefined) merged['type'] = t.warnings.type;
+        const attrs = sortStableStringAttrs(merged, ['custom', 'type']);
+        lines.push(`${inner}<warnings${renderAttrs(attrs)}/>`);
+    }
+
+    if (t.compileCount) {
+        const attrs: Array<[string, string]> = [['enable', bool01(!!t.compileCount.enabled)]];
+        if (t.compileCount.value !== undefined) attrs.push(['value', String(t.compileCount.value)]);
+        lines.push(`${inner}<compilecount${renderAttrs(attrs)}/>`);
+    }
+
+    if (t.buildCount) {
+        const attrs: Array<[string, string]> = [['enable', bool01(!!t.buildCount.enabled)]];
+        if (t.buildCount.value !== undefined) attrs.push(['value', String(t.buildCount.value)]);
+        lines.push(`${inner}<buildcount${renderAttrs(attrs)}/>`);
+    }
+
+    if (t.versionInfo) {
+        lines.push(`${inner}<versioninfo${renderAttrs([['enable', bool01(!!t.versionInfo.enabled)]])}>`);
+        const fields = [...(t.versionInfo.fields ?? [])].sort((a, b) => compareVersionFieldId(a.id, b.id));
+        for (const f of fields) {
+            const id = (f.id ?? '').trim();
+            if (!id) continue;
+            lines.push(`${inner}${indent}<${id}${renderAttrs([['value', f.value ?? '']])}/>`);
+        }
+        lines.push(`${inner}</versioninfo>`);
+    }
+
+    if (t.resources && (t.resources.items?.length ?? 0) > 0) {
+        lines.push(`${inner}<resources>`);
+        for (const r of t.resources.items) {
+            lines.push(`${inner}${indent}<resource${renderAttrs([['value', r ?? '']])}/>`);
+        }
+        lines.push(`${inner}</resources>`);
+    }
+
+    if (t.watchList !== undefined) {
+        lines.push(`${inner}<watchlist>${escapeXmlText(t.watchList ?? '')}</watchlist>`);
     }
 
     if (t.constants && t.constants.length > 0) {
@@ -189,6 +271,11 @@ function writeTarget(lines: string[], indent: string, t: PbpTarget): void {
             lines.push(`${inner}${indent}<constant${renderAttrs(cAttrs)}/>`);
         }
         lines.push(`${inner}</constants>`);
+    }
+
+    if (t.format && Object.keys(t.format).length > 0) {
+        const attrs: Array<[string, string]> = sortKeyedAttrs(t.format);
+        lines.push(`${inner}<format${renderAttrs(attrs)}/>`);
     }
 
     lines.push(`${indent}${indent}</target>`);
@@ -225,6 +312,20 @@ function stableUnique(values: string[]): string[] {
     return out;
 }
 
+function sortProjectAttrs(attrs: Record<string, string>): Array<[string, string]> {
+    // Preserve common root attribute ordering to keep diffs minimal.
+    return sortStableStringAttrs(attrs, ['xmlns', 'version', 'creator']);
+}
+
+function compareVersionFieldId(a: string, b: string): number {
+    const an = parseInt(String(a).replace(/\D+/g, ''), 10);
+    const bn = parseInt(String(b).replace(/\D+/g, ''), 10);
+
+    if (Number.isFinite(an) && Number.isFinite(bn) && an !== bn) return an - bn;
+    if (a === b) return 0;
+    return a < b ? -1 : 1;
+}
+
 function escapeXmlText(text: string): string {
     // Keep in sync with the decoder in parser.ts (decodeXmlEntities)
     return String(text)
@@ -248,17 +349,12 @@ function renderAttrs(attrs: Array<[string, string]>): string {
     return out;
 }
 
-function renderBooleanAttrs(obj: Record<string, boolean>): string {
-    const fixedOrder = ['load', 'scan', 'panel', 'warn', 'enable', 'enabled', 'default', 'show'];
+function sortStableStringAttrs(obj: Record<string, string>, fixedOrder: string[] = []): Array<[string, string]> {
     const keys = Object.keys(obj)
         .filter(k => (obj as any)[k] !== undefined)
         .sort((a, b) => compareStableKeys(a, b, fixedOrder));
 
-    let out = '';
-    for (const k of keys) {
-        out += ` ${k}="${bool01(!!obj[k])}"`;
-    }
-    return out;
+    return keys.map(k => [k, obj[k] ?? '']);
 }
 
 function sortKeyedAttrs(obj: Record<string, string>): Array<[string, string]> {

@@ -20,6 +20,7 @@ import type {
     PbpData,
     PbpFileEntry,
     PbpProject,
+    PbpProjectMeta,
     PbpTarget,
     PbpTargetValue,
 } from './model';
@@ -30,6 +31,7 @@ export type {
     PbpData,
     PbpFileEntry,
     PbpProject,
+    PbpProjectMeta,
     PbpTarget,
     PbpTargetValue,
 } from './model';
@@ -44,8 +46,9 @@ import { resolveProjectPath } from './resolve';
 // --------------------------------------------------------------------------------------
 
 const RX_XML_PROJECT_HEADER = /<\?xml\b[\s\S]*?<project\b/i;
+const RX_PROJECT_TAG = /<project\b([^>]*)>/i;
 
-const RX_CONFIG_OPTIONS_NAME = /<options\b[^>]*\bname="([^"]*)"[^>]*\/>/i;
+const RX_CONFIG_OPTIONS = /<options\b([^>]*)\/>/i;
 const RX_CONFIG_COMMENT = /<comment\b[^>]*>([\s\S]*?)<\/comment>/i;
 
 const RX_DATA_EXPLORER = /<explorer\b([^>]*)\/?>/i;
@@ -55,6 +58,7 @@ const RX_DATA_LASTOPEN = /<lastopen\b([^>]*)\/?>/i;
 const RX_FILE_ENTRY = /<file\b[^>]*\bname="([^"]+)"[^>]*>([\s\S]*?)<\/file>/gi;
 const RX_FILE_ENTRY_SELF_CLOSED = /<file\b[^>]*\bname="([^"]+)"[^>]*\/>/gi;
 const RX_FILE_CONFIG = /<config\b([^>]*)\/>/i;
+const RX_FILE_FINGERPRINT = /<fingerprint\b([^>]*)\/>/i;
 
 const RX_LIB_VALUE = /<library\b[^>]*\bvalue="([^"]*)"[^>]*\/>/gi;
 const RX_LIB_KEY = /<key\b[^>]*\bname="Library\d+"[^>]*>\s*([\s\S]*?)\s*<\/key>/gi;
@@ -66,6 +70,20 @@ const RX_TARGET_PURIFIER = /<purifier\b([^>]*)\/>/i;
 const RX_TARGET_OPTIONS = /<options\b([^>]*)\/>/i;
 const RX_TARGET_FORMAT = /<format\b([^>]*)\/>/i;
 const RX_TARGET_ICON = /<icon\b([^>]*)>([\s\S]*?)<\/icon>/i;
+
+const RX_TARGET_WARNINGS = /<warnings\b([^>]*)\/>/i;
+
+const RX_TARGET_VERSIONINFO_SECTION = /<versioninfo\b([^>]*)>([\s\S]*?)<\/versioninfo>/i;
+const RX_TARGET_VERSIONINFO_FIELD = /<(field\d+)\b([^>]*)\/>/gi;
+
+const RX_TARGET_RESOURCES_SECTION = /<resources\b[^>]*>([\s\S]*?)<\/resources>/i;
+const RX_TARGET_RESOURCE = /<resource\b([^>]*)\/>/gi;
+
+const RX_TARGET_WATCHLIST = /<watchlist\b[^>]*>([\s\S]*?)<\/watchlist>/i;
+
+const RX_TARGET_TEMPORARYEXE = /<temporaryexe\b([^>]*)\/>/i;
+const RX_TARGET_COMPILECOUNT = /<compilecount\b([^>]*)\/>/i;
+const RX_TARGET_BUILDCOUNT = /<buildcount\b([^>]*)\/>/i;
 
 const RX_TARGET_CONSTANTS_SECTION = /<constants\b[^>]*>([\s\S]*?)<\/constants>/i;
 const RX_TARGET_CONSTANT = /<constant\b([^>]*)\/>/gi;
@@ -116,15 +134,27 @@ export function parsePbpProjectText(content: string, projectFileFsPath: string, 
  * Parses .pbp project files (XML format)
  */
 function parseXmlProject(content: string, projectFileFsPath: string, projectDir: string): PbpProject | null {
+    const meta = parseProjectMeta(content);
     const config = parseProjectConfig(content);
     const data = parseProjectData(content);
     const files = parseProjectFiles(content, projectDir);
     const targets = parseProjectTargets(content, projectDir);
     const libraries = parseProjectLibraries(content);
 
+    if (meta) {
+        meta.presentSections = {
+            config: extractSection(content, 'config') !== null,
+            data: extractSection(content, 'data') !== null,
+            files: extractSection(content, 'files') !== null,
+            targets: extractSection(content, 'targets') !== null,
+            libraries: extractSection(content, 'libraries') !== null,
+        };
+    }
+
     return {
         projectFile: projectFileFsPath,
         projectDir,
+        meta,
         config,
         data,
         files,
@@ -133,9 +163,16 @@ function parseXmlProject(content: string, projectFileFsPath: string, projectDir:
     };
 }
 
+function parseProjectMeta(content: string): PbpProjectMeta | undefined {
+    const m = content.match(RX_PROJECT_TAG);
+    if (!m) return undefined;
+    const attrs = parseAttributes(m[1] ?? '');
+    return { projectAttrs: attrs };
+}
+
 function parseProjectConfig(content: string): PbpConfig {
     const configSection = extractSection(content, 'config');
-        if (!configSection) {
+    if (!configSection) {
         return {
             name: '',
             comment: '',
@@ -144,14 +181,19 @@ function parseProjectConfig(content: string): PbpConfig {
         };
     }
 
-    const name = configSection.match(RX_CONFIG_OPTIONS_NAME);
-    const comment = configSection.match(RX_CONFIG_COMMENT);
+    const optionsMatch = configSection.match(RX_CONFIG_OPTIONS);
+    const optionsAttrs = optionsMatch ? parseAttributes(optionsMatch[1] ?? '') : {};
+
+    const commentMatch = configSection.match(RX_CONFIG_COMMENT);
+    const commentPresent = !!commentMatch;
 
     return {
-        name: (name?.[1] ?? '').trim(),
-        comment: decodeXmlEntities((comment?.[1] ?? '').trim()),
-        closefiles: configSection.includes('closefiles="1"') || configSection.includes('closefiles="true"'),
-        openmode: (configSection.includes('openmode="1"') || configSection.includes('openmode="true"')) ? 1 : 0,
+        name: (optionsAttrs['name'] ?? '').trim(),
+        comment: decodeXmlEntities((commentMatch?.[1] ?? '').trim()),
+        closefiles: parseBool(optionsAttrs['closefiles']),
+        openmode: parseOptionalInt(optionsAttrs['openmode']) ?? 0,
+        optionsAttrs: optionsAttrs,
+        commentPresent,
     };
 }
 
@@ -192,7 +234,7 @@ function parseProjectFiles(content: string, projectDir: string): PbpFileEntry[] 
 
     const result: PbpFileEntry[] = [];
 
-    // Normal <file name="..."><...></file>
+    // Normal <file name="...">...</file>
     const fileRe = cloneGlobalRegex(RX_FILE_ENTRY);
     let m: RegExpExecArray | null;
     while ((m = fileRe.exec(filesSection)) !== null) {
@@ -200,12 +242,28 @@ function parseProjectFiles(content: string, projectDir: string): PbpFileEntry[] 
         const body = m[2] ?? '';
 
         const configMatch = body.match(RX_FILE_CONFIG);
-        const cfg = configMatch ? parseBooleanAttributes(configMatch[1] ?? '') : undefined;
+        const configAttrs = configMatch ? parseAttributes(configMatch[1] ?? '') : undefined;
+
+        const cfg = configAttrs ? {
+            load: configAttrs['load'] !== undefined ? parseBool(configAttrs['load']) : undefined,
+            scan: configAttrs['scan'] !== undefined ? parseBool(configAttrs['scan']) : undefined,
+            panel: configAttrs['panel'] !== undefined ? parseBool(configAttrs['panel']) : undefined,
+            warn: configAttrs['warn'] !== undefined ? parseBool(configAttrs['warn']) : undefined,
+        } : undefined;
+
+        const fingerprintMatch = body.match(RX_FILE_FINGERPRINT);
+        const fingerprintAttrs = fingerprintMatch ? parseAttributes(fingerprintMatch[1] ?? '') : undefined;
+
+        const meta = (configAttrs || fingerprintAttrs) ? {
+            configAttrs,
+            fingerprintAttrs,
+        } : undefined;
 
         result.push({
             rawPath,
             fsPath: resolveProjectPath(projectDir, rawPath),
             config: cfg,
+            meta,
         });
     }
 
@@ -275,7 +333,7 @@ function parseProjectTargets(content: string, projectDir: string): PbpTarget[] {
         const enabled = parseBool(attrs['enabled']);
         const isDefault = parseBool(attrs['default']);
 
-        const directory = (attrs['directory'] ?? '').trim();
+        const directory = (attrs['directory'] ?? '').trim() || undefined;
 
         const inputRaw = extractValueAttr(body, 'inputfile');
         const outputRaw = extractValueAttr(body, 'outputfile');
@@ -298,7 +356,36 @@ function parseProjectTargets(content: string, projectDir: string): PbpTarget[] {
         const purifierGranularity = purifierAttrs?.['granularity'];
 
         const optMatch = body.match(RX_TARGET_OPTIONS);
-        const options = optMatch ? parseBooleanAttributes(optMatch[1] ?? '') : {};
+        const optionAttrs = optMatch ? parseAttributes(optMatch[1] ?? '') : undefined;
+        const options = optionAttrs ? parseBooleanLikeAttributes(optionAttrs) : {};
+
+        const warningsMatch = body.match(RX_TARGET_WARNINGS);
+        const warningsAttrs = warningsMatch ? parseAttributes(warningsMatch[1] ?? '') : undefined;
+        const warnings = warningsAttrs
+            ? {
+                custom: warningsAttrs['custom'] !== undefined ? parseBool(warningsAttrs['custom']) : undefined,
+                type: (warningsAttrs['type'] ?? '').trim() || undefined,
+                attrs: warningsAttrs,
+            }
+            : undefined;
+
+        const tempExeMatch = body.match(RX_TARGET_TEMPORARYEXE);
+        const tempExeAttrs = tempExeMatch ? parseAttributes(tempExeMatch[1] ?? '') : undefined;
+        const temporaryExe = (tempExeAttrs?.['value'] ?? '').trim() || undefined;
+
+        const compileCountMatch = body.match(RX_TARGET_COMPILECOUNT);
+        const compileCountAttrs = compileCountMatch ? parseAttributes(compileCountMatch[1] ?? '') : undefined;
+        const compileCount = compileCountAttrs ? {
+            enabled: parseBool(compileCountAttrs['enable']),
+            value: parseOptionalInt(compileCountAttrs['value']),
+        } : undefined;
+
+        const buildCountMatch = body.match(RX_TARGET_BUILDCOUNT);
+        const buildCountAttrs = buildCountMatch ? parseAttributes(buildCountMatch[1] ?? '') : undefined;
+        const buildCount = buildCountAttrs ? {
+            enabled: parseBool(buildCountAttrs['enable']),
+            value: parseOptionalInt(buildCountAttrs['value']),
+        } : undefined;
 
         const fmtMatch = body.match(RX_TARGET_FORMAT);
         const format = fmtMatch ? parseAttributes(fmtMatch[1] ?? '') : undefined;
@@ -309,11 +396,18 @@ function parseProjectTargets(content: string, projectDir: string): PbpTarget[] {
 
         const constants = parseTargetConstants(body);
 
+        const versionInfo = parseTargetVersionInfo(body);
+        const resources = parseTargetResources(body);
+
+        const watchListMatch = body.match(RX_TARGET_WATCHLIST);
+        const watchList = watchListMatch ? decodeXmlEntities((watchListMatch[1] ?? '').trim()) : undefined;
+
         result.push({
             name,
             enabled,
             isDefault,
             directory,
+            targetAttrs: attrs,
             inputFile: {
                 rawPath: inputRaw,
                 fsPath: resolveProjectPath(projectDir, inputRaw),
@@ -327,10 +421,15 @@ function parseProjectTargets(content: string, projectDir: string): PbpTarget[] {
                 fsPath: resolveProjectPath(projectDir, exeRaw),
             },
             options,
+            optionAttrs,
+            temporaryExe: temporaryExe,
+            compileCount,
+            buildCount,
             compilerVersion,
             commandLine,
             subsystem,
             purifier: purifierMatch ? { enabled: purifierEnabled, granularity: purifierGranularity } : undefined,
+            warnings,
             format,
             icon: iconText
                 ? {
@@ -339,11 +438,61 @@ function parseProjectTargets(content: string, projectDir: string): PbpTarget[] {
                     fsPath: resolveProjectPath(projectDir, iconText),
                 }
                 : undefined,
+            versionInfo,
+            resources,
+            watchList,
             constants,
         });
     }
 
     return result;
+}
+
+function parseTargetVersionInfo(targetBody: string): PbpTarget['versionInfo'] {
+    const m = targetBody.match(RX_TARGET_VERSIONINFO_SECTION);
+    if (!m) return undefined;
+
+    const attrs = parseAttributes(m[1] ?? '');
+    const enabled = parseBool(attrs['enable']);
+    const body = m[2] ?? '';
+
+    const fields: Array<{ id: string; value: string }> = [];
+    const re = cloneGlobalRegex(RX_TARGET_VERSIONINFO_FIELD);
+    let fm: RegExpExecArray | null;
+    while ((fm = re.exec(body)) !== null) {
+        const id = (fm[1] ?? '').trim();
+        const fAttrs = parseAttributes(fm[2] ?? '');
+        const value = decodeXmlEntities((fAttrs['value'] ?? '').trim());
+        fields.push({ id, value });
+    }
+
+    // Deterministic, but keep semantic ordering by numeric suffix.
+    fields.sort((a, b) => {
+        const an = parseOptionalInt(a.id.replace(/^field/i, '')) ?? 0;
+        const bn = parseOptionalInt(b.id.replace(/^field/i, '')) ?? 0;
+        if (an !== bn) return an - bn;
+        return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    });
+
+    return { enabled, fields };
+}
+
+function parseTargetResources(targetBody: string): PbpTarget['resources'] {
+    const m = targetBody.match(RX_TARGET_RESOURCES_SECTION);
+    if (!m) return undefined;
+
+    const body = m[1] ?? '';
+    const items: string[] = [];
+
+    const re = cloneGlobalRegex(RX_TARGET_RESOURCE);
+    let rm: RegExpExecArray | null;
+    while ((rm = re.exec(body)) !== null) {
+        const attrs = parseAttributes(rm[1] ?? '');
+        const v = decodeXmlEntities((attrs['value'] ?? '').trim());
+        if (v) items.push(v);
+    }
+
+    return { items };
 }
 
 function parseTargetConstants(targetBody: string): Array<{ enabled: boolean; value: string }> {
@@ -389,6 +538,24 @@ function parseBool(v: string | undefined): boolean {
     return t === '1' || t === 'true' || t === 'yes';
 }
 
+function parseMaybeBool(v: string | undefined): boolean | undefined {
+    if (v === undefined) return undefined;
+    const t = v.trim().toLowerCase();
+    if (!t) return undefined;
+    if (t === '1' || t === 'true' || t === 'yes') return true;
+    if (t === '0' || t === 'false' || t === 'no') return false;
+    return undefined;
+}
+
+function parseBooleanLikeAttributes(raw: Record<string, string>): Record<string, boolean> {
+    const out: Record<string, boolean> = {};
+    for (const [k, v] of Object.entries(raw)) {
+        const b = parseMaybeBool(v);
+        if (b !== undefined) out[k] = b;
+    }
+    return out;
+}
+
 function parseAttributes(attrText: string): Record<string, string> {
     const attrs: Record<string, string> = {};
     const re = /(\w+)\s*=\s*"([^"]*)"/g;
@@ -397,15 +564,6 @@ function parseAttributes(attrText: string): Record<string, string> {
         attrs[m[1]] = decodeXmlEntities(m[2]);
     }
     return attrs;
-}
-
-function parseBooleanAttributes(attrText: string): Record<string, boolean> {
-    const raw = parseAttributes(attrText);
-    const out: Record<string, boolean> = {};
-    for (const [k, v] of Object.entries(raw)) {
-        out[k] = parseBool(v);
-    }
-    return out;
 }
 
 function decodeXmlEntities(s: string): string {

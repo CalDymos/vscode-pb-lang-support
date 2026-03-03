@@ -3,6 +3,7 @@ import * as path from 'path';
 
 import {
     parsePbpProjectText,
+    writePbpProjectText,
     pickTarget,
     getProjectIncludeDirectories,
     getProjectSourceFiles,
@@ -11,7 +12,7 @@ import {
     type PbpTarget,
 } from '@caldymos/pb-project-core';
 
-import type { PbFileProjectPayload, PbProjectContext, PbProjectContextPayload, PbProjectFilesApi, ProjectScope } from '../api';
+import type { PbFileProjectPayload, PbProjectContext, PbProjectContextPayload, PbProjectFilesApi, PbProjectSettingsPayload, ProjectScope } from '../api';
 
 const DEFAULT_PBP_GLOB = '**/*.pbp';
 const DEFAULT_EXCLUDE_GLOB = '**/{node_modules,.git}/**';
@@ -88,13 +89,16 @@ export class ProjectService implements vscode.Disposable {
 
     public getApi(): PbProjectFilesApi {
         return {
-            version: 1,
+            version: 2,
             getActiveContext: () => this.getActiveContext(),
             getActiveContextPayload: () => this.getActiveContextPayload(),
             getProjectForFile: (fileUri: vscode.Uri) => this.getProjectForFile(fileUri),
             refresh: () => this.refresh(),
             pickActiveProject: () => this.pickActiveProject(),
             pickActiveTarget: () => this.pickActiveTarget(),
+            getProjectSettingsPayload: (projectFileUri: vscode.Uri) => this.getProjectSettingsPayload(projectFileUri),
+            saveProjectXml: (projectFileUri: vscode.Uri, xml: string) => this.saveProjectXml(projectFileUri, xml),
+            saveProjectModel: (projectFileUri: vscode.Uri, project: Pick<PbpProject, 'meta' | 'config' | 'data' | 'files' | 'targets' | 'libraries'>) => this.saveProjectModel(projectFileUri, project),
             onDidChangeActiveContext: this.onDidChangeActiveContext,
         };
     }
@@ -135,6 +139,9 @@ export class ProjectService implements vscode.Disposable {
             targetName: this.activeTargetName,
             includeDirs: meta?.includeDirs ?? [],
             projectFiles: meta?.projectFiles ?? [],
+            project: proj,
+            target: proj ? this.getActiveTarget(proj) : undefined,
+
         };
     }
 
@@ -248,6 +255,34 @@ export class ProjectService implements vscode.Disposable {
         await this.persistActiveState();
         this.updateStatusBar();
         this.emitActiveContextChanged();
+    }
+
+    public async getProjectSettingsPayload(projectFileUri: vscode.Uri): Promise<PbProjectSettingsPayload | undefined> {
+        try {
+            const bytes = await vscode.workspace.fs.readFile(projectFileUri);
+            const xml = Buffer.from(bytes).toString("utf8");
+            const project = parsePbpProjectText(xml, projectFileUri.fsPath);
+            if (!project) return undefined;
+            return {
+                projectFile: project.projectFile,
+                projectDir: project.projectDir,
+                project,
+                xml,
+            };
+        } catch {
+            return undefined;
+        }
+    }
+
+    public async saveProjectXml(projectFileUri: vscode.Uri, xml: string): Promise<void> {
+        await vscode.workspace.fs.writeFile(projectFileUri, Buffer.from(xml, "utf8"));
+        await this.refresh();
+    }
+
+    public async saveProjectModel(projectFileUri: vscode.Uri, project: Pick<PbpProject, "meta" | "config" | "data" | "files" | "targets" | "libraries">): Promise<void> {
+        const xml = writePbpProjectText(project, { newline: "\n" });
+        await vscode.workspace.fs.writeFile(projectFileUri, Buffer.from(xml, "utf8"));
+        await this.refresh();
     }
 
     private async setActiveProject(projectFile: string): Promise<void> {

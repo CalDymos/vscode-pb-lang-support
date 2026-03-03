@@ -11,12 +11,24 @@ export interface PbpProject {
     projectFile: string;
     /** Absolute filesystem path to the project directory */
     projectDir: string;
+
+    /** Optional metadata extracted from the root <project ...> element */
+    meta?: PbpProjectMeta;
+
     config: PbpConfig;
     data: PbpData;
     files: PbpFileEntry[];
     /** Project libraries (best-effort; may be empty if not specified in the .pbp) */
     libraries: string[];
     targets: PbpTarget[];
+}
+
+export interface PbpProjectMeta {
+    /** Attributes from the root <project ...> element (eg. xmlns/version/creator). */
+    projectAttrs: Record<string, string>;
+
+    /** Section presence information to keep writer output close to the original file. */
+    presentSections?: Record<string, boolean>;
 }
 
 export interface PbpConfig {
@@ -26,6 +38,12 @@ export interface PbpConfig {
     name: string;
     /** Project comment (from <section name="config"><comment>...</comment>) */
     comment: string;
+
+    /** Raw attributes from <section name="config"><options .../> to preserve unknown fields. */
+    optionsAttrs?: Record<string, string>;
+
+    /** True if the source file contained a <comment> element (even if empty). */
+    commentPresent?: boolean;
 }
 
 export interface PbpData {
@@ -48,12 +66,21 @@ export interface PbpFileEntry {
     rawPath: string;
     /** Resolved absolute filesystem path */
     fsPath: string;
+
     /** Optional file flags as stored in the project */
     config?: {
         load?: boolean;
         scan?: boolean;
         panel?: boolean;
         warn?: boolean;
+    };
+
+    /** Additional, non-modeled file information preserved for display/editing */
+    meta?: {
+        /** Raw attributes from the <config .../> element (includes non-boolean fields like sortindex/panelstate). */
+        configAttrs?: Record<string, string>;
+        /** Raw attributes from the <fingerprint .../> element (eg. md5). */
+        fingerprintAttrs?: Record<string, string>;
     };
 }
 
@@ -64,8 +91,16 @@ export interface PbpTarget {
     inputFile: PbpTargetValue;
     outputFile: PbpTargetValue;
     executable: PbpTargetValue;
-    directory: string;
+    directory?: string;
+
+    /** Raw attributes from the <target ...> start tag to preserve unknown fields. */
+    targetAttrs?: Record<string, string>;
+
+    /** Boolean options extracted from <options .../> (best-effort). */
     options: Record<string, boolean>;
+    /** Raw <options .../> attributes as strings (includes non-boolean enumerations/values). */
+    optionAttrs?: Record<string, string>;
+
     /** Compiler version string as stored in <compiler version="..."/> */
     compilerVersion?: string;
     /** Optional additional command line args as stored in the project file (best-effort). */
@@ -76,12 +111,47 @@ export interface PbpTarget {
         enabled: boolean;
         granularity?: string;
     };
+
+    warnings?: {
+        custom?: boolean;
+        type?: string;
+        attrs?: Record<string, string>;
+    };
+
+    /** Value from <temporaryexe value="..."/> (eg. "source"). */
+    temporaryExe?: string;
+
+    /** From <compilecount enable="..." value="..."/> */
+    compileCount?: {
+        enabled: boolean;
+        value?: integer;
+    };
+
+    /** From <buildcount enable="..." value="..."/> */
+    buildCount?: {
+        enabled: boolean;
+        value?: integer;
+    };
+
     format?: Record<string, string>;
     icon?: {
         enabled: boolean;
         rawPath: string;
         fsPath: string;
     };
+
+    versionInfo?: {
+        enabled: boolean;
+        /** Ordered list of version info fields, eg. field0..field16. */
+        fields: Array<{ id: string; value: string }>;
+    };
+
+    resources?: {
+        /** Ordered list of resource file references from <resources><resource value="..."/>. */
+        items: string[];
+    };
+
+    watchList?: string;
     constants: Array<{
         enabled: boolean;
         value: string;
