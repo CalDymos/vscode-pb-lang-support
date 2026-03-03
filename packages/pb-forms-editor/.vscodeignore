@@ -5,12 +5,9 @@ src/**
 .gitignore
 tsconfig.json
 *.ts
-*.map
 coverage/
-test/
 jest.config.js
 tsconfig.test.json
-src/**
 test/**
 .vscode/**
 .github/**
