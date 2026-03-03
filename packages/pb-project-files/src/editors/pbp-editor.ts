@@ -145,7 +145,7 @@ function renderHtml(webview: vscode.Webview, document: vscode.TextDocument, proj
 
   function setActiveTab(name) {
     state.activeTab = name;
-    for (const btn of document.querySelectorAll('.tabbtn')) {
+    for (const btn of document.querySelectorAll('.tabs .tabbtn')) {
       btn.classList.toggle('active', btn.dataset.tab === name);
     }
     for (const p of document.querySelectorAll('.page')) {
@@ -154,7 +154,7 @@ function renderHtml(webview: vscode.Webview, document: vscode.TextDocument, proj
   }
 
   function bindTabs() {
-    for (const btn of document.querySelectorAll('.tabbtn')) {
+    for (const btn of document.querySelectorAll('.tabs .tabbtn')) {
       btn.addEventListener('click', () => {
         setActiveTab(btn.dataset.tab);
       });
