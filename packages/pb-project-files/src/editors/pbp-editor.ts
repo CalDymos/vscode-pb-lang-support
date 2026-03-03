@@ -1295,7 +1295,10 @@ export class PbpEditorProvider implements vscode.CustomTextEditorProvider {
                 });
                 if (!uris || uris.length === 0) return;
                 const picked = uris[0];
-                const rawPath = path.relative(projectDir, picked.fsPath);
+                const rel = path.relative(projectDir, picked.fsPath);
+                // Use absolute path for files outside the project root (PureBasic IDE behavior).
+                const isExternal = rel === '..' || rel.startsWith('..' + path.sep) || path.isAbsolute(rel);
+                const rawPath = isExternal ? picked.fsPath : rel;
                 void webviewPanel.webview.postMessage({
                     type: 'filePicked',
                     rawPath,

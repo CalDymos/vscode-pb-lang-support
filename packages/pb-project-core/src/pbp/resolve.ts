@@ -124,12 +124,16 @@ export function resolveProjectPath(projectDir: string, rawPath: string): string 
     const p = normalizeRawProjectPath(rawPath);
     if (!p || !projectDir) return '';
 
-    const projectRoot = path.resolve(projectDir);
-    const candidate = isAbsoluteCrossPlatform(p)
-        ? path.normalize(path.resolve(p))
-        : path.normalize(path.resolve(projectRoot, p));
+    // Absolute paths are stored as-is by PureBasic IDE for files outside the project root.
+    // Return them directly without root-containment check.
+    if (isAbsoluteCrossPlatform(p)) {
+        return path.normalize(path.resolve(p));
+    }
 
-    // Reject paths that escape the project root (including absolute external paths).
+    const projectRoot = path.resolve(projectDir);
+    const candidate = path.normalize(path.resolve(projectRoot, p));
+
+    // Reject relative paths that escape the project root via '..'.
     const relBase = path.sep === '\\' ? projectRoot.toLowerCase() : projectRoot;
     const relTarget = path.sep === '\\' ? candidate.toLowerCase() : candidate;
     const rel = path.relative(relBase, relTarget);
