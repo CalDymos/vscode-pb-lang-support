@@ -12,6 +12,7 @@
 
 import type {
     PbpData,
+    PbpFileConfig,
     PbpFileEntry,
     PbpProject,
     PbpTarget,
@@ -26,14 +27,13 @@ export interface WritePbpOptions {
     includeXmlDeclaration?: boolean;
 }
 
+const MODELED_SECTIONS = ['config', 'data', 'files', 'targets', 'libraries'] as const;
+
 /**
  * Serialize a parsed/edited .pbp project back into XML.
- *
- * The output is intentionally minimal and focuses on the sections currently
- * modeled by this library: config, data, files, targets, libraries.
  */
 export function writePbpProjectText(
-    project: Pick<PbpProject, 'meta' | 'config' | 'data' | 'files' | 'targets' | 'libraries'>,
+    project: Pick<PbpProject, 'config' | 'data' | 'files' | 'targets' | 'libraries' | 'meta'>,
     options: WritePbpOptions = {}
 ): string {
     const newline = options.newline ?? '\n';
@@ -43,23 +43,94 @@ export function writePbpProjectText(
     const lines: string[] = [];
     if (includeXmlDeclaration) {
         lines.push('<?xml version="1.0" encoding="UTF-8"?>');
+        lines.push('');
     }
 
-    const rootAttrs = project.meta?.projectAttrs;
-    const rootPairs = rootAttrs && Object.keys(rootAttrs).length > 0 ? sortProjectAttrs(rootAttrs) : undefined;
-    lines.push(`<project${rootPairs ? renderAttrs(rootPairs) : ''}>`);
+    const projectAttrs = project.meta?.projectAttrs ?? {};
+    const projectAttrText = renderAttrsFromMap(projectAttrs, ['xmlns', 'version', 'creator']);
+    lines.push(`<project${projectAttrText}>`);
 
-    const present = project.meta?.presentSections;
-    if (present?.config !== false) writeConfigSection(lines, indent, project.config);
-    if (present?.data !== false) writeDataSection(lines, indent, project.data);
-    if (present?.files !== false) writeFilesSection(lines, indent, project.files ?? []);
-    if (present?.targets !== false) writeTargetsSection(lines, indent, project.targets ?? []);
+    const order = buildSectionOrder(project);
+    for (const sec of order) {
+        if (sec === 'config') {
+            writeConfigSection(lines, indent, project.config);
+        } else if (sec === 'data') {
+            if (shouldWriteDataSection(project)) {
+                writeDataSection(lines, indent, project.data);
+            }
+        } else if (sec === 'files') {
+            if (shouldWriteFilesSection(project)) {
+                writeFilesSection(lines, indent, project.files ?? []);
+            }
+        } else if (sec === 'targets') {
+            if (shouldWriteTargetsSection(project)) {
+                writeTargetsSection(lines, indent, project.targets ?? []);
+            }
+        } else if (sec === 'libraries') {
+            if (shouldWriteLibrariesSection(project)) {
+                writeLibrariesSection(lines, indent, project.libraries ?? []);
+            }
+        } else {
+            const raw = project.meta?.unknownSections?.[sec];
+            if (raw) {
+                pushRawBlock(lines, normalizeNewlines(raw));
+            }
+        }
+    }
 
-    const shouldWriteLibraries = (project.libraries ?? []).length > 0 || present?.libraries !== false;
-    if (shouldWriteLibraries) writeLibrariesSection(lines, indent, project.libraries ?? []);
     lines.push('</project>');
 
     return lines.join(newline) + newline;
+}
+
+// --------------------------------------------------------------------------------------
+// Section order
+// --------------------------------------------------------------------------------------
+
+function buildSectionOrder(project: Pick<PbpProject, 'meta' | 'data' | 'files' | 'targets' | 'libraries'>): string[] {
+    const original = project.meta?.sectionOrder ?? [];
+    const order: string[] = [];
+
+    // Start with original order to keep diffs small.
+    for (const sec of original) {
+        if (!sec) continue;
+        if (order.includes(sec)) continue;
+        order.push(sec);
+    }
+
+    // Ensure modeled sections exist in a deterministic order.
+    for (const sec of MODELED_SECTIONS) {
+        if (!order.includes(sec)) {
+            order.push(sec);
+        }
+    }
+
+    return order;
+}
+
+function wasSectionPresent(project: Pick<PbpProject, 'meta'>, name: string): boolean {
+    return !!project.meta?.presentSections?.[name];
+}
+
+function shouldWriteDataSection(project: Pick<PbpProject, 'data' | 'meta'>): boolean {
+    if (wasSectionPresent(project, 'data')) return true;
+    const d = project.data;
+    return !!(d?.explorer || d?.log || d?.lastopen || d?.meta?.extraXml);
+}
+
+function shouldWriteFilesSection(project: Pick<PbpProject, 'files' | 'meta'>): boolean {
+    if (wasSectionPresent(project, 'files')) return true;
+    return (project.files ?? []).length > 0;
+}
+
+function shouldWriteTargetsSection(project: Pick<PbpProject, 'targets' | 'meta'>): boolean {
+    if (wasSectionPresent(project, 'targets')) return true;
+    return (project.targets ?? []).length > 0;
+}
+
+function shouldWriteLibrariesSection(project: Pick<PbpProject, 'libraries' | 'meta'>): boolean {
+    if (wasSectionPresent(project, 'libraries')) return true;
+    return stableUnique(project.libraries ?? []).length > 0;
 }
 
 // --------------------------------------------------------------------------------------
@@ -69,19 +140,22 @@ export function writePbpProjectText(
 function writeConfigSection(lines: string[], indent: string, cfg: PbpProject['config']): void {
     lines.push(`${indent}<section name="config">`);
 
-    const merged: Record<string, string> = { ...(cfg?.optionsAttrs ?? {}) };
-    merged['name'] = cfg?.name ?? '';
-    merged['closefiles'] = bool01(!!cfg?.closefiles);
-    merged['openmode'] = String(cfg?.openmode ?? 0);
+    const opt: Record<string, string> = { ...(cfg?.meta?.optionsAttrs ?? {}) };
+    opt['closefiles'] = bool01(!!cfg?.closefiles);
+    opt['openmode'] = String(cfg?.openmode ?? 0);
+    opt['name'] = cfg?.name ?? '';
 
-    const optionAttrs = sortStableStringAttrs(merged, ['name', 'closefiles', 'openmode']);
-    lines.push(`${indent}${indent}<options${renderAttrs(optionAttrs)}/>`);
+    lines.push(`${indent}${indent}<options${renderAttrsFromMap(opt, ['closefiles', 'openmode', 'name'])}/>`);
 
-    const comment = cfg?.comment ?? '';
-    const shouldWriteComment = !!cfg?.commentPresent || comment.length > 0;
-    if (shouldWriteComment) {
-        lines.push(`${indent}${indent}<comment>${escapeXmlText(comment)}</comment>`);
+    const hasComment = !!cfg?.meta?.hasComment || !!(cfg?.comment ?? '').trim();
+    if (hasComment) {
+        lines.push(`${indent}${indent}<comment>${escapeXmlText(cfg?.comment ?? '')}</comment>`);
     }
+
+    if (cfg?.meta?.extraXml) {
+        pushRawBlock(lines, normalizeNewlines(cfg.meta.extraXml));
+    }
+
     lines.push(`${indent}</section>`);
 }
 
@@ -90,24 +164,28 @@ function writeDataSection(lines: string[], indent: string, data: PbpData | undef
 
     const d = data ?? {};
     if (d.explorer) {
-        const attrs: Array<[string, string]> = [];
-        if (d.explorer.view !== undefined) attrs.push(['view', d.explorer.view]);
-        if (d.explorer.pattern !== undefined) attrs.push(['pattern', String(d.explorer.pattern)]);
-        lines.push(`${indent}${indent}<explorer${renderAttrs(attrs)}/>`);
+        const attrs: Record<string, string> = {};
+        if (d.explorer.view !== undefined) attrs['view'] = d.explorer.view;
+        if (d.explorer.pattern !== undefined) attrs['pattern'] = String(d.explorer.pattern);
+        lines.push(`${indent}${indent}<explorer${renderAttrsFromMap(attrs, ['view', 'pattern'])}/>`);
     }
 
     if (d.log) {
-        const attrs: Array<[string, string]> = [];
-        if (d.log.show !== undefined) attrs.push(['show', bool01(d.log.show)]);
-        lines.push(`${indent}${indent}<log${renderAttrs(attrs)}/>`);
+        const attrs: Record<string, string> = {};
+        if (d.log.show !== undefined) attrs['show'] = bool01(d.log.show);
+        lines.push(`${indent}${indent}<log${renderAttrsFromMap(attrs, ['show'])}/>`);
     }
 
     if (d.lastopen) {
-        const attrs: Array<[string, string]> = [];
-        if (d.lastopen.date !== undefined) attrs.push(['date', d.lastopen.date]);
-        if (d.lastopen.user !== undefined) attrs.push(['user', d.lastopen.user]);
-        if (d.lastopen.host !== undefined) attrs.push(['host', d.lastopen.host]);
-        lines.push(`${indent}${indent}<lastopen${renderAttrs(attrs)}/>`);
+        const attrs: Record<string, string> = {};
+        if (d.lastopen.date !== undefined) attrs['date'] = d.lastopen.date;
+        if (d.lastopen.user !== undefined) attrs['user'] = d.lastopen.user;
+        if (d.lastopen.host !== undefined) attrs['host'] = d.lastopen.host;
+        lines.push(`${indent}${indent}<lastopen${renderAttrsFromMap(attrs, ['date', 'user', 'host'])}/>`);
+    }
+
+    if (d.meta?.extraXml) {
+        pushRawBlock(lines, normalizeNewlines(d.meta.extraXml));
     }
 
     lines.push(`${indent}</section>`);
@@ -120,50 +198,64 @@ function writeFilesSection(lines: string[], indent: string, files: PbpFileEntry[
         const rawPath = f?.rawPath ?? '';
         const fileNameAttr = escapeXmlAttr(rawPath);
 
-        const cfg = f?.config;
-        const cfgMetaAttrs = f?.meta?.configAttrs;
-        const fingerprintAttrs = f?.meta?.fingerprintAttrs;
+        const hasCfg = !!f?.config?.attrs || hasAnyFileConfigValue(f?.config);
+        const hasFp = !!f?.fingerprint && Object.keys(f.fingerprint).length > 0;
+        const hasExtra = !!f?.meta?.extraXml;
 
-        // Merge raw config attributes (if present) with the modeled boolean flags.
-        // Boolean flags always win to keep edits consistent.
-        const mergedCfg: Record<string, string> = {};
-        if (cfgMetaAttrs) {
-            for (const [k, v] of Object.entries(cfgMetaAttrs)) {
-                mergedCfg[k] = v ?? '';
-            }
-        }
-
-        if (cfg) {
-            if (cfg.load !== undefined) mergedCfg['load'] = bool01(!!cfg.load);
-            if (cfg.scan !== undefined) mergedCfg['scan'] = bool01(!!cfg.scan);
-            if (cfg.panel !== undefined) mergedCfg['panel'] = bool01(!!cfg.panel);
-            if (cfg.warn !== undefined) mergedCfg['warn'] = bool01(!!cfg.warn);
-        }
-
-        const hasCfg = Object.keys(mergedCfg).length > 0;
-        const hasFp = !!fingerprintAttrs && Object.keys(fingerprintAttrs).length > 0;
-
-        if (!hasCfg && !hasFp) {
+        if (!hasCfg && !hasFp && !hasExtra) {
             lines.push(`${indent}${indent}<file name="${fileNameAttr}"/>`);
             continue;
         }
 
         lines.push(`${indent}${indent}<file name="${fileNameAttr}">`);
 
+        const inner = `${indent}${indent}${indent}`;
+
         if (hasCfg) {
-            const attrs = sortStableStringAttrs(mergedCfg, ['load', 'scan', 'panel', 'warn', 'lastopen', 'sortindex', 'panelstate']);
-            lines.push(`${indent}${indent}${indent}<config${renderAttrs(attrs)}/>`);
+            const cfgAttrs = buildFileConfigAttrs(f.config);
+            lines.push(`${inner}<config${renderAttrsFromMap(cfgAttrs, ['load', 'scan', 'panel', 'warn', 'lastopen', 'sortindex', 'panelstate'])}/>`);
         }
 
-        if (hasFp && fingerprintAttrs) {
-            const attrs = sortStableStringAttrs(fingerprintAttrs);
-            lines.push(`${indent}${indent}${indent}<fingerprint${renderAttrs(attrs)}/>`);
+        if (hasFp) {
+            lines.push(`${inner}<fingerprint${renderAttrsFromMap(f.fingerprint ?? {}, ['md5'])}/>`);
+        }
+
+        if (hasExtra) {
+            pushRawBlock(lines, normalizeNewlines(f.meta!.extraXml!));
         }
 
         lines.push(`${indent}${indent}</file>`);
     }
 
     lines.push(`${indent}</section>`);
+}
+
+function buildFileConfigAttrs(cfg: PbpFileConfig | undefined): Record<string, string> {
+    const out: Record<string, string> = { ...(cfg?.attrs ?? {}) };
+
+    // Apply known fields back into raw attrs to keep them consistent.
+    if (cfg?.load !== undefined) out['load'] = bool01(cfg.load);
+    if (cfg?.scan !== undefined) out['scan'] = bool01(cfg.scan);
+    if (cfg?.panel !== undefined) out['panel'] = bool01(cfg.panel);
+    if (cfg?.warn !== undefined) out['warn'] = bool01(cfg.warn);
+    if (cfg?.lastopen !== undefined) out['lastopen'] = bool01(cfg.lastopen);
+    if (cfg?.sortindex !== undefined) out['sortindex'] = String(cfg.sortindex);
+    if (cfg?.panelstate !== undefined) out['panelstate'] = cfg.panelstate;
+
+    return out;
+}
+
+function hasAnyFileConfigValue(cfg: PbpFileConfig | undefined): boolean {
+    if (!cfg) return false;
+    return (
+        cfg.load !== undefined ||
+        cfg.scan !== undefined ||
+        cfg.panel !== undefined ||
+        cfg.warn !== undefined ||
+        cfg.lastopen !== undefined ||
+        cfg.sortindex !== undefined ||
+        cfg.panelstate !== undefined
+    );
 }
 
 function writeTargetsSection(lines: string[], indent: string, targets: PbpTarget[]): void {
@@ -177,118 +269,256 @@ function writeTargetsSection(lines: string[], indent: string, targets: PbpTarget
 }
 
 function writeTarget(lines: string[], indent: string, t: PbpTarget): void {
-    const mergedAttrs: Record<string, string> = { ...(t?.targetAttrs ?? {}) };
-    mergedAttrs['name'] = t?.name ?? '';
-    mergedAttrs['enabled'] = bool01(!!t?.enabled);
-    mergedAttrs['default'] = bool01(!!t?.isDefault);
+    const openAttrs: Record<string, string> = { ...(t?.meta?.targetAttrs ?? {}) };
+    openAttrs['name'] = t?.name ?? '';
+    openAttrs['enabled'] = bool01(!!t?.enabled);
+    openAttrs['default'] = bool01(!!t?.isDefault);
 
-    const dir = (t?.directory ?? '').trim();
-    if (dir) mergedAttrs['directory'] = dir;
-    else delete mergedAttrs['directory'];
+    // Do not add "directory" attribute unless it existed (directory is usually stored as its own tag).
+    const dirKey = 'directory';
+    if (openAttrs[dirKey] !== undefined && (t?.directory ?? '') !== '') {
+        openAttrs[dirKey] = t.directory;
+    }
 
-    const tAttrs = sortStableStringAttrs(mergedAttrs, ['name', 'enabled', 'default', 'directory']);
-    lines.push(`${indent}${indent}<target${renderAttrs(tAttrs)}>`);
+    const tAttrText = renderAttrsFromMap(openAttrs, ['name', 'enabled', 'default']);
+    lines.push(`${indent}${indent}<target${tAttrText}>`);
 
     const inner = `${indent}${indent}${indent}`;
-    lines.push(`${inner}<inputfile${renderAttrs([['value', t?.inputFile?.rawPath ?? '']])}/>`);
-    lines.push(`${inner}<outputfile${renderAttrs([['value', t?.outputFile?.rawPath ?? '']])}/>`);
-    if (t.compilerVersion) lines.push(`${inner}<compiler${renderAttrs([['version', t.compilerVersion]])}/>`);
-    lines.push(`${inner}<executable${renderAttrs([['value', t?.executable?.rawPath ?? '']])}/>`);
 
-    if (t.commandLine) lines.push(`${inner}<commandline${renderAttrs([['value', t.commandLine]])}/>`);
-    if (t.subsystem) lines.push(`${inner}<subsystem${renderAttrs([['value', t.subsystem]])}/>`);
+    // input/output are always present in PB-generated projects.
+    lines.push(`${inner}<inputfile${renderAttrsFromMap({ value: t?.inputFile?.rawPath ?? '' }, ['value'])}/>`);
+    lines.push(`${inner}<outputfile${renderAttrsFromMap({ value: t?.outputFile?.rawPath ?? '' }, ['value'])}/>`);
 
-    const optAttrs = (t.optionAttrs && Object.keys(t.optionAttrs).length > 0)
-        ? sortStableStringAttrs(t.optionAttrs)
-        : (t.options && Object.keys(t.options).length > 0)
-            ? sortStableStringAttrs(Object.fromEntries(Object.entries(t.options).map(([k, v]) => [k, bool01(!!v)])))
-            : undefined;
-    if (optAttrs && optAttrs.length > 0) lines.push(`${inner}<options${renderAttrs(optAttrs)}/>`);
+    const present = t?.meta?.presentNodes ?? {};
 
-    if (t.purifier) {
-        const attrs: Array<[string, string]> = [['enable', bool01(!!t.purifier.enabled)]];
-        if (t.purifier.granularity) attrs.push(['granularity', t.purifier.granularity]);
-        lines.push(`${inner}<purifier${renderAttrs(attrs)}/>`);
+    const exeRaw = t?.executable?.rawPath ?? '';
+    if (exeRaw || present['executable']) {
+        lines.push(`${inner}<executable${renderAttrsFromMap({ value: exeRaw }, ['value'])}/>`);
     }
 
-    if (t.temporaryExe) lines.push(`${inner}<temporaryexe${renderAttrs([['value', t.temporaryExe]])}/>`);
-
-    if (t.icon && t.icon.rawPath) {
-        const attrs: Array<[string, string]> = [['enable', bool01(!!t.icon.enabled)]];
-        lines.push(`${inner}<icon${renderAttrs(attrs)}>${escapeXmlText(t.icon.rawPath)}</icon>`);
+    if (t?.compilerVersion) {
+        lines.push(`${inner}<compiler${renderAttrsFromMap({ version: t.compilerVersion }, ['version'])}/>`);
+    } else if (present['compiler']) {
+        // Preserve tag presence even if version is empty.
+        lines.push(`${inner}<compiler${renderAttrsFromMap({ version: '' }, ['version'])}/>`);
     }
 
-    if (t.warnings) {
-        const merged: Record<string, string> = { ...(t.warnings.attrs ?? {}) };
-        if (t.warnings.custom !== undefined) merged['custom'] = bool01(!!t.warnings.custom);
-        if (t.warnings.type !== undefined) merged['type'] = t.warnings.type;
-        const attrs = sortStableStringAttrs(merged, ['custom', 'type']);
-        lines.push(`${inner}<warnings${renderAttrs(attrs)}/>`);
+    if (t?.commandLine) {
+        lines.push(`${inner}<commandline${renderAttrsFromMap({ value: t.commandLine }, ['value'])}/>`);
+    } else if (present['commandline']) {
+        lines.push(`${inner}<commandline${renderAttrsFromMap({ value: '' }, ['value'])}/>`);
     }
 
-    if (t.compileCount) {
-        const attrs: Array<[string, string]> = [['enable', bool01(!!t.compileCount.enabled)]];
-        if (t.compileCount.value !== undefined) attrs.push(['value', String(t.compileCount.value)]);
-        lines.push(`${inner}<compilecount${renderAttrs(attrs)}/>`);
+    if (t?.directory || present['directory']) {
+        lines.push(`${inner}<directory${renderAttrsFromMap({ value: t?.directory ?? '' }, ['value'])}/>`);
     }
 
-    if (t.buildCount) {
-        const attrs: Array<[string, string]> = [['enable', bool01(!!t.buildCount.enabled)]];
-        if (t.buildCount.value !== undefined) attrs.push(['value', String(t.buildCount.value)]);
-        lines.push(`${inner}<buildcount${renderAttrs(attrs)}/>`);
+    if (t?.subsystem) {
+        lines.push(`${inner}<subsystem${renderAttrsFromMap({ value: t.subsystem }, ['value'])}/>`);
+    } else if (present['subsystem']) {
+        lines.push(`${inner}<subsystem${renderAttrsFromMap({ value: '' }, ['value'])}/>`);
     }
 
-    if (t.versionInfo) {
-        lines.push(`${inner}<versioninfo${renderAttrs([['enable', bool01(!!t.versionInfo.enabled)]])}>`);
-        const fields = [...(t.versionInfo.fields ?? [])].sort((a, b) => compareVersionFieldId(a.id, b.id));
-        for (const f of fields) {
-            const id = (f.id ?? '').trim();
-            if (!id) continue;
-            lines.push(`${inner}${indent}<${id}${renderAttrs([['value', f.value ?? '']])}/>`);
-        }
-        lines.push(`${inner}</versioninfo>`);
+    if (t?.linker?.rawPath) {
+        lines.push(`${inner}<linker${renderAttrsFromMap({ value: t.linker.rawPath }, ['value'])}/>`);
+    } else if (present['linker']) {
+        lines.push(`${inner}<linker${renderAttrsFromMap({ value: '' }, ['value'])}/>`);
     }
 
-    if (t.resources && (t.resources.items?.length ?? 0) > 0) {
-        lines.push(`${inner}<resources>`);
-        for (const r of t.resources.items) {
-            lines.push(`${inner}${indent}<resource${renderAttrs([['value', r ?? '']])}/>`);
-        }
-        lines.push(`${inner}</resources>`);
+    if (t?.purifier) {
+        const attrs: Record<string, string> = { ...(t.purifier.attrs ?? {}) };
+        attrs['enable'] = bool01(!!t.purifier.enabled);
+        if (t.purifier.granularity !== undefined) attrs['granularity'] = t.purifier.granularity;
+        lines.push(`${inner}<purifier${renderAttrsFromMap(attrs, ['enable', 'granularity'])}/>`);
+    } else if (present['purifier']) {
+        lines.push(`${inner}<purifier${renderAttrsFromMap({ enable: '0' }, ['enable'])}/>`);
     }
 
-    if (t.watchList !== undefined) {
-        lines.push(`${inner}<watchlist>${escapeXmlText(t.watchList ?? '')}</watchlist>`);
+    if (t?.temporaryExe) {
+        lines.push(`${inner}<temporaryexe${renderAttrsFromMap({ value: t.temporaryExe }, ['value'])}/>`);
+    } else if (present['temporaryexe']) {
+        lines.push(`${inner}<temporaryexe${renderAttrsFromMap({ value: '' }, ['value'])}/>`);
     }
 
-    if (t.constants && t.constants.length > 0) {
+    // options
+    const optAttrs = buildTargetOptionsAttrs(t);
+    if (Object.keys(optAttrs).length > 0) {
+        lines.push(`${inner}<options${renderAttrsFromMap(optAttrs, targetOptionsFixedOrder())}/>`);
+    } else if (present['options']) {
+        lines.push(`${inner}<options/>`);
+    }
+
+    if (t?.format && Object.keys(t.format).length > 0) {
+        lines.push(`${inner}<format${renderAttrsFromMap(t.format, ['exe', 'cpu'])}/>`);
+    } else if (present['format']) {
+        lines.push(`${inner}<format/>`);
+    }
+
+    if (t?.icon && t.icon.rawPath) {
+        const attrs: Record<string, string> = { ...(t.icon.attrs ?? {}) };
+        attrs['enable'] = bool01(!!t.icon.enabled);
+        lines.push(`${inner}<icon${renderAttrsFromMap(attrs, ['enable'])}>${escapeXmlText(t.icon.rawPath)}</icon>`);
+    } else if (present['icon']) {
+        lines.push(`${inner}<icon${renderAttrsFromMap({ enable: '0' }, ['enable'])}></icon>`);
+    }
+
+    if (t?.debugger) {
+        const attrs: Record<string, string> = { ...(t.debugger.attrs ?? {}) };
+        if (t.debugger.custom !== undefined) attrs['custom'] = bool01(t.debugger.custom);
+        if (t.debugger.type !== undefined) attrs['type'] = t.debugger.type;
+        lines.push(`${inner}<debugger${renderAttrsFromMap(attrs, ['custom', 'type'])}/>`);
+    } else if (present['debugger']) {
+        lines.push(`${inner}<debugger/>`);
+    }
+
+    if (t?.warnings) {
+        const attrs: Record<string, string> = { ...(t.warnings.attrs ?? {}) };
+        if (t.warnings.custom !== undefined) attrs['custom'] = bool01(t.warnings.custom);
+        if (t.warnings.type !== undefined) attrs['type'] = t.warnings.type;
+        lines.push(`${inner}<warnings${renderAttrsFromMap(attrs, ['custom', 'type'])}/>`);
+    } else if (present['warnings']) {
+        lines.push(`${inner}<warnings/>`);
+    }
+
+    if (t?.compileCount) {
+        const attrs: Record<string, string> = { ...(t.compileCount.attrs ?? {}) };
+        attrs['enable'] = bool01(!!t.compileCount.enabled);
+        if (t.compileCount.value !== undefined) attrs['value'] = String(t.compileCount.value);
+        lines.push(`${inner}<compilecount${renderAttrsFromMap(attrs, ['enable', 'value'])}/>`);
+    } else if (present['compilecount']) {
+        lines.push(`${inner}<compilecount${renderAttrsFromMap({ enable: '0', value: '0' }, ['enable', 'value'])}/>`);
+    }
+
+    if (t?.buildCount) {
+        const attrs: Record<string, string> = { ...(t.buildCount.attrs ?? {}) };
+        attrs['enable'] = bool01(!!t.buildCount.enabled);
+        if (t.buildCount.value !== undefined) attrs['value'] = String(t.buildCount.value);
+        lines.push(`${inner}<buildcount${renderAttrsFromMap(attrs, ['enable', 'value'])}/>`);
+    } else if (present['buildcount']) {
+        lines.push(`${inner}<buildcount${renderAttrsFromMap({ enable: '0', value: '0' }, ['enable', 'value'])}/>`);
+    }
+
+    if (t?.exeConstant) {
+        const attrs: Record<string, string> = { ...(t.exeConstant.attrs ?? {}) };
+        attrs['enable'] = bool01(!!t.exeConstant.enabled);
+        lines.push(`${inner}<execonstant${renderAttrsFromMap(attrs, ['enable'])}/>`);
+    } else if (present['execonstant']) {
+        lines.push(`${inner}<execonstant${renderAttrsFromMap({ enable: '0' }, ['enable'])}/>`);
+    }
+
+    if (t?.constants && t.constants.length > 0) {
         lines.push(`${inner}<constants>`);
         for (const c of t.constants) {
-            const cAttrs: Array<[string, string]> = [
-                ['enable', bool01(!!c.enabled)],
-                ['value', c.value ?? ''],
-            ];
-            lines.push(`${inner}${indent}<constant${renderAttrs(cAttrs)}/>`);
+            const cAttrs: Record<string, string> = {
+                enable: bool01(!!c.enabled),
+                value: c.value ?? '',
+            };
+            lines.push(`${inner}${indent}<constant${renderAttrsFromMap(cAttrs, ['enable', 'value'])}/>`);
         }
         lines.push(`${inner}</constants>`);
+    } else if (present['constants']) {
+        lines.push(`${inner}<constants></constants>`);
     }
 
-    if (t.format && Object.keys(t.format).length > 0) {
-        const attrs: Array<[string, string]> = sortKeyedAttrs(t.format);
-        lines.push(`${inner}<format${renderAttrs(attrs)}/>`);
+    if (t?.versionInfo) {
+        const viAttrs: Record<string, string> = { ...(t.versionInfo.attrs ?? {}) };
+        viAttrs['enable'] = bool01(!!t.versionInfo.enabled);
+        lines.push(`${inner}<versioninfo${renderAttrsFromMap(viAttrs, ['enable'])}>`);
+        for (const f of t.versionInfo.fields ?? []) {
+            lines.push(`${inner}${indent}<${f.id}${renderAttrsFromMap({ value: f.value ?? '' }, ['value'])}/>`);
+        }
+        lines.push(`${inner}</versioninfo>`);
+    } else if (present['versioninfo']) {
+        lines.push(`${inner}<versioninfo${renderAttrsFromMap({ enable: '0' }, ['enable'])}></versioninfo>`);
+    }
+
+    if (t?.resources && t.resources.length > 0) {
+        lines.push(`${inner}<resources>`);
+        for (const r of t.resources) {
+            lines.push(`${inner}${indent}<resource${renderAttrsFromMap({ value: r }, ['value'])}/>`);
+        }
+        lines.push(`${inner}</resources>`);
+    } else if (present['resources']) {
+        lines.push(`${inner}<resources></resources>`);
+    }
+
+    if (t?.watchList !== undefined) {
+        lines.push(`${inner}<watchlist>${escapeXmlText(t.watchList ?? '')}</watchlist>`);
+    } else if (present['watchlist']) {
+        lines.push(`${inner}<watchlist></watchlist>`);
+    }
+
+    if (t?.meta?.extraXml) {
+        pushRawBlock(lines, normalizeNewlines(t.meta.extraXml));
     }
 
     lines.push(`${indent}${indent}</target>`);
+}
+
+function buildTargetOptionsAttrs(t: PbpTarget): Record<string, string> {
+    const attrs: Record<string, string> = { ...(t.optionsAttrs ?? {}) };
+
+    // If there is no raw map, fall back to boolean options.
+    if (!t.optionsAttrs) {
+        for (const [k, v] of Object.entries(t.options ?? {})) {
+            if (v) attrs[k] = '1';
+        }
+        return attrs;
+    }
+
+    // Keep raw attributes as-is but ensure known booleans are normalized when toggled.
+    for (const [k, v] of Object.entries(t.options ?? {})) {
+        if (v) {
+            attrs[k] = '1';
+        } else if (attrs[k] === '1') {
+            // If it was enabled before, remove it unless the caller explicitly set a different value.
+            delete attrs[k];
+        }
+    }
+
+    return attrs;
+}
+
+function targetOptionsFixedOrder(): string[] {
+    // Derived from the user-provided mapping (PureBasic_CompilerOptions_CompileRun.xlsx).
+    return [
+        'debug',
+        'optimizer',
+        'asm',
+        'thread',
+        'onerror',
+        'dpiaware',
+        'xpskin',
+        'admin',
+        'user',
+        'dllprotection',
+        'shareducrt',
+        'wayland',
+    ];
 }
 
 function writeLibrariesSection(lines: string[], indent: string, libs: string[]): void {
     lines.push(`${indent}<section name="libraries">`);
 
     for (const lib of stableUnique(libs)) {
-        lines.push(`${indent}${indent}<library${renderAttrs([['value', lib]])}/>`);
+        lines.push(`${indent}${indent}<library${renderAttrsFromMap({ value: lib }, ['value'])}/>`);
     }
 
     lines.push(`${indent}</section>`);
+}
+
+// --------------------------------------------------------------------------------------
+// Raw blocks
+// --------------------------------------------------------------------------------------
+
+function pushRawBlock(lines: string[], raw: string): void {
+    const block = normalizeNewlines(raw);
+    const split = block.split('\n');
+    for (const line of split) {
+        const v = line.replace(/\s+$/g, '');
+        if (v.length === 0) continue;
+        lines.push(v);
+    }
 }
 
 // --------------------------------------------------------------------------------------
@@ -312,18 +542,8 @@ function stableUnique(values: string[]): string[] {
     return out;
 }
 
-function sortProjectAttrs(attrs: Record<string, string>): Array<[string, string]> {
-    // Preserve common root attribute ordering to keep diffs minimal.
-    return sortStableStringAttrs(attrs, ['xmlns', 'version', 'creator']);
-}
-
-function compareVersionFieldId(a: string, b: string): number {
-    const an = parseInt(String(a).replace(/\D+/g, ''), 10);
-    const bn = parseInt(String(b).replace(/\D+/g, ''), 10);
-
-    if (Number.isFinite(an) && Number.isFinite(bn) && an !== bn) return an - bn;
-    if (a === b) return 0;
-    return a < b ? -1 : 1;
+function normalizeNewlines(content: string): string {
+    return content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 }
 
 function escapeXmlText(text: string): string {
@@ -340,41 +560,21 @@ function escapeXmlAttr(text: string): string {
     return escapeXmlText(text);
 }
 
-function renderAttrs(attrs: Array<[string, string]>): string {
+function renderAttrsFromMap(attrs: Record<string, string>, fixedOrder: string[] = []): string {
+    const keys = Object.keys(attrs);
+    if (keys.length === 0) return '';
+
+    const fixed = fixedOrder.filter(k => attrs[k] !== undefined);
+    const rest = keys.filter(k => !fixed.includes(k)).sort(compareAscii);
+
     let out = '';
-    for (const [k, v] of attrs) {
-        // Always include the attribute (even if empty) to preserve semantics where possible.
-        out += ` ${k}="${escapeXmlAttr(v ?? '')}"`;
+    for (const k of [...fixed, ...rest]) {
+        out += ` ${k}="${escapeXmlAttr(attrs[k] ?? '')}"`;
     }
     return out;
-}
-
-function sortStableStringAttrs(obj: Record<string, string>, fixedOrder: string[] = []): Array<[string, string]> {
-    const keys = Object.keys(obj)
-        .filter(k => (obj as any)[k] !== undefined)
-        .sort((a, b) => compareStableKeys(a, b, fixedOrder));
-
-    return keys.map(k => [k, obj[k] ?? '']);
-}
-
-function sortKeyedAttrs(obj: Record<string, string>): Array<[string, string]> {
-    const keys = Object.keys(obj).sort(compareAscii);
-    return keys.map(k => [k, obj[k] ?? '']);
 }
 
 function compareAscii(a: string, b: string): number {
     if (a === b) return 0;
     return a < b ? -1 : 1;
-}
-
-function compareStableKeys(a: string, b: string, fixedOrder: string[]): number {
-    const ai = fixedOrder.indexOf(a);
-    const bi = fixedOrder.indexOf(b);
-    if (ai >= 0 || bi >= 0) {
-        if (ai < 0) return 1;
-        if (bi < 0) return -1;
-        if (ai !== bi) return ai - bi;
-        return 0;
-    }
-    return compareAscii(a, b);
 }

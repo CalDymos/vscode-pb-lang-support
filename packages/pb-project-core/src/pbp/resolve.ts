@@ -62,10 +62,10 @@ export function classifyProjectPath(projectDir: string, fsPath: string): Project
 export function resolveBuildEntry(project: PbpProject, target: PbpTarget): ResolvedBuildEntry {
     const inputFile = target.inputFile?.fsPath ?? '';
     const outputFile = target.outputFile?.fsPath ?? '';
-    const executable = target.executable?.fsPath ?? '';
+    const executable = (target.executable?.fsPath ?? '') || outputFile;
 
-    // Target.directory is usually a relative directory inside the project.
-    const workingDir = resolveProjectPath(project.projectDir, target.directory ?? '');
+    // Target output/working directory may be outside of the project root.
+    const workingDir = resolveTargetPath(project.projectDir, target.directory ?? '');
 
     return {
         projectFile: project.projectFile,
@@ -79,6 +79,45 @@ export function resolveBuildEntry(project: PbpProject, target: PbpTarget): Resol
         outputKind: classifyProjectPath(project.projectDir, outputFile),
         executableKind: classifyProjectPath(project.projectDir, executable),
     };
+}
+
+/** Removes a leading "./" or ".\" (including repeated slashes, e.g. ".//") from a path-like string. */
+function stripLeadingDotSlash(rawPath: string): string {
+    return rawPath.replace(/^\.[\\/]+/, '');
+}
+
+/**
+ * Resolves a project path but allows paths outside of the project root.
+ *
+ * This is required for target-related values such as output file,
+ * executable, working directory, icon path, or linker option file.
+ */
+export function resolveTargetPath(projectDir: string, rawPath: string): string {
+    let p = rawPath.trim();
+    if (!p || !projectDir) return '';
+
+    // Strip leading ./ or .\\
+    p = stripLeadingDotSlash(p);
+
+    // Windows absolute path: normalize with win32 on any platform.
+    if (looksLikeWindowsAbs(p)) {
+        return path.win32.normalize(p);
+    }
+
+    // POSIX absolute
+    if (p.startsWith('/')) {
+        return path.posix.normalize(p);
+    }
+
+    // Relative: resolve based on the style of projectDir.
+    const isWinProject = looksLikeWindowsAbs(projectDir) || projectDir.includes('\\');
+    if (isWinProject) {
+        const rp = p.replace(/[\\/]+/g, '\\');
+        return path.win32.normalize(path.win32.resolve(projectDir, rp));
+    }
+
+    const rp = p.replace(/[\\/]+/g, path.sep);
+    return path.normalize(path.resolve(projectDir, rp));
 }
 
 export function resolveProjectPath(projectDir: string, rawPath: string): string {
@@ -111,8 +150,7 @@ function normalizeRawProjectPath(rawPath: string): string {
     if (!p) return '';
 
     // Strip leading ./ or .\\
-    p = p.replace(/^\.\/[\\/]/, '');
-    p = p.replace(/^\.\\/, '');
+    p = stripLeadingDotSlash(p);
 
     // Keep the original separator style but normalize for path.join()
     p = p.replace(/[\\/]+/g, path.sep);
@@ -127,4 +165,9 @@ function isAbsoluteCrossPlatform(p: string): boolean {
     // Windows drive path
     if (/^[a-zA-Z]:[\\/]/.test(p)) return true;
     return path.isAbsolute(p);
+}
+
+function looksLikeWindowsAbs(p: string): boolean {
+    if (p.startsWith('\\\\')) return true;
+    return /^[a-zA-Z]:[\\/]/.test(p);
 }

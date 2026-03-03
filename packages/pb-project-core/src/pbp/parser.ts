@@ -6,6 +6,7 @@
  * - Parses XML-based .pbp files (PureBasic >= 6.21)
  * - Extracts source file references
  * - Extracts project configuration metadata
+ * - Best-effort parsing for additional target compiler options
  * - No runtime or editor dependencies
  *
  * Intended for shared use between extension hosts,
@@ -19,6 +20,7 @@ import type {
     PbpConfig,
     PbpData,
     PbpFileEntry,
+    PbpFileConfig,
     PbpProject,
     PbpProjectMeta,
     PbpTarget,
@@ -30,13 +32,14 @@ export type {
     PbpConfig,
     PbpData,
     PbpFileEntry,
+    PbpFileConfig,
     PbpProject,
     PbpProjectMeta,
     PbpTarget,
     PbpTargetValue,
 } from './model';
 
-import { resolveProjectPath } from './resolve';
+import { resolveProjectPath, resolveTargetPath } from './resolve';
 
 // --------------------------------------------------------------------------------------
 // Regex constants
@@ -46,14 +49,16 @@ import { resolveProjectPath } from './resolve';
 // --------------------------------------------------------------------------------------
 
 const RX_XML_PROJECT_HEADER = /<\?xml\b[\s\S]*?<project\b/i;
-const RX_PROJECT_TAG = /<project\b([^>]*)>/i;
+const RX_PROJECT_OPEN = /<project\b([^>]*)>/i;
+
+const RX_SECTION_BLOCK = /<section\b([^>]*)\bname="([^"]+)"([^>]*)>([\s\S]*?)<\/section>/gi;
 
 const RX_CONFIG_OPTIONS = /<options\b([^>]*)\/>/i;
 const RX_CONFIG_COMMENT = /<comment\b[^>]*>([\s\S]*?)<\/comment>/i;
 
-const RX_DATA_EXPLORER = /<explorer\b([^>]*)\/?>/i;
-const RX_DATA_LOG = /<log\b([^>]*)\/?>/i;
-const RX_DATA_LASTOPEN = /<lastopen\b([^>]*)\/?>/i;
+const RX_DATA_EXPLORER = /<explorer\b([^>]*)\/>/i;
+const RX_DATA_LOG = /<log\b([^>]*)\/>/i;
+const RX_DATA_LASTOPEN = /<lastopen\b([^>]*)\/>/i;
 
 const RX_FILE_ENTRY = /<file\b[^>]*\bname="([^"]+)"[^>]*>([\s\S]*?)<\/file>/gi;
 const RX_FILE_ENTRY_SELF_CLOSED = /<file\b[^>]*\bname="([^"]+)"[^>]*\/>/gi;
@@ -65,33 +70,31 @@ const RX_LIB_KEY = /<key\b[^>]*\bname="Library\d+"[^>]*>\s*([\s\S]*?)\s*<\/key>/
 
 const RX_TARGET = /<target\b([^>]*)>([\s\S]*?)<\/target>/gi;
 const RX_TARGET_COMPILER = /<compiler\b([^>]*)\/>/i;
-const RX_TARGET_COMMANDLINE_TEXT = /<commandline\b[^>]*>([\s\S]*?)<\/commandline>/i;
+const RX_TARGET_COMMANDLINE = /<commandline\b[^>]*\/>/gi;
 const RX_TARGET_PURIFIER = /<purifier\b([^>]*)\/>/i;
 const RX_TARGET_OPTIONS = /<options\b([^>]*)\/>/i;
 const RX_TARGET_FORMAT = /<format\b([^>]*)\/>/i;
 const RX_TARGET_ICON = /<icon\b([^>]*)>([\s\S]*?)<\/icon>/i;
 
+const RX_TARGET_DEBUGGER = /<debugger\b([^>]*)\/>/i;
 const RX_TARGET_WARNINGS = /<warnings\b([^>]*)\/>/i;
-
-const RX_TARGET_VERSIONINFO_SECTION = /<versioninfo\b([^>]*)>([\s\S]*?)<\/versioninfo>/i;
-const RX_TARGET_VERSIONINFO_FIELD = /<(field\d+)\b([^>]*)\/>/gi;
-
-const RX_TARGET_RESOURCES_SECTION = /<resources\b[^>]*>([\s\S]*?)<\/resources>/i;
-const RX_TARGET_RESOURCE = /<resource\b([^>]*)\/>/gi;
-
-const RX_TARGET_WATCHLIST = /<watchlist\b[^>]*>([\s\S]*?)<\/watchlist>/i;
-
-const RX_TARGET_TEMPORARYEXE = /<temporaryexe\b([^>]*)\/>/i;
 const RX_TARGET_COMPILECOUNT = /<compilecount\b([^>]*)\/>/i;
 const RX_TARGET_BUILDCOUNT = /<buildcount\b([^>]*)\/>/i;
+const RX_TARGET_EXECONSTANT = /<execonstant\b([^>]*)\/>/i;
+
+const RX_TARGET_VERSIONINFO = /<versioninfo\b([^>]*)>([\s\S]*?)<\/versioninfo>/i;
+const RX_TARGET_VERSIONINFO_FIELD = /<(field\d+)\b([^>]*)\/>/gi;
+
+const RX_TARGET_RESOURCES = /<resources\b[^>]*>([\s\S]*?)<\/resources>/i;
+const RX_TARGET_RESOURCE = /<resource\b[^>]*\bvalue="([^"]*)"[^>]*\/>/gi;
+
+const RX_TARGET_WATCHLIST = /<watchlist\b[^>]*>([\s\S]*?)<\/watchlist>/i;
 
 const RX_TARGET_CONSTANTS_SECTION = /<constants\b[^>]*>([\s\S]*?)<\/constants>/i;
 const RX_TARGET_CONSTANT = /<constant\b([^>]*)\/>/gi;
 
 const RX_VALUE_ATTR_TEMPLATE = `<__TAG__\\b[^>]*\\bvalue="([^"]*)"[^>]*\\/>`; // Usage: new RegExp(RX_VALUE_ATTR_TEMPLATE.replace('__TAG__', escapeRegExp(tagName)), 'i');
 const RX_VALUE_ATTR_FLAGS = 'i';
-const RX_SECTION_TEMPLATE = `<section\\b[^>]*\\bname="__NAME__"[^>]*>([\\s\\S]*?)<\\/section>`; // Usage: new RegExp(RX_SECTION_TEMPLATE.replace('__NAME__', escapeRegExp(sectionName)), 'i');
-const RX_SECTION_FLAGS = 'i';
 
 /**
  * Escape special characters in regular expressions
@@ -105,8 +108,8 @@ function cloneGlobalRegex(re: RegExp): RegExp {
 }
 
 function parseOptionalInt(v: string | undefined): number | undefined {
-    if (!v) return undefined;
-    const t = v.trim();
+    if (v === undefined) return undefined;
+    const t = String(v).trim();
     if (!t) return undefined;
     const n = parseInt(t, 10);
     return Number.isFinite(n) ? n : undefined;
@@ -119,6 +122,8 @@ function parseOptionalInt(v: string | undefined): number | undefined {
  * All paths inside the project are stored relative to the project file.
  */
 export function parsePbpProjectText(content: string, projectFileFsPath: string, options: ParsePbpOptions = {}): PbpProject | null {
+    void options;
+
     const normalized = normalizeNewlines(content);
     const projectDir = path.dirname(projectFileFsPath);
 
@@ -134,44 +139,77 @@ export function parsePbpProjectText(content: string, projectFileFsPath: string, 
  * Parses .pbp project files (XML format)
  */
 function parseXmlProject(content: string, projectFileFsPath: string, projectDir: string): PbpProject | null {
-    const meta = parseProjectMeta(content);
-    const config = parseProjectConfig(content);
-    const data = parseProjectData(content);
-    const files = parseProjectFiles(content, projectDir);
-    const targets = parseProjectTargets(content, projectDir);
-    const libraries = parseProjectLibraries(content);
+    const { sections, sectionOrder } = extractSections(content);
+    const projectAttrs = parseProjectAttrs(content);
 
-    if (meta) {
-        meta.presentSections = {
-            config: extractSection(content, 'config') !== null,
-            data: extractSection(content, 'data') !== null,
-            files: extractSection(content, 'files') !== null,
-            targets: extractSection(content, 'targets') !== null,
-            libraries: extractSection(content, 'libraries') !== null,
-        };
+    const presentSections: Record<string, boolean> = {};
+    for (const name of sectionOrder) {
+        presentSections[name] = true;
     }
+
+    const unknownSections: Record<string, string> = {};
+    for (const name of sectionOrder) {
+        if (!isModeledSection(name)) {
+            const raw = sections.get(name)?.raw;
+            if (raw) unknownSections[name] = raw;
+        }
+    }
+
+    const config = parseProjectConfig(sections.get('config')?.body ?? null);
+    const data = parseProjectData(sections.get('data')?.body ?? null);
+    const files = parseProjectFiles(sections.get('files')?.body ?? null, projectDir);
+    const targets = parseProjectTargets(sections.get('targets')?.body ?? null, projectDir);
+    const libraries = parseProjectLibraries(sections.get('libraries')?.body ?? null);
+
+    const meta: PbpProjectMeta = {
+        projectAttrs,
+        sectionOrder,
+        presentSections,
+        unknownSections: Object.keys(unknownSections).length > 0 ? unknownSections : undefined,
+    };
 
     return {
         projectFile: projectFileFsPath,
         projectDir,
-        meta,
         config,
         data,
         files,
         libraries,
         targets,
+        meta,
     };
 }
 
-function parseProjectMeta(content: string): PbpProjectMeta | undefined {
-    const m = content.match(RX_PROJECT_TAG);
-    if (!m) return undefined;
-    const attrs = parseAttributes(m[1] ?? '');
-    return { projectAttrs: attrs };
+function isModeledSection(name: string): boolean {
+    return name === 'config' || name === 'data' || name === 'files' || name === 'targets' || name === 'libraries';
 }
 
-function parseProjectConfig(content: string): PbpConfig {
-    const configSection = extractSection(content, 'config');
+function parseProjectAttrs(content: string): Record<string, string> {
+    const m = content.match(RX_PROJECT_OPEN);
+    return m ? parseAttributes(m[1] ?? '') : {};
+}
+
+function extractSections(content: string): { sections: Map<string, { attrsText: string; body: string; raw: string }>; sectionOrder: string[] } {
+    const sections = new Map<string, { attrsText: string; body: string; raw: string }>();
+    const sectionOrder: string[] = [];
+
+    const re = cloneGlobalRegex(RX_SECTION_BLOCK);
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(content)) !== null) {
+        const attrsText = `${m[1] ?? ''}${m[3] ?? ''}`;
+        const name = (m[2] ?? '').trim();
+        const body = m[4] ?? '';
+        const raw = m[0] ?? '';
+
+        if (!name) continue;
+        sections.set(name, { attrsText, body, raw });
+        sectionOrder.push(name);
+    }
+
+    return { sections, sectionOrder };
+}
+
+function parseProjectConfig(configSection: string | null): PbpConfig {
     if (!configSection) {
         return {
             name: '',
@@ -181,24 +219,32 @@ function parseProjectConfig(content: string): PbpConfig {
         };
     }
 
-    const optionsMatch = configSection.match(RX_CONFIG_OPTIONS);
-    const optionsAttrs = optionsMatch ? parseAttributes(optionsMatch[1] ?? '') : {};
+    const optMatch = configSection.match(RX_CONFIG_OPTIONS);
+    const optAttrs = optMatch ? parseAttributes(optMatch[1] ?? '') : {};
 
     const commentMatch = configSection.match(RX_CONFIG_COMMENT);
-    const commentPresent = !!commentMatch;
+    const commentText = decodeXmlEntities((commentMatch?.[1] ?? '').trim());
+
+    // Preserve unmodeled XML inside config section.
+    let extra = configSection;
+    extra = extra.replace(RX_CONFIG_OPTIONS, '');
+    extra = extra.replace(RX_CONFIG_COMMENT, '');
+    extra = extra.trim();
 
     return {
-        name: (optionsAttrs['name'] ?? '').trim(),
-        comment: decodeXmlEntities((commentMatch?.[1] ?? '').trim()),
-        closefiles: parseBool(optionsAttrs['closefiles']),
-        openmode: parseOptionalInt(optionsAttrs['openmode']) ?? 0,
-        optionsAttrs: optionsAttrs,
-        commentPresent,
+        name: (optAttrs['name'] ?? '').trim(),
+        comment: commentText,
+        closefiles: parseBool(optAttrs['closefiles']),
+        openmode: parseOptionalInt(optAttrs['openmode']) ?? 0,
+        meta: {
+            optionsAttrs: optMatch ? optAttrs : undefined,
+            hasComment: !!commentMatch,
+            extraXml: extra || undefined,
+        },
     };
 }
 
-function parseProjectData(content: string): PbpData {
-    const dataSection = extractSection(content, 'data');
+function parseProjectData(dataSection: string | null): PbpData {
     if (!dataSection) return {};
 
     const explorerMatch = dataSection.match(RX_DATA_EXPLORER);
@@ -210,31 +256,49 @@ function parseProjectData(content: string): PbpData {
     const lastOpenMatch = dataSection.match(RX_DATA_LASTOPEN);
     const lastopenAttrs = lastOpenMatch ? parseAttributes(lastOpenMatch[1] ?? '') : undefined;
 
-    const explorer = explorerAttrs ? {
-        view: explorerAttrs['view'] ?? undefined,
-        pattern: parseOptionalInt(explorerAttrs['pattern']),
-    } : undefined;
+    const explorer = explorerAttrs
+        ? {
+              view: explorerAttrs['view'] ?? undefined,
+              pattern: parseOptionalInt(explorerAttrs['pattern']),
+          }
+        : undefined;
 
-    const log = logAttrs ? {
-        show: logAttrs['show'] !== undefined ? parseBool(logAttrs['show']) : undefined,
-    } : undefined;
+    const log = logAttrs
+        ? {
+              show: logAttrs['show'] !== undefined ? parseBool(logAttrs['show']) : undefined,
+          }
+        : undefined;
 
-    const lastopen = lastopenAttrs ? {
-        date: (lastopenAttrs['date'] ?? '').trim() || undefined,
-        user: (lastopenAttrs['user'] ?? '').trim() || undefined,
-        host: (lastopenAttrs['host'] ?? '').trim() || undefined,
-    } : undefined;
+    const lastopen = lastopenAttrs
+        ? {
+              date: (lastopenAttrs['date'] ?? '').trim() || undefined,
+              user: (lastopenAttrs['user'] ?? '').trim() || undefined,
+              host: (lastopenAttrs['host'] ?? '').trim() || undefined,
+          }
+        : undefined;
 
-    return { explorer, log, lastopen };
+    let extra = dataSection;
+    extra = extra.replace(RX_DATA_EXPLORER, '');
+    extra = extra.replace(RX_DATA_LOG, '');
+    extra = extra.replace(RX_DATA_LASTOPEN, '');
+    extra = extra.trim();
+
+    return {
+        explorer,
+        log,
+        lastopen,
+        meta: {
+            extraXml: extra || undefined,
+        },
+    };
 }
 
-function parseProjectFiles(content: string, projectDir: string): PbpFileEntry[] {
-    const filesSection = extractSection(content, 'files');
+function parseProjectFiles(filesSection: string | null, projectDir: string): PbpFileEntry[] {
     if (!filesSection) return [];
 
     const result: PbpFileEntry[] = [];
 
-    // Normal <file name="...">...</file>
+    // Normal <file name="..."> ... </file>
     const fileRe = cloneGlobalRegex(RX_FILE_ENTRY);
     let m: RegExpExecArray | null;
     while ((m = fileRe.exec(filesSection)) !== null) {
@@ -244,26 +308,35 @@ function parseProjectFiles(content: string, projectDir: string): PbpFileEntry[] 
         const configMatch = body.match(RX_FILE_CONFIG);
         const configAttrs = configMatch ? parseAttributes(configMatch[1] ?? '') : undefined;
 
-        const cfg = configAttrs ? {
-            load: configAttrs['load'] !== undefined ? parseBool(configAttrs['load']) : undefined,
-            scan: configAttrs['scan'] !== undefined ? parseBool(configAttrs['scan']) : undefined,
-            panel: configAttrs['panel'] !== undefined ? parseBool(configAttrs['panel']) : undefined,
-            warn: configAttrs['warn'] !== undefined ? parseBool(configAttrs['warn']) : undefined,
-        } : undefined;
+        const cfg: PbpFileConfig | undefined = configAttrs
+            ? {
+                  load: configAttrs['load'] !== undefined ? parseBool(configAttrs['load']) : undefined,
+                  scan: configAttrs['scan'] !== undefined ? parseBool(configAttrs['scan']) : undefined,
+                  panel: configAttrs['panel'] !== undefined ? parseBool(configAttrs['panel']) : undefined,
+                  warn: configAttrs['warn'] !== undefined ? parseBool(configAttrs['warn']) : undefined,
+                  lastopen: configAttrs['lastopen'] !== undefined ? parseBool(configAttrs['lastopen']) : undefined,
+                  sortindex: parseOptionalInt(configAttrs['sortindex']),
+                  panelstate: (configAttrs['panelstate'] ?? '').trim() || undefined,
+                  attrs: configAttrs,
+              }
+            : undefined;
 
-        const fingerprintMatch = body.match(RX_FILE_FINGERPRINT);
-        const fingerprintAttrs = fingerprintMatch ? parseAttributes(fingerprintMatch[1] ?? '') : undefined;
+        const fpMatch = body.match(RX_FILE_FINGERPRINT);
+        const fingerprint = fpMatch ? parseAttributes(fpMatch[1] ?? '') : undefined;
 
-        const meta = (configAttrs || fingerprintAttrs) ? {
-            configAttrs,
-            fingerprintAttrs,
-        } : undefined;
+        let extra = body;
+        extra = extra.replace(RX_FILE_CONFIG, '');
+        extra = extra.replace(RX_FILE_FINGERPRINT, '');
+        extra = extra.trim();
 
         result.push({
             rawPath,
             fsPath: resolveProjectPath(projectDir, rawPath),
             config: cfg,
-            meta,
+            fingerprint,
+            meta: {
+                extraXml: extra || undefined,
+            },
         });
     }
 
@@ -282,25 +355,24 @@ function parseProjectFiles(content: string, projectDir: string): PbpFileEntry[] 
     return result;
 }
 
-function parseProjectLibraries(content: string): string[] {
+function parseProjectLibraries(librariesSection: string | null): string[] {
     // Best-effort parsing: PureBasic stores libraries inconsistently across versions.
     // Common patterns observed:
     //  - <section name="libraries"> ... <library value="..."/> ... </section>
     //  - <section name="libraries"> ... <key name="Library0">...</key> ... </section>
-    const section = extractSection(content, 'libraries');
-    if (!section) return [];
+    if (!librariesSection) return [];
 
     const libs: string[] = [];
 
     const valueRe = cloneGlobalRegex(RX_LIB_VALUE);
     let m: RegExpExecArray | null;
-    while ((m = valueRe.exec(section)) !== null) {
+    while ((m = valueRe.exec(librariesSection)) !== null) {
         const v = decodeXmlEntities((m[1] ?? '').trim());
         if (v) libs.push(v);
     }
 
     const keyRe = cloneGlobalRegex(RX_LIB_KEY);
-    while ((m = keyRe.exec(section)) !== null) {
+    while ((m = keyRe.exec(librariesSection)) !== null) {
         const v = decodeXmlEntities((m[1] ?? '').trim());
         if (v) libs.push(v);
     }
@@ -317,8 +389,7 @@ function parseProjectLibraries(content: string): string[] {
     return result;
 }
 
-function parseProjectTargets(content: string, projectDir: string): PbpTarget[] {
-    const targetsSection = extractSection(content, 'targets');
+function parseProjectTargets(targetsSection: string | null, projectDir: string): PbpTarget[] {
     if (!targetsSection) return [];
 
     const result: PbpTarget[] = [];
@@ -333,22 +404,63 @@ function parseProjectTargets(content: string, projectDir: string): PbpTarget[] {
         const enabled = parseBool(attrs['enabled']);
         const isDefault = parseBool(attrs['default']);
 
-        const directory = (attrs['directory'] ?? '').trim() || undefined;
+        const targetAttrs: Record<string, string> = { ...attrs };
+        delete targetAttrs['name'];
+        delete targetAttrs['enabled'];
+        delete targetAttrs['default'];
+
+        const presentNodes: Record<string, boolean> = {
+            inputfile: containsTag(body, 'inputfile'),
+            outputfile: containsTag(body, 'outputfile'),
+            executable: containsTag(body, 'executable'),
+            directory: containsTag(body, 'directory') || attrs['directory'] !== undefined,
+            compiler: containsTag(body, 'compiler'),
+            commandline: containsTag(body, 'commandline'),
+            options: containsTag(body, 'options'),
+            purifier: containsTag(body, 'purifier'),
+            temporaryexe: containsTag(body, 'temporaryexe'),
+            subsystem: containsTag(body, 'subsystem'),
+            linker: containsTag(body, 'linker'),
+            icon: containsTag(body, 'icon'),
+            format: containsTag(body, 'format'),
+            debugger: containsTag(body, 'debugger'),
+            warnings: containsTag(body, 'warnings'),
+            compilecount: containsTag(body, 'compilecount'),
+            buildcount: containsTag(body, 'buildcount'),
+            execonstant: containsTag(body, 'execonstant'),
+            constants: containsTag(body, 'constants'),
+            versioninfo: containsTag(body, 'versioninfo'),
+            resources: containsTag(body, 'resources'),
+            watchlist: containsTag(body, 'watchlist'),
+        };
 
         const inputRaw = extractValueAttr(body, 'inputfile');
         const outputRaw = extractValueAttr(body, 'outputfile');
         const exeRaw = extractValueAttr(body, 'executable');
 
+        // Directory may be stored as target attribute or as a nested tag.
+        const dirTagRaw = extractValueAttr(body, 'directory');
+        const directory = (dirTagRaw || (attrs['directory'] ?? '')).trim();
+
         const compilerMatch = body.match(RX_TARGET_COMPILER);
         const compilerAttrs = compilerMatch ? parseAttributes(compilerMatch[1] ?? '') : undefined;
         const compilerVersion = (compilerAttrs?.['version'] ?? '').trim() || undefined;
 
-        const commandLineRaw = extractValueAttr(body, 'commandline');
-        const commandLineTextMatch = !commandLineRaw ? body.match(RX_TARGET_COMMANDLINE_TEXT) : null;
-        const commandLine = (commandLineRaw || decodeXmlEntities((commandLineTextMatch?.[1] ?? '').trim())) || undefined;
+        const commandLine = extractValueAttr(body, 'commandline');
 
         const subsystemRaw = extractValueAttr(body, 'subsystem');
         const subsystem = subsystemRaw ? subsystemRaw : undefined;
+
+        const tempExeRaw = extractValueAttr(body, 'temporaryexe');
+        const temporaryExe = tempExeRaw ? tempExeRaw : undefined;
+
+        const linkerRaw = extractValueAttr(body, 'linker');
+        const linker: PbpTargetValue | undefined = linkerRaw
+            ? {
+                  rawPath: linkerRaw,
+                  fsPath: resolveTargetPath(projectDir, linkerRaw),
+              }
+            : undefined;
 
         const purifierMatch = body.match(RX_TARGET_PURIFIER);
         const purifierAttrs = purifierMatch ? parseAttributes(purifierMatch[1] ?? '') : undefined;
@@ -356,36 +468,8 @@ function parseProjectTargets(content: string, projectDir: string): PbpTarget[] {
         const purifierGranularity = purifierAttrs?.['granularity'];
 
         const optMatch = body.match(RX_TARGET_OPTIONS);
-        const optionAttrs = optMatch ? parseAttributes(optMatch[1] ?? '') : undefined;
-        const options = optionAttrs ? parseBooleanLikeAttributes(optionAttrs) : {};
-
-        const warningsMatch = body.match(RX_TARGET_WARNINGS);
-        const warningsAttrs = warningsMatch ? parseAttributes(warningsMatch[1] ?? '') : undefined;
-        const warnings = warningsAttrs
-            ? {
-                custom: warningsAttrs['custom'] !== undefined ? parseBool(warningsAttrs['custom']) : undefined,
-                type: (warningsAttrs['type'] ?? '').trim() || undefined,
-                attrs: warningsAttrs,
-            }
-            : undefined;
-
-        const tempExeMatch = body.match(RX_TARGET_TEMPORARYEXE);
-        const tempExeAttrs = tempExeMatch ? parseAttributes(tempExeMatch[1] ?? '') : undefined;
-        const temporaryExe = (tempExeAttrs?.['value'] ?? '').trim() || undefined;
-
-        const compileCountMatch = body.match(RX_TARGET_COMPILECOUNT);
-        const compileCountAttrs = compileCountMatch ? parseAttributes(compileCountMatch[1] ?? '') : undefined;
-        const compileCount = compileCountAttrs ? {
-            enabled: parseBool(compileCountAttrs['enable']),
-            value: parseOptionalInt(compileCountAttrs['value']),
-        } : undefined;
-
-        const buildCountMatch = body.match(RX_TARGET_BUILDCOUNT);
-        const buildCountAttrs = buildCountMatch ? parseAttributes(buildCountMatch[1] ?? '') : undefined;
-        const buildCount = buildCountAttrs ? {
-            enabled: parseBool(buildCountAttrs['enable']),
-            value: parseOptionalInt(buildCountAttrs['value']),
-        } : undefined;
+        const optionsAttrs = optMatch ? parseAttributes(optMatch[1] ?? '') : undefined;
+        const options = optionsAttrs ? parseBooleanMap(optionsAttrs) : {};
 
         const fmtMatch = body.match(RX_TARGET_FORMAT);
         const format = fmtMatch ? parseAttributes(fmtMatch[1] ?? '') : undefined;
@@ -394,66 +478,147 @@ function parseProjectTargets(content: string, projectDir: string): PbpTarget[] {
         const iconAttrs = iconMatch ? parseAttributes(iconMatch[1] ?? '') : undefined;
         const iconText = iconMatch ? decodeXmlEntities((iconMatch[2] ?? '').trim()) : '';
 
+        const debuggerMatch = body.match(RX_TARGET_DEBUGGER);
+        const debuggerAttrs = debuggerMatch ? parseAttributes(debuggerMatch[1] ?? '') : undefined;
+
+        const warningsMatch = body.match(RX_TARGET_WARNINGS);
+        const warningsAttrs = warningsMatch ? parseAttributes(warningsMatch[1] ?? '') : undefined;
+
+        const compileCountMatch = body.match(RX_TARGET_COMPILECOUNT);
+        const compileCountAttrs = compileCountMatch ? parseAttributes(compileCountMatch[1] ?? '') : undefined;
+
+        const buildCountMatch = body.match(RX_TARGET_BUILDCOUNT);
+        const buildCountAttrs = buildCountMatch ? parseAttributes(buildCountMatch[1] ?? '') : undefined;
+
+        const exeConstantMatch = body.match(RX_TARGET_EXECONSTANT);
+        const exeConstantAttrs = exeConstantMatch ? parseAttributes(exeConstantMatch[1] ?? '') : undefined;
+
         const constants = parseTargetConstants(body);
 
         const versionInfo = parseTargetVersionInfo(body);
         const resources = parseTargetResources(body);
+        const watchList = parseTargetWatchList(body);
 
-        const watchListMatch = body.match(RX_TARGET_WATCHLIST);
-        const watchList = watchListMatch ? decodeXmlEntities((watchListMatch[1] ?? '').trim()) : undefined;
+        let extra = body;
+        // Remove known tags (best-effort, non-destructive for nested data).
+        extra = extra.replace(/<inputfile\b[\s\S]*?\/>/gi, '');
+        extra = extra.replace(/<outputfile\b[\s\S]*?\/>/gi, '');
+        extra = extra.replace(/<executable\b[\s\S]*?\/>/gi, '');
+        extra = extra.replace(/<directory\b[\s\S]*?\/>/gi, '');
+        extra = extra.replace(RX_TARGET_COMPILER, '');
+        extra = extra.replace(cloneGlobalRegex(RX_TARGET_COMMANDLINE), '');
+        extra = extra.replace(RX_TARGET_PURIFIER, '');
+        extra = extra.replace(RX_TARGET_OPTIONS, '');
+        extra = extra.replace(RX_TARGET_FORMAT, '');
+        extra = extra.replace(/<icon\b[\s\S]*?<\/icon>/gi, '');
+        extra = extra.replace(/<temporaryexe\b[\s\S]*?\/>/gi, '');
+        extra = extra.replace(/<subsystem\b[\s\S]*?\/>/gi, '');
+        extra = extra.replace(/<linker\b[\s\S]*?\/>/gi, '');
+        extra = extra.replace(RX_TARGET_DEBUGGER, '');
+        extra = extra.replace(RX_TARGET_WARNINGS, '');
+        extra = extra.replace(RX_TARGET_COMPILECOUNT, '');
+        extra = extra.replace(RX_TARGET_BUILDCOUNT, '');
+        extra = extra.replace(RX_TARGET_EXECONSTANT, '');
+        extra = extra.replace(/<constants\b[\s\S]*?<\/constants>/gi, '');
+        extra = extra.replace(/<versioninfo\b[\s\S]*?<\/versioninfo>/gi, '');
+        extra = extra.replace(/<resources\b[\s\S]*?<\/resources>/gi, '');
+        extra = extra.replace(/<watchlist\b[\s\S]*?<\/watchlist>/gi, '');
+        extra = extra.trim();
 
         result.push({
             name,
             enabled,
             isDefault,
             directory,
-            targetAttrs: attrs,
             inputFile: {
                 rawPath: inputRaw,
-                fsPath: resolveProjectPath(projectDir, inputRaw),
+                fsPath: resolveTargetPath(projectDir, inputRaw),
             },
             outputFile: {
                 rawPath: outputRaw,
-                fsPath: resolveProjectPath(projectDir, outputRaw),
+                fsPath: resolveTargetPath(projectDir, outputRaw),
             },
             executable: {
                 rawPath: exeRaw,
-                fsPath: resolveProjectPath(projectDir, exeRaw),
+                fsPath: resolveTargetPath(projectDir, exeRaw),
             },
             options,
-            optionAttrs,
-            temporaryExe: temporaryExe,
-            compileCount,
-            buildCount,
+            optionsAttrs,
             compilerVersion,
             commandLine,
             subsystem,
-            purifier: purifierMatch ? { enabled: purifierEnabled, granularity: purifierGranularity } : undefined,
-            warnings,
+            temporaryExe,
+            linker,
+            purifier: purifierMatch
+                ? {
+                      enabled: purifierEnabled,
+                      granularity: purifierGranularity,
+                      attrs: purifierAttrs,
+                  }
+                : undefined,
             format,
             icon: iconText
                 ? {
-                    enabled: parseBool(iconAttrs?.['enable']),
-                    rawPath: iconText,
-                    fsPath: resolveProjectPath(projectDir, iconText),
-                }
+                      enabled: parseBool(iconAttrs?.['enable']),
+                      rawPath: iconText,
+                      fsPath: resolveTargetPath(projectDir, iconText),
+                      attrs: iconAttrs,
+                  }
                 : undefined,
+            debugger: debuggerAttrs
+                ? {
+                      custom: debuggerAttrs['custom'] !== undefined ? parseBool(debuggerAttrs['custom']) : undefined,
+                      type: (debuggerAttrs['type'] ?? '').trim() || undefined,
+                      attrs: debuggerAttrs,
+                  }
+                : undefined,
+            warnings: warningsAttrs
+                ? {
+                      custom: warningsAttrs['custom'] !== undefined ? parseBool(warningsAttrs['custom']) : undefined,
+                      type: (warningsAttrs['type'] ?? '').trim() || undefined,
+                      attrs: warningsAttrs,
+                  }
+                : undefined,
+            compileCount: compileCountAttrs
+                ? {
+                      enabled: parseBool(compileCountAttrs['enable']),
+                      value: parseOptionalInt(compileCountAttrs['value']),
+                      attrs: compileCountAttrs,
+                  }
+                : undefined,
+            buildCount: buildCountAttrs
+                ? {
+                      enabled: parseBool(buildCountAttrs['enable']),
+                      value: parseOptionalInt(buildCountAttrs['value']),
+                      attrs: buildCountAttrs,
+                  }
+                : undefined,
+            exeConstant: exeConstantAttrs
+                ? {
+                      enabled: parseBool(exeConstantAttrs['enable']),
+                      attrs: exeConstantAttrs,
+                  }
+                : undefined,
+            constants,
             versionInfo,
             resources,
             watchList,
-            constants,
+            meta: {
+                targetAttrs: Object.keys(targetAttrs).length > 0 ? targetAttrs : undefined,
+                presentNodes,
+                extraXml: extra || undefined,
+            },
         });
     }
 
     return result;
 }
 
-function parseTargetVersionInfo(targetBody: string): PbpTarget['versionInfo'] {
-    const m = targetBody.match(RX_TARGET_VERSIONINFO_SECTION);
+function parseTargetVersionInfo(targetBody: string): PbpTarget['versionInfo'] | undefined {
+    const m = targetBody.match(RX_TARGET_VERSIONINFO);
     if (!m) return undefined;
 
     const attrs = parseAttributes(m[1] ?? '');
-    const enabled = parseBool(attrs['enable']);
     const body = m[2] ?? '';
 
     const fields: Array<{ id: string; value: string }> = [];
@@ -463,36 +628,45 @@ function parseTargetVersionInfo(targetBody: string): PbpTarget['versionInfo'] {
         const id = (fm[1] ?? '').trim();
         const fAttrs = parseAttributes(fm[2] ?? '');
         const value = decodeXmlEntities((fAttrs['value'] ?? '').trim());
-        fields.push({ id, value });
+        if (id) {
+            fields.push({ id, value });
+        }
     }
 
-    // Deterministic, but keep semantic ordering by numeric suffix.
     fields.sort((a, b) => {
-        const an = parseOptionalInt(a.id.replace(/^field/i, '')) ?? 0;
-        const bn = parseOptionalInt(b.id.replace(/^field/i, '')) ?? 0;
-        if (an !== bn) return an - bn;
+        const ai = parseInt(a.id.replace(/^field/i, ''), 10);
+        const bi = parseInt(b.id.replace(/^field/i, ''), 10);
+        if (Number.isFinite(ai) && Number.isFinite(bi)) return ai - bi;
         return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
     });
 
-    return { enabled, fields };
+    return {
+        enabled: parseBool(attrs['enable']),
+        attrs,
+        fields,
+    };
 }
 
-function parseTargetResources(targetBody: string): PbpTarget['resources'] {
-    const m = targetBody.match(RX_TARGET_RESOURCES_SECTION);
+function parseTargetResources(targetBody: string): string[] | undefined {
+    const m = targetBody.match(RX_TARGET_RESOURCES);
     if (!m) return undefined;
 
     const body = m[1] ?? '';
-    const items: string[] = [];
-
+    const out: string[] = [];
     const re = cloneGlobalRegex(RX_TARGET_RESOURCE);
     let rm: RegExpExecArray | null;
     while ((rm = re.exec(body)) !== null) {
-        const attrs = parseAttributes(rm[1] ?? '');
-        const v = decodeXmlEntities((attrs['value'] ?? '').trim());
-        if (v) items.push(v);
+        const v = decodeXmlEntities((rm[1] ?? '').trim());
+        if (v) out.push(v);
     }
+    return out;
+}
 
-    return { items };
+function parseTargetWatchList(targetBody: string): string | undefined {
+    const m = targetBody.match(RX_TARGET_WATCHLIST);
+    if (!m) return undefined;
+    const txt = decodeXmlEntities((m[1] ?? '').trim());
+    return txt || undefined;
 }
 
 function parseTargetConstants(targetBody: string): Array<{ enabled: boolean; value: string }> {
@@ -508,9 +682,7 @@ function parseTargetConstants(targetBody: string): Array<{ enabled: boolean; val
         const attrs = parseAttributes(m[1] ?? '');
         const enabled = parseBool(attrs['enable']);
         const value = decodeXmlEntities((attrs['value'] ?? '').trim());
-        if (value) {
-            result.push({ enabled, value });
-        }
+            result.push({ enabled, value }); //push also empty values to preserve round-trip consistency
     }
 
     return result;
@@ -522,10 +694,9 @@ function extractValueAttr(targetBody: string, tagName: string): string {
     return decodeXmlEntities((m?.[1] ?? '').trim());
 }
 
-function extractSection(content: string, sectionName: string): string | null {
-    const re = new RegExp(RX_SECTION_TEMPLATE.replace('__NAME__', escapeRegExp(sectionName)), RX_SECTION_FLAGS);
-    const m = content.match(re);
-    return m ? (m[1] ?? '') : null;
+function containsTag(body: string, tagName: string): boolean {
+    const re = new RegExp(`<${escapeRegExp(tagName)}\\b`, 'i');
+    return re.test(body);
 }
 
 function normalizeNewlines(content: string): string {
@@ -533,37 +704,27 @@ function normalizeNewlines(content: string): string {
 }
 
 function parseBool(v: string | undefined): boolean {
-    if (!v) return false;
-    const t = v.trim().toLowerCase();
+    if (v === undefined) return false;
+    const t = String(v).trim().toLowerCase();
     return t === '1' || t === 'true' || t === 'yes';
-}
-
-function parseMaybeBool(v: string | undefined): boolean | undefined {
-    if (v === undefined) return undefined;
-    const t = v.trim().toLowerCase();
-    if (!t) return undefined;
-    if (t === '1' || t === 'true' || t === 'yes') return true;
-    if (t === '0' || t === 'false' || t === 'no') return false;
-    return undefined;
-}
-
-function parseBooleanLikeAttributes(raw: Record<string, string>): Record<string, boolean> {
-    const out: Record<string, boolean> = {};
-    for (const [k, v] of Object.entries(raw)) {
-        const b = parseMaybeBool(v);
-        if (b !== undefined) out[k] = b;
-    }
-    return out;
 }
 
 function parseAttributes(attrText: string): Record<string, string> {
     const attrs: Record<string, string> = {};
-    const re = /(\w+)\s*=\s*"([^"]*)"/g;
+    const re = /([:\w-]+)\s*=\s*"([^"]*)"/g;
     let m: RegExpExecArray | null;
     while ((m = re.exec(attrText)) !== null) {
         attrs[m[1]] = decodeXmlEntities(m[2]);
     }
     return attrs;
+}
+
+function parseBooleanMap(attrs: Record<string, string>): Record<string, boolean> {
+    const out: Record<string, boolean> = {};
+    for (const [k, v] of Object.entries(attrs)) {
+        out[k] = parseBool(v);
+    }
+    return out;
 }
 
 function decodeXmlEntities(s: string): string {

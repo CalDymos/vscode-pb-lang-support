@@ -8,9 +8,7 @@ let projectService: ProjectService | undefined;
 export async function activate(context: vscode.ExtensionContext): Promise<PbProjectFilesApi> {
     projectService = new ProjectService(context);
     context.subscriptions.push(projectService);
-    context.subscriptions.push(PbpEditorProvider.register(context, async () => {
-        await projectService?.refresh();
-    }));
+    context.subscriptions.push(PbpEditorProvider.register(context));
 
     context.subscriptions.push(
         vscode.commands.registerCommand('pbProjectFiles.refresh', async () => {

@@ -1,730 +1,1202 @@
 /*
-    Provides a custom editor for PureBasic .pbp project files.
+    Provides an editable custom editor for PureBasic .pbp project files.
 
-    Note:
-    - This editor intentionally uses an explicit "Save" button.
-    - It does not integrate with VS Code's undo/redo or dirty tracking yet.
+    The editor offers structured tabs similar to PureBasic's project dialog,
+    plus a Raw XML tab to cover settings not (yet) modeled.
 */
 
 import * as vscode from 'vscode';
 
-import {
-    parsePbpProjectText,
-    writePbpProjectText,
-    type PbpProject,
-} from '@caldymos/pb-project-core';
+import { parsePbpProjectText, writePbpProjectText, type PbpProject, type PbpTarget } from '@caldymos/pb-project-core';
 
 export const PBP_EDITOR_VIEW_TYPE = 'pbProjectFiles.pbpEditor';
 
-class PbpDocument implements vscode.CustomDocument {
-    public constructor(public readonly uri: vscode.Uri) {}
-
-    public dispose(): void {
-        // No resources to release.
-    }
-}
-
-function escapeHtml(value: string): string {
-    return value
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
-
 function getNonce(): string {
-    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let out = '';
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let text = '';
     for (let i = 0; i < 32; i++) {
-        out += alphabet[Math.floor(Math.random() * alphabet.length)];
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
     }
-    return out;
+    return text;
 }
 
-function renderShellHtml(title: string, nonce: string): string {
-    // Keep this HTML intentionally small; the actual UI is rendered by the inline script.
+function renderHtml(webview: vscode.Webview, document: vscode.TextDocument, project: PbpProject | null, xml: string, errorText?: string): string {
+    const nonce = getNonce();
+    const csp = `default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';`;
+
+    const initial = {
+        uri: document.uri.toString(),
+        fsPath: document.uri.fsPath,
+        xml,
+        project,
+        errorText: errorText ?? null,
+    };
+
+    const initialJson = JSON.stringify(initial).replace(/</g, '\\u003c');
+
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="${csp}">
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${escapeHtml(title)}</title>
+  <title>PureBasic Project</title>
   <style>
-    body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--vscode-foreground); background: var(--vscode-editor-background); margin: 0; padding: 0; }
-    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--vscode-editorWidget-border); }
-    .title { font-size: 13px; opacity: 0.9; }
-    button { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: 1px solid var(--vscode-button-border); padding: 6px 10px; border-radius: 4px; cursor: pointer; }
-    button:disabled { opacity: 0.6; cursor: default; }
-    .tabs { display: flex; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--vscode-editorWidget-border); flex-wrap: wrap; }
-    .tab { padding: 6px 10px; border-radius: 4px; border: 1px solid var(--vscode-editorWidget-border); background: var(--vscode-editorWidget-background); cursor: pointer; user-select: none; }
-    .tab.active { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-color: var(--vscode-button-border); }
-    .content { padding: 12px; }
-    .row { display: grid; grid-template-columns: 180px 1fr; gap: 8px 12px; margin-bottom: 10px; align-items: center; }
-    .row label { opacity: 0.9; }
-    input[type="text"], textarea, select { width: 100%; box-sizing: border-box; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); padding: 6px 8px; border-radius: 4px; }
-    textarea { min-height: 80px; resize: vertical; }
-    table { width: 100%; border-collapse: collapse; }
+    body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--vscode-foreground); background: var(--vscode-editor-background); padding: 0; margin: 0; }
+    .toolbar { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--vscode-editorWidget-border); position: sticky; top: 0; background: var(--vscode-editor-background); z-index: 2; }
+    .toolbar button { padding: 4px 10px; }
+    .status { opacity: 0.8; }
+
+    .tabs { display: flex; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--vscode-editorWidget-border); }
+    .tabbtn { padding: 6px 10px; border: 1px solid var(--vscode-editorWidget-border); border-radius: 4px; background: var(--vscode-editorWidget-background); cursor: pointer; }
+    .tabbtn.active { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-color: var(--vscode-button-background); }
+
+    .page { display: none; padding: 10px; }
+    .page.active { display: block; }
+
+    .grid2 { display: grid; grid-template-columns: 240px 1fr; gap: 10px 14px; align-items: center; max-width: 1100px; }
+    .grid2 label { opacity: 0.95; }
+    input[type="text"], input[type="number"], textarea, select { width: 100%; box-sizing: border-box; padding: 4px 6px; border: 1px solid var(--vscode-input-border); background: var(--vscode-input-background); color: var(--vscode-input-foreground); border-radius: 3px; }
+    textarea { min-height: 90px; resize: vertical; }
+
+    .row { display: grid; grid-template-columns: 280px 1fr; gap: 10px; }
+    .panel { border: 1px solid var(--vscode-editorWidget-border); border-radius: 6px; padding: 10px; background: var(--vscode-editorWidget-background); }
+
+    table { border-collapse: collapse; width: 100%; }
     th, td { border: 1px solid var(--vscode-editorWidget-border); padding: 6px 8px; text-align: left; }
     th { background: var(--vscode-editorWidget-background); }
-    .split { display: grid; grid-template-columns: 220px 1fr; gap: 12px; }
-    .list { border: 1px solid var(--vscode-editorWidget-border); border-radius: 4px; overflow: hidden; }
-    .list-item { padding: 6px 8px; border-bottom: 1px solid var(--vscode-editorWidget-border); cursor: pointer; }
-    .list-item:last-child { border-bottom: none; }
-    .list-item.active { background: var(--vscode-editorWidget-background); }
-    .muted { opacity: 0.8; }
-    .h2 { font-size: 13px; margin: 0 0 10px; opacity: 0.9; }
-    .btn-row { display: flex; gap: 8px; margin: 10px 0; }
-    .danger { background: var(--vscode-inputValidation-errorBackground); color: var(--vscode-inputValidation-errorForeground); border-color: var(--vscode-inputValidation-errorBorder); }
-    .mono { font-family: var(--vscode-editor-font-family); font-size: var(--vscode-editor-font-size); }
+
+    .subtabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+
+    .muted { opacity: 0.75; }
+    .error { margin: 10px 0; padding: 8px 10px; border: 1px solid var(--vscode-inputValidation-errorBorder); background: var(--vscode-inputValidation-errorBackground); color: var(--vscode-inputValidation-errorForeground); border-radius: 4px; }
+
+    .btnrow { display:flex; gap:8px; flex-wrap:wrap; }
+    .btn { padding: 4px 10px; }
   </style>
 </head>
 <body>
-  <div class="topbar">
-    <div class="title">${escapeHtml(title)}</div>
-    <div style="display:flex; gap:8px; align-items:center;">
-      <span id="status" class="muted"></span>
-      <button id="saveBtn" disabled>Save</button>
-    </div>
+  <div class="toolbar">
+    <button id="btnSave" disabled>Save</button>
+    <button id="btnSaveXml" disabled>Save XML</button>
+    <span id="status" class="status muted"></span>
   </div>
-  <div class="tabs" id="tabs"></div>
-  <div class="content" id="content"></div>
+
+  <div class="tabs">
+    <button class="tabbtn active" data-tab="project">Project Options</button>
+    <button class="tabbtn" data-tab="files">Project Files</button>
+    <button class="tabbtn" data-tab="targets">Targets</button>
+    <button class="tabbtn" data-tab="libraries">Libraries</button>
+    <button class="tabbtn" data-tab="xml">Raw XML</button>
+  </div>
+
+  <div id="page-project" class="page active"></div>
+  <div id="page-files" class="page"></div>
+  <div id="page-targets" class="page"></div>
+  <div id="page-libraries" class="page"></div>
+  <div id="page-xml" class="page"></div>
 
   <script nonce="${nonce}">
-    const vscode = acquireVsCodeApi();
+  const vscode = acquireVsCodeApi();
+  const initial = ${initialJson};
 
-    const tabs = [
-      { id: 'project', label: 'Project Options' },
-      { id: 'files', label: 'Project Files' },
-      { id: 'targets', label: 'Targets' },
-      { id: 'libraries', label: 'Libraries' },
-      { id: 'raw', label: 'Raw XML' },
-    ];
+  let state = {
+    project: initial.project,
+    xml: initial.xml,
+    errorText: initial.errorText,
+    dirtyModel: false,
+    dirtyXml: false,
+    activeTab: 'project',
+    activeTargetIndex: 0,
+    activeTargetTab: 'compiler',
+  };
 
-    let activeTab = 'project';
-    let activeTargetIdx = 0;
+  function $(id) { return document.getElementById(id); }
 
-    /** @type {any} */
-    let state = { project: null, xml: '' };
+  function setStatus(text) {
+    $('status').textContent = text || '';
+  }
 
-    let isDirty = false;
-    let isRawDirty = false;
+  function setDirtyModel(v) {
+    state.dirtyModel = v;
+    $('btnSave').disabled = !v;
+    renderStatus();
+  }
 
-    const elTabs = document.getElementById('tabs');
-    const elContent = document.getElementById('content');
-    const elSaveBtn = document.getElementById('saveBtn');
-    const elStatus = document.getElementById('status');
+  function setDirtyXml(v) {
+    state.dirtyXml = v;
+    $('btnSaveXml').disabled = !v;
+    renderStatus();
+  }
 
-    function setDirty(dirty) {
-      isDirty = dirty;
-      elSaveBtn.disabled = !(isDirty || isRawDirty);
-      elStatus.textContent = (isDirty || isRawDirty) ? 'Unsaved changes' : '';
+  function renderStatus() {
+    const parts = [];
+    if (state.dirtyModel) parts.push('Model changed');
+    if (state.dirtyXml) parts.push('XML changed');
+    if (state.errorText) parts.push('Parse error');
+    setStatus(parts.join(' • '));
+  }
+
+  function esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  function setActiveTab(name) {
+    state.activeTab = name;
+    for (const btn of document.querySelectorAll('.tabbtn')) {
+      btn.classList.toggle('active', btn.dataset.tab === name);
+    }
+    for (const p of document.querySelectorAll('.page')) {
+      p.classList.toggle('active', p.id === 'page-' + name);
+    }
+  }
+
+  function bindTabs() {
+    for (const btn of document.querySelectorAll('.tabbtn')) {
+      btn.addEventListener('click', () => {
+        setActiveTab(btn.dataset.tab);
+      });
+    }
+  }
+
+  function ensureProject() {
+    if (state.project) return true;
+    return false;
+  }
+
+  function updateConfigField(key, value) {
+    if (!ensureProject()) return;
+    state.project.config[key] = value;
+    setDirtyModel(true);
+  }
+
+  function parseIntSafe(v) {
+    const n = parseInt(String(v ?? '').trim(), 10);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function getTargets() {
+    if (!state.project) return [];
+    return Array.isArray(state.project.targets) ? state.project.targets : [];
+  }
+
+  function getActiveTarget() {
+    const targets = getTargets();
+    const idx = Math.max(0, Math.min(state.activeTargetIndex, targets.length - 1));
+    return targets[idx];
+  }
+
+  function ensureTargetOptions(t) {
+    if (!t.options) t.options = {};
+    if (!t.optionsAttrs) t.optionsAttrs = {};
+  }
+
+  function setTargetOptionFlag(t, key, enabled, opts = {}) {
+    ensureTargetOptions(t);
+    t.options[key] = !!enabled;
+
+    // Excel mapping: optimizer uses explicit 0/1, others are commonly omitted when disabled.
+    const forceZero = opts.forceZero === true;
+
+    if (enabled) {
+      t.optionsAttrs[key] = '1';
+    } else {
+      if (forceZero) t.optionsAttrs[key] = '0';
+      else delete t.optionsAttrs[key];
     }
 
-    function setRawDirty(dirty) {
-      isRawDirty = dirty;
-      elSaveBtn.disabled = !(isDirty || isRawDirty);
-      elStatus.textContent = (isDirty || isRawDirty) ? 'Unsaved changes' : '';
+    // admin/user mutual exclusion (Excel note)
+    if (key === 'admin' && enabled) {
+      t.options['user'] = false;
+      delete t.optionsAttrs['user'];
+    }
+    if (key === 'user' && enabled) {
+      t.options['admin'] = false;
+      delete t.optionsAttrs['admin'];
     }
 
-    function renderTabs() {
-      elTabs.innerHTML = '';
-      for (const t of tabs) {
-        const div = document.createElement('div');
-        div.className = 'tab' + (t.id === activeTab ? ' active' : '');
-        div.textContent = t.label;
-        div.addEventListener('click', () => { activeTab = t.id; render(); });
-        elTabs.appendChild(div);
-      }
+    setDirtyModel(true);
+  }
+
+  function setTargetValueTag(t, tagName, raw) {
+    if (!t.meta) t.meta = {};
+    if (!t.meta.presentNodes) t.meta.presentNodes = {};
+    t.meta.presentNodes[tagName] = true;
+
+    if (tagName === 'directory') {
+      t.directory = raw;
+    } else if (tagName === 'commandline') {
+      t.commandLine = raw;
+    } else if (tagName === 'temporaryexe') {
+      t.temporaryExe = raw;
+    }
+    setDirtyModel(true);
+  }
+
+  function renderProjectOptions() {
+    const el = $('page-project');
+    el.innerHTML = '';
+
+    if (state.errorText) {
+      el.innerHTML = \`<div class="error"><strong>Parse error:</strong> \${esc(state.errorText)}</div>\`;
     }
 
-    function h(tag, attrs = {}, ...children) {
-      const el = document.createElement(tag);
-      for (const [k,v] of Object.entries(attrs)) {
-        if (k === 'class') el.className = v;
-        else if (k === 'text') el.textContent = v;
-        else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.substring(2).toLowerCase(), v);
-        else el.setAttribute(k, v);
-      }
-      for (const c of children) {
-        if (c == null) continue;
-        if (typeof c === 'string') el.appendChild(document.createTextNode(c));
-        else el.appendChild(c);
-      }
-      return el;
+    if (!ensureProject()) {
+      el.innerHTML += \`<div class="panel">No project model available.</div>\`;
+      return;
     }
 
-    function renderProjectOptions() {
-      const p = state.project;
-      if (!p) return h('div', { class: 'muted', text: 'No project loaded.' });
+    const cfg = state.project.config;
 
-      const root = h('div');
-      root.appendChild(h('div', { class: 'h2', text: 'Project Info' }));
+    const wrap = document.createElement('div');
+    wrap.className = 'panel';
+    wrap.innerHTML = \`
+      <div class="grid2">
+        <label>Project name</label>
+        <input id="cfgName" type="text" />
 
-      const nameInput = h('input', { type: 'text', value: p.config?.name ?? '' });
-      nameInput.addEventListener('input', () => { p.config.name = nameInput.value; setDirty(true); });
+        <label>Close all sources when closing the project</label>
+        <input id="cfgCloseFiles" type="checkbox" />
 
-      const commentArea = h('textarea', {}, p.config?.comment ?? '');
-      commentArea.addEventListener('input', () => { p.config.comment = commentArea.value; setDirty(true); });
+        <label>Open mode (numeric)</label>
+        <input id="cfgOpenMode" type="number" min="0" step="1" />
 
-      const closeFiles = h('input', { type: 'checkbox' });
-      closeFiles.checked = !!p.config?.closefiles;
-      closeFiles.addEventListener('change', () => { p.config.closefiles = closeFiles.checked; setDirty(true); });
+        <label>Comment</label>
+        <textarea id="cfgComment"></textarea>
+      </div>
+      <div class="muted" style="margin-top:8px;">Note: Open mode mapping depends on the PureBasic version/IDE settings.</div>
+    \`;
 
-      const openModeSel = h('select');
-      openModeSel.appendChild(h('option', { value: '0', text: 'Load sources open last time' }));
-      openModeSel.appendChild(h('option', { value: '1', text: 'Load all project sources' }));
-      openModeSel.appendChild(h('option', { value: '2', text: 'Load only sources marked in Project Files' }));
-      openModeSel.appendChild(h('option', { value: '3', text: 'Load only main file of default target' }));
-      openModeSel.appendChild(h('option', { value: '4', text: 'Load no files' }));
-      openModeSel.value = String(p.config?.openmode ?? 0);
-      openModeSel.addEventListener('change', () => { p.config.openmode = parseInt(openModeSel.value, 10) || 0; setDirty(true); });
+    el.appendChild(wrap);
 
-      root.appendChild(h('div', { class: 'row' }, h('label', { text: 'Project name' }), nameInput));
-      root.appendChild(h('div', { class: 'row' }, h('label', { text: 'Comments' }), commentArea));
-      root.appendChild(h('div', { class: 'row' }, h('label', { text: 'Close all sources on close' }), closeFiles));
-      root.appendChild(h('div', { class: 'row' }, h('label', { text: 'Open mode' }), openModeSel));
+    $('cfgName').value = cfg.name ?? '';
+    $('cfgCloseFiles').checked = !!cfg.closefiles;
+    $('cfgOpenMode').value = String(cfg.openmode ?? 0);
+    $('cfgComment').value = cfg.comment ?? '';
 
-      return root;
+    $('cfgName').addEventListener('input', (e) => updateConfigField('name', e.target.value));
+    $('cfgCloseFiles').addEventListener('change', (e) => updateConfigField('closefiles', e.target.checked));
+    $('cfgOpenMode').addEventListener('input', (e) => updateConfigField('openmode', parseIntSafe(e.target.value)));
+    $('cfgComment').addEventListener('input', (e) => updateConfigField('comment', e.target.value));
+  }
+
+  function renderFiles() {
+    const el = $('page-files');
+    el.innerHTML = '';
+
+    if (!ensureProject()) {
+      el.innerHTML = \`<div class="panel">No project model available.</div>\`;
+      return;
     }
 
-    function renderProjectFiles() {
-      const p = state.project;
-      if (!p) return h('div', { class: 'muted', text: 'No project loaded.' });
+    const files = state.project.files ?? [];
+    const panel = document.createElement('div');
+    panel.className = 'panel';
 
-      const table = h('table');
-      const thead = h('thead');
-      thead.appendChild(h('tr', {},
-        h('th', { text: 'File' }),
-        h('th', { text: 'Load' }),
-        h('th', { text: 'Scan' }),
-        h('th', { text: 'Panel' }),
-        h('th', { text: 'Warn' }),
-      ));
-      table.appendChild(thead);
+    const rows = files.map((f, idx) => {
+      const c = f.config || {};
+      return \`
+        <tr>
+          <td title="\${esc(f.fsPath || '')}">\${esc(f.rawPath)}</td>
+          <td><input type="checkbox" data-file="\${idx}" data-k="load" \${c.load ? 'checked' : ''}></td>
+          <td><input type="checkbox" data-file="\${idx}" data-k="scan" \${c.scan ? 'checked' : ''}></td>
+          <td><input type="checkbox" data-file="\${idx}" data-k="panel" \${c.panel ? 'checked' : ''}></td>
+          <td><input type="checkbox" data-file="\${idx}" data-k="warn" \${c.warn ? 'checked' : ''}></td>
+          <td><input type="number" style="width:90px" data-file="\${idx}" data-k="sortindex" value="\${esc(c.sortindex ?? '')}"></td>
+          <td><input type="text" style="width:90px" data-file="\${idx}" data-k="panelstate" value="\${esc(c.panelstate ?? '')}"></td>
+        </tr>\`;
+    }).join('');
 
-      const tbody = h('tbody');
-      for (const f of (p.files ?? [])) {
-        const cfg = f.config ?? (f.config = {});
-        function mkCb(key) {
-          const cb = h('input', { type: 'checkbox' });
-          cb.checked = !!cfg[key];
-          cb.addEventListener('change', () => { cfg[key] = cb.checked; setDirty(true); });
-          return cb;
+    panel.innerHTML = \`
+      <div class="muted" style="margin-bottom:8px;">Edits update &lt;file&gt; &lt;config .../&gt; attributes.</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Filename</th>
+            <th>Load</th>
+            <th>Scan</th>
+            <th>Panel</th>
+            <th>Warn</th>
+            <th>SortIndex</th>
+            <th>PanelState</th>
+          </tr>
+        </thead>
+        <tbody>
+          \${rows || '<tr><td colspan="7"><em>No files listed.</em></td></tr>'}
+        </tbody>
+      </table>
+    \`;
+
+    el.appendChild(panel);
+
+    for (const input of panel.querySelectorAll('input')) {
+      input.addEventListener('change', (e) => {
+        const idx = parseInt(e.target.dataset.file, 10);
+        const k = e.target.dataset.k;
+        const f = state.project.files[idx];
+        if (!f.config) f.config = {};
+        if (!f.config.attrs) f.config.attrs = {};
+
+        if (e.target.type === 'checkbox') {
+          f.config[k] = e.target.checked;
+          f.config.attrs[k] = e.target.checked ? '1' : '0';
+        } else if (e.target.type === 'number') {
+          const v = parseIntSafe(e.target.value);
+          f.config[k] = v;
+          f.config.attrs[k] = String(v);
+        } else {
+          f.config[k] = e.target.value;
+          f.config.attrs[k] = e.target.value;
         }
 
-        const tr = h('tr', {},
-          h('td', { text: f.rawPath ?? '' }),
-          h('td', {}, mkCb('load')),
-          h('td', {}, mkCb('scan')),
-          h('td', {}, mkCb('panel')),
-          h('td', {}, mkCb('warn')),
-        );
+        setDirtyModel(true);
+      });
+    }
+  }
+
+  function renderLibraries() {
+    const el = $('page-libraries');
+    el.innerHTML = '';
+
+    if (!ensureProject()) {
+      el.innerHTML = \`<div class="panel">No project model available.</div>\`;
+      return;
+    }
+
+    const libs = state.project.libraries ?? [];
+
+    const panel = document.createElement('div');
+    panel.className = 'panel';
+
+    panel.innerHTML = \`
+      <div class="btnrow" style="margin-bottom:8px;">
+        <button class="btn" id="libAdd">Add</button>
+      </div>
+      <table>
+        <thead><tr><th>Library</th><th style="width:80px"></th></tr></thead>
+        <tbody id="libRows"></tbody>
+      </table>
+    \`;
+
+    el.appendChild(panel);
+
+    function rebuild() {
+      const tbody = $('libRows');
+      tbody.innerHTML = '';
+      for (let i = 0; i < libs.length; i++) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = \`
+          <td><input type="text" data-idx="\${i}" value="\${esc(libs[i])}"></td>
+          <td><button class="btn" data-del="\${i}">Remove</button></td>\`;
         tbody.appendChild(tr);
       }
-      table.appendChild(tbody);
-
-      const note = h('div', { class: 'muted', text: 'Note: Additional per-file fields like sortindex/panelstate/fingerprint are preserved in the parsed model (meta), but are not fully edited yet.' });
-
-      return h('div', {}, table, h('div', { style: 'height: 10px;' }), note);
-    }
-
-    function renderTargets() {
-      const p = state.project;
-      if (!p) return h('div', { class: 'muted', text: 'No project loaded.' });
-
-      const targets = p.targets ?? [];
-      if (targets.length === 0) return h('div', { class: 'muted', text: 'No targets found.' });
-
-      if (activeTargetIdx < 0 || activeTargetIdx >= targets.length) activeTargetIdx = 0;
-      const cur = targets[activeTargetIdx];
-
-      const left = h('div', { class: 'list' });
-      targets.forEach((t, idx) => {
-        const item = h('div', { class: 'list-item' + (idx === activeTargetIdx ? ' active' : ''), text: t.name ?? '(unnamed)' });
-        item.addEventListener('click', () => { activeTargetIdx = idx; render(); });
-        left.appendChild(item);
-      });
-
-      const right = h('div');
-      right.appendChild(h('div', { class: 'h2', text: 'Compiler Options' }));
-
-      // options checkboxes
-      const optContainer = h('div');
-      const optKeys = Object.keys(cur.optionAttrs ?? cur.options ?? {}).sort();
-      if (!cur.optionAttrs) cur.optionAttrs = {};
-
-      function readBoolFromOption(key) {
-        const raw = cur.optionAttrs[key];
-        if (raw === '1' || raw === 'true' || raw === 'yes') return true;
-        if (raw === '0' || raw === 'false' || raw === 'no') return false;
-        return !!(cur.options && cur.options[key]);
+      if (libs.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = \`<td colspan="2"><em>No libraries.</em></td>\`;
+        tbody.appendChild(tr);
       }
 
-      for (const k of optKeys) {
-        const cb = h('input', { type: 'checkbox' });
-        cb.checked = readBoolFromOption(k);
-        cb.addEventListener('change', () => {
-          cur.options = cur.options ?? {};
-          cur.options[k] = cb.checked;
-          cur.optionAttrs[k] = cb.checked ? '1' : '0';
-          setDirty(true);
-        });
-        optContainer.appendChild(h('div', { class: 'row' }, h('label', { text: k }), cb));
-      }
-
-      if (optKeys.length === 0) {
-        optContainer.appendChild(h('div', { class: 'muted', text: 'No target options found.' }));
-      }
-
-      right.appendChild(optContainer);
-
-      // Purifier
-      right.appendChild(h('div', { class: 'h2', text: 'Purifier' }));
-      const purifierEnabled = h('input', { type: 'checkbox' });
-      purifierEnabled.checked = !!cur.purifier?.enabled;
-      purifierEnabled.addEventListener('change', () => {
-        cur.purifier = cur.purifier ?? { enabled: false };
-        cur.purifier.enabled = purifierEnabled.checked;
-        setDirty(true);
-      });
-
-      const purifierGran = h('input', { type: 'text', value: cur.purifier?.granularity ?? '' });
-      purifierGran.addEventListener('input', () => {
-        cur.purifier = cur.purifier ?? { enabled: false };
-        cur.purifier.granularity = purifierGran.value;
-        setDirty(true);
-      });
-
-      right.appendChild(h('div', { class: 'row' }, h('label', { text: 'Enable Purifier' }), purifierEnabled));
-      right.appendChild(h('div', { class: 'row' }, h('label', { text: 'Granularity' }), purifierGran));
-
-      // Warnings
-      right.appendChild(h('div', { class: 'h2', text: 'Warnings' }));
-      const warnCustom = h('input', { type: 'checkbox' });
-      warnCustom.checked = !!cur.warnings?.custom;
-      warnCustom.addEventListener('change', () => {
-        cur.warnings = cur.warnings ?? {};
-        cur.warnings.custom = warnCustom.checked;
-        setDirty(true);
-      });
-
-      const warnType = h('input', { type: 'text', value: cur.warnings?.type ?? '' });
-      warnType.addEventListener('input', () => {
-        cur.warnings = cur.warnings ?? {};
-        cur.warnings.type = warnType.value;
-        setDirty(true);
-      });
-
-      right.appendChild(h('div', { class: 'row' }, h('label', { text: 'Custom warnings' }), warnCustom));
-      right.appendChild(h('div', { class: 'row' }, h('label', { text: 'Type' }), warnType));
-
-      right.appendChild(h('div', { class: 'h2', text: 'Compile/Run' }));
-
-      const inFile = h('input', { type: 'text', value: cur.inputFile?.rawPath ?? '' });
-      inFile.addEventListener('input', () => { cur.inputFile.rawPath = inFile.value; setDirty(true); });
-
-      const outFile = h('input', { type: 'text', value: cur.outputFile?.rawPath ?? '' });
-      outFile.addEventListener('input', () => { cur.outputFile.rawPath = outFile.value; setDirty(true); });
-
-      const dir = h('input', { type: 'text', value: cur.directory ?? '' });
-      dir.addEventListener('input', () => { cur.directory = dir.value; setDirty(true); });
-
-      const cmd = h('input', { type: 'text', value: cur.commandLine ?? '' });
-      cmd.addEventListener('input', () => { cur.commandLine = cmd.value; setDirty(true); });
-
-      const tempExe = h('input', { type: 'text', value: cur.temporaryExe ?? '' });
-      tempExe.addEventListener('input', () => { cur.temporaryExe = tempExe.value; setDirty(true); });
-
-      // Executable
-      cur.executable = cur.executable ?? { rawPath: '', fsPath: '' };
-      const exe = h('input', { type: 'text', value: cur.executable?.rawPath ?? '' });
-      exe.addEventListener('input', () => { cur.executable.rawPath = exe.value; setDirty(true); });
-
-      // Icon
-      cur.icon = cur.icon ?? { enabled: false, rawPath: '', fsPath: '' };
-      const iconEnabled = h('input', { type: 'checkbox' });
-      iconEnabled.checked = !!cur.icon.enabled;
-      iconEnabled.addEventListener('change', () => { cur.icon.enabled = iconEnabled.checked; setDirty(true); });
-
-      const iconPath = h('input', { type: 'text', value: cur.icon.rawPath ?? '' });
-      iconPath.addEventListener('input', () => { cur.icon.rawPath = iconPath.value; setDirty(true); });
-
-      // Counters
-      const ccEnabled = h('input', { type: 'checkbox' });
-      ccEnabled.checked = !!cur.compileCount?.enabled;
-      ccEnabled.addEventListener('change', () => {
-        cur.compileCount = cur.compileCount ?? { enabled: false };
-        cur.compileCount.enabled = ccEnabled.checked;
-        setDirty(true);
-      });
-
-      const ccValue = h('input', { type: 'text', value: String(cur.compileCount?.value ?? '') });
-      ccValue.addEventListener('input', () => {
-        cur.compileCount = cur.compileCount ?? { enabled: false };
-        const v = ccValue.value.trim();
-        cur.compileCount.value = v ? (parseInt(v, 10) || 0) : undefined;
-        setDirty(true);
-      });
-
-      const bcEnabled = h('input', { type: 'checkbox' });
-      bcEnabled.checked = !!cur.buildCount?.enabled;
-      bcEnabled.addEventListener('change', () => {
-        cur.buildCount = cur.buildCount ?? { enabled: false };
-        cur.buildCount.enabled = bcEnabled.checked;
-        setDirty(true);
-      });
-
-      const bcValue = h('input', { type: 'text', value: String(cur.buildCount?.value ?? '') });
-      bcValue.addEventListener('input', () => {
-        cur.buildCount = cur.buildCount ?? { enabled: false };
-        const v = bcValue.value.trim();
-        cur.buildCount.value = v ? (parseInt(v, 10) || 0) : undefined;
-        setDirty(true);
-      });
-
-      right.appendChild(h('div', { class: 'row' }, h('label', { text: 'Input file' }), inFile));
-      right.appendChild(h('div', { class: 'row' }, h('label', { text: 'Output file' }), outFile));
-      right.appendChild(h('div', { class: 'row' }, h('label', { text: 'Executable' }), exe));
-      right.appendChild(h('div', { class: 'row' }, h('label', { text: 'Target directory' }), dir));
-      right.appendChild(h('div', { class: 'row' }, h('label', { text: 'Command line' }), cmd));
-      right.appendChild(h('div', { class: 'row' }, h('label', { text: 'Temporary EXE (value)' }), tempExe));
-
-      right.appendChild(h('div', { class: 'row' }, h('label', { text: 'Icon enabled' }), iconEnabled));
-      right.appendChild(h('div', { class: 'row' }, h('label', { text: 'Icon file' }), iconPath));
-
-      right.appendChild(h('div', { class: 'row' }, h('label', { text: 'CompileCount enabled' }), ccEnabled));
-      right.appendChild(h('div', { class: 'row' }, h('label', { text: 'CompileCount value' }), ccValue));
-
-      right.appendChild(h('div', { class: 'row' }, h('label', { text: 'BuildCount enabled' }), bcEnabled));
-      right.appendChild(h('div', { class: 'row' }, h('label', { text: 'BuildCount value' }), bcValue));
-
-      right.appendChild(h('div', { class: 'h2', text: 'Constants' }));
-
-      const constBox = h('div');
-      cur.constants = cur.constants ?? [];
-
-      function renderConstants() {
-        constBox.innerHTML = '';
-        if (cur.constants.length === 0) {
-          constBox.appendChild(h('div', { class: 'muted', text: 'No constants.' }));
-        }
-        cur.constants.forEach((c, idx) => {
-          const en = h('input', { type: 'checkbox' });
-          en.checked = !!c.enabled;
-          en.addEventListener('change', () => { c.enabled = en.checked; setDirty(true); });
-
-          const val = h('input', { type: 'text', value: c.value ?? '' });
-          val.addEventListener('input', () => { c.value = val.value; setDirty(true); });
-
-          const del = h('button', { class: 'danger', text: 'Remove' });
-          del.addEventListener('click', () => { cur.constants.splice(idx, 1); setDirty(true); renderConstants(); });
-
-          const row = h('div', { class: 'row' }, h('label', { text: 'Enabled' }), en);
-          const row2 = h('div', { class: 'row' }, h('label', { text: 'Value' }), val);
-          constBox.appendChild(row);
-          constBox.appendChild(row2);
-          constBox.appendChild(h('div', { class: 'btn-row' }, del));
-          constBox.appendChild(h('div', { style: 'height: 8px;' }));
+      for (const inp of tbody.querySelectorAll('input[type="text"]')) {
+        inp.addEventListener('input', (e) => {
+          const idx = parseInt(e.target.dataset.idx, 10);
+          libs[idx] = e.target.value;
+          setDirtyModel(true);
         });
       }
-
-      const addBtn = h('button', { text: 'Add constant' });
-      addBtn.addEventListener('click', () => {
-        cur.constants.push({ enabled: true, value: '' });
-        setDirty(true);
-        renderConstants();
-      });
-
-      right.appendChild(h('div', { class: 'btn-row' }, addBtn));
-      right.appendChild(constBox);
-      renderConstants();
-
-      // Version Info
-      right.appendChild(h('div', { class: 'h2', text: 'Version Info' }));
-      const viEnabled = h('input', { type: 'checkbox' });
-      viEnabled.checked = !!cur.versionInfo?.enabled;
-      viEnabled.addEventListener('change', () => {
-        cur.versionInfo = cur.versionInfo ?? { enabled: false, fields: [] };
-        cur.versionInfo.enabled = viEnabled.checked;
-        setDirty(true);
-        renderVersionInfo();
-      });
-
-      const viBox = h('div');
-      function renderVersionInfo() {
-        viBox.innerHTML = '';
-
-        const fields = cur.versionInfo?.fields ?? [];
-        if (fields.length === 0) {
-          viBox.appendChild(h('div', { class: 'muted', text: 'No version fields.' }));
-        }
-
-        fields.forEach((f, idx) => {
-          const id = h('input', { type: 'text', value: f.id ?? '' });
-          id.addEventListener('input', () => { f.id = id.value; setDirty(true); });
-
-          const val = h('input', { type: 'text', value: f.value ?? '' });
-          val.addEventListener('input', () => { f.value = val.value; setDirty(true); });
-
-          const del = h('button', { class: 'danger', text: 'Remove' });
-          del.addEventListener('click', () => { fields.splice(idx, 1); setDirty(true); renderVersionInfo(); });
-
-          viBox.appendChild(h('div', { class: 'row' }, h('label', { text: 'Field id' }), id));
-          viBox.appendChild(h('div', { class: 'row' }, h('label', { text: 'Value' }), val));
-          viBox.appendChild(h('div', { class: 'btn-row' }, del));
-          viBox.appendChild(h('div', { style: 'height: 8px;' }));
+      for (const btn of tbody.querySelectorAll('button[data-del]')) {
+        btn.addEventListener('click', (e) => {
+          const idx = parseInt(e.target.dataset.del, 10);
+          libs.splice(idx, 1);
+          setDirtyModel(true);
+          rebuild();
         });
       }
-
-      const addVi = h('button', { text: 'Add field' });
-      addVi.addEventListener('click', () => {
-        cur.versionInfo = cur.versionInfo ?? { enabled: false, fields: [] };
-        cur.versionInfo.fields.push({ id: 'field0', value: '' });
-        setDirty(true);
-        renderVersionInfo();
-      });
-
-      right.appendChild(h('div', { class: 'row' }, h('label', { text: 'Enable Version Info' }), viEnabled));
-      right.appendChild(h('div', { class: 'btn-row' }, addVi));
-      right.appendChild(viBox);
-      renderVersionInfo();
-
-      // Resources
-      right.appendChild(h('div', { class: 'h2', text: 'Resources' }));
-      cur.resources = cur.resources ?? { items: [] };
-      cur.resources.items = cur.resources.items ?? [];
-
-      const resBox = h('div');
-      function renderResources() {
-        resBox.innerHTML = '';
-        if (cur.resources.items.length === 0) {
-          resBox.appendChild(h('div', { class: 'muted', text: 'No resources.' }));
-        }
-        cur.resources.items.forEach((r, idx) => {
-          const val = h('input', { type: 'text', value: r ?? '' });
-          val.addEventListener('input', () => { cur.resources.items[idx] = val.value; setDirty(true); });
-          const del = h('button', { class: 'danger', text: 'Remove' });
-          del.addEventListener('click', () => { cur.resources.items.splice(idx, 1); setDirty(true); renderResources(); });
-          resBox.appendChild(h('div', { class: 'row' }, h('label', { text: 'Resource' }), val));
-          resBox.appendChild(h('div', { class: 'btn-row' }, del));
-          resBox.appendChild(h('div', { style: 'height: 8px;' }));
-        });
-      }
-
-      const resNew = h('input', { type: 'text', value: '' });
-      const resAdd = h('button', { text: 'Add resource' });
-      resAdd.addEventListener('click', () => {
-        const v = resNew.value.trim();
-        if (!v) return;
-        cur.resources.items.push(v);
-        resNew.value = '';
-        setDirty(true);
-        renderResources();
-      });
-
-      right.appendChild(h('div', { class: 'row' }, h('label', { text: 'New resource' }), h('div', {}, resNew, h('div', { style: 'height: 6px;' }), resAdd)));
-      right.appendChild(resBox);
-      renderResources();
-
-      // Watchlist
-      right.appendChild(h('div', { class: 'h2', text: 'Watchlist' }));
-      const wl = h('input', { type: 'text', value: cur.watchList ?? '' });
-      wl.addEventListener('input', () => { cur.watchList = wl.value; setDirty(true); });
-      right.appendChild(h('div', { class: 'row' }, h('label', { text: 'Watchlist item(s)' }), wl));
-
-      return h('div', { class: 'split' }, left, right);
     }
 
-    function renderLibraries() {
-      const p = state.project;
-      if (!p) return h('div', { class: 'muted', text: 'No project loaded.' });
-
-      p.libraries = p.libraries ?? [];
-
-      const list = h('div', { class: 'list' });
-      p.libraries.forEach((lib, idx) => {
-        const item = h('div', { class: 'list-item', text: lib });
-        item.addEventListener('click', () => {
-          if (!confirm('Remove library?')) return;
-          p.libraries.splice(idx, 1);
-          setDirty(true);
-          render();
-        });
-        list.appendChild(item);
-      });
-
-      const input = h('input', { type: 'text', value: '' });
-      const add = h('button', { text: 'Add' });
-      add.addEventListener('click', () => {
-        const v = input.value.trim();
-        if (!v) return;
-        p.libraries.push(v);
-        input.value = '';
-        setDirty(true);
-        render();
-      });
-
-      return h('div', {},
-        h('div', { class: 'row' }, h('label', { text: 'New library' }), h('div', {}, input, h('div', { style: 'height: 6px;' }), add)),
-        h('div', { style: 'height: 10px;' }),
-        list,
-        h('div', { class: 'muted', text: 'Click a library entry to remove it.' }),
-      );
-    }
-
-    function renderRawXml() {
-      const ta = h('textarea', { class: 'mono', readonly: 'true', style: 'min-height: 500px;' }, state.xml ?? '');
-
-      const note = h('div', { class: 'muted', text: 'Raw XML view is read-only. Use the structured tabs to make changes.' });
-
-      return h('div', {}, ta, h('div', { style: 'height: 10px;' }), note);
-    }
-
-    function render() {
-      renderTabs();
-
-      elContent.innerHTML = '';
-
-      if (activeTab === 'project') elContent.appendChild(renderProjectOptions());
-      else if (activeTab === 'files') elContent.appendChild(renderProjectFiles());
-      else if (activeTab === 'targets') elContent.appendChild(renderTargets());
-      else if (activeTab === 'libraries') elContent.appendChild(renderLibraries());
-      else if (activeTab === 'raw') elContent.appendChild(renderRawXml());
-    }
-
-    elSaveBtn.addEventListener('click', () => {
-      if (!state.project) return;
-
-      if (isRawDirty) {
-        vscode.postMessage({ type: 'saveXml', xml: state.xml });
-        setRawDirty(false);
-        setDirty(false);
-        return;
-      }
-
-      vscode.postMessage({ type: 'saveModel', project: state.project });
-      setDirty(false);
+    $('libAdd').addEventListener('click', () => {
+      libs.push('');
+      setDirtyModel(true);
+      rebuild();
     });
 
-    window.addEventListener('message', (event) => {
-      const msg = event.data;
-      if (!msg || typeof msg !== 'object') return;
-      if (msg.type === 'init') {
+    rebuild();
+  }
+
+  function renderTargetSubTabs(container, t) {
+    const subtabs = document.createElement('div');
+    subtabs.className = 'subtabs';
+    const names = [
+      { id: 'compiler', label: 'Compiler Options' },
+      { id: 'run', label: 'Compile/Run' },
+      { id: 'constants', label: 'Constants' },
+      { id: 'version', label: 'Version Info' },
+      { id: 'resources', label: 'Resources' },
+      { id: 'watch', label: 'Watchlist' },
+    ];
+
+    for (const n of names) {
+      const b = document.createElement('button');
+      b.className = 'tabbtn' + (state.activeTargetTab === n.id ? ' active' : '');
+      b.textContent = n.label;
+      b.addEventListener('click', () => {
+        state.activeTargetTab = n.id;
+        renderTargets();
+      });
+      subtabs.appendChild(b);
+    }
+
+    container.appendChild(subtabs);
+
+    const content = document.createElement('div');
+    container.appendChild(content);
+
+    if (state.activeTargetTab === 'compiler') {
+      renderTargetCompiler(content, t);
+    } else if (state.activeTargetTab === 'run') {
+      renderTargetRun(content, t);
+    } else if (state.activeTargetTab === 'constants') {
+      renderTargetConstants(content, t);
+    } else if (state.activeTargetTab === 'version') {
+      renderTargetVersionInfo(content, t);
+    } else if (state.activeTargetTab === 'resources') {
+      renderTargetResources(content, t);
+    } else if (state.activeTargetTab === 'watch') {
+      renderTargetWatchlist(content, t);
+    }
+  }
+
+  function renderTargetCompiler(container, t) {
+    container.innerHTML = \`
+      <div class="grid2">
+        <label>Input source file</label>
+        <input id="tInput" type="text" />
+
+        <label>Output executable</label>
+        <input id="tOutput" type="text" />
+
+        <label>Use compiler (version)</label>
+        <input id="tCompiler" type="text" />
+
+        <label>Executable (run)</label>
+        <input id="tExecutable" type="text" />
+
+        <label>Use icon</label>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <input id="tIconEnable" type="checkbox" />
+          <input id="tIconPath" type="text" placeholder="path" />
+        </div>
+
+        <label>Linker options file</label>
+        <input id="tLinker" type="text" />
+
+        <label>Library subsystem</label>
+        <input id="tSubsystem" type="text" />
+
+        <label>Executable format / OS</label>
+        <select id="tFmtExe">
+          <option value="">(none)</option>
+          <option value="default">default</option>
+          <option value="console">console</option>
+          <option value="dll">dll</option>
+        </select>
+
+        <label>Executable format / CPU</label>
+        <select id="tFmtCpu">
+          <option value="">(none)</option>
+          <option value="0">0 - All CPU</option>
+          <option value="1">1 - Dynamic CPU</option>
+          <option value="2">2 - CPU with MMX</option>
+          <option value="3">3 - CPU with 3DNOW</option>
+          <option value="4">4 - CPU with SSE</option>
+          <option value="5">5 - CPU with SSE2</option>
+        </select>
+      </div>
+
+      <div style="margin-top:14px;" class="panel">
+        <div class="muted" style="margin-bottom:6px;">Compiler option flags (from &lt;options .../&gt;)</div>
+        <div class="grid2" style="grid-template-columns: 360px 1fr;">
+          <label>Optimize generated code</label><input id="opt_optimizer" type="checkbox" />
+          <label>Enable inline ASM syntax coloring</label><input id="opt_asm" type="checkbox" />
+          <label>Create threadsafe executable</label><input id="opt_thread" type="checkbox" />
+          <label>Enable OnError lines support</label><input id="opt_onerror" type="checkbox" />
+          <label>Enable DPI aware executable</label><input id="opt_dpiaware" type="checkbox" />
+          <label>Enable modern theme support (XP skin)</label><input id="opt_xpskin" type="checkbox" />
+          <label>Request Administrator mode</label><input id="opt_admin" type="checkbox" />
+          <label>Request User mode (no virtualization)</label><input id="opt_user" type="checkbox" />
+          <label>Enable DLL preloading protection</label><input id="opt_dllprotection" type="checkbox" />
+          <label>Use shared UCRT</label><input id="opt_shareducrt" type="checkbox" />
+          <label>Enable Wayland support</label><input id="opt_wayland" type="checkbox" />
+        </div>
+      </div>
+    \`;
+
+    // Basic fields
+    $('tInput').value = t.inputFile?.rawPath ?? '';
+    $('tOutput').value = t.outputFile?.rawPath ?? '';
+    $('tCompiler').value = t.compilerVersion ?? '';
+    $('tExecutable').value = t.executable?.rawPath ?? '';
+
+    $('tSubsystem').value = t.subsystem ?? '';
+    $('tLinker').value = t.linker?.rawPath ?? '';
+
+    $('tIconEnable').checked = !!t.icon?.enabled;
+    $('tIconPath').value = t.icon?.rawPath ?? '';
+
+    $('tFmtExe').value = t.format?.exe ?? '';
+    $('tFmtCpu').value = t.format?.cpu ?? '';
+
+    $('tInput').addEventListener('input', (e) => { t.inputFile.rawPath = e.target.value; setDirtyModel(true); });
+    $('tOutput').addEventListener('input', (e) => { t.outputFile.rawPath = e.target.value; setDirtyModel(true); });
+    $('tCompiler').addEventListener('input', (e) => { t.compilerVersion = e.target.value; if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.compiler = true; setDirtyModel(true); });
+    $('tExecutable').addEventListener('input', (e) => { t.executable.rawPath = e.target.value; if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.executable = true; setDirtyModel(true); });
+
+    $('tSubsystem').addEventListener('input', (e) => { t.subsystem = e.target.value; if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.subsystem = true; setDirtyModel(true); });
+    $('tLinker').addEventListener('input', (e) => { t.linker = { rawPath: e.target.value, fsPath: '' }; if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.linker = true; setDirtyModel(true); });
+
+    $('tIconEnable').addEventListener('change', (e) => {
+      if (!t.icon) t.icon = { enabled: false, rawPath: '', fsPath: '' };
+      t.icon.enabled = e.target.checked;
+      if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.icon = true;
+      setDirtyModel(true);
+    });
+    $('tIconPath').addEventListener('input', (e) => {
+      if (!t.icon) t.icon = { enabled: false, rawPath: '', fsPath: '' };
+      t.icon.rawPath = e.target.value;
+      if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.icon = true;
+      setDirtyModel(true);
+    });
+
+    $('tFmtExe').addEventListener('change', (e) => { if (!t.format) t.format = {}; t.format.exe = e.target.value; if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.format = true; setDirtyModel(true); });
+    $('tFmtCpu').addEventListener('change', (e) => { if (!t.format) t.format = {}; t.format.cpu = e.target.value; if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.format = true; setDirtyModel(true); });
+
+    // Options flags
+    ensureTargetOptions(t);
+    $('opt_optimizer').checked = t.optionsAttrs?.optimizer === '1' || t.options?.optimizer === true;
+    $('opt_asm').checked = t.optionsAttrs?.asm === '1' || t.options?.asm === true;
+    $('opt_thread').checked = t.optionsAttrs?.thread === '1' || t.options?.thread === true;
+    $('opt_onerror').checked = t.optionsAttrs?.onerror === '1' || t.options?.onerror === true;
+    $('opt_dpiaware').checked = t.optionsAttrs?.dpiaware === '1' || t.options?.dpiaware === true;
+    $('opt_xpskin').checked = t.optionsAttrs?.xpskin === '1' || t.options?.xpskin === true;
+    $('opt_admin').checked = t.optionsAttrs?.admin === '1' || t.options?.admin === true;
+    $('opt_user').checked = t.optionsAttrs?.user === '1' || t.options?.user === true;
+    $('opt_dllprotection').checked = t.optionsAttrs?.dllprotection === '1' || t.options?.dllprotection === true;
+    $('opt_shareducrt').checked = t.optionsAttrs?.shareducrt === '1' || t.options?.shareducrt === true;
+    $('opt_wayland').checked = t.optionsAttrs?.wayland === '1' || t.options?.wayland === true;
+
+    $('opt_optimizer').addEventListener('change', (e) => setTargetOptionFlag(t, 'optimizer', e.target.checked, { forceZero: true }));
+    $('opt_asm').addEventListener('change', (e) => setTargetOptionFlag(t, 'asm', e.target.checked));
+    $('opt_thread').addEventListener('change', (e) => setTargetOptionFlag(t, 'thread', e.target.checked));
+    $('opt_onerror').addEventListener('change', (e) => setTargetOptionFlag(t, 'onerror', e.target.checked));
+    $('opt_dpiaware').addEventListener('change', (e) => setTargetOptionFlag(t, 'dpiaware', e.target.checked));
+    $('opt_xpskin').addEventListener('change', (e) => setTargetOptionFlag(t, 'xpskin', e.target.checked));
+    $('opt_admin').addEventListener('change', (e) => setTargetOptionFlag(t, 'admin', e.target.checked));
+    $('opt_user').addEventListener('change', (e) => setTargetOptionFlag(t, 'user', e.target.checked));
+    $('opt_dllprotection').addEventListener('change', (e) => setTargetOptionFlag(t, 'dllprotection', e.target.checked));
+    $('opt_shareducrt').addEventListener('change', (e) => setTargetOptionFlag(t, 'shareducrt', e.target.checked));
+    $('opt_wayland').addEventListener('change', (e) => setTargetOptionFlag(t, 'wayland', e.target.checked));
+  }
+
+  function renderTargetRun(container, t) {
+    container.innerHTML = \`
+      <div class="grid2">
+        <label>Enable Debugger</label>
+        <input id="run_debug" type="checkbox" />
+
+        <label>Enable Purifier</label>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <input id="run_purifier" type="checkbox" />
+          <input id="run_granularity" type="text" placeholder="granularity" />
+        </div>
+
+        <label>Use selected Debugger</label>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <input id="run_dbg_custom" type="checkbox" />
+          <input id="run_dbg_type" type="text" placeholder="type" />
+        </div>
+
+        <label>Use Warning mode</label>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <input id="run_warn_custom" type="checkbox" />
+          <input id="run_warn_type" type="text" placeholder="type" />
+        </div>
+
+        <label>Executable Commandline</label>
+        <input id="run_cmd" type="text" />
+
+        <label>Current directory</label>
+        <input id="run_dir" type="text" />
+
+        <label>Create temporary executable in source directory</label>
+        <input id="run_temp" type="text" placeholder="source" />
+
+        <label>Compile count</label>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <input id="run_cc_enable" type="checkbox" />
+          <input id="run_cc_value" type="number" step="1" />
+        </div>
+
+        <label>Build count</label>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <input id="run_bc_enable" type="checkbox" />
+          <input id="run_bc_value" type="number" step="1" />
+        </div>
+
+        <label>EXE constant</label>
+        <input id="run_execonst" type="checkbox" />
+      </div>
+    \`;
+
+    ensureTargetOptions(t);
+    $('run_debug').checked = t.optionsAttrs?.debug === '1' || t.options?.debug === true;
+    $('run_debug').addEventListener('change', (e) => setTargetOptionFlag(t, 'debug', e.target.checked));
+
+    $('run_purifier').checked = !!t.purifier?.enabled;
+    $('run_granularity').value = t.purifier?.granularity ?? '';
+
+    $('run_purifier').addEventListener('change', (e) => {
+      if (!t.purifier) t.purifier = { enabled: false };
+      t.purifier.enabled = e.target.checked;
+      if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.purifier = true;
+      setDirtyModel(true);
+    });
+    $('run_granularity').addEventListener('input', (e) => {
+      if (!t.purifier) t.purifier = { enabled: false };
+      t.purifier.granularity = e.target.value;
+      if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.purifier = true;
+      setDirtyModel(true);
+    });
+
+    $('run_dbg_custom').checked = !!t.debugger?.custom;
+    $('run_dbg_type').value = t.debugger?.type ?? '';
+    $('run_dbg_custom').addEventListener('change', (e) => {
+      if (!t.debugger) t.debugger = {};
+      t.debugger.custom = e.target.checked;
+      if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.debugger = true;
+      setDirtyModel(true);
+    });
+    $('run_dbg_type').addEventListener('input', (e) => {
+      if (!t.debugger) t.debugger = {};
+      t.debugger.type = e.target.value;
+      if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.debugger = true;
+      setDirtyModel(true);
+    });
+
+    $('run_warn_custom').checked = !!t.warnings?.custom;
+    $('run_warn_type').value = t.warnings?.type ?? '';
+    $('run_warn_custom').addEventListener('change', (e) => {
+      if (!t.warnings) t.warnings = {};
+      t.warnings.custom = e.target.checked;
+      if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.warnings = true;
+      setDirtyModel(true);
+    });
+    $('run_warn_type').addEventListener('input', (e) => {
+      if (!t.warnings) t.warnings = {};
+      t.warnings.type = e.target.value;
+      if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.warnings = true;
+      setDirtyModel(true);
+    });
+
+    $('run_cmd').value = t.commandLine ?? '';
+    $('run_cmd').addEventListener('input', (e) => { setTargetValueTag(t, 'commandline', e.target.value); });
+
+    $('run_dir').value = t.directory ?? '';
+    $('run_dir').addEventListener('input', (e) => { setTargetValueTag(t, 'directory', e.target.value); });
+
+    $('run_temp').value = t.temporaryExe ?? '';
+    $('run_temp').addEventListener('input', (e) => { setTargetValueTag(t, 'temporaryexe', e.target.value); });
+
+    $('run_cc_enable').checked = !!t.compileCount?.enabled;
+    $('run_cc_value').value = String(t.compileCount?.value ?? 0);
+    $('run_cc_enable').addEventListener('change', (e) => {
+      if (!t.compileCount) t.compileCount = { enabled: false };
+      t.compileCount.enabled = e.target.checked;
+      if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.compilecount = true;
+      setDirtyModel(true);
+    });
+    $('run_cc_value').addEventListener('input', (e) => {
+      if (!t.compileCount) t.compileCount = { enabled: false };
+      t.compileCount.value = parseIntSafe(e.target.value);
+      if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.compilecount = true;
+      setDirtyModel(true);
+    });
+
+    $('run_bc_enable').checked = !!t.buildCount?.enabled;
+    $('run_bc_value').value = String(t.buildCount?.value ?? 0);
+    $('run_bc_enable').addEventListener('change', (e) => {
+      if (!t.buildCount) t.buildCount = { enabled: false };
+      t.buildCount.enabled = e.target.checked;
+      if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.buildcount = true;
+      setDirtyModel(true);
+    });
+    $('run_bc_value').addEventListener('input', (e) => {
+      if (!t.buildCount) t.buildCount = { enabled: false };
+      t.buildCount.value = parseIntSafe(e.target.value);
+      if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.buildcount = true;
+      setDirtyModel(true);
+    });
+
+    $('run_execonst').checked = !!t.exeConstant?.enabled;
+    $('run_execonst').addEventListener('change', (e) => {
+      if (!t.exeConstant) t.exeConstant = { enabled: false };
+      t.exeConstant.enabled = e.target.checked;
+      if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.execonstant = true;
+      setDirtyModel(true);
+    });
+  }
+
+  function renderTargetConstants(container, t) {
+    if (!t.constants) t.constants = [];
+
+    container.innerHTML = \`
+      <div class="btnrow" style="margin-bottom:8px;">
+        <button class="btn" id="constAdd">Add</button>
+      </div>
+      <table>
+        <thead><tr><th>Enabled</th><th>Value</th><th style="width:80px"></th></tr></thead>
+        <tbody id="constRows"></tbody>
+      </table>
+    \`;
+
+    function rebuild() {
+      const tbody = $('constRows');
+      tbody.innerHTML = '';
+      for (let i = 0; i < t.constants.length; i++) {
+        const c = t.constants[i];
+        const tr = document.createElement('tr');
+        tr.innerHTML = \`
+          <td><input type="checkbox" data-idx="\${i}" data-k="en" \${c.enabled ? 'checked' : ''}></td>
+          <td><input type="text" data-idx="\${i}" data-k="val" value="\${esc(c.value)}"></td>
+          <td><button class="btn" data-del="\${i}">Remove</button></td>
+        \`;
+        tbody.appendChild(tr);
+      }
+      if (t.constants.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = \`<td colspan="3"><em>No constants.</em></td>\`;
+        tbody.appendChild(tr);
+      }
+
+      for (const inp of tbody.querySelectorAll('input')) {
+        inp.addEventListener('change', (e) => {
+          const idx = parseInt(e.target.dataset.idx, 10);
+          const k = e.target.dataset.k;
+          if (k === 'en') t.constants[idx].enabled = e.target.checked;
+          if (k === 'val') t.constants[idx].value = e.target.value;
+          if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.constants = true;
+          setDirtyModel(true);
+        });
+        inp.addEventListener('input', (e) => {
+          if (e.target.dataset.k !== 'val') return;
+          const idx = parseInt(e.target.dataset.idx, 10);
+          t.constants[idx].value = e.target.value;
+          if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.constants = true;
+          setDirtyModel(true);
+        });
+      }
+
+      for (const btn of tbody.querySelectorAll('button[data-del]')) {
+        btn.addEventListener('click', (e) => {
+          const idx = parseInt(e.target.dataset.del, 10);
+          t.constants.splice(idx, 1);
+          if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.constants = true;
+          setDirtyModel(true);
+          rebuild();
+        });
+      }
+    }
+
+    $('constAdd').addEventListener('click', () => {
+      t.constants.push({ enabled: true, value: '' });
+      if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.constants = true;
+      setDirtyModel(true);
+      rebuild();
+    });
+
+    rebuild();
+  }
+
+  function renderTargetVersionInfo(container, t) {
+    if (!t.versionInfo) t.versionInfo = { enabled: false, fields: [] };
+
+    container.innerHTML = \`
+      <div class="grid2">
+        <label>Enable Version Info</label>
+        <input id="viEnable" type="checkbox" />
+      </div>
+      <div class="btnrow" style="margin:10px 0 8px;">
+        <button class="btn" id="viAdd">Add field</button>
+      </div>
+      <table>
+        <thead><tr><th style="width:160px">Field</th><th>Value</th><th style="width:80px"></th></tr></thead>
+        <tbody id="viRows"></tbody>
+      </table>
+    \`;
+
+    $('viEnable').checked = !!t.versionInfo.enabled;
+    $('viEnable').addEventListener('change', (e) => {
+      t.versionInfo.enabled = e.target.checked;
+      if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.versioninfo = true;
+      setDirtyModel(true);
+    });
+
+    function rebuild() {
+      const tbody = $('viRows');
+      tbody.innerHTML = '';
+      const fields = t.versionInfo.fields || [];
+      for (let i = 0; i < fields.length; i++) {
+        const f = fields[i];
+        const tr = document.createElement('tr');
+        tr.innerHTML = \`
+          <td><input type="text" data-idx="\${i}" data-k="id" value="\${esc(f.id)}"></td>
+          <td><input type="text" data-idx="\${i}" data-k="val" value="\${esc(f.value)}"></td>
+          <td><button class="btn" data-del="\${i}">Remove</button></td>
+        \`;
+        tbody.appendChild(tr);
+      }
+      if (fields.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = \`<td colspan="3"><em>No version fields.</em></td>\`;
+        tbody.appendChild(tr);
+      }
+
+      for (const inp of tbody.querySelectorAll('input')) {
+        inp.addEventListener('input', (e) => {
+          const idx = parseInt(e.target.dataset.idx, 10);
+          const k = e.target.dataset.k;
+          if (k === 'id') fields[idx].id = e.target.value;
+          if (k === 'val') fields[idx].value = e.target.value;
+          if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.versioninfo = true;
+          setDirtyModel(true);
+        });
+      }
+
+      for (const btn of tbody.querySelectorAll('button[data-del]')) {
+        btn.addEventListener('click', (e) => {
+          const idx = parseInt(e.target.dataset.del, 10);
+          fields.splice(idx, 1);
+          if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.versioninfo = true;
+          setDirtyModel(true);
+          rebuild();
+        });
+      }
+    }
+
+    $('viAdd').addEventListener('click', () => {
+      const fields = t.versionInfo.fields || (t.versionInfo.fields = []);
+      const nextIndex = fields.length;
+      fields.push({ id: 'field' + nextIndex, value: '' });
+      if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.versioninfo = true;
+      setDirtyModel(true);
+      rebuild();
+    });
+
+    rebuild();
+  }
+
+  function renderTargetResources(container, t) {
+    if (!t.resources) t.resources = [];
+
+    container.innerHTML = \`
+      <div class="btnrow" style="margin-bottom:8px;">
+        <button class="btn" id="resAdd">Add</button>
+      </div>
+      <table>
+        <thead><tr><th>Resource</th><th style="width:80px"></th></tr></thead>
+        <tbody id="resRows"></tbody>
+      </table>
+    \`;
+
+    function rebuild() {
+      const tbody = $('resRows');
+      tbody.innerHTML = '';
+      for (let i = 0; i < t.resources.length; i++) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = \`
+          <td><input type="text" data-idx="\${i}" value="\${esc(t.resources[i])}"></td>
+          <td><button class="btn" data-del="\${i}">Remove</button></td>
+        \`;
+        tbody.appendChild(tr);
+      }
+      if (t.resources.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = \`<td colspan="2"><em>No resources.</em></td>\`;
+        tbody.appendChild(tr);
+      }
+
+      for (const inp of tbody.querySelectorAll('input')) {
+        inp.addEventListener('input', (e) => {
+          const idx = parseInt(e.target.dataset.idx, 10);
+          t.resources[idx] = e.target.value;
+          if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.resources = true;
+          setDirtyModel(true);
+        });
+      }
+
+      for (const btn of tbody.querySelectorAll('button[data-del]')) {
+        btn.addEventListener('click', (e) => {
+          const idx = parseInt(e.target.dataset.del, 10);
+          t.resources.splice(idx, 1);
+          if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.resources = true;
+          setDirtyModel(true);
+          rebuild();
+        });
+      }
+    }
+
+    $('resAdd').addEventListener('click', () => {
+      t.resources.push('');
+      if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.resources = true;
+      setDirtyModel(true);
+      rebuild();
+    });
+
+    rebuild();
+  }
+
+  function renderTargetWatchlist(container, t) {
+    container.innerHTML = \`
+      <div class="grid2">
+        <label>Watchlist</label>
+        <textarea id="watchText"></textarea>
+      </div>
+    \`;
+
+    $('watchText').value = t.watchList ?? '';
+    $('watchText').addEventListener('input', (e) => {
+      t.watchList = e.target.value;
+      if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.watchlist = true;
+      setDirtyModel(true);
+    });
+  }
+
+  function renderTargets() {
+    const el = $('page-targets');
+    el.innerHTML = '';
+
+    if (!ensureProject()) {
+      el.innerHTML = \`<div class="panel">No project model available.</div>\`;
+      return;
+    }
+
+    const targets = getTargets();
+    if (targets.length === 0) {
+      el.innerHTML = \`<div class="panel"><em>No targets found.</em></div>\`;
+      return;
+    }
+
+    const row = document.createElement('div');
+    row.className = 'row';
+
+    const left = document.createElement('div');
+    left.className = 'panel';
+    left.innerHTML = \`
+      <div class="muted" style="margin-bottom:6px;">Compile targets</div>
+      <select id="targetSelect"></select>
+      <div class="muted" style="margin-top:8px;">Default target is marked by the PureBasic project file.</div>
+    \`;
+
+    row.appendChild(left);
+
+    const right = document.createElement('div');
+    right.className = 'panel';
+    row.appendChild(right);
+
+    el.appendChild(row);
+
+    const sel = $('targetSelect');
+    sel.innerHTML = '';
+    targets.forEach((t, i) => {
+      const opt = document.createElement('option');
+      const flags = \`\${t.enabled ? '' : ' (disabled)'}\${t.isDefault ? ' [default]' : ''}\`;
+      opt.value = String(i);
+      opt.textContent = (t.name || ('Target ' + (i+1))) + flags;
+      sel.appendChild(opt);
+    });
+
+    state.activeTargetIndex = Math.max(0, Math.min(state.activeTargetIndex, targets.length - 1));
+    sel.value = String(state.activeTargetIndex);
+
+    sel.addEventListener('change', () => {
+      state.activeTargetIndex = parseInt(sel.value, 10);
+      renderTargets();
+    });
+
+    const t = getActiveTarget();
+    if (!t) {
+      right.innerHTML = '<em>No target selected.</em>';
+      return;
+    }
+
+    const head = document.createElement('div');
+    head.className = 'muted';
+    head.style.marginBottom = '8px';
+    head.textContent = \`Target: \${t.name}\`;
+    right.appendChild(head);
+
+    renderTargetSubTabs(right, t);
+  }
+
+  function renderXml() {
+    const el = $('page-xml');
+    el.innerHTML = '';
+
+    const panel = document.createElement('div');
+    panel.className = 'panel';
+    panel.innerHTML = \`
+      <div class="muted" style="margin-bottom:8px;">Raw XML view is read-only. Use the structured tabs to make changes.</div>
+      <textarea id="xmlText" style="min-height: 480px;" readonly></textarea>
+    \`;
+    el.appendChild(panel);
+
+    const ta = $('xmlText');
+    ta.value = state.xml ?? '';
+    // editing XML directly is disabled for now. If we enable this, we need to make sure to update the structured view on every change, which can be tricky and cause performance issues.
+    // ta.addEventListener('input', () => {
+    //  state.xml = ta.value;
+    //  setDirtyXml(true);
+    //});
+  }
+
+  function renderAll() {
+    renderStatus();
+    renderProjectOptions();
+    renderFiles();
+    renderTargets();
+    renderLibraries();
+    renderXml();
+  }
+
+  // Toolbar actions
+  $('btnSave').addEventListener('click', () => {
+    if (!state.project) return;
+    vscode.postMessage({ type: 'saveModel', project: state.project });
+  });
+  $('btnSaveXml').addEventListener('click', () => {
+    vscode.postMessage({ type: 'saveXml', xml: state.xml ?? '' });
+  });
+
+  window.addEventListener('message', (event) => {
+    const msg = event.data;
+    if (!msg || !msg.type) return;
+
+    if (msg.type === 'state') {
+      // Only replace state if user did not change it locally.
+      if (!state.dirtyModel) {
         state.project = msg.project;
+        state.errorText = msg.errorText;
+      }
+      if (!state.dirtyXml) {
         state.xml = msg.xml;
-        setDirty(false);
-        setRawDirty(false);
-        render();
       }
-      if (msg.type === 'saved') {
-        setDirty(false);
-        setRawDirty(false);
-        elStatus.textContent = msg.message || '';
-        setTimeout(() => { if (!(isDirty || isRawDirty)) elStatus.textContent = ''; }, 2000);
-      }
-      if (msg.type === 'error') {
-        elStatus.textContent = msg.message || 'Error';
-      }
-    });
+      renderAll();
+    }
 
-    renderTabs();
+    if (msg.type === 'saved') {
+      setDirtyModel(false);
+      setDirtyXml(false);
+      state.errorText = msg.errorText ?? null;
+      renderAll();
+    }
+  });
 
-    // Request init from extension.
-    vscode.postMessage({ type: 'ready' });
+  bindTabs();
+  renderAll();
+
   </script>
 </body>
 </html>`;
 }
 
-export class PbpEditorProvider implements vscode.CustomReadonlyEditorProvider<PbpDocument> {
-    public static register(context: vscode.ExtensionContext, onDidSave?: () => Promise<void>): vscode.Disposable {
-        const provider = new PbpEditorProvider(context, onDidSave);
+export class PbpEditorProvider implements vscode.CustomTextEditorProvider {
+    public static register(context: vscode.ExtensionContext): vscode.Disposable {
+        const provider = new PbpEditorProvider(context);
         return vscode.window.registerCustomEditorProvider(PBP_EDITOR_VIEW_TYPE, provider, {
             webviewOptions: { retainContextWhenHidden: true },
             supportsMultipleEditorsPerDocument: false,
         });
     }
 
-    public constructor(
-        private readonly context: vscode.ExtensionContext,
-        private readonly onDidSave?: () => Promise<void>
-    ) {}
-
-    public async openCustomDocument(uri: vscode.Uri): Promise<PbpDocument> {
-        return new PbpDocument(uri);
+    public constructor(private readonly context: vscode.ExtensionContext) {
+        void context;
     }
 
-    public async resolveCustomEditor(document: PbpDocument, webviewPanel: vscode.WebviewPanel): Promise<void> {
-        const nonce = getNonce();
-
+    public async resolveCustomTextEditor(document: vscode.TextDocument, webviewPanel: vscode.WebviewPanel): Promise<void> {
         webviewPanel.webview.options = {
             enableScripts: true,
             localResourceRoots: [this.context.extensionUri],
         };
 
-        const title = `PureBasic Project: ${document.uri.fsPath}`;
-        webviewPanel.webview.html = renderShellHtml(title, nonce);
-
-        const postInit = async (): Promise<void> => {
+        const update = () => {
+            const xml = document.getText();
+            let project: PbpProject | null = null;
+            let errorText: string | undefined;
             try {
-                const bytes = await vscode.workspace.fs.readFile(document.uri);
-                const xml = Buffer.from(bytes).toString('utf8');
-                const project = parsePbpProjectText(xml, document.uri.fsPath);
-                webviewPanel.webview.postMessage({ type: 'init', project, xml });
+                project = parsePbpProjectText(xml, document.uri.fsPath);
             } catch (err: any) {
-                webviewPanel.webview.postMessage({ type: 'error', message: err?.message ?? String(err) });
+                errorText = err?.message ?? String(err);
             }
+
+            webviewPanel.webview.html = renderHtml(webviewPanel.webview, document, project, xml, errorText);
         };
 
-        const saveModel = async (project: PbpProject): Promise<void> => {
-            const xml = writePbpProjectText(project, { newline: '\n' });
-            await vscode.workspace.fs.writeFile(document.uri, Buffer.from(xml, 'utf8'));
-            if (this.onDidSave) await this.onDidSave();
-            webviewPanel.webview.postMessage({ type: 'saved', message: 'Saved.' });
-        };
+        update();
 
-        const saveXml = async (xml: string): Promise<void> => {
-            await vscode.workspace.fs.writeFile(document.uri, Buffer.from(xml ?? '', 'utf8'));
-            if (this.onDidSave) await this.onDidSave();
-            webviewPanel.webview.postMessage({ type: 'saved', message: 'Saved.' });
-        };
-
-        webviewPanel.webview.onDidReceiveMessage(async (msg: any) => {
+        // Keep webview in sync if the user edits the text directly.
+        const docChangeSub = vscode.workspace.onDidChangeTextDocument(e => {
+            if (e.document.uri.toString() !== document.uri.toString()) return;
+            const xml = document.getText();
+            let project: PbpProject | null = null;
+            let errorText: string | undefined;
             try {
-                if (!msg || typeof msg !== 'object') return;
-                if (msg.type === 'ready') {
-                    await postInit();
-                    return;
-                }
-                if (msg.type === 'saveModel') {
-                    await saveModel(msg.project);
-                    await postInit();
-                    return;
-                }
-                if (msg.type === 'saveXml') {
-                    await saveXml(msg.xml);
-                    await postInit();
-                    return;
-                }
+                project = parsePbpProjectText(xml, document.uri.fsPath);
             } catch (err: any) {
-                webviewPanel.webview.postMessage({ type: 'error', message: err?.message ?? String(err) });
+                errorText = err?.message ?? String(err);
             }
+            void webviewPanel.webview.postMessage({ type: 'state', xml, project, errorText: errorText ?? null });
         });
 
-        // Also refresh view when the document changes on disk.
-        const watcher = vscode.workspace.createFileSystemWatcher('**/*.pbp');
-        const onChange = (uri: vscode.Uri) => {
-            if (uri.fsPath === document.uri.fsPath) {
-                void postInit();
+        webviewPanel.onDidDispose(() => docChangeSub.dispose());
+
+        webviewPanel.webview.onDidReceiveMessage(async (msg: any) => {
+            if (!msg || typeof msg.type !== 'string') return;
+
+            if (msg.type === 'saveModel') {
+                const model = msg.project as PbpProject;
+                const xml = writePbpProjectText(model);
+                await replaceDocumentText(document, xml);
+                await document.save();
+                void webviewPanel.webview.postMessage({ type: 'saved', errorText: null });
+                return;
             }
-        };
-        watcher.onDidChange(onChange);
-        watcher.onDidCreate(onChange);
-        watcher.onDidDelete(onChange);
 
-        webviewPanel.onDidDispose(() => watcher.dispose());
+            if (msg.type === 'saveXml') {
+                const xml = String(msg.xml ?? '');
+                // Validate parse before applying.
+                let errorText: string | null = null;
+                try {
+                    parsePbpProjectText(xml, document.uri.fsPath);
+                } catch (err: any) {
+                    errorText = err?.message ?? String(err);
+                }
 
-        await postInit();
+                if (errorText) {
+                    void webviewPanel.webview.postMessage({ type: 'saved', errorText });
+                    return;
+                }
+
+                await replaceDocumentText(document, xml);
+                await document.save();
+                void webviewPanel.webview.postMessage({ type: 'saved', errorText: null });
+                return;
+            }
+        });
     }
+}
+
+async function replaceDocumentText(document: vscode.TextDocument, text: string): Promise<void> {
+    const edit = new vscode.WorkspaceEdit();
+    const lastLine = document.lineAt(document.lineCount - 1);
+    const fullRange = new vscode.Range(0, 0, document.lineCount - 1, lastLine.text.length);
+    edit.replace(document.uri, fullRange, text);
+    await vscode.workspace.applyEdit(edit);
 }

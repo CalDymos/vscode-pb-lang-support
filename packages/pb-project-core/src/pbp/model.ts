@@ -6,29 +6,44 @@
 
 type integer = number;
 
+type StringMap = Record<string, string>;
+
+type BooleanMap = Record<string, boolean>;
+
+export interface PbpProjectMeta {
+    /** Attributes from the root <project ...> node (e.g. xmlns, version, creator). */
+    projectAttrs?: StringMap;
+    /** Original section order as found in the .pbp. */
+    sectionOrder?: string[];
+    /** True/false per section name if it was present in the source file. */
+    presentSections?: Record<string, boolean>;
+    /** Raw XML of sections not modeled by this library (full <section ...>...</section> block). */
+    unknownSections?: Record<string, string>;
+}
+
 export interface PbpProject {
     /** Absolute filesystem path to the .pbp file */
     projectFile: string;
     /** Absolute filesystem path to the project directory */
     projectDir: string;
-
-    /** Optional metadata extracted from the root <project ...> element */
-    meta?: PbpProjectMeta;
-
     config: PbpConfig;
     data: PbpData;
     files: PbpFileEntry[];
     /** Project libraries (best-effort; may be empty if not specified in the .pbp) */
     libraries: string[];
     targets: PbpTarget[];
+
+    /** Optional metadata used to preserve non-modeled XML sections/attributes on write. */
+    meta?: PbpProjectMeta;
 }
 
-export interface PbpProjectMeta {
-    /** Attributes from the root <project ...> element (eg. xmlns/version/creator). */
-    projectAttrs: Record<string, string>;
-
-    /** Section presence information to keep writer output close to the original file. */
-    presentSections?: Record<string, boolean>;
+export interface PbpConfigMeta {
+    /** Raw attributes from <options .../> inside the config section. */
+    optionsAttrs?: StringMap;
+    /** True if a <comment> tag existed in the original file. */
+    hasComment?: boolean;
+    /** Raw XML nodes inside <section name="config"> which are not modeled. */
+    extraXml?: string;
 }
 
 export interface PbpConfig {
@@ -39,11 +54,7 @@ export interface PbpConfig {
     /** Project comment (from <section name="config"><comment>...</comment>) */
     comment: string;
 
-    /** Raw attributes from <section name="config"><options .../> to preserve unknown fields. */
-    optionsAttrs?: Record<string, string>;
-
-    /** True if the source file contained a <comment> element (even if empty). */
-    commentPresent?: boolean;
+    meta?: PbpConfigMeta;
 }
 
 export interface PbpData {
@@ -59,103 +70,151 @@ export interface PbpData {
         user?: string;
         host?: string;
     };
+
+    meta?: {
+        /** Raw XML nodes inside <section name=\"data\"> which are not modeled. */
+        extraXml?: string;
+    };
+}
+
+export interface PbpFileConfig {
+    load?: boolean;
+    scan?: boolean;
+    panel?: boolean;
+    warn?: boolean;
+
+    // Additional flags/values observed in PB 6.x project files.
+    lastopen?: boolean;
+    sortindex?: integer;
+    panelstate?: string;
+
+    /** Raw attributes from <config .../> to preserve additional values. */
+    attrs?: StringMap;
+}
+
+export interface PbpFileEntryMeta {
+    /** Raw XML nodes inside <file> which are not modeled. */
+    extraXml?: string;
 }
 
 export interface PbpFileEntry {
     /** File name/path as stored in the .pbp (usually relative to the project file) */
     rawPath: string;
-    /** Resolved absolute filesystem path */
+    /** Resolved absolute filesystem path (restricted to project root; may be empty if outside). */
     fsPath: string;
-
     /** Optional file flags as stored in the project */
-    config?: {
-        load?: boolean;
-        scan?: boolean;
-        panel?: boolean;
-        warn?: boolean;
-    };
+    config?: PbpFileConfig;
+    /** Optional fingerprint information (e.g. md5). */
+    fingerprint?: StringMap;
 
-    /** Additional, non-modeled file information preserved for display/editing */
-    meta?: {
-        /** Raw attributes from the <config .../> element (includes non-boolean fields like sortindex/panelstate). */
-        configAttrs?: Record<string, string>;
-        /** Raw attributes from the <fingerprint .../> element (eg. md5). */
-        fingerprintAttrs?: Record<string, string>;
-    };
+    meta?: PbpFileEntryMeta;
+}
+
+export interface PbpTargetMeta {
+    /** Raw attributes from the opening <target ...> tag (excluding name/enabled/default when possible). */
+    targetAttrs?: StringMap;
+
+    /** True/false per node name if it was present in the source file. */
+    presentNodes?: Record<string, boolean>;
+
+    /** Raw XML nodes inside <target> which are not modeled. */
+    extraXml?: string;
 }
 
 export interface PbpTarget {
     name: string;
     enabled: boolean;
     isDefault: boolean;
+
     inputFile: PbpTargetValue;
     outputFile: PbpTargetValue;
+    /** Executable to run (may be empty if not specified). */
     executable: PbpTargetValue;
-    directory?: string;
 
-    /** Raw attributes from the <target ...> start tag to preserve unknown fields. */
-    targetAttrs?: Record<string, string>;
+    /** Working directory (from <directory value="..."/> or target attribute). */
+    directory: string;
 
-    /** Boolean options extracted from <options .../> (best-effort). */
-    options: Record<string, boolean>;
-    /** Raw <options .../> attributes as strings (includes non-boolean enumerations/values). */
-    optionAttrs?: Record<string, string>;
+    /** Raw attributes from <options .../> inside target. */
+    optionsAttrs?: StringMap;
+    /** Boolean view of optionsAttrs (best-effort). */
+    options: BooleanMap;
 
     /** Compiler version string as stored in <compiler version="..."/> */
     compilerVersion?: string;
+
     /** Optional additional command line args as stored in the project file (best-effort). */
     commandLine?: string;
+
     /** Subsystem name as stored in <subsystem value="..."/> */
     subsystem?: string;
+
     purifier?: {
         enabled: boolean;
         granularity?: string;
+        attrs?: StringMap;
+    };
+
+    /** Temporary executable mode (from <temporaryexe value="..."/>). */
+    temporaryExe?: string;
+
+    /** Linker options file (from <linker value="..."/>). */
+    linker?: PbpTargetValue;
+
+    /** Executable format attributes (from <format .../>). */
+    format?: StringMap;
+
+    icon?: {
+        enabled: boolean;
+        rawPath: string;
+        fsPath: string;
+        attrs?: StringMap;
+    };
+
+    debugger?: {
+        custom?: boolean;
+        type?: string;
+        attrs?: StringMap;
     };
 
     warnings?: {
         custom?: boolean;
         type?: string;
-        attrs?: Record<string, string>;
+        attrs?: StringMap;
     };
 
-    /** Value from <temporaryexe value="..."/> (eg. "source"). */
-    temporaryExe?: string;
-
-    /** From <compilecount enable="..." value="..."/> */
     compileCount?: {
         enabled: boolean;
         value?: integer;
+        attrs?: StringMap;
     };
 
-    /** From <buildcount enable="..." value="..."/> */
     buildCount?: {
         enabled: boolean;
         value?: integer;
+        attrs?: StringMap;
     };
 
-    format?: Record<string, string>;
-    icon?: {
+    exeConstant?: {
         enabled: boolean;
-        rawPath: string;
-        fsPath: string;
+        attrs?: StringMap;
     };
 
-    versionInfo?: {
-        enabled: boolean;
-        /** Ordered list of version info fields, eg. field0..field16. */
-        fields: Array<{ id: string; value: string }>;
-    };
-
-    resources?: {
-        /** Ordered list of resource file references from <resources><resource value="..."/>. */
-        items: string[];
-    };
-
-    watchList?: string;
     constants: Array<{
         enabled: boolean;
         value: string;
     }>;
+
+    versionInfo?: {
+        enabled: boolean;
+        attrs?: StringMap;
+        fields: Array<{ id: string; value: string }>;
+    };
+
+    resources?: string[];
+
+    watchList?: string;
+
+    meta?: PbpTargetMeta;
 }
 
 export interface PbpTargetValue {
