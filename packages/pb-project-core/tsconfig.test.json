@@ -4,5 +4,6 @@
     "rootDir": ".",
     "types": ["jest", "node"]
   },
-  "include": ["src/**/*", "test/**/*"]
+  "include": ["src/**/*", "test/**/*"],
+  "isolateModules": true
 }
