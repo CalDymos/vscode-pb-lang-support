@@ -1,6 +1,6 @@
 const path = require('path');
 
-module.exports = [
+module.exports = (env, argv) => [
     {
         target: 'node',
         entry: './src/extension.ts',
@@ -37,7 +37,7 @@ module.exports = [
             ],
         },
         optimization: {
-            minimize: false,
+            minimize: argv.mode === 'production',
         },
     },
     {
@@ -75,7 +75,7 @@ module.exports = [
             ],
         },
         optimization: {
-            minimize: false,
+            minimize: argv.mode === 'production',
         },
     },
     // Debug Adapter – runs as a standalone Node.js child process.
@@ -112,7 +112,7 @@ module.exports = [
             ],
         },
         optimization: {
-            minimize: false,
+            minimize: argv.mode === 'production',
         },
     }
 ];

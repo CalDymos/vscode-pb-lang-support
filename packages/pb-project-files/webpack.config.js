@@ -4,7 +4,6 @@ const path = require("path");
 /** @type {import('webpack').Configuration} */
 module.exports = {
   target: "node",
-  mode: "none",
 
   entry: "./src/extension.ts",
   output: {
