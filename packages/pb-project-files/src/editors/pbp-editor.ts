@@ -1082,7 +1082,12 @@ function renderFiles() {
     left.innerHTML = \`
       <div class="muted" style="margin-bottom:6px;">Compile targets</div>
       <select id="targetSelect"></select>
-      <div class="muted" style="margin-top:8px;">Default target is marked by the PureBasic project file.</div>
+      <div style="margin-top:10px;">
+        <label><input type="checkbox" id="tIsDefault" style="margin-right:6px;">Set as default target</label>
+      </div>
+      <div style="margin-top:6px;">
+        <label><input type="checkbox" id="tEnabled" style="margin-right:6px;">Enable in 'Build all Targets'</label>
+      </div>
     \`;
 
     row.appendChild(left);
@@ -1116,6 +1121,30 @@ function renderFiles() {
       right.innerHTML = '<em>No target selected.</em>';
       return;
     }
+
+    $('tIsDefault').checked = !!t.isDefault;
+    $('tEnabled').checked = !!t.enabled;
+
+    $('tIsDefault').addEventListener('change', (e) => {
+      t.isDefault = e.target.checked;
+      const opt = sel.options[state.activeTargetIndex];
+      if (opt) {
+        const flags = \`\${t.enabled ? '' : ' (disabled)'}\${t.isDefault ? ' [default]' : ''}\`;
+        opt.textContent = (t.name || ('Target ' + (state.activeTargetIndex + 1))) + flags;
+      }
+      setDirtyModel(true);
+    });
+
+    $('tEnabled').addEventListener('change', (e) => {
+      t.enabled = e.target.checked;
+      const opt = sel.options[state.activeTargetIndex];
+      if (opt) {
+        const flags = \`\${t.enabled ? '' : ' (disabled)'}\${t.isDefault ? ' [default]' : ''}\`;
+        opt.textContent = (t.name || ('Target ' + (state.activeTargetIndex + 1))) + flags;
+      }
+      setDirtyModel(true);
+    });
+
 
     const head = document.createElement('div');
     head.className = 'muted';
