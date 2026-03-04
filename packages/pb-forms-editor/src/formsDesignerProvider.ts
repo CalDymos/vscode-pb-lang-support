@@ -23,7 +23,7 @@ import {
   applyWindowPbAnyToggle,
   applyWindowRectPatch
 } from "./core/emitter/patchEmitter";
-import { readDesignerSettings, SETTINGS_SECTION, DesignerSettings } from "./settings";
+import { readDesignerSettings, SETTINGS_SECTION, DesignerSettings } from "./config/settings";
 import { FormDocument, PBFD_SYMBOLS } from "./core/model";
 
 const CONFIG_KEYS = {
