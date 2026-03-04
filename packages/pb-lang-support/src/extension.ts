@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from 'vscode-languageclient/node';
 import { PureBasicDebugAdapterDescriptorFactory } from './debug/debugAdapterDescriptorFactory';
+import type { PbpProject, PbpTarget } from '@caldymos/pb-project-core';
 
 
 let client: LanguageClient;
@@ -10,9 +11,9 @@ let fileWatcher: vscode.FileSystemWatcher;
 
 // ---------------------------------------------------------------------------
 // pb-project-files API (v2)
-// Mirror of PbProjectFilesApi from pb-project-files/src/api.ts.
-// Only the subset used by this bridge is declared here
-// unknown fields are ignored at runtime, so the declaration stays lean.
+// Mirrors PbProjectFilesApi from pb-project-files/src/api.ts.
+// Only the subset used by this bridge is declared here – unknown fields are
+// ignored at runtime, so the declaration stays lean.
 // ---------------------------------------------------------------------------
 interface PbProjectContextPayload {
     projectFile?: string;
@@ -21,6 +22,10 @@ interface PbProjectContextPayload {
     targetName?: string;
     includeDirs?: string[];
     projectFiles?: string[];
+    /** Full parsed project model. */
+    project?: PbpProject;
+    /** Active target model. */
+    target?: PbpTarget;
 }
 
 interface PbpProjectMinimal {
@@ -195,13 +200,15 @@ async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promis
     const sendProjectContext = () => {
         const ctx = api!.getActiveContextPayload();
         client.sendNotification('purebasic/projectContext', {
-            version: 1,
+            version: 2,
             projectFileUri: ctx.projectFile ? vscode.Uri.file(ctx.projectFile).toString() : undefined,
             projectDir: ctx.projectDir,
             projectName: ctx.projectName,
             targetName: ctx.targetName,
             includeDirs: ctx.includeDirs ?? [],
             projectFiles: ctx.projectFiles ?? [],
+            project: ctx.project,
+            target: ctx.target,
         });
     };
 

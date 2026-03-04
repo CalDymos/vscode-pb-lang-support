@@ -9,11 +9,12 @@
 import { Connection } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { URI } from 'vscode-uri';
+import type { PbpProject, PbpTarget } from '@caldymos/pb-project-core';
 import { PureBasicSymbol } from '../symbols/types';
 import { symbolCache } from '../symbols/symbol-cache';
 
 export interface ProjectContextLspPayload {
-    version: 1;
+    version: 2;
 
     projectFileUri?: string;
     projectDir?: string;
@@ -23,6 +24,11 @@ export interface ProjectContextLspPayload {
 
     includeDirs?: string[];
     projectFiles?: string[];
+
+    /** Full parsed project model forwarded from pb-project-files. */
+    project?: PbpProject;
+    /** Active target model forwarded from pb-project-files. */
+    target?: PbpTarget;
 }
 
 export interface FileProjectLspPayload {
@@ -46,6 +52,11 @@ export interface ProjectContext {
     /** file:// URIs of all project files – derived from projectFiles for fast lookup. */
     projectFileUris: Set<string>;
 
+    /** Full parsed project model (from pb-project-files, via LSP notification). */
+    project?: PbpProject;
+    /** Active target model (from pb-project-files, via LSP notification). */
+    activeTarget?: PbpTarget;
+
     lastModified: number;
 }
 
@@ -60,7 +71,7 @@ export class ProjectManager {
     public constructor(private readonly connection: Connection) {}
 
     public setActiveContext(payload: ProjectContextLspPayload): void {
-        if (!payload || payload.version !== 1) return;
+        if (!payload || payload.version !== 2) return;
 
         this.activeProjectFileUri = payload.projectFileUri;
         this.activeTargetName = payload.targetName;
@@ -81,6 +92,13 @@ export class ProjectManager {
             ctx.projectFileUris = new Set(
                 payload.projectFiles.filter(Boolean).map(p => URI.file(p).toString())
             );
+        }
+
+        if (payload.project !== undefined) {
+            ctx.project = payload.project;
+        }
+        if (payload.target !== undefined) {
+            ctx.activeTarget = payload.target;
         }
 
         ctx.lastModified = Date.now();
@@ -137,6 +155,26 @@ export class ProjectManager {
         const projectKey = this.getProjectKeyForDocument(documentUri);
         const ctx = projectKey ? this.projects.get(projectKey) : undefined;
         return ctx ? Array.from(ctx.projectFiles) : [];
+    }
+
+    /**
+     * Returns the full PbpProject model for the project associated with the given document.
+     * Available only when pb-project-files is active and has sent the project model.
+     */
+    public getProjectModel(documentUri: string): PbpProject | undefined {
+        const projectKey = this.getProjectKeyForDocument(documentUri);
+        const ctx = projectKey ? this.projects.get(projectKey) : undefined;
+        return ctx?.project;
+    }
+
+    /**
+     * Returns the active PbpTarget for the project associated with the given document.
+     * Available only when pb-project-files is active and has sent the target model.
+     */
+    public getActiveTarget(documentUri: string): PbpTarget | undefined {
+        const projectKey = this.getProjectKeyForDocument(documentUri);
+        const ctx = projectKey ? this.projects.get(projectKey) : undefined;
+        return ctx?.activeTarget;
     }
 
     /**
