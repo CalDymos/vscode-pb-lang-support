@@ -8,6 +8,9 @@
 
 import { Connection } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
+import { URI } from 'vscode-uri';
+import { PureBasicSymbol } from '../symbols/types';
+import { symbolCache } from '../symbols/symbol-cache';
 
 export interface ProjectContextLspPayload {
     version: 1;
@@ -38,10 +41,10 @@ export interface ProjectContext {
     targetName?: string;
 
     includeDirs: string[];
+    /** Absolute FS paths of all project files (from .pbp via pb-project-files). */
     projectFiles: Set<string>;
-
-    globalSymbols: Map<string, any>;
-    fileSymbols: Map<string, Set<string>>;
+    /** file:// URIs of all project files – derived from projectFiles for fast lookup. */
+    projectFileUris: Set<string>;
 
     lastModified: number;
 }
@@ -75,6 +78,9 @@ export class ProjectManager {
 
         if (Array.isArray(payload.projectFiles)) {
             ctx.projectFiles = new Set(payload.projectFiles.filter(Boolean));
+            ctx.projectFileUris = new Set(
+                payload.projectFiles.filter(Boolean).map(p => URI.file(p).toString())
+            );
         }
 
         ctx.lastModified = Date.now();
@@ -97,27 +103,22 @@ export class ProjectManager {
         this.fileToProject.set(payload.documentUri, payload.projectFileUri);
         this.getOrCreateProject(payload.projectFileUri).lastModified = Date.now();
     }
-    public onDocumentOpen(document: TextDocument): void {
-        this.updateProjectSymbols(document);
-    }
+    /**
+     * No-op: symbol parsing is handled by symbol-manager / symbolCache.
+     * Kept for API compatibility with server.ts.
+     */
+    public onDocumentOpen(_document: TextDocument): void { /* handled by symbolCache */ }
 
-    public onDocumentChange(document: TextDocument): void {
-        this.updateProjectSymbols(document);
-    }
+    /**
+     * No-op: symbol parsing is handled by symbol-manager / symbolCache.
+     * Kept for API compatibility with server.ts.
+     */
+    public onDocumentChange(_document: TextDocument): void { /* handled by symbolCache */ }
 
     public onDocumentClose(document: TextDocument): void {
-        const projectKey = this.getProjectKeyForDocument(document.uri);
-
-        // Keep the maps bounded to currently open documents.
+        // Clean up routing maps so memory stays bounded to open documents.
         this.fileToProject.delete(document.uri);
         this.fileScope.delete(document.uri);
-        if (!projectKey) return;
-
-        const ctx = this.projects.get(projectKey);
-        if (!ctx) return;
-
-        this.removeDocumentSymbols(ctx, document.uri);
-        ctx.lastModified = Date.now();
     }
 
     /**
@@ -139,16 +140,34 @@ export class ProjectManager {
     }
 
     /**
-     * Lookup a symbol in the project that contains the given document.
+     * Look up a symbol definition scoped to the project that contains the given document.
+     * Delegates to symbolCache (populated by symbol-manager) and filters results to
+     * files that belong to the same project.
      */
-    public findSymbolDefinition(symbolName: string, documentUri: string): any | null {
+    public findSymbolDefinition(
+        symbolName: string,
+        documentUri: string
+    ): { uri: string; symbol: PureBasicSymbol } | null {
         const projectKey = this.getProjectKeyForDocument(documentUri);
         if (!projectKey) return null;
 
         const ctx = this.projects.get(projectKey);
         if (!ctx) return null;
 
-        return ctx.globalSymbols.get(symbolName) || null;
+        const results = symbolCache.findSymbolDetailed(symbolName);
+        if (results.length === 0) return null;
+
+        // If the project has a known file list, prefer hits inside the project.
+        if (ctx.projectFileUris.size > 0) {
+            const inProject = results.find(r => ctx.projectFileUris.has(r.uri));
+            if (inProject) return inProject;
+        }
+
+        // Fallback: accept any hit from a file explicitly mapped to this project.
+        const mappedHit = results.find(r => this.fileToProject.get(r.uri) === projectKey);
+        if (mappedHit) return mappedHit;
+
+        return null;
     }
 
     private getProjectKeyForDocument(documentUri: string): string | undefined {
@@ -170,8 +189,7 @@ export class ProjectManager {
             projectFileUri,
             includeDirs: [],
             projectFiles: new Set(),
-            globalSymbols: new Map(),
-            fileSymbols: new Map(),
+            projectFileUris: new Set(),
             lastModified: Date.now(),
         };
 
@@ -179,120 +197,4 @@ export class ProjectManager {
         return ctx;
     }
 
-    private updateProjectSymbols(document: TextDocument): void {
-        // Do not attempt to parse .pbp XML as PureBasic source.
-        if (document.uri.toLowerCase().endsWith('.pbp')) {
-            return;
-        }
-
-        const projectKey = this.getProjectKeyForDocument(document.uri);
-        if (!projectKey) return;
-
-        const ctx = this.getOrCreateProject(projectKey);
-
-        // Replace symbols from this document.
-        this.removeDocumentSymbols(ctx, document.uri);
-
-        const symbols = this.extractSymbols(document);
-        const names = new Set<string>();
-
-        for (const sym of symbols) {
-            names.add(sym.name);
-            ctx.globalSymbols.set(sym.name, sym);
-        }
-
-        ctx.fileSymbols.set(document.uri, names);
-        ctx.lastModified = Date.now();
-    }
-
-    private removeDocumentSymbols(ctx: ProjectContext, documentUri: string): void {
-        const names = ctx.fileSymbols.get(documentUri);
-        if (!names) return;
-
-        for (const name of names) {
-            const existing = ctx.globalSymbols.get(name);
-            if (existing && existing.file === documentUri) {
-                ctx.globalSymbols.delete(name);
-            }
-        }
-
-        ctx.fileSymbols.delete(documentUri);
-    }
-
-    private extractSymbols(document: TextDocument): Array<{ name: string; type: string; file: string; line: number; definition: string } > {
-        const content = document.getText();
-        const lines = content.split('\n');
-        const out: Array<{ name: string; type: string; file: string; line: number; definition: string } > = [];
-
-        for (let i = 0; i < lines.length; i++) {
-            const raw = lines[i];
-            const line = raw.trim();
-
-            // Procedure definitions
-            const procMatch = line.match(/^(?:Procedure(?:\.\w+)?)\s+(\w+)\s*\(/i);
-            if (procMatch) {
-                out.push({
-                    name: procMatch[1],
-                    type: 'procedure',
-                    file: document.uri,
-                    line: i,
-                    definition: raw,
-                });
-                continue;
-            }
-
-            // Macro definitions
-            const macroMatch = line.match(/^Macro\s+(\w+)\b/i);
-            if (macroMatch) {
-                out.push({
-                    name: macroMatch[1],
-                    type: 'macro',
-                    file: document.uri,
-                    line: i,
-                    definition: raw,
-                });
-                continue;
-            }
-
-            // Constants: #NAME = ...
-            const constMatch = line.match(/^#\s*([a-zA-Z_][a-zA-Z0-9_]*\$?)\s*=/);
-            if (constMatch) {
-                out.push({
-                    name: constMatch[1],
-                    type: 'constant',
-                    file: document.uri,
-                    line: i,
-                    definition: raw,
-                });
-                continue;
-            }
-
-            // Structures
-            const structMatch = line.match(/^Structure\s+(\w+)\b/i);
-            if (structMatch) {
-                out.push({
-                    name: structMatch[1],
-                    type: 'structure',
-                    file: document.uri,
-                    line: i,
-                    definition: raw,
-                });
-                continue;
-            }
-
-            // Globals
-            const globalMatch = line.match(/^(?:Global|Define)\s+(\w+)\b/i);
-            if (globalMatch) {
-                out.push({
-                    name: globalMatch[1],
-                    type: 'variable',
-                    file: document.uri,
-                    line: i,
-                    definition: raw,
-                });
-            }
-        }
-
-        return out;
-    }
 }

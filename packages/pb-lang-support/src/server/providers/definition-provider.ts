@@ -92,23 +92,10 @@ export function handleDefinition(
         if (projectManager) {
             const projectSymbol = projectManager.findSymbolDefinition(word, document.uri);
             if (projectSymbol) {
-                // Convert project symbol to Location
-                try {
-                    const lines = projectSymbol.file.split('\n');
-                    const definitionLine = lines[projectSymbol.line] || '';
-                    const startPos = definitionLine.indexOf(word);
-                    if (startPos !== -1) {
-                        definitions.push({
-                            uri: projectSymbol.file,
-                            range: {
-                                start: { line: projectSymbol.line, character: startPos },
-                                end: { line: projectSymbol.line, character: startPos + word.length }
-                            }
-                        });
-                    }
-                } catch (error) {
-                    // Ignore conversion errors
-                }
+                definitions.push({
+                    uri: projectSymbol.uri,
+                    range: projectSymbol.symbol.range
+                });
             }
         }
 
