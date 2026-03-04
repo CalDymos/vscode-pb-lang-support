@@ -2,7 +2,7 @@
   "name": "pb-lang-support",
   "displayName": "PureBasic Language Services",
   "description": "%extension.description%",
-  "version": "0.11.0",
+  "version": "0.11.3",
   "publisher": "CalDymos",
   "author": {
     "name": "CalDymos"
@@ -10,12 +10,13 @@
   "icon": "icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/CalDymos/vscode-pb-lang-suite.git"
+    "url": "https://github.com/CalDymos/vscode-pb-lang-suite.git",
+    "directory": "packages/pb-lang-support"
   },
   "bugs": {
     "url": "https://github.com/CalDymos/vscode-pb-lang-suite/issues"
   },
-  "homepage": "https://github.com/CalDymos/vscode-pb-lang-suite#readme",
+  "homepage": "https://github.com/CalDymos/vscode-pb-lang-suite/tree/main/packages/pb-lang-support",
   "license": "MIT",
   "keywords": [
     "purebasic",
@@ -368,10 +369,11 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run webpack:prod",
+    "vscode:prepublish": "npm run typecheck && npm run webpack:prod",
+    "typecheck": "tsc -p ./ --noEmit",
     "compile": "tsc -p ./",
     "watch": "tsc -w",
-    "webpack": "webpack --mode development",
+    "webpack": "webpack --mode development --config webpack.config.js",
     "webpack:prod": "webpack --mode production --config webpack.config.js",
     "webpack:watch": "webpack --mode development --watch",
     "test": "jest",

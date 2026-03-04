@@ -1,145 +1,243 @@
 /*
-    Provides a read-only custom editor for PureBasic .pbp project files.
+    Provides an editable custom editor for PureBasic .pbp project files.
+
+    The editor offers structured tabs similar to PureBasic's project dialog,
+    plus a Raw XML tab to cover settings not (yet) modeled.
 */
 
 import * as vscode from 'vscode';
-
-import { parsePbpProjectText, type PbpProject } from '@caldymos/pb-project-core';
+import * as path from 'path';
+import { readProjectEditorSettings, SETTINGS_SECTION, ProjectEditorSettings } from '../config/settings'
+import { parsePbpProjectText, writePbpProjectText, type PbpProject } from '@caldymos/pb-project-core';
 
 export const PBP_EDITOR_VIEW_TYPE = 'pbProjectFiles.pbpEditor';
 
-class PbpDocument implements vscode.CustomDocument {
-    public constructor(public readonly uri: vscode.Uri) {}
-
-    public dispose(): void {
-        // No resources to release.
+function getNonce(): string {
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let text = '';
+    for (let i = 0; i < 32; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
     }
+    return text;
 }
 
-function escapeHtml(value: string): string {
-    return value
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
+// scriptUri: webview-safe URI to out/webview/pbp-editor-view.js
+function renderHtml(webview: vscode.Webview, document: vscode.TextDocument, project: PbpProject | null, xml: string, scriptUri: vscode.Uri, settings: ProjectEditorSettings, errorText?: string): string {
+    const nonce = getNonce();
 
-function renderProjectHtml(project: PbpProject | null, errorText?: string): string {
-    const title = project?.config?.name?.trim() ? project.config.name : (project ? project.projectFile : 'PureBasic Project');
-    const projFile = project?.projectFile ?? '';
-    const projDir = project?.projectDir ?? '';
-    const targets = project?.targets ?? [];
-    const files = project?.files ?? [];
-    const libs = project?.libraries ?? [];
+    // Inline script (bootstrap) is covered by nonce.
+    // External bundle is covered by webview.cspSource (served from extension dir).
+    const csp = `default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}' ${webview.cspSource};`;
 
-    const targetRows = targets.length
-        ? targets.map(t => `<tr><td>${escapeHtml(t.name)}</td><td>${t.enabled ? 'Yes' : 'No'}</td><td>${t.isDefault ? 'Yes' : 'No'}</td></tr>`).join('')
-        : `<tr><td colspan="3"><em>No targets found.</em></td></tr>`;
+    const initial = {
+        uri: document.uri.toString(),
+        fsPath: document.uri.fsPath,
+        xml,
+        project,
+        errorText: errorText ?? null,
+    };
 
-    const fileRows = files.length
-        ? files.slice(0, 200).map(f => `<li title="${escapeHtml(f.fsPath)}">${escapeHtml(f.rawPath)}</li>`).join('')
-        : `<li><em>No files listed.</em></li>`;
-
-    const libRows = libs.length
-        ? libs.map(l => `<li>${escapeHtml(l)}</li>`).join('')
-        : `<li><em>No libraries listed.</em></li>`;
-
-    const errorBlock = errorText
-        ? `<div class="error"><strong>Parse error:</strong> ${escapeHtml(errorText)}</div>`
-        : '';
+    const initialJson = JSON.stringify(initial).replace(/</g, '\\u003c');
 
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="${csp}">
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${escapeHtml(title)}</title>
+  <title>PureBasic Project</title>
   <style>
-    body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--vscode-foreground); background: var(--vscode-editor-background); }
-    h1 { font-size: 18px; margin: 0 0 12px; }
-    h2 { font-size: 14px; margin: 18px 0 8px; }
-    .muted { opacity: 0.8; }
-    .grid { display: grid; grid-template-columns: 140px 1fr; gap: 6px 12px; }
-    code { background: var(--vscode-textCodeBlock-background); padding: 1px 4px; border-radius: 3px; }
+    body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--vscode-foreground); background: var(--vscode-editor-background); padding: 0; margin: 0; }
+    :root { --pbp-inactive-tab-fg: ${settings.inactiveTabForeground || 'var(--vscode-foreground)'}; }
+    .toolbar { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--vscode-editorWidget-border); position: sticky; top: 0; background: var(--vscode-editor-background); z-index: 2; }
+    .toolbar button { padding: 4px 10px; }
+    .status { opacity: 0.8; }
+
+    .tabs { display: flex; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--vscode-editorWidget-border); }
+    .tabbtn { padding: 6px 10px; border: 1px solid var(--vscode-editorWidget-border); border-radius: 4px; background: var(--vscode-editorWidget-background); cursor: pointer; }
+    .tabbtn.active { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-color: var(--vscode-button-background); }
+
+    .page { display: none; padding: 10px; }
+    .page.active { display: block; }
+
+    .grid2 { display: grid; grid-template-columns: 240px 1fr; gap: 10px 14px; align-items: center; max-width: 1100px; }
+    .grid2 label { opacity: 0.95; }
+    input[type="text"], input[type="number"], textarea, select { width: 100%; box-sizing: border-box; padding: 4px 6px; border: 1px solid var(--vscode-input-border); background: var(--vscode-input-background); color: var(--vscode-input-foreground); border-radius: 3px; }
+    textarea { min-height: 90px; resize: vertical; }
+
+    .row { display: grid; grid-template-columns: 280px 1fr; gap: 10px; }
+    .panel { border: 1px solid var(--vscode-editorWidget-border); border-radius: 6px; padding: 10px; background: var(--vscode-editorWidget-background); }
+
     table { border-collapse: collapse; width: 100%; }
     th, td { border: 1px solid var(--vscode-editorWidget-border); padding: 6px 8px; text-align: left; }
     th { background: var(--vscode-editorWidget-background); }
-    ul { margin: 6px 0 0; padding-left: 18px; }
+
+    .subtabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+
+    .muted { opacity: 0.75; }
     .error { margin: 10px 0; padding: 8px 10px; border: 1px solid var(--vscode-inputValidation-errorBorder); background: var(--vscode-inputValidation-errorBackground); color: var(--vscode-inputValidation-errorForeground); border-radius: 4px; }
-    .hint { margin-top: 10px; padding: 8px 10px; border: 1px dashed var(--vscode-editorWidget-border); border-radius: 4px; }
+
+    .btnrow { display:flex; gap:8px; flex-wrap:wrap; }
+    .btn { padding: 4px 10px; }
   </style>
 </head>
 <body>
-  <h1>PureBasic Project <span class="muted">(Preview)</span></h1>
-  ${errorBlock}
-  <div class="grid">
-    <div>Project:</div><div><code>${escapeHtml(title)}</code></div>
-    <div>File:</div><div class="muted">${escapeHtml(projFile)}</div>
-    <div>Directory:</div><div class="muted">${escapeHtml(projDir)}</div>
-    <div>Targets:</div><div class="muted">${targets.length}</div>
-    <div>Files:</div><div class="muted">${files.length}</div>
+  <div class="toolbar">
+    <button id="btnSave" disabled>Save</button>
+    <button id="btnSaveXml" disabled>Save XML</button>
+    <span id="status" class="status muted"></span>
   </div>
 
-  <h2>Targets</h2>
-  <table>
-    <thead>
-      <tr><th>Name</th><th>Enabled</th><th>Default</th></tr>
-    </thead>
-    <tbody>
-      ${targetRows}
-    </tbody>
-  </table>
-
-  <h2>Files (first 200)</h2>
-  <ul>
-    ${fileRows}
-  </ul>
-
-  <h2>Libraries</h2>
-  <ul>
-    ${libRows}
-  </ul>
-
-  <div class="hint">
-    <strong>Tip:</strong> Use <em>Reopen Editor With...</em> → <em>Text Editor</em> to edit the raw .pbp XML.
+  <div class="tabs">
+    <button class="tabbtn active" data-tab="project">Project Options</button>
+    <button class="tabbtn" data-tab="files">Project Files</button>
+    <button class="tabbtn" data-tab="targets">Targets</button>
+    <button class="tabbtn" data-tab="libraries">Libraries</button>
+    <button class="tabbtn" data-tab="xml">Raw XML</button>
   </div>
+
+  <div id="page-project" class="page active"></div>
+  <div id="page-files" class="page"></div>
+  <div id="page-targets" class="page"></div>
+  <div id="page-libraries" class="page"></div>
+  <div id="page-xml" class="page"></div>
+
+  <!-- Bootstrap: inject initial state before the external bundle loads. -->
+  <script nonce="${nonce}">window.__PBPEDITOR_INITIAL__ = ${initialJson};</script>
+  <!-- External webview bundle (built by webviewConfig in webpack.config.js). -->
+  <script src="${scriptUri}"></script>
 </body>
 </html>`;
 }
 
-export class PbpReadonlyEditorProvider implements vscode.CustomReadonlyEditorProvider<PbpDocument> {
+export class PbpEditorProvider implements vscode.CustomTextEditorProvider {
     public static register(context: vscode.ExtensionContext): vscode.Disposable {
-        const provider = new PbpReadonlyEditorProvider(context);
+        const provider = new PbpEditorProvider(context);
         return vscode.window.registerCustomEditorProvider(PBP_EDITOR_VIEW_TYPE, provider, {
             webviewOptions: { retainContextWhenHidden: true },
             supportsMultipleEditorsPerDocument: false,
         });
     }
 
-    public constructor(private readonly context: vscode.ExtensionContext) {}
-
-    public async openCustomDocument(uri: vscode.Uri): Promise<PbpDocument> {
-        return new PbpDocument(uri);
+    public constructor(private readonly context: vscode.ExtensionContext) {
+        void context;
     }
 
-    public async resolveCustomEditor(document: PbpDocument, webviewPanel: vscode.WebviewPanel): Promise<void> {
+    public async resolveCustomTextEditor(document: vscode.TextDocument, webviewPanel: vscode.WebviewPanel): Promise<void> {
         webviewPanel.webview.options = {
-            enableScripts: false,
+            enableScripts: true,
             localResourceRoots: [this.context.extensionUri],
         };
 
-        let project: PbpProject | null = null;
-        let errorText: string | undefined;
+        // Resolve the external webview bundle URI once per editor instance.
+        const scriptUri = webviewPanel.webview.asWebviewUri(
+            vscode.Uri.joinPath(this.context.extensionUri, 'out', 'webview', 'pbp-editor-view.js')
+        );
 
-        try {
-            const bytes = await vscode.workspace.fs.readFile(document.uri);
-            const content = Buffer.from(bytes).toString('utf8');
-            project = parsePbpProjectText(content, document.uri.fsPath);
-        } catch (err: any) {
-            errorText = err?.message ?? String(err);
-        }
+        const update = () => {
+            const xml = document.getText();
+            const settings = readProjectEditorSettings();
+            let project: PbpProject | null = null;
+            let errorText: string | undefined;
+            try {
+                project = parsePbpProjectText(xml, document.uri.fsPath);
+            } catch (err: any) {
+                errorText = err?.message ?? String(err);
+            }
+            
+            webviewPanel.webview.html = renderHtml(webviewPanel.webview, document, project, xml, scriptUri, settings, errorText);
+        };
 
-        webviewPanel.webview.html = renderProjectHtml(project, errorText);
+        update();
+
+        // Keep webview in sync if the user edits the text directly.
+        const docChangeSub = vscode.workspace.onDidChangeTextDocument(e => {
+            if (e.document.uri.toString() !== document.uri.toString()) return;
+            const xml = document.getText();
+            let project: PbpProject | null = null;
+            let errorText: string | undefined;
+            try {
+                project = parsePbpProjectText(xml, document.uri.fsPath);
+            } catch (err: any) {
+                errorText = err?.message ?? String(err);
+            }
+            void webviewPanel.webview.postMessage({ type: 'state', xml, project, errorText: errorText ?? null });
+        });
+
+        const cfgChangeSub = vscode.workspace.onDidChangeConfiguration(e => {
+            if (e.affectsConfiguration(SETTINGS_SECTION)) update();
+        });
+
+        webviewPanel.onDidDispose(() => { docChangeSub.dispose(); cfgChangeSub.dispose(); });
+
+        webviewPanel.webview.onDidReceiveMessage(async (msg: any) => {
+            if (!msg || typeof msg.type !== 'string') return;
+
+            if (msg.type === 'saveModel') {
+                let errorText: string | null = null;
+                try {
+                    const model = msg.project as PbpProject;
+                    const xml = writePbpProjectText(model);
+                    await replaceDocumentText(document, xml);
+                    await document.save();
+                } catch (err: any) {
+                    errorText = err?.message ?? 'Unknown error';
+                }
+                void webviewPanel.webview.postMessage({ type: 'saved', errorText });
+                return;
+            }
+
+            if (msg.type === 'saveXml') {
+                const xml = String(msg.xml ?? '');
+                let errorText: string | null = null;
+                try {
+                    parsePbpProjectText(xml, document.uri.fsPath);
+                } catch (err: any) {
+                    errorText = err?.message ?? String(err);
+                }
+
+                if (errorText) {
+                    void webviewPanel.webview.postMessage({ type: 'saved', errorText });
+                    return;
+                }
+
+                try {
+                    await replaceDocumentText(document, xml);
+                    await document.save();
+                } catch (err: any) {
+                    errorText = err?.message ?? 'Unknown error';
+                }
+                void webviewPanel.webview.postMessage({ type: 'saved', errorText });
+                return;
+            }
+
+            if (msg.type === 'pickFile') {
+                try {
+                    const projectDir = path.dirname(document.uri.fsPath);
+                    const uris = await vscode.window.showOpenDialog({
+                        canSelectMany: false,
+                        defaultUri: vscode.Uri.file(projectDir),
+                        filters: { 'PureBasic Files': ['pb', 'pbi', 'pbf', 'pbh'] },
+                    });
+                    if (!uris || uris.length === 0) return;
+                    const picked = uris[0];
+                    const rel = path.relative(projectDir, picked.fsPath);
+                    const isExternal = rel === '..' || rel.startsWith('..' + path.sep) || path.isAbsolute(rel);
+                    const rawPath = isExternal ? picked.fsPath : rel;
+                    void webviewPanel.webview.postMessage({ type: 'filePicked', rawPath, fsPath: picked.fsPath });
+                } catch (err: any) {
+                    void vscode.window.showErrorMessage(`File pick failed: ${err?.message ?? 'Unknown error'}`);
+                }
+                return;
+            }
+        });
     }
+}
+
+async function replaceDocumentText(document: vscode.TextDocument, text: string): Promise<void> {
+    const edit = new vscode.WorkspaceEdit();
+    const lastLine = document.lineAt(document.lineCount - 1);
+    const fullRange = new vscode.Range(0, 0, document.lineCount - 1, lastLine.text.length);
+    edit.replace(document.uri, fullRange, text);
+    await vscode.workspace.applyEdit(edit);
 }

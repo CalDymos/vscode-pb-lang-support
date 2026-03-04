@@ -1,0 +1,4 @@
+{
+  "purebasicProjectEditor.configuration.title": "PureBasic Projekt-Editor",
+  "purebasicProjectEditor.inactiveTabForeground.description": "Schriftfarbe für inaktive Tabs im PureBasic Projekt-Editor (z. B. '#cccccc'). Leer lassen für die Standard-Schriftfarbe von VS Code."
+}

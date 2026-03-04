@@ -1,0 +1,4 @@
+{
+  "purebasicProjectEditor.configuration.title": "PureBasic Project Editor",
+  "purebasicProjectEditor.inactiveTabForeground.description": "Foreground color for inactive tabs in the PureBasic Project Editor (e.g. '#cccccc'). Leave empty to use the VS Code default foreground color."
+}

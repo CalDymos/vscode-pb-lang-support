@@ -2,7 +2,7 @@
   "name": "pb-project-files",
   "displayName": "PureBasic Project Files",
   "description": "Workspace project/target management for PureBasic (.pbp) projects",
-  "version": "0.2.4",
+  "version": "0.6.0",
   "publisher": "CalDymos",
   "author": {
     "name": "CalDymos"
@@ -11,17 +11,23 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/CalDymos/vscode-pb-lang-suite.git"
+    "url": "https://github.com/CalDymos/vscode-pb-lang-suite.git",
+    "directory": "packages/pb-project-files"
   },
   "bugs": {
     "url": "https://github.com/CalDymos/vscode-pb-lang-suite/issues"
   },
-  "homepage": "https://github.com/CalDymos/vscode-pb-lang-suite#readme",
+  "homepage": "https://github.com/CalDymos/vscode-pb-lang-suite/tree/main/packages/pb-project-files",
   "keywords": [
     "purebasic",
     "pbp",
     "project",
-    "targets"
+    "project files",
+    "targets",
+    "build targets",
+    "project manager",
+    "custom editor",
+    "webview"
   ],
   "engines": {
     "vscode": "^1.85.0"
@@ -34,6 +40,16 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "configuration": {
+      "title": "%purebasicProjectEditor.configuration.title%",
+      "properties": {
+        "purebasicProjectEditor.inactiveTabForeground": {
+          "type": "string",
+          "default": "",
+          "description": "%purebasicProjectEditor.inactiveTabForeground.description%"
+        }
+      }
+    },
     "commands": [
       {
         "command": "pbProjectFiles.pickProject",
@@ -65,8 +81,8 @@
     ]
   },
   "scripts": {
-    "compile": "tsc -p ./",
-    "watch": "tsc -w -p ./",
+    "compile": "tsc -p ./ && webpack --mode development --config webpack.config.js",
+    "watch": "tsc -w -p ./ && webpack --mode development --watch --config webpack.config.js",
     "webpack:prod": "webpack --mode production --config webpack.config.js",
     "webpack:dev": "webpack --mode development --config webpack.config.js",
     "vscode:prepublish": "npm run compile && npm run webpack:prod"

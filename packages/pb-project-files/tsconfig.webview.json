@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "esnext",
+    "moduleResolution": "node",
+    "lib": ["dom", "es2020"],
+    "strict": true,
+    "noImplicitAny": true,
+    "noEmit": true,
+    "sourceMap": true
+  },
+  "include": [
+    "src/webview/**/*.ts"
+  ]
+}

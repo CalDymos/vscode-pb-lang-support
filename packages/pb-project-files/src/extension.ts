@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { PbProjectFilesApi } from './api';
-import { PbpReadonlyEditorProvider } from './editors/pbp-editor';
+import { PbpEditorProvider } from './editors/pbp-editor';
 import { ProjectService } from './services/project-service';
 
 let projectService: ProjectService | undefined;
@@ -8,7 +8,7 @@ let projectService: ProjectService | undefined;
 export async function activate(context: vscode.ExtensionContext): Promise<PbProjectFilesApi> {
     projectService = new ProjectService(context);
     context.subscriptions.push(projectService);
-    context.subscriptions.push(PbpReadonlyEditorProvider.register(context));
+    context.subscriptions.push(PbpEditorProvider.register(context));
 
     context.subscriptions.push(
         vscode.commands.registerCommand('pbProjectFiles.refresh', async () => {

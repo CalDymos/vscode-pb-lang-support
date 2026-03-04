@@ -44,14 +44,14 @@ jobs:
       - name: Build pb-project-core
         run: npm -w packages/pb-project-core run build
 
-      - name: Compile
+      - name: Compile (${{ matrix.pkg }})
         run: npm -w packages/${{ matrix.pkg }} run compile
 
-      - name: Build bundle (pb-lang-support only)
-        if: matrix.pkg == 'pb-lang-support'
+      - name: Build bundle (${{ matrix.pkg }})
+        if: matrix.pkg == 'pb-lang-support' || matrix.pkg == 'pb-project-files'
         run: npm -w packages/${{ matrix.pkg }} run webpack:prod
 
-      - name: Package VSIX
+      - name: Package VSIX (${{ matrix.pkg }})
         run: npx @vscode/vsce package --no-dependencies --out ${{ matrix.pkg }}.vsix
         working-directory: packages/${{ matrix.pkg }}
 

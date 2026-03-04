@@ -31,29 +31,21 @@ jobs:
       - name: Build pb-project-core
         run: npm -w packages/pb-project-core run build
 
-      - name: Compile
+      - name: Compile (${{ matrix.pkg }})
         run: npm -w packages/${{ matrix.pkg }} run compile
 
-      - name: Build bundle (pb-lang-support only)
-        if: matrix.pkg == 'pb-lang-support'
+      - name: Build bundle (${{ matrix.pkg }})
+        if: matrix.pkg == 'pb-lang-support' || matrix.pkg == 'pb-project-files'
         run: npm -w packages/${{ matrix.pkg }} run webpack:prod
 
       - name: Run tests (pb-lang-support only)
         if: matrix.pkg == 'pb-lang-support' && hashFiles('packages/pb-lang-support/test/**/*.test.*', 'packages/pb-lang-support/test/**/*.spec.*') != ''
         run: npm -w packages/${{ matrix.pkg }} run test -- --passWithNoTests
 
-      - name: Package VSIX (pb-lang-support)
-        if: matrix.pkg == 'pb-lang-support'
+      - name: Run tests (pb-project-files only)
+        if: matrix.pkg == 'pb-project-files' && hashFiles('packages/pb-project-files/test/**/*.test.*', 'packages/pb-project-files/test/**/*.spec.*') != ''
+        run: npm -w packages/${{ matrix.pkg }} run test -- --passWithNoTests
+
+      - name: Package VSIX (${{ matrix.pkg }})
         run: npx @vscode/vsce package --no-dependencies --out ${{ matrix.pkg }}.vsix
         working-directory: packages/${{ matrix.pkg }}
-
-      - name: Package VSIX (pb-forms-editor)
-        if: matrix.pkg == 'pb-forms-editor'
-        run: npx @vscode/vsce package --no-dependencies --out ${{ matrix.pkg }}.vsix
-        working-directory: packages/${{ matrix.pkg }}
-
-      - name: Upload VSIX artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: devel-vsix-${{ matrix.pkg }}
-          path: packages/${{ matrix.pkg }}/${{ matrix.pkg }}.vsix

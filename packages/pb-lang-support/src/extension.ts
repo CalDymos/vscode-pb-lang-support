@@ -8,19 +8,34 @@ let client: LanguageClient;
 let debugChannel: vscode.OutputChannel;
 let fileWatcher: vscode.FileSystemWatcher;
 
-interface PbProjectFilesApi {
-    version: 1;
-    getActiveContextPayload(): {
-        projectFile?: string;
-        projectDir?: string;
-        projectName?: string;
-        targetName?: string;
-        includeDirs?: string[];
-        projectFiles?: string[];
-    };
-    getProjectForFile(fileUri: vscode.Uri): { projectFile: string; projectDir: string } | undefined;
-    onDidChangeActiveContext: vscode.Event<any>;
+// ---------------------------------------------------------------------------
+// pb-project-files API (v2)
+// Mirror of PbProjectFilesApi from pb-project-files/src/api.ts.
+// Only the subset used by this bridge is declared here
+// unknown fields are ignored at runtime, so the declaration stays lean.
+// ---------------------------------------------------------------------------
+interface PbProjectContextPayload {
+    projectFile?: string;
+    projectDir?: string;
+    projectName?: string;
+    targetName?: string;
+    includeDirs?: string[];
+    projectFiles?: string[];
 }
+
+interface PbpProjectMinimal {
+    projectFile: string;
+    projectDir: string;
+}
+
+interface PbProjectFilesApi {
+    readonly version: 2;
+    getActiveContextPayload(): PbProjectContextPayload;
+    getProjectForFile(fileUri: vscode.Uri): PbpProjectMinimal | undefined;
+    readonly onDidChangeActiveContext: vscode.Event<PbProjectContextPayload>;
+}
+
+// ---------------------------------------------------------------------------
 
 function formatInternalError(err: unknown): string {
     if (err instanceof Error) {
@@ -149,6 +164,7 @@ export function activate(context: vscode.ExtensionContext) {
 async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promise<void> {
     const ext = vscode.extensions.getExtension('CalDymos.pb-project-files');
     if (!ext) {
+        // pb-project-files not installed – run in standalone mode, no bridge needed.
         return;
     }
 
@@ -159,12 +175,25 @@ async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promis
         logInternalError('pb-project-files activation failed (optional integration, continuing without it)', err);
         return;
     }
-    if (!api || api.version !== 1) {
+
+    // Guard: require exact v2 API. Older or unknown versions are skipped
+    // so that pb-lang-support keeps running standalone without breaking.
+    if (!api || api.version !== 2) {
+        debugChannel.appendLine(
+            `[pb-project-files] Unexpected API version (got ${(api as any)?.version}, expected 2). ` +
+            'Running without project integration.'
+        );
         return;
     }
 
+    debugChannel.appendLine('[pb-project-files] v2 API connected – project bridge active.');
+
+    // ------------------------------------------------------------------
+    // Helpers
+    // ------------------------------------------------------------------
+
     const sendProjectContext = () => {
-        const ctx = api.getActiveContextPayload();
+        const ctx = api!.getActiveContextPayload();
         client.sendNotification('purebasic/projectContext', {
             version: 1,
             projectFileUri: ctx.projectFile ? vscode.Uri.file(ctx.projectFile).toString() : undefined,
@@ -183,7 +212,7 @@ async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promis
 
     const sendFileProject = (doc: vscode.TextDocument, isClosed = false) => {
         if (doc.uri.scheme !== 'file') return;
-        const proj = isClosed ? undefined : api.getProjectForFile(doc.uri);
+        const proj = isClosed ? undefined : api!.getProjectForFile(doc.uri);
         client.sendNotification('purebasic/fileProject', {
             version: 1,
             documentUri: doc.uri.toString(),
@@ -192,15 +221,18 @@ async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promis
         });
     };
 
-    // Initial sync.
+    // ------------------------------------------------------------------
+    // Initial sync
+    // ------------------------------------------------------------------
     sendProjectContext();
     for (const doc of vscode.workspace.textDocuments) {
         sendFileProject(doc);
     }
 
-    const subs: vscode.Disposable[] = [];
-
-    subs.push(
+    // ------------------------------------------------------------------
+    // Ongoing sync
+    // ------------------------------------------------------------------
+    const subs: vscode.Disposable[] = [
         api.onDidChangeActiveContext(() => {
             sendProjectContext();
             const ed = vscode.window.activeTextEditor;
@@ -210,8 +242,8 @@ async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promis
         vscode.workspace.onDidCloseTextDocument(doc => sendFileProject(doc, true)),
         vscode.window.onDidChangeActiveTextEditor(ed => {
             if (ed) sendFileProject(ed.document);
-        })
-    );
+        }),
+    ];
 
     context.subscriptions.push(...subs);
 }

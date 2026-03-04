@@ -24,6 +24,18 @@ export interface PbProjectContextPayload {
 
     /** Project-related code files (.pb/.pbi) derived from the .pbp (absolute paths) */
     projectFiles?: string[];
+
+    /** Full parsed project model (may be large). */
+    project?: PbpProject;
+
+    /** Active target model (derived from project + targetName). */
+    target?: PbpTarget;
+}
+
+export interface PbProjectSettingsPayload {
+    projectFile: string;
+    xml: string;
+    project: PbpProject | null;
 }
 
 export interface PbFileProjectPayload {
@@ -36,7 +48,7 @@ export interface PbFileProjectPayload {
 }
 
 export interface PbProjectFilesApi {
-    readonly version: 1;
+    readonly version: 2;
 
     getActiveContext(): PbProjectContext;
     getActiveContextPayload(): PbProjectContextPayload;
@@ -46,6 +58,15 @@ export interface PbProjectFilesApi {
      * Falls back to "best matching" project root containment if the file is not explicitly listed in the .pbp.
      */
     getProjectForFile(fileUri: vscode.Uri): PbpProject | undefined;
+
+    /** Read a .pbp file (raw XML + parsed model). */
+    readProjectFile(projectFileUri: vscode.Uri): Promise<PbProjectSettingsPayload>;
+
+    /** Write a .pbp file by serializing a project model with the core writer. */
+    writeProjectFileModel(projectFileUri: vscode.Uri, project: PbpProject): Promise<void>;
+
+    /** Write a .pbp file using raw XML. */
+    writeProjectFileXml(projectFileUri: vscode.Uri, xml: string): Promise<void>;
 
     refresh(): Promise<void>;
     pickActiveProject(): Promise<void>;

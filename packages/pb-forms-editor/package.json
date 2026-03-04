@@ -2,7 +2,7 @@
   "name": "pb-forms-editor",
   "displayName": "PureBasic Forms Editor",
   "description": "Custom Editor for PureBasic .pbf forms with a webview designer.",
-  "version": "0.7.13",
+  "version": "0.7.15",
   "publisher": "CalDymos",
   "author": {
     "name": "CalDymos"
@@ -10,12 +10,13 @@
   "icon": "icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/CalDymos/vscode-pb-lang-suite.git"
+    "url": "https://github.com/CalDymos/vscode-pb-lang-suite.git",
+    "directory": "packages/pb-forms-editor"
   },
   "bugs": {
     "url": "https://github.com/CalDymos/vscode-pb-lang-suite/issues"
   },
-  "homepage": "https://github.com/CalDymos/vscode-pb-lang-suite#readme",
+  "homepage": "https://github.com/CalDymos/vscode-pb-lang-suite/tree/main/packages/pb-forms-editor",
   "license": "MIT",
   "keywords": [
     "purebasic",

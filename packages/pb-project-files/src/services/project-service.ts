@@ -7,11 +7,12 @@ import {
     getProjectIncludeDirectories,
     getProjectSourceFiles,
     getProjectIncludeFiles,
+    writePbpProjectText,
     type PbpProject,
     type PbpTarget,
 } from '@caldymos/pb-project-core';
 
-import type { PbFileProjectPayload, PbProjectContext, PbProjectContextPayload, PbProjectFilesApi, ProjectScope } from '../api';
+import type { PbFileProjectPayload, PbProjectContext, PbProjectContextPayload, PbProjectFilesApi, PbProjectSettingsPayload, ProjectScope } from '../api';
 
 const DEFAULT_PBP_GLOB = '**/*.pbp';
 const DEFAULT_EXCLUDE_GLOB = '**/{node_modules,.git}/**';
@@ -88,10 +89,14 @@ export class ProjectService implements vscode.Disposable {
 
     public getApi(): PbProjectFilesApi {
         return {
-            version: 1,
+            version: 2,
             getActiveContext: () => this.getActiveContext(),
             getActiveContextPayload: () => this.getActiveContextPayload(),
             getProjectForFile: (fileUri: vscode.Uri) => this.getProjectForFile(fileUri),
+
+            readProjectFile: (projectFileUri: vscode.Uri) => this.readProjectFile(projectFileUri),
+            writeProjectFileModel: (projectFileUri: vscode.Uri, project: PbpProject) => this.writeProjectFileModel(projectFileUri, project),
+            writeProjectFileXml: (projectFileUri: vscode.Uri, xml: string) => this.writeProjectFileXml(projectFileUri, xml),
             refresh: () => this.refresh(),
             pickActiveProject: () => this.pickActiveProject(),
             pickActiveTarget: () => this.pickActiveTarget(),
@@ -128,6 +133,7 @@ export class ProjectService implements vscode.Disposable {
     public getActiveContextPayload(): PbProjectContextPayload {
         const proj = this.activeProjectFile ? this.projects.get(this.activeProjectFile) : undefined;
         const meta = this.activeProjectFile ? this.projectMeta.get(this.activeProjectFile) : undefined;
+        const target = proj ? this.getActiveTarget(proj) : undefined;
         return {
             projectFile: proj?.projectFile ?? this.activeProjectFile,
             projectDir: proj?.projectDir,
@@ -135,6 +141,8 @@ export class ProjectService implements vscode.Disposable {
             targetName: this.activeTargetName,
             includeDirs: meta?.includeDirs ?? [],
             projectFiles: meta?.projectFiles ?? [],
+            project: proj,
+            target,
         };
     }
 
@@ -281,17 +289,20 @@ export class ProjectService implements vscode.Disposable {
     }
 
     private computeProjectMeta(project: PbpProject): { includeDirs: string[]; projectFiles: string[] } {
-        const includeDirs = [...new Set((getProjectIncludeDirectories(project) ?? []).filter(Boolean))];
+        const includeDirs = [...new Set((getProjectIncludeDirectories(project) ?? [])
+            .filter((p): p is string => typeof p === 'string' && p.trim().length > 0))];
 
-        const src = (getProjectSourceFiles(project) ?? []).filter(Boolean);
-        const inc = (getProjectIncludeFiles(project) ?? []).filter(Boolean);
+        const src = (getProjectSourceFiles(project) ?? [])
+            .filter((p): p is string => typeof p === 'string' && p.trim().length > 0);
+        const inc = (getProjectIncludeFiles(project) ?? [])
+            .filter((p): p is string => typeof p === 'string' && p.trim().length > 0);
+
         const projectFiles = [...new Set([...src, ...inc])]
             .filter(p => p.toLowerCase().endsWith('.pb') || p.toLowerCase().endsWith('.pbi'))
             .map(p => path.resolve(p));
 
         return { includeDirs, projectFiles };
     }
-
     private rebuildFileToProjectMap(): void {
         this.fileToProject.clear(); // Clear before rebuilding to remove stale entries.
         
@@ -415,6 +426,22 @@ export class ProjectService implements vscode.Disposable {
             );
             return null;
         }
+    }
+
+    public async readProjectFile(projectFileUri: vscode.Uri): Promise<PbProjectSettingsPayload> {
+        const bytes = await vscode.workspace.fs.readFile(projectFileUri);
+        const xml = Buffer.from(bytes).toString('utf8');
+        const project = parsePbpProjectText(xml, projectFileUri.fsPath);
+        return { projectFile: projectFileUri.fsPath, xml, project };
+    }
+
+    public async writeProjectFileModel(projectFileUri: vscode.Uri, project: PbpProject): Promise<void> {
+        const xml = writePbpProjectText(project);
+        await this.writeProjectFileXml(projectFileUri, xml);
+    }
+
+    public async writeProjectFileXml(projectFileUri: vscode.Uri, xml: string): Promise<void> {
+        await vscode.workspace.fs.writeFile(projectFileUri, Buffer.from(xml, 'utf8'));
     }
 
     private updateStatusBar(): void {
