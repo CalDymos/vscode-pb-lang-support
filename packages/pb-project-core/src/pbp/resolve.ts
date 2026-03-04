@@ -126,8 +126,12 @@ export function resolveProjectPath(projectDir: string, rawPath: string): string 
 
     // Absolute paths are stored as-is by PureBasic IDE for files outside the project root.
     // Return them directly without root-containment check.
-    if (isAbsoluteCrossPlatform(p)) {
-        return path.normalize(path.resolve(p));
+    // Use platform-specific normalizers to avoid mis-resolving Windows/UNC paths on non-Windows.
+    if (looksLikeWindowsAbs(p)) {
+        return path.win32.normalize(p);
+    }
+    if (p.startsWith('/')) {
+        return path.posix.normalize(p);
     }
 
     const projectRoot = path.resolve(projectDir);
