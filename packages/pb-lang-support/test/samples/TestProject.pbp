@@ -8,7 +8,7 @@
   <section name="data">
     <explorer view="D:\Documents\PureBasic\Projects\" pattern="0"/>
     <log show="1"/>
-    <lastopen date="2026-03-03 08:37" user="th" host="RT"/>
+    <lastopen date="2026-03-04 06:48" user="CalDymos" host="RT"/>
   </section>
   <section name="files">
     <file name="test_basic.pb">
@@ -39,6 +39,11 @@
       <compilecount enable="1" value="0"/>
       <buildcount enable="1" value="0"/>
       <execonstant enable="1"/>
+      <versioninfo enable="1">
+        <field0 value="1.0.0"/>
+        <field1 value="1.2.5"/>
+        <field2 value="companyname"/>
+      </versioninfo>
     </target>
     <target name="Target 2" enabled="1" default="0">
       <inputfile value=""/>
