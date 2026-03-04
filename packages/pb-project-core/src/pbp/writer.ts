@@ -425,7 +425,8 @@ function writeTarget(lines: string[], indent: string, t: PbpTarget): void {
         viAttrs['enable'] = boolTo01String(!!t.versionInfo.enabled);
         lines.push(`${inner}<versioninfo${renderAttrsFromMap(viAttrs, ['enable'])}>`);
         for (const f of t.versionInfo.fields ?? []) {
-            lines.push(`${inner}${indent}<${f.id}${renderAttrsFromMap({ value: f.value ?? '' }, ['value'])}/>`);
+            if (!(f.value ?? '').trim()) continue; // skip empty fields (PB IDE behaviour)
+            lines.push(`${inner}${indent}<${f.id}${renderAttrsFromMap({ value: f.value }, ['value'])}/>`);
         }
         lines.push(`${inner}</versioninfo>`);
     } else if (present['versioninfo']) {

@@ -907,80 +907,366 @@ function renderFiles() {
 
   function renderTargetVersionInfo(container, t) {
     if (!t.versionInfo) t.versionInfo = { enabled: false, fields: [] };
+    if (!t.versionInfo.fields) t.versionInfo.fields = [];
 
-    container.innerHTML = \`
-      <div class="grid2">
-        <label>Enable Version Info</label>
-        <input id="viEnable" type="checkbox" />
-      </div>
-      <div class="btnrow" style="margin:10px 0 8px;">
-        <button class="btn" id="viAdd">Add field</button>
-      </div>
-      <table>
-        <thead><tr><th style="width:160px">Field</th><th>Value</th><th style="width:80px"></th></tr></thead>
-        <tbody id="viRows"></tbody>
-      </table>
-    \`;
+    const FIXED_FIELDS = [
+      { id: 'field0',  label: 'File Version (n,n,n,n) *',    type: 'version' },
+      { id: 'field1',  label: 'Product Version (n,n,n,n) *', type: 'version' },
+      { id: 'field2',  label: 'Company Name *',               type: 'text' },
+      { id: 'field3',  label: 'Product Name *',               type: 'text' },
+      { id: 'field4',  label: 'Product Version *',            type: 'text' },
+      { id: 'field5',  label: 'File Version *',               type: 'text' },
+      { id: 'field6',  label: 'File Description *',           type: 'text' },
+      { id: 'field7',  label: 'Internal Name *',              type: 'text' },
+      { id: 'field8',  label: 'Original FileName *',          type: 'text' },
+      { id: 'field9',  label: 'Legal Copyright',              type: 'text' },
+      { id: 'field10', label: 'Legal Trademarks',             type: 'text' },
+      { id: 'field11', label: 'Private Build',                type: 'text' },
+      { id: 'field12', label: 'Special Build',                type: 'text' },
+      { id: 'field13', label: 'Email',                        type: 'text' },
+      { id: 'field14', label: 'Website',                      type: 'text' },
+      { id: 'field15', label: 'File OS',                      type: 'select',
+          options: [ 'VOS_UNKNOWN', 'VOS_DOS_WINDOWS32', 'VOS_NT_WINDOWS32', 'VOS_NT'] },
+      { id: 'field16', label: 'File Type',                    type: 'select',
+          options: [ 'VFT_UNKNOWN', 'VFT_APP', 'VFT_DLL', 'VFT_DRV', 'VFT_FONT', 'VFT_VXD', 'VFT_STATIC_LIB'] },
+      { id: 'field17', label: 'Language',                     type: 'select',
+          options: ['0000 Language Neutral',
+                    '007f Invariant locale',
+                    '0400 Process Or User Default Language',
+                    '0800 System Default Language',
+                    '0436 Afrikaans',
+                    '041c Albanian',
+                    '0401 Arabic (Saudi Arabia)',
+                    '0801 Arabic (Iraq)',
+                    '0c01 Arabic (Egypt)',
+                    '1001 Arabic (Libya)',
+                    '1401 Arabic (Algeria)',
+                    '1801 Arabic (Morocco)',
+                    '1c01 Arabic (Tunisia)',
+                    '2001 Arabic (Oman)',
+                    '2401 Arabic (Yemen)',
+                    '2801 Arabic (Syria)',
+                    '2c01 Arabic (Jordan)',
+                    '3001 Arabic (Lebanon)',
+                    '3401 Arabic (Kuwait)',
+                    '3801 Arabic (U.A.E.)',
+                    '3c01 Arabic (Bahrain)',
+                    '4001 Arabic (Qatar)',
+                    '042b Armenian',
+                    '042c Azeri (Latin)',
+                    '082c Azeri (Cyrillic)',
+                    '042d Basque',
+                    '0423 Belarusian',
+                    '0445 Bengali (India)',
+                    '141a Bosnian (Bosnia And Herzegovina)',
+                    '0402 Bulgarian',
+                    '0455 Burmese',
+                    '0403 Catalan',
+                    '0404 Chinese (Taiwan)',
+                    '0804 Chinese (PRC)',
+                    '0c04 Chinese (Hong Kong SAR, PRC)',
+                    '1004 Chinese (Singapore)',
+                    '1404 Chinese (Macao SAR)',
+                    '041a Croatian',
+                    '101a Croatian (Bosnia And Herzegovina)',
+                    '0405 Czech',
+                    '0406 Danish',
+                    '0465 Divehi',
+                    '0413 Dutch (Netherlands)',
+                    '0813 Dutch (Belgium)',
+                    '0409 English (United States)',
+                    '0809 English (United Kingdom)',
+                    '0c09 English (Australian)',
+                    '1009 English (Canadian)',
+                    '1409 English (New Zealand)',
+                    '1809 English (Ireland)',
+                    '1c09 English (South Africa)',
+                    '2009 English (Jamaica)',
+                    '2409 English (Caribbean)',
+                    '2809 English (Belize)',
+                    '2c09 English (Trinidad)',
+                    '3009 English (Zimbabwe)',
+                    '3409 English (Philippines)',
+                    '0425 Estonian',
+                    '0438 Faeroese',
+                    '0429 Farsi',
+                    '040b Finnish',
+                    '040c French (Standard)',
+                    '080c French (Belgian)',
+                    '0c0c French (Canadian)',
+                    '100c French (Switzerland)',
+                    '140c French (Luxembourg)',
+                    '180c French (Monaco)',
+                    '0456 Galician',
+                    '0437 Georgian',
+                    '0407 German (Standard)',
+                    '0807 German (Switzerland)',
+                    '0c07 German (Austria)',
+                    '1007 German (Luxembourg)',
+                    '1407 German (Liechtenstein)',
+                    '0408 Greek',
+                    '0447 Gujarati',
+                    '040d Hebrew',
+                    '0439 Hindi',
+                    '040e Hungarian',
+                    '040f Icelandic',
+                    '0421 Indonesian',
+                    '0434 isiXhosa/Xhosa (South Africa)',
+                    '0435 isiZulu/Zulu (South Africa)',
+                    '0410 Italian (Standard)',
+                    '0810 Italian (Switzerland)',
+                    '0411 Japanese',
+                    '044b Kannada',
+                    '0457 Konkani',
+                    '0412 Korean',
+                    '0812 Korean (Johab)',
+                    '0440 Kyrgyz',
+                    '0426 Latvian',
+                    '0427 Lithuanian',
+                    '0827 Lithuanian (Classic)',
+                    '042f Macedonian (FYROM)',
+                    '043e Malay (Malaysian)',
+                    '083e Malay (Brunei Darussalam)',
+                    '044c Malayalam (India)',
+                    '0481 Maori (New Zealand)',
+                    '043a Maltese (Malta)',
+                    '044e Marathi',
+                    '0450 Mongolian',
+                    '0414 Norwegian (Bokmal)',
+                    '0814 Norwegian (Nynorsk)',
+                    '0415 Polish',
+                    '0416 Portuguese (Brazil)',
+                    '0816 Portuguese (Portugal)',
+                    '0446 Punjabi',
+                    '046b Quechua (Bolivia)',
+                    '086b Quechua (Ecuador)',
+                    '0c6b Quechua (Peru)',
+                    '0418 Romanian',
+                    '0419 Russian',
+                    '044f Sanskrit',
+                    '043b Sami, Northern (Norway)',
+                    '083b Sami, Northern (Sweden)',
+                    '0c3b Sami, Northern (Finland)',
+                    '103b Sami, Lule (Norway)',
+                    '143b Sami, Lule (Sweden)',
+                    '183b Sami, Southern (Norway)',
+                    '1c3b Sami, Southern (Sweden)',
+                    '203b Sami, Skolt (Finland)',
+                    '243b Sami, Inari (Finland)',
+                    '0c1a Serbian (Cyrillic)',
+                    '1c1a Serbian (Cyrillic, Bosnia, And Herzegovina)',
+                    '081a Serbian (Latin)',
+                    '181a Serbian (Latin, Bosnia, And Herzegovina)',
+                    '046c Sesotho sa Leboa/Northern Sotho (South Africa)',
+                    '0432 Setswana/Tswana (South Africa)',
+                    '041b Slovak',
+                    '0424 Slovenian',
+                    '040a Spanish (Spain, Traditional Sort)',
+                    '080a Spanish (Mexican)',
+                    '0c0a Spanish (Spain, Modern Sort)',
+                    '100a Spanish (Guatemala)',
+                    '140a Spanish (Costa Rica)',
+                    '180a Spanish (Panama)',
+                    '1c0a Spanish (Dominican Republic)',
+                    '200a Spanish (Venezuela)',
+                    '240a Spanish (Colombia)',
+                    '280a Spanish (Peru)',
+                    '2c0a Spanish (Argentina)',
+                    '300a Spanish (Ecuador)',
+                    '340a Spanish (Chile)',
+                    '380a Spanish (Uruguay)',
+                    '3c0a Spanish (Paraguay)',
+                    '400a Spanish (Bolivia)',
+                    '440a Spanish (El Salvador)',
+                    '480a Spanish (Honduras)',
+                    '4c0a Spanish (Nicaragua)',
+                    '500a Spanish (Puerto Rico)',
+                    '0430 Sutu',
+                    '0441 Swahili (Kenya)',
+                    '041d Swedish',
+                    '081d Swedish (Finland)',
+                    '045a Syriac',
+                    '0449 Tamil',
+                    '0444 Tatar (Tatarstan)',
+                    '044a Telugu',
+                    '041e Thai',
+                    '041f Turkish',
+                    '0422 Ukrainian',
+                    '0420 Urdu (Pakistan)',
+                    '0820 Urdu (India)',
+                    '0443 Uzbek (Latin)',
+                    '0843 Uzbek (Cyrillic)',
+                    '042a Vietnamese',
+                    '0452 Welsh (United Kingdom)'
+                  ] },   
+    ];
+    const SELECT_DEFAULTS = {};
+    for (let i = 0; i < FIXED_FIELDS.length; i++) {
+      const fd = FIXED_FIELDS[i];
+      if (fd.type === 'select') SELECT_DEFAULTS[fd.id] = fd.options[0];
+    }
 
-    $('viEnable').checked = !!t.versionInfo.enabled;
-    $('viEnable').addEventListener('change', (e) => {
-      t.versionInfo.enabled = e.target.checked;
-      if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.versioninfo = true;
+    function getFieldValue(id) {
+      const f = t.versionInfo.fields.find(function(x) { return x.id === id; });
+      return f ? (f.value || '') : '';
+    }
+
+    function setFieldValue(id, value) {
+      if (!value && SELECT_DEFAULTS[id]) {
+        value = SELECT_DEFAULTS[id];
+      }
+      const existing = t.versionInfo.fields.find(function(x) { return x.id === id; });
+      if (!value) {
+        t.versionInfo.fields = t.versionInfo.fields.filter(function(x) { return x.id !== id; });
+      } else if (existing) {
+        existing.value = value;
+      } else {
+        t.versionInfo.fields.push({ id: id, value: value });
+      }
+      markViDirty();
+    }
+
+    function markViDirty() {
+      if (!t.meta) t.meta = {};
+      if (!t.meta.presentNodes) t.meta.presentNodes = {};
+      t.meta.presentNodes.versioninfo = true;
       setDirtyModel(true);
+    }
+
+    const enabled   = !!t.versionInfo.enabled;
+    const chk       = enabled ? 'checked' : '';
+    const dis       = enabled ? '' : 'disabled';
+
+    let html = '';
+    html += '<div class="grid2" style="margin-bottom:10px;">';
+    html += '<label>Enable Version Info</label>';
+    html += '<input id="viEnable" type="checkbox" ' + chk + ' />';
+    html += '</div>';
+
+    if (!enabled) {
+      html += '<div class="muted" style="margin-bottom:8px;">Enable Version Info to edit fields.</div>';
+    } else {
+      html += '<div class="muted" style="margin-bottom:6px; font-size:0.9em;">';
+      html += 'Tokens: %OS %SOURCE %EXECUTABLE %COMPILECOUNT %BUILDCOUNT';
+      html += ' and FormatDate() tokens (%yy %mm %dd ...)';
+      html += '</div>';
+    }
+
+    html += '<div class="grid2" id="viFixedGrid" style="max-width:900px;">';
+    for (let i = 0; i < FIXED_FIELDS.length; i++) {
+      const fd  = FIXED_FIELDS[i];
+      const val = esc(getFieldValue(fd.id));
+      html += '<label>' + esc(fd.label) + '</label>';
+      if (fd.type === 'select') {
+        html += '<select id="vi_' + fd.id + '" ' + dis + '>';
+        for (let j = 0; j < fd.options.length; j++) {
+          const currentVal = getFieldValue(fd.id) || SELECT_DEFAULTS[fd.id] || '';
+          const selAttr = currentVal === fd.options[j] ? 'selected' : '';;
+          const optLabel = fd.options[j] || '(none)';
+          html += '<option value="' + esc(fd.options[j]) + '" ' + selAttr + '>' + esc(optLabel) + '</option>';
+        }
+        html += '</select>';
+      } else {
+        html += '<input type="text" id="vi_' + fd.id + '" value="' + val + '" ' + dis + ' />';
+      }
+    }
+    html += '</div>';
+
+    html += '<hr style="margin:14px 0; border:none; border-top:1px solid var(--vscode-editorWidget-border);" />';
+    html += '<div class="muted" style="margin-bottom:6px;">Custom fields</div>';
+    html += '<div class="btnrow" style="margin-bottom:8px;">';
+    html += '<button class="btn" id="viAddCustom" ' + dis + '>Add custom field</button>';
+    html += '</div>';
+    html += '<table>';
+    html += '<thead><tr>';
+    html += '<th style="width:140px;">Field ID</th>';
+    html += '<th>Value</th>';
+    html += '<th style="width:80px;"></th>';
+    html += '</tr></thead>';
+    html += '<tbody id="viCustomRows"></tbody>';
+    html += '</table>';
+
+    container.innerHTML = html;
+
+    // --- Enable toggle (re-renders entire panel) ---
+    $('viEnable').addEventListener('change', function(e) {
+      t.versionInfo.enabled = e.target.checked;
+      markViDirty();
+      renderTargetVersionInfo(container, t);
     });
 
-    function rebuild() {
-      const tbody = $('viRows');
+    // --- Fixed field bindings ---
+    for (let fi = 0; fi < FIXED_FIELDS.length; fi++) {
+      (function(fd) {
+        const el = document.getElementById('vi_' + fd.id);
+        if (!el) return;
+        const evtName = fd.type === 'select' ? 'change' : 'input';
+        el.addEventListener(evtName, function(e) {
+          setFieldValue(fd.id, e.target.value);
+        });
+      })(FIXED_FIELDS[fi]);
+    }
+
+    // --- Custom fields (field18+) ---
+    function isCustomField(f) {
+      const m = f.id.match(/^field(\d+)$/);
+      return !m || parseInt(m[1], 10) >= 18;
+    }
+
+    function rebuildCustom() {
+      const tbody = $('viCustomRows');
       tbody.innerHTML = '';
-      const fields = t.versionInfo.fields || [];
-      for (let i = 0; i < fields.length; i++) {
-        const f = fields[i];
+      const custom = t.versionInfo.fields.filter(isCustomField);
+
+      if (custom.length === 0) {
         const tr = document.createElement('tr');
-        tr.innerHTML = \`
-          <td><input type="text" data-idx="\${i}" data-k="id" value="\${esc(f.id)}"></td>
-          <td><input type="text" data-idx="\${i}" data-k="val" value="\${esc(f.value)}"></td>
-          <td><button class="btn" data-del="\${i}">Remove</button></td>
-        \`;
-        tbody.appendChild(tr);
-      }
-      if (fields.length === 0) {
-        const tr = document.createElement('tr');
-        tr.innerHTML = \`<td colspan="3"><em>No version fields.</em></td>\`;
+        tr.innerHTML = '<td colspan="3"><em>No custom fields.</em></td>';
         tbody.appendChild(tr);
       }
 
-      for (const inp of tbody.querySelectorAll('input')) {
-        inp.addEventListener('input', (e) => {
-          const idx = parseInt(e.target.dataset.idx, 10);
-          const k = e.target.dataset.k;
-          if (k === 'id') fields[idx].id = e.target.value;
-          if (k === 'val') fields[idx].value = e.target.value;
-          if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.versioninfo = true;
-          setDirtyModel(true);
+      for (let ci = 0; ci < custom.length; ci++) {
+        const cf       = custom[ci];
+        const gidx     = t.versionInfo.fields.indexOf(cf);
+        const disAttr  = enabled ? '' : 'disabled';
+        const tr       = document.createElement('tr');
+        tr.innerHTML =
+          '<td><input type="text" data-gidx="' + gidx + '" data-k="id"  value="' + esc(cf.id)    + '" ' + disAttr + ' /></td>' +
+          '<td><input type="text" data-gidx="' + gidx + '" data-k="val" value="' + esc(cf.value) + '" ' + disAttr + ' /></td>' +
+          '<td><button class="btn" data-gidx="' + gidx + '" ' + disAttr + '>Remove</button></td>';
+        tbody.appendChild(tr);
+      }
+
+      for (const inp of tbody.querySelectorAll('input[type="text"]')) {
+        inp.addEventListener('input', function(e) {
+          const gidx = parseInt(e.target.dataset.gidx, 10);
+          const k    = e.target.dataset.k;
+          if (k === 'id')  t.versionInfo.fields[gidx].id    = e.target.value;
+          if (k === 'val') t.versionInfo.fields[gidx].value = e.target.value;
+          markViDirty();
         });
       }
 
-      for (const btn of tbody.querySelectorAll('button[data-del]')) {
-        btn.addEventListener('click', (e) => {
-          const idx = parseInt(e.target.dataset.del, 10);
-          fields.splice(idx, 1);
-          if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.versioninfo = true;
-          setDirtyModel(true);
-          rebuild();
+      for (const btn of tbody.querySelectorAll('button[data-gidx]')) {
+        btn.addEventListener('click', function(e) {
+          const gidx = parseInt(e.target.dataset.gidx, 10);
+          t.versionInfo.fields.splice(gidx, 1);
+          markViDirty();
+          rebuildCustom();
         });
       }
     }
 
-    $('viAdd').addEventListener('click', () => {
-      const fields = t.versionInfo.fields || (t.versionInfo.fields = []);
-      const nextIndex = fields.length;
-      fields.push({ id: 'field' + nextIndex, value: '' });
-      if (!t.meta) t.meta = {}; if (!t.meta.presentNodes) t.meta.presentNodes = {}; t.meta.presentNodes.versioninfo = true;
-      setDirtyModel(true);
-      rebuild();
+    $('viAddCustom').addEventListener('click', function() {
+      let nextId = 18;
+      while (t.versionInfo.fields.some(function(f) { return f.id === 'field' + nextId; })) {
+        nextId++;
+      }
+      t.versionInfo.fields.push({ id: 'field' + nextId, value: '' });
+      markViDirty();
+      rebuildCustom();
     });
 
-    rebuild();
+    rebuildCustom();
   }
 
   function renderTargetResources(container, t) {
