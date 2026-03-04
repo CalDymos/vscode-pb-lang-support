@@ -9,7 +9,6 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { readProjectEditorSettings, SETTINGS_SECTION, ProjectEditorSettings } from '../config/settings'
 import { parsePbpProjectText, writePbpProjectText, type PbpProject } from '@caldymos/pb-project-core';
-import { settings } from 'cluster';
 
 export const PBP_EDITOR_VIEW_TYPE = 'pbProjectFiles.pbpEditor';
 
