@@ -4,7 +4,8 @@ node_modules/**
 src/**
 .gitignore
 tsconfig.json
-*.ts
+**/*.ts
+**/*.d.ts
 coverage/
 jest.config.js
 tsconfig.test.json
