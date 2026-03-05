@@ -24,6 +24,12 @@ const ANCHOR_RE = /^; IDE Options = PureBasic (.+)$/;
 const KV_RE     = /^; ([A-Za-z][A-Za-z0-9_]*) = (.*)$/;
 const FLAG_RE   = /^; ([A-Za-z][A-Za-z0-9_]*)$/;
 
+// Variants without the ";" prefix (fileCfg / projectCfg)
+const ANCHOR_BARE_RE = /^IDE Options = PureBasic (.+)$/;
+const KV_BARE_RE     = /^([A-Za-z][A-Za-z0-9_]*) = (.*)$/;
+const FLAG_BARE_RE   = /^([A-Za-z][A-Za-z0-9_]*)$/;
+const SECTION_RE     = /^\[(.+)\]$/;
+
 // ---------------------------------------------------------------------------
 // Parse
 // ---------------------------------------------------------------------------
@@ -101,7 +107,78 @@ export function extractExecutable(meta: PbFileMetadata, baseDir: string): string
     return val && val !== true ? resolve(baseDir, val) : undefined;
 }
 
+// ---------------------------------------------------------------------------
+// fileCfg  (<file>.pb.cfg)
+// Identical to the sourceMetadata structure, but without the “; ” prefix.
+// ---------------------------------------------------------------------------
+export function parseCfgFile(text: string): PbFileMetadata | null {
+    const lines = text.split(/\r?\n/);
+    const anchorMatch = ANCHOR_BARE_RE.exec(lines[0]?.trim() ?? '');
+    if (!anchorMatch) return null;
+
+    const entries = new Map<string, string | true>();
+    for (const line of lines.slice(1)) {
+        const stripped = line.trim();
+        if (!stripped) continue;
+        const kv   = KV_BARE_RE.exec(stripped);
+        if (kv)   { entries.set(kv[1], kv[2]); continue; }
+        const flag = FLAG_BARE_RE.exec(stripped);
+        if (flag) { entries.set(flag[1], true); }
+    }
+
+    return { entries, ideVersion: anchorMatch[1] };
+}
+
+// ---------------------------------------------------------------------------
+// projectCfg  (project.cfg)
+// INI-like: [filename.pb] sections, content indented.
+//
+// [MyFile.pb]
+//   IDE Options = PureBasic 6.30 (Windows - x86)
+//   EnableThread
+//   Executable = out\myapp.exe
+// ---------------------------------------------------------------------------
+export function parseProjectCfg(
+    text:     string,
+    fileName: string,   // Only the file name, e.g., “test.pb”
+): PbFileMetadata | null {
+    const lines    = text.split(/\r?\n/);
+    const targetSection = fileName.toLowerCase();
+
+    let inSection = false;
+    let ideVersion: string | null = null;
+    const entries = new Map<string, string | true>();
+
+    for (const line of lines) {
+        const trimmed = line.trim();
+
+        // Section-Header
+        const sectionMatch = SECTION_RE.exec(trimmed);
+        if (sectionMatch) {
+            inSection = sectionMatch[1].toLowerCase() === targetSection;
+            continue;
+        }
+
+        if (!inSection || !trimmed) continue;
+
+        // Anchor line
+        const anchorMatch = ANCHOR_BARE_RE.exec(trimmed);
+        if (anchorMatch) { ideVersion = anchorMatch[1]; continue; }
+
+        // Key-Value
+        const kv = KV_BARE_RE.exec(trimmed);
+        if (kv)   { entries.set(kv[1], kv[2]); continue; }
+        // Flag
+        const flag = FLAG_BARE_RE.exec(trimmed);
+        if (flag) { entries.set(flag[1], true); }
+    }
+
+    if (!ideVersion) return null;
+    return { entries, ideVersion };
+}
+
 function resolve(base: string, p: string): string {
     const path = require('path') as typeof import('path');
     return path.isAbsolute(p) ? p : path.resolve(base, p);
 }
+

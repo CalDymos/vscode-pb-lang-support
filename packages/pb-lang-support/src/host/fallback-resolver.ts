@@ -6,7 +6,7 @@
  */
 import * as vscode from 'vscode';
 import * as path   from 'path';
-import {splitPbFile, extractExecutable} from './utils/pb-metadata';
+import { splitPbFile, parseCfgFile, parseProjectCfg, extractExecutable } from './utils/pb-metadata';
 
 export type FallbackSource =
     | 'sourceMetadata'   // PureBasic IDE comments at end of file
@@ -91,7 +91,19 @@ export class FallbackResolver {
     // fileCfg  (<file>.pb.cfg)
     // -----------------------------------------------------------------------
     private async fromFileCfg(uri: vscode.Uri): Promise<FallbackBuildContext | null> {
-        return this.parseCfgFile(uri.fsPath + '.cfg', 'fileCfg');
+        const cfgPath = uri.fsPath + '.cfg';
+        try {
+            const bytes = await vscode.workspace.fs.readFile(vscode.Uri.file(cfgPath));
+            const meta  = parseCfgFile(Buffer.from(bytes).toString('utf8'));
+            if (!meta) return null;
+
+            const base = path.dirname(uri.fsPath);
+            return {
+                source:       'fileCfg',
+                projectFiles: [],
+                outputFile:   extractExecutable(meta, base),
+            };
+        } catch { return null; }
     }
 
     // -----------------------------------------------------------------------
@@ -100,52 +112,27 @@ export class FallbackResolver {
     private async fromProjectCfg(uri: vscode.Uri): Promise<FallbackBuildContext | null> {
         const wsFolder = vscode.workspace.getWorkspaceFolder(uri);
         const stopAt   = wsFolder?.uri.fsPath ?? path.parse(uri.fsPath).root;
+        const fileName = path.basename(uri.fsPath);  // z.B. "test.pb"
 
         let dir = path.dirname(uri.fsPath);
         while (true) {
-            const result = await this.parseCfgFile(path.join(dir, 'project.cfg'), 'projectCfg');
-            if (result) return result;
+            const cfgPath = path.join(dir, 'project.cfg');
+            try {
+                const bytes = await vscode.workspace.fs.readFile(vscode.Uri.file(cfgPath));
+                const meta  = parseProjectCfg(Buffer.from(bytes).toString('utf8'), fileName);
+                if (meta) {
+                    return {
+                        source:       'projectCfg',
+                        projectFiles: [],
+                        outputFile:   extractExecutable(meta, dir),
+                    };
+                }
+            } catch { /* Datei nicht vorhanden – nächste Ebene */ }
+
             if (dir === stopAt || dir === path.dirname(dir)) break;
             dir = path.dirname(dir);
         }
         return null;
-    }
-
-    // -----------------------------------------------------------------------
-    // Common .cfg parser (key=value, repeatable keys)
-    //
-    //   executable=./out/myapp.exe
-    //   file=./module.pb
-    //   # Comments with # or ;
-    // -----------------------------------------------------------------------
-    private async parseCfgFile(
-        filePath: string,
-        source:   FallbackSource,
-    ): Promise<FallbackBuildContext | null> {
-        try {
-            const bytes = await vscode.workspace.fs.readFile(vscode.Uri.file(filePath));
-            const dir   = path.dirname(filePath);
-
-            const projectFiles: string[] = [];
-            let   outputFile:   string | undefined;
-
-            for (const raw of Buffer.from(bytes).toString('utf8').split(/\r?\n/)) {
-                const line = raw.trim();
-                if (!line || line.startsWith('#') || line.startsWith(';')) continue;
-                const eq = line.indexOf('=');
-                if (eq < 0) continue;
-                const key = line.slice(0, eq).trim().toLowerCase();
-                const val = line.slice(eq + 1).trim();
-                if (!val) continue;
-
-                else if (key === 'file')   { projectFiles.push(this.abs(dir, val)); }
-                else if (key === 'executable') { outputFile = this.abs(dir, val);   }
-            }
-
-            return { source, projectFiles, outputFile };
-        } catch {
-            return null;
-        }
     }
 
     // -----------------------------------------------------------------------
