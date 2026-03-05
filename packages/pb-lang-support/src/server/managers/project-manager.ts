@@ -22,7 +22,6 @@ export interface ProjectContextLspPayload {
 
     targetName?: string;
 
-    includeDirs?: string[];
     projectFiles?: string[];
 
     /** Full parsed project model forwarded from pb-project-files. null = explicitly cleared. */
@@ -46,7 +45,6 @@ export interface ProjectContext {
 
     targetName?: string;
 
-    includeDirs: string[];
     /** Absolute FS paths of all project files (from .pbp via pb-project-files). */
     projectFiles: Set<string>;
     /** file:// URIs of all project files – derived from projectFiles for fast lookup. */
@@ -82,10 +80,6 @@ export class ProjectManager {
         ctx.projectDir = payload.projectDir;
         ctx.projectName = payload.projectName;
         ctx.targetName = payload.targetName;
-
-        if (Array.isArray(payload.includeDirs)) {
-            ctx.includeDirs = payload.includeDirs.filter(Boolean);
-        }
 
         if (Array.isArray(payload.projectFiles)) {
             ctx.projectFiles = new Set(payload.projectFiles.filter(Boolean));
@@ -137,15 +131,6 @@ export class ProjectManager {
         // Clean up routing maps so memory stays bounded to open documents.
         this.fileToProject.delete(document.uri);
         this.fileScope.delete(document.uri);
-    }
-
-    /**
-     * Returns include directories for the project associated with the given document.
-     */
-    public getIncludeDirsForDocument(documentUri: string): string[] {
-        const projectKey = this.getProjectKeyForDocument(documentUri);
-        const ctx = projectKey ? this.projects.get(projectKey) : undefined;
-        return ctx?.includeDirs ?? [];
     }
 
     /**
@@ -225,7 +210,6 @@ export class ProjectManager {
 
         const ctx: ProjectContext = {
             projectFileUri,
-            includeDirs: [],
             projectFiles: new Set(),
             projectFileUris: new Set(),
             lastModified: Date.now(),

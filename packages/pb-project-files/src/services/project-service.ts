@@ -4,7 +4,6 @@ import * as path from 'path';
 import {
     parsePbpProjectText,
     pickTarget,
-    getProjectIncludeDirectories,
     getProjectSourceFiles,
     getProjectIncludeFiles,
     writePbpProjectText,
@@ -53,7 +52,7 @@ export class ProjectService implements vscode.Disposable {
     private readonly fileToProject = new Map<string, string>();
 
     /** Cached per project (keyed by normalized .pbp fsPath) */
-    private readonly projectMeta = new Map<string, { includeDirs: string[]; projectFiles: string[] }>();
+    private readonly projectMeta = new Map<string, { projectFiles: string[] }>();
 
     private activeProjectFile?: string;
     private activeTargetName?: string;
@@ -89,7 +88,7 @@ export class ProjectService implements vscode.Disposable {
 
     public getApi(): PbProjectFilesApi {
         return {
-            version: 2,
+            version: 3,
             getActiveContext: () => this.getActiveContext(),
             getActiveContextPayload: () => this.getActiveContextPayload(),
             getProjectForFile: (fileUri: vscode.Uri) => this.getProjectForFile(fileUri),
@@ -139,7 +138,6 @@ export class ProjectService implements vscode.Disposable {
             projectDir: proj?.projectDir,
             projectName: proj?.config?.name,
             targetName: this.activeTargetName,
-            includeDirs: meta?.includeDirs ?? [],
             projectFiles: meta?.projectFiles ?? [],
             project: proj,
             target,
@@ -288,9 +286,7 @@ export class ProjectService implements vscode.Disposable {
         return t ?? project.targets?.[0];
     }
 
-    private computeProjectMeta(project: PbpProject): { includeDirs: string[]; projectFiles: string[] } {
-        const includeDirs = [...new Set((getProjectIncludeDirectories(project) ?? [])
-            .filter((p): p is string => typeof p === 'string' && p.trim().length > 0))];
+    private computeProjectMeta(project: PbpProject): { projectFiles: string[] } {
 
         const src = (getProjectSourceFiles(project) ?? [])
             .filter((p): p is string => typeof p === 'string' && p.trim().length > 0);
@@ -301,7 +297,7 @@ export class ProjectService implements vscode.Disposable {
             .filter(p => p.toLowerCase().endsWith('.pb') || p.toLowerCase().endsWith('.pbi'))
             .map(p => path.resolve(p));
 
-        return { includeDirs, projectFiles };
+        return { projectFiles };
     }
     private rebuildFileToProjectMap(): void {
         this.fileToProject.clear(); // Clear before rebuilding to remove stale entries.

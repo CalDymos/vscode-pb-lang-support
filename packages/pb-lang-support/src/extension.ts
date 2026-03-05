@@ -20,7 +20,6 @@ interface PbProjectContextPayload {
     projectDir?: string;
     projectName?: string;
     targetName?: string;
-    includeDirs?: string[];
     projectFiles?: string[];
     /** Full parsed project model. */
     project?: PbpProject;
@@ -34,7 +33,7 @@ interface PbpProjectMinimal {
 }
 
 interface PbProjectFilesApi {
-    readonly version: 2;
+    readonly version: 3;
     getActiveContextPayload(): PbProjectContextPayload;
     getProjectForFile(fileUri: vscode.Uri): PbpProjectMinimal | undefined;
     readonly onDidChangeActiveContext: vscode.Event<PbProjectContextPayload>;
@@ -221,9 +220,9 @@ async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promis
 
     // Guard: require exact v2 API. Older or unknown versions are skipped
     // so that pb-lang-support keeps running standalone without breaking.
-    if (!api || api.version !== 2) {
+    if (!api || api.version !== 3) {
         debugChannel.appendLine(
-            `[pb-project-files] Unexpected API version (got ${(api as any)?.version}, expected 2). ` +
+            `[pb-project-files] Unexpected API version (got ${(api as any)?.version}, expected 3). ` +
             'Running without project integration.'
         );
         return;
@@ -243,7 +242,6 @@ async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promis
             projectDir: ctx.projectDir,
             projectName: ctx.projectName,
             targetName: ctx.targetName,
-            includeDirs: ctx.includeDirs ?? [],
             projectFiles: ctx.projectFiles ?? [],
             project: ctx.project ? stripProjectForLsp(ctx.project) : null,
             target: ctx.target ? stripTargetForLsp(ctx.target) : null,

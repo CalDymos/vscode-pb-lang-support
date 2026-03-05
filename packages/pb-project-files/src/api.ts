@@ -19,9 +19,6 @@ export interface PbProjectContextPayload {
     /** Target name as stored in the .pbp */
     targetName?: string;
 
-    /** Include search directories derived from the .pbp (absolute paths) */
-    includeDirs?: string[];
-
     /** Project-related code files (.pb/.pbi) derived from the .pbp (absolute paths) */
     projectFiles?: string[];
 
@@ -48,7 +45,7 @@ export interface PbFileProjectPayload {
 }
 
 export interface PbProjectFilesApi {
-    readonly version: 2;
+    readonly version: 3;
 
     getActiveContext(): PbProjectContext;
     getActiveContextPayload(): PbProjectContextPayload;
