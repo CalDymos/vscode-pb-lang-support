@@ -321,7 +321,7 @@ async function activateFallbackMode(context: vscode.ExtensionContext): Promise<v
         if (!doc || doc.uri.scheme !== 'file') return;
         const fallback = await resolver.resolve(doc.uri);
         client.sendNotification('purebasic/projectContext', {
-            version:      2,
+            version:      3,
             noProject:    true,
             projectFiles: fallback?.projectFiles ?? [],
         });

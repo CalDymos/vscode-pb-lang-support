@@ -35,7 +35,7 @@ It provides a visual interface for managing project files, build targets, and pr
 
 ## Extension API
 
-`pb-project-files` exposes a versioned public API (`version: 2`) that other extensions can consume to access project context at runtime.
+`pb-project-files` exposes a versioned public API (`version: 3`) that other extensions can consume to access project context at runtime.
 
 **Acquiring the API:**
 
