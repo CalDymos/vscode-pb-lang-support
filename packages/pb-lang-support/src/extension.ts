@@ -4,7 +4,7 @@ import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } f
 import { PureBasicDebugAdapterDescriptorFactory } from './debug/debugAdapterDescriptorFactory';
 import type { PbpProject, PbpTarget } from '@caldymos/pb-project-core';
 import { FallbackResolver } from './host/fallback-resolver';
-import {splitPbFile, joinPbFile} from './host/utils/pb-metadata';
+import {splitPbFile, PbFileSplit} from './host/utils/pb-metadata';
 
 
 let client: LanguageClient;
@@ -334,37 +334,65 @@ async function activateFallbackMode(context: vscode.ExtensionContext): Promise<v
         }),
     );
 
-    // Metadaten beim Speichern aktualisieren (nur im Fallback-Modus)
+    // Update metadata when saving (only in fallback mode)
     context.subscriptions.push(
         vscode.workspace.onWillSaveTextDocument(e => {
             if (e.document.languageId !== 'purebasic') return;
 
-            const text  = e.document.getText();
-            const split = splitPbFile(text);
-            if (!split.metadata) return; // kein Block → nichts aktualisieren
-
-            // Einzige "lebende" Daten die wir im Fallback kennen und
-            // in die Metadaten zurückschreiben: CursorPosition
             const editor = vscode.window.activeTextEditor;
-            if (editor?.document === e.document) {
-                const line = editor.selection.active.line + 1;
-                split.metadata.entries.set('CursorPosition', String(line));
-            }
+            if (editor?.document !== e.document) return;
 
-            const newText = joinPbFile(split.source, split.metadata);
-            if (newText === text) return; // keine Änderung → kein Edit
+            const text = e.document.getText();
+            const split = splitPbFile(text);
+            if (!split.metadata) return; // no block → do not update anything
 
-            const fullRange = new vscode.Range(
-                e.document.positionAt(0),
-                e.document.positionAt(text.length),
+            const cursorLine = editor.selection.active.line + 1;
+            const newValue = String(cursorLine);
+
+            // Narrow Edit: only adjust the cursor position line,
+            // never touch the rest of the document.
+            const edit = findOrBuildCursorPositionEdit(
+                e.document, split, newValue,
             );
-            e.waitUntil(
-                Promise.resolve([new vscode.TextEdit(fullRange, newText)])
-            );
+            if (edit) e.waitUntil(Promise.resolve([edit]));
         })
     );
 
     void send(vscode.window.activeTextEditor?.document);
+}
+
+function findOrBuildCursorPositionEdit(
+    document: vscode.TextDocument,
+    split:    PbFileSplit,
+    newValue: string,
+): vscode.TextEdit | null {
+    if (split.metaStartLine < 0) return null;
+
+    const KEY = 'CursorPosition';
+
+    // Search for existing CursorPosition line in metadata block
+    for (let i = split.metaStartLine; i < document.lineCount; i++) {
+        const lineText = document.lineAt(i).text;
+        // Matches "; CursorPosition = <number>"
+        if (/^; CursorPosition = \d+$/.test(lineText)) {
+            const oldValue = lineText.replace(/^; CursorPosition = /, '');
+            if (oldValue === newValue) return null; // no changes needed
+
+            const range = document.lineAt(i).range;
+            return vscode.TextEdit.replace(
+                range,
+                `; ${KEY} = ${newValue}`,
+            );
+        }
+    }
+
+    // No entry found → insert after anchor (line metaStartLine + 1)
+    const insertPos = new vscode.Position(split.metaStartLine + 1, 0);
+    const eol       = split.eol;
+    return vscode.TextEdit.insert(
+        insertPos,
+        `; ${KEY} = ${newValue}${eol}`,
+    );
 }
 
 function registerFoldingProvider(context: vscode.ExtensionContext) : void {

@@ -18,6 +18,8 @@ export interface PbFileSplit {
     metadata: PbFileMetadata | null;
     /** Line number (0-based) where the metadata block starts, or -1 */
     metaStartLine: number;
+    /** End of line in the original document ('\r\n' or'\n'). */
+    eol: '\r\n' | '\n';
 }
 
 const ANCHOR_RE = /^; IDE Options = PureBasic (.+)$/;
@@ -35,6 +37,7 @@ const SECTION_RE     = /^\[(.+)\]$/;
 // ---------------------------------------------------------------------------
 
 export function splitPbFile(text: string): PbFileSplit {
+    const eol: '\r\n' | '\n' = text.includes('\r\n') ? '\r\n' : '\n';
     const lines = text.split(/\r?\n/);
 
     let metaStartLine = -1;
@@ -46,7 +49,7 @@ export function splitPbFile(text: string): PbFileSplit {
     }
 
     if (metaStartLine < 0) {
-        return { source: text, metadata: null, metaStartLine: -1 };
+        return { source: text, metadata: null, metaStartLine: -1, eol };
     }
 
     // Source code: everything up to the block, trim trailing whitespace
@@ -73,7 +76,7 @@ export function splitPbFile(text: string): PbFileSplit {
     return {
         source,
         metadata: { entries, ideVersion },
-        metaStartLine,
+        metaStartLine, eol
     };
 }
 
@@ -81,21 +84,22 @@ export function splitPbFile(text: string): PbFileSplit {
 // Serialize
 // ---------------------------------------------------------------------------
 
-export function serializeMetadata(meta: PbFileMetadata): string {
+export function serializeMetadata(meta: PbFileMetadata, eol: '\r\n' | '\n' = '\n'): string {
     const lines: string[] = [];
     lines.push(`; IDE Options = PureBasic ${meta.ideVersion}`);
     for (const [key, val] of meta.entries) {
         lines.push(val === true ? `; ${key}` : `; ${key} = ${val}`);
     }
-    return lines.join('\n');
+    return lines.join(eol);
 }
 
 /**
  * Writes source code + (new/updated) metadata block together.
  * Preserves the original line ending convention of the document.
  */
-export function joinPbFile(source: string, metadata: PbFileMetadata): string {
-    return `${source}\n\n\n${serializeMetadata(metadata)}\n`;
+export function joinPbFile(source: string, metadata: PbFileMetadata, eol: '\r\n' | '\n' = '\n'): string {
+    const sep = eol;
+    return `${source}${sep}${sep}${sep}${serializeMetadata(metadata, eol)}${sep}`;
 }
 
 // ---------------------------------------------------------------------------
