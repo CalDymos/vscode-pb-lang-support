@@ -16,6 +16,7 @@ import { getWorkspaceFiles, getWorkspaceRootForUri  } from '../indexer/workspace
 import { analyzeScopesAndVariables } from '../utils/scope-manager';
 import { parsePureBasicConstantDefinition, parsePureBasicConstantDeclaration } from '../utils/constants';
 import { escapeRegExp } from '../utils/string-utils';
+import * as path from 'path';
 
 /**
  * Handle definition requests
@@ -651,6 +652,10 @@ function collectSearchDocuments(
         const text = baseDoc.getText();
         const lines = text.split('\n');
 
+        const target = projectManager?.getActiveTarget(uri);
+        const inputFileDir = target?.inputFile?.fsPath
+             ? path.dirname(target.inputFile.fsPath)
+             : undefined
         // Maintain current IncludePath search directories (newest first)
         const includeDirs: string[] = [];
 
@@ -668,7 +673,7 @@ function collectSearchDocuments(
             const m = line.match(/^\s*(?:X?IncludeFile)\s+\"([^\"]+)\"/i);
             if (!m) continue;
             const inc = m[1];
-            const fsPath = resolveIncludePath(uri, inc, includeDirs, workspaceRoot);
+            const fsPath = resolveIncludePath(uri, inc, includeDirs, workspaceRoot, inputFileDir);
             if (!fsPath) continue;
             const incUri = fsPathToUri(fsPath);
             if (result.has(incUri)) {
