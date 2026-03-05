@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from 'vscode-languageclient/node';
 import { PureBasicDebugAdapterDescriptorFactory } from './debug/debugAdapterDescriptorFactory';
+import type { PbpProject, PbpTarget } from '@caldymos/pb-project-core';
 
 
 let client: LanguageClient;
@@ -10,9 +11,9 @@ let fileWatcher: vscode.FileSystemWatcher;
 
 // ---------------------------------------------------------------------------
 // pb-project-files API (v2)
-// Mirror of PbProjectFilesApi from pb-project-files/src/api.ts.
-// Only the subset used by this bridge is declared here
-// unknown fields are ignored at runtime, so the declaration stays lean.
+// Mirrors PbProjectFilesApi from pb-project-files/src/api.ts.
+// Only the subset used by this bridge is declared here – unknown fields are
+// ignored at runtime, so the declaration stays lean.
 // ---------------------------------------------------------------------------
 interface PbProjectContextPayload {
     projectFile?: string;
@@ -21,6 +22,10 @@ interface PbProjectContextPayload {
     targetName?: string;
     includeDirs?: string[];
     projectFiles?: string[];
+    /** Full parsed project model. */
+    project?: PbpProject;
+    /** Active target model. */
+    target?: PbpTarget;
 }
 
 interface PbpProjectMinimal {
@@ -161,6 +166,44 @@ export function activate(context: vscode.ExtensionContext) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// LSP payload helpers – strip heavy/roundtrip-only fields before sending
+// over JSON-RPC. Fields needed for compile/debug are kept.
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns a copy of PbpProject with fields that are only needed for
+ * roundtrip-writing or IDE-UI state removed:
+ *  - meta (raw XML, roundtrip only)
+ *  - data (explorer state, lastopen, log flags)
+ *  - files[].fingerprint (MD5 hashes)
+ *  - files[].meta (raw XML per file entry)
+ */
+function stripProjectForLsp(project: PbpProject): PbpProject {
+    return {
+        ...project,
+        meta: undefined,
+        data: {},
+        files: project.files.map(f => ({
+            rawPath: f.rawPath,
+            fsPath: f.fsPath,
+            config: f.config,
+            // fingerprint and meta intentionally omitted
+        })),
+    };
+}
+
+/**
+ * Returns a copy of PbpTarget with fields that are only needed for
+ * IDE-UI state removed:
+ *  - meta (raw XML, roundtrip only)
+ *  - watchList (IDE-internal watch list)
+ */
+function stripTargetForLsp(target: PbpTarget): PbpTarget {
+    const { meta: _meta, watchList: _watchList, ...rest } = target;
+    return rest;
+}
+
 async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promise<void> {
     const ext = vscode.extensions.getExtension('CalDymos.pb-project-files');
     if (!ext) {
@@ -195,13 +238,15 @@ async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promis
     const sendProjectContext = () => {
         const ctx = api!.getActiveContextPayload();
         client.sendNotification('purebasic/projectContext', {
-            version: 1,
+            version: 2,
             projectFileUri: ctx.projectFile ? vscode.Uri.file(ctx.projectFile).toString() : undefined,
             projectDir: ctx.projectDir,
             projectName: ctx.projectName,
             targetName: ctx.targetName,
             includeDirs: ctx.includeDirs ?? [],
             projectFiles: ctx.projectFiles ?? [],
+            project: ctx.project ? stripProjectForLsp(ctx.project) : null,
+            target: ctx.target ? stripTargetForLsp(ctx.target) : null,
         });
     };
 

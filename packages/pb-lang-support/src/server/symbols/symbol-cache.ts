@@ -186,6 +186,32 @@ class EnhancedSymbolCache {
     }
 
     /**
+     * Exact-match symbol lookup (case-insensitive equality, not substring).
+     * Use this for definition resolution where a substring hit would be wrong.
+     */
+    findSymbolExactDetailed(name: string, kind?: SymbolKind): Array<{ uri: string; symbol: PureBasicSymbol }> {
+        const out: Array<{ uri: string; symbol: PureBasicSymbol }> = [];
+        const searchName = name.toLowerCase();
+
+        for (const [uri, entry] of this.cache.entries()) {
+            for (const sym of entry.symbols) {
+                if (sym.name.toLowerCase() === searchName) {
+                    if (!kind || sym.kind === kind) {
+                        out.push({ uri, symbol: sym });
+                    }
+                }
+            }
+        }
+
+        return out.sort((a, b) => {
+            const entryA = this.cache.get(a.uri);
+            const entryB = this.cache.get(b.uri);
+            if (!entryA || !entryB) return 0;
+            return entryB.priority - entryA.priority;
+        });
+    }
+
+    /**
      * 批量清除多个文档的符号
      */
     clearMultipleSymbols(uris: string[]): void {

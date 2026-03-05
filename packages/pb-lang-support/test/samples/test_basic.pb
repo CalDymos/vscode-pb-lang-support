@@ -1,6 +1,8 @@
 ; PureBasic basic syntax test file
 ; For testing various features of VSCode plugins
 
+IncludeFile "inludes\testInclude.pbi"
+
 ; Global variable declaration
 Global window.i = 0
 Global event.i = 0
