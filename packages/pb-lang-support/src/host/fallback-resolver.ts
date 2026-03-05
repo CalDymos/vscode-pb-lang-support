@@ -6,6 +6,7 @@
  */
 import * as vscode from 'vscode';
 import * as path   from 'path';
+import { parse } from 'jsonc-parser';
 import { splitPbFile, parseCfgFile, parseProjectCfg, extractExecutable } from './utils/pb-metadata';
 
 export type FallbackSource =
@@ -69,8 +70,8 @@ export class FallbackResolver {
         try {
             const bytes = await vscode.workspace.fs.readFile(launchUri);
             // launch.json may contain comments (jsonc)
-            const text = Buffer.from(bytes).toString('utf8').replace(/\/\/[^\n]*/g, '');
-            const json = JSON.parse(text) as { configurations?: unknown[] };
+            const text = Buffer.from(bytes).toString('utf8');
+            const json = parse(text) as { configurations?: unknown[] };
             const cfgs  = json.configurations ?? [];
 
             // Prefer first purebasic configuration
