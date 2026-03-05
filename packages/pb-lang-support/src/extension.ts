@@ -20,7 +20,6 @@ interface PbProjectContextPayload {
     projectDir?: string;
     projectName?: string;
     targetName?: string;
-    includeDirs?: string[];
     projectFiles?: string[];
     /** Full parsed project model. */
     project?: PbpProject;
@@ -243,7 +242,6 @@ async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promis
             projectDir: ctx.projectDir,
             projectName: ctx.projectName,
             targetName: ctx.targetName,
-            includeDirs: ctx.includeDirs ?? [],
             projectFiles: ctx.projectFiles ?? [],
             project: ctx.project ? stripProjectForLsp(ctx.project) : null,
             target: ctx.target ? stripTargetForLsp(ctx.target) : null,

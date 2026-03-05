@@ -652,10 +652,7 @@ function collectSearchDocuments(
         const lines = text.split('\n');
 
         // Maintain current IncludePath search directories (newest first)
-        // Seed with project include directories from pb-project-files if available.
-        const includeDirs: string[] = typeof projectManager?.getIncludeDirsForDocument === 'function'
-            ? (projectManager.getIncludeDirsForDocument(uri) ?? []).slice()
-            : [];
+        const includeDirs: string[] = [];
 
         for (const line of lines) {
             // IncludePath directive
