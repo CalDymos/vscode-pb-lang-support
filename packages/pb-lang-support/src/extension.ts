@@ -4,6 +4,7 @@ import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } f
 import { PureBasicDebugAdapterDescriptorFactory } from './debug/debugAdapterDescriptorFactory';
 import type { PbpProject, PbpTarget } from '@caldymos/pb-project-core';
 import { FallbackResolver } from './host/fallback-resolver';
+import {splitPbFile, joinPbFile} from './host/utils/pb-metadata';
 
 
 let client: LanguageClient;
@@ -125,6 +126,9 @@ export function activate(context: vscode.ExtensionContext) {
 
         // Register debug configuration provider
         registerDebugProvider(context);
+
+        // Register folding provider for PureBasic meta section
+        registerFoldingProvider(context);
 
         // Start the language server.
         console.log('Starting Language Server...');
@@ -319,7 +323,6 @@ async function activateFallbackMode(context: vscode.ExtensionContext): Promise<v
         client.sendNotification('purebasic/projectContext', {
             version:      2,
             noProject:    true,
-            includeDirs:  fallback?.includeDirs  ?? [],
             projectFiles: fallback?.projectFiles ?? [],
         });
     };
@@ -331,8 +334,62 @@ async function activateFallbackMode(context: vscode.ExtensionContext): Promise<v
         }),
     );
 
+    // Metadaten beim Speichern aktualisieren (nur im Fallback-Modus)
+    context.subscriptions.push(
+        vscode.workspace.onWillSaveTextDocument(e => {
+            if (e.document.languageId !== 'purebasic') return;
+
+            const text  = e.document.getText();
+            const split = splitPbFile(text);
+            if (!split.metadata) return; // kein Block → nichts aktualisieren
+
+            // Einzige "lebende" Daten die wir im Fallback kennen und
+            // in die Metadaten zurückschreiben: CursorPosition
+            const editor = vscode.window.activeTextEditor;
+            if (editor?.document === e.document) {
+                const line = editor.selection.active.line + 1;
+                split.metadata.entries.set('CursorPosition', String(line));
+            }
+
+            const newText = joinPbFile(split.source, split.metadata);
+            if (newText === text) return; // keine Änderung → kein Edit
+
+            const fullRange = new vscode.Range(
+                e.document.positionAt(0),
+                e.document.positionAt(text.length),
+            );
+            e.waitUntil(
+                Promise.resolve([new vscode.TextEdit(fullRange, newText)])
+            );
+        })
+    );
+
     void send(vscode.window.activeTextEditor?.document);
 }
+
+function registerFoldingProvider(context: vscode.ExtensionContext) : void {
+    context.subscriptions.push(
+        vscode.languages.registerFoldingRangeProvider(
+            { language: 'purebasic' },
+            {
+                provideFoldingRanges(document) {
+                    const text  = document.getText();
+                    const split = splitPbFile(text);
+                    if (split.metaStartLine < 0) return [];
+
+                    return [
+                        new vscode.FoldingRange(
+                            split.metaStartLine,
+                            document.lineCount - 1,
+                            vscode.FoldingRangeKind.Comment,
+                        ),
+                    ];
+                },
+            },
+        )
+    );
+}
+
 
 function registerDebugProvider(context: vscode.ExtensionContext): void {
     context.subscriptions.push(

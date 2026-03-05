@@ -1,23 +1,23 @@
 /**
  * pb-lang-support – FallbackResolver
  *
- * Stellt Build-Kontext bereit wenn kein .pbp-Projekt aktiv ist.
- * Konfigurierbar über purebasic.build.fallbackSource.
+ * Provides build context when no .pbp project is active.
+ * Configurable via purebasic.build.fallbackSource.
  */
 import * as vscode from 'vscode';
 import * as path   from 'path';
+import {splitPbFile, extractExecutable} from './utils/pb-metadata';
 
 export type FallbackSource =
-    | 'sourceMetadata'   // PureBasic-IDE-Kommentare am Dateiende
+    | 'sourceMetadata'   // PureBasic IDE comments at end of file
     | 'launchJson'       // .vscode/launch.json
-    | 'fileCfg'          // <dateiname>.pb.cfg neben der Quelldatei
-    | 'projectCfg';      // project.cfg – Verzeichnisbaum aufwärts
+    | 'fileCfg'          // <filename>.pb.cfg next to source file
+    | 'projectCfg';      // project.cfg – walk up directory tree
 
 export interface FallbackBuildContext {
     source:       FallbackSource;
-    includeDirs:  string[];
     projectFiles: string[];
-    /** Pfad zur Ausgabedatei (Compiler-Output), falls verfügbar. */
+    /** Path to output file (compiler output), if available. */
     outputFile?:  string;
 }
 
@@ -37,40 +37,28 @@ export class FallbackResolver {
 
     // -----------------------------------------------------------------------
     // sourceMetadata
-    // PureBasic-IDE schreibt Build-Parameter als Kommentare ans Dateiende:
+    // PureBasic IDE writes build parameters as comments at end of file:
     //   ; Executable = output\MyApp.exe
-    //   ; IncludeDirectory = lib
     // -----------------------------------------------------------------------
     private async fromSourceMetadata(uri: vscode.Uri): Promise<FallbackBuildContext | null> {
         try {
             const bytes = await vscode.workspace.fs.readFile(uri);
-            const lines = Buffer.from(bytes).toString('utf8').split(/\r?\n/);
-            const fileDir = path.dirname(uri.fsPath);
+            const { metadata } = splitPbFile(Buffer.from(bytes).toString('utf8'));
+            if (!metadata) return null;
 
-            const includeDirs: string[] = [];
-            let outputFile: string | undefined;
-
-            // Metadaten stehen in den letzten ~50 Zeilen, Präfix "; "
-            for (const line of lines.slice(-50)) {
-                if (!line.startsWith('; ')) continue;
-                const entry = line.slice(2);
-                if (entry.startsWith('IncludeDirectory = ')) {
-                    includeDirs.push(this.abs(fileDir, entry.slice('IncludeDirectory = '.length).trim()));
-                } else if (entry.startsWith('Executable = ')) {
-                    outputFile = this.abs(fileDir, entry.slice('Executable = '.length).trim());
-                }
-            }
-
-            return { source: 'sourceMetadata', includeDirs, projectFiles: [], outputFile };
-        } catch {
-            return null;
-        }
+            const base = path.dirname(uri.fsPath);
+            return {
+                source:       'sourceMetadata',
+                projectFiles: [],
+                outputFile:   extractExecutable(metadata, base),
+            };
+        } catch { return null; }
     }
 
     // -----------------------------------------------------------------------
     // launchJson  (.vscode/launch.json)
-    // Erwartet optionale Felder in der purebasic-Konfiguration:
-    //   "includeDirs": ["./includes"],  "projectFiles": [],  "executable": ""
+    // Expects optional fields in the purebasic configuration:
+    //  "projectFiles": [],  "executable": ""
     // -----------------------------------------------------------------------
     private async fromLaunchJson(uri: vscode.Uri): Promise<FallbackBuildContext | null> {
         const wsFolder = vscode.workspace.getWorkspaceFolder(uri)
@@ -80,35 +68,34 @@ export class FallbackResolver {
         const launchUri = vscode.Uri.joinPath(wsFolder.uri, '.vscode', 'launch.json');
         try {
             const bytes = await vscode.workspace.fs.readFile(launchUri);
-            // launch.json darf Kommentare enthalten (jsonc)
+            // launch.json may contain comments (jsonc)
             const text = Buffer.from(bytes).toString('utf8').replace(/\/\/[^\n]*/g, '');
             const json = JSON.parse(text) as { configurations?: unknown[] };
             const cfgs  = json.configurations ?? [];
 
-            // Erste purebasic-Konfiguration bevorzugen
+            // Prefer first purebasic configuration
             const cfg = (cfgs.find((c: any) => c.type === 'purebasic') ?? cfgs[0]) as any;
             if (!cfg) return null;
 
             const base = wsFolder.uri.fsPath;
-            const includeDirs  = ((cfg.includeDirs  ?? []) as string[]).map(d => this.abs(base, d));
             const projectFiles = ((cfg.projectFiles ?? []) as string[]).map(f => this.abs(base, f));
             const outputFile   = cfg.executable ? this.abs(base, cfg.executable as string) : undefined;
 
-            return { source: 'launchJson', includeDirs, projectFiles, outputFile };
+            return { source: 'launchJson', projectFiles, outputFile };
         } catch {
             return null;
         }
     }
 
     // -----------------------------------------------------------------------
-    // fileCfg  (<datei>.pb.cfg)
+    // fileCfg  (<file>.pb.cfg)
     // -----------------------------------------------------------------------
     private async fromFileCfg(uri: vscode.Uri): Promise<FallbackBuildContext | null> {
         return this.parseCfgFile(uri.fsPath + '.cfg', 'fileCfg');
     }
 
     // -----------------------------------------------------------------------
-    // projectCfg  (project.cfg – Verzeichnisbaum aufwärts bis Workspace-Root)
+    // projectCfg  (project.cfg – walk up directory tree to workspace root)
     // -----------------------------------------------------------------------
     private async fromProjectCfg(uri: vscode.Uri): Promise<FallbackBuildContext | null> {
         const wsFolder = vscode.workspace.getWorkspaceFolder(uri);
@@ -125,13 +112,11 @@ export class FallbackResolver {
     }
 
     // -----------------------------------------------------------------------
-    // Gemeinsamer .cfg-Parser (key=value, wiederholbare Schlüssel)
+    // Common .cfg parser (key=value, repeatable keys)
     //
     //   executable=./out/myapp.exe
-    //   includedir=./includes
-    //   includedir=../shared
     //   file=./module.pb
-    //   # Kommentare mit # oder ;
+    //   # Comments with # or ;
     // -----------------------------------------------------------------------
     private async parseCfgFile(
         filePath: string,
@@ -141,7 +126,6 @@ export class FallbackResolver {
             const bytes = await vscode.workspace.fs.readFile(vscode.Uri.file(filePath));
             const dir   = path.dirname(filePath);
 
-            const includeDirs:  string[] = [];
             const projectFiles: string[] = [];
             let   outputFile:   string | undefined;
 
@@ -154,12 +138,11 @@ export class FallbackResolver {
                 const val = line.slice(eq + 1).trim();
                 if (!val) continue;
 
-                if (key === 'includedir')  { includeDirs.push(this.abs(dir, val));  }
                 else if (key === 'file')   { projectFiles.push(this.abs(dir, val)); }
                 else if (key === 'executable') { outputFile = this.abs(dir, val);   }
             }
 
-            return { source, includeDirs, projectFiles, outputFile };
+            return { source, projectFiles, outputFile };
         } catch {
             return null;
         }
