@@ -166,6 +166,44 @@ export function activate(context: vscode.ExtensionContext) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// LSP payload helpers – strip heavy/roundtrip-only fields before sending
+// over JSON-RPC. Fields needed for compile/debug are kept.
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns a copy of PbpProject with fields that are only needed for
+ * roundtrip-writing or IDE-UI state removed:
+ *  - meta (raw XML, roundtrip only)
+ *  - data (explorer state, lastopen, log flags)
+ *  - files[].fingerprint (MD5 hashes)
+ *  - files[].meta (raw XML per file entry)
+ */
+function stripProjectForLsp(project: PbpProject): PbpProject {
+    return {
+        ...project,
+        meta: undefined,
+        data: {},
+        files: project.files.map(f => ({
+            rawPath: f.rawPath,
+            fsPath: f.fsPath,
+            config: f.config,
+            // fingerprint and meta intentionally omitted
+        })),
+    };
+}
+
+/**
+ * Returns a copy of PbpTarget with fields that are only needed for
+ * IDE-UI state removed:
+ *  - meta (raw XML, roundtrip only)
+ *  - watchList (IDE-internal watch list)
+ */
+function stripTargetForLsp(target: PbpTarget): PbpTarget {
+    const { meta: _meta, watchList: _watchList, ...rest } = target;
+    return rest;
+}
+
 async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promise<void> {
     const ext = vscode.extensions.getExtension('CalDymos.pb-project-files');
     if (!ext) {
@@ -207,8 +245,8 @@ async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promis
             targetName: ctx.targetName,
             includeDirs: ctx.includeDirs ?? [],
             projectFiles: ctx.projectFiles ?? [],
-            project: ctx.project,
-            target: ctx.target,
+            project: ctx.project ? stripProjectForLsp(ctx.project) : undefined,
+            target: ctx.target ? stripTargetForLsp(ctx.target) : undefined,
         });
     };
 
