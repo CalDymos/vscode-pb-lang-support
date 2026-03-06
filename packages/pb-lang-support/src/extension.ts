@@ -293,6 +293,9 @@ async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promis
 
     const sendFileProject = (doc: vscode.TextDocument, isClosed = false) => {
         if (doc.uri.scheme !== 'file') return;
+        // In "No Project" mode, suppress file-project mappings so the server
+        // does not override the fallback context with stale project associations.
+        if (api!.getActiveContextPayload().noProject) return;
         const proj = isClosed ? undefined : api!.getProjectForFile(doc.uri);
         client.sendNotification('purebasic/fileProject', {
             version: 3,

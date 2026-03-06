@@ -78,6 +78,9 @@ export class ProjectManager {
 
     if (payload.noProject === true) {
         this.activeProjectFileUri = ProjectManager.FALLBACK_KEY;
+        // Clear stale per-file project mappings so they cannot override fallback context.
+        this.fileToProject.clear();
+        this.fileScope.clear();
         const ctx = this.getOrCreateProject(ProjectManager.FALLBACK_KEY);
         ctx.projectFiles  = new Set(payload.projectFiles?.filter(Boolean) ?? []);
         ctx.projectFileUris = new Set(

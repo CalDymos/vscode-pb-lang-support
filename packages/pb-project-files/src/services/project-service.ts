@@ -155,6 +155,9 @@ export class ProjectService implements vscode.Disposable {
     }
 
     public getProjectForFile(fileUri: vscode.Uri): PbpProject | undefined {
+        // In "No Project" mode, no file belongs to a project.
+        if (this.activeProjectFile === NO_PROJECT_SENTINEL) return undefined;
+
         const fsPath = normalizeFsPath(fileUri.fsPath);
 
         // If the file is a .pbp, it is its own project key.
