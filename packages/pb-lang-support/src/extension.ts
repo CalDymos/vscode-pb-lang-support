@@ -2,15 +2,19 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from 'vscode-languageclient/node';
 import { PureBasicDebugAdapterDescriptorFactory } from './debug/debugAdapterDescriptorFactory';
-import { resolveUnifiedContext, type PbProjectFilesApi } from './host/unified-context';
 import type { PbpProject, PbpTarget } from '@caldymos/pb-project-core';
 import { FallbackResolver } from './host/fallback-resolver';
+import { resolveUnifiedContext, type PbProjectFilesApi } from './host/unified-context';
+import { buildActiveTarget } from './host/pbcompiler/build-active-target';
 import {splitPbFile, PbFileSplit} from './host/utils/pb-metadata';
 
 
 let client: LanguageClient;
 let debugChannel: vscode.OutputChannel;
+let buildChannel: vscode.OutputChannel;
 let fileWatcher: vscode.FileSystemWatcher;
+
+let projectFilesApi: PbProjectFilesApi | undefined;
 
 // ---------------------------------------------------------------------------
 
@@ -41,6 +45,10 @@ export function activate(context: vscode.ExtensionContext) {
 
     debugChannel = vscode.window.createOutputChannel('PureBasic (Language Server)');
     context.subscriptions.push(debugChannel);
+
+    buildChannel = vscode.window.createOutputChannel('PureBasic (Build)');
+    context.subscriptions.push(buildChannel);
+
     debugChannel.appendLine('Activating PureBasic Language Server...');
 
     try {
@@ -185,6 +193,7 @@ async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promis
         debugChannel.appendLine(
             '[pb-project-files] Not installed – activating standalone fallback mode.'
         );
+        projectFilesApi = undefined;
         await activateFallbackMode(context);
         return;
     }
@@ -197,31 +206,31 @@ async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promis
         return;
     }
 
-    // Guard: require exact v2 API. Older or unknown versions are skipped
+    // Guard: require exact v3 API. Older or unknown versions are skipped
     // so that pb-lang-support keeps running standalone without breaking.
     if (!api || api.version !== 3) {
         debugChannel.appendLine(
             `[pb-project-files] Unexpected API version (got ${(api as any)?.version}, expected 3). ` +
             'Running without project integration.'
         );
+        projectFilesApi = undefined;
         return;
     }
 
-    debugChannel.appendLine('[pb-project-files] v2 API connected – project bridge active.');
+    projectFilesApi = api;
 
-    // ------------------------------------------------------------------
-    // Helpers
-    // ------------------------------------------------------------------
+    debugChannel.appendLine(`[pb-project-files] v${(api as any)?.version} API connected – project bridge active.`);
 
     const fallbackResolver = new FallbackResolver();
 
     const sendProjectContext = async () => {
         const ed = vscode.window.activeTextEditor;
         const uctx = await resolveUnifiedContext({
-            api,
+            api: api!,
             fallbackResolver,
             activeDocument: ed?.document,
         });
+
         if (!uctx) return;
 
         if (uctx.mode === 'fallback') {
@@ -262,7 +271,7 @@ async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promis
     };
 
     // ------------------------------------------------------------------
-    // Initial sync
+    // Initial pbp ctx sync
     // ------------------------------------------------------------------
     void sendProjectContext();
     for (const doc of vscode.workspace.textDocuments) {
@@ -270,7 +279,7 @@ async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promis
     }
 
     // ------------------------------------------------------------------
-    // Ongoing sync
+    // Ongoing pbp ctx sync
     // ------------------------------------------------------------------
     const subs: vscode.Disposable[] = [
         api.onDidChangeActiveContext(() => {
@@ -289,21 +298,17 @@ async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promis
 }
 
 async function activateFallbackMode(context: vscode.ExtensionContext): Promise<void> {
-    const fallbackResolver = new FallbackResolver();
+    const resolver = new FallbackResolver();
+
+    projectFilesApi = undefined;
 
     const send = async (doc: vscode.TextDocument | undefined) => {
         if (!doc || doc.uri.scheme !== 'file') return;
-
-        const uctx = await resolveUnifiedContext({
-            fallbackResolver,
-            activeDocument: doc,
-        });
-        if (!uctx) return;
-
+        const fallback = await resolver.resolve(doc.uri);
         client.sendNotification('purebasic/projectContext', {
-            version: 3,
-            noProject: true,
-            projectFiles: uctx.projectFiles,
+            version:      3,
+            noProject:    true,
+            projectFiles: fallback?.projectFiles ?? [],
         });
     };
 
@@ -501,13 +506,21 @@ function registerCommands(context: vscode.ExtensionContext) {
         }
     });
 
+    const buildTarget = vscode.commands.registerCommand('purebasic.buildActiveTarget', async () => {
+        await buildActiveTarget({
+            projectFilesApi,
+            outputChannel: buildChannel,
+        });
+    });
+
     // Register all commands
     context.subscriptions.push(
         showDiagnostics,
         restartLanguageServer,
         clearSymbolCache,
         formatDocument,
-        findSymbols
+        findSymbols,
+        buildTarget
     );
 }
 

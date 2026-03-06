@@ -197,6 +197,12 @@
           ],
           "default": "launchJson",
           "description": "%config.purebasic.build.fallbackSource.description%"
+        },
+        "purebasic.build.compiler": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "%config.purebasic.build.compiler.description%"
         }
       }
     },
@@ -225,6 +231,11 @@
         "command": "purebasic.findSymbols",
         "title": "%command.findSymbols.title%",
         "category": "PureBasic"
+      },
+      {
+        "command": "purebasic.buildActiveTarget",
+        "title": "%command.buildActiveTarget.title%",
+        "category": "PureBasic"
       }
     ],
     "menus": {
@@ -247,6 +258,10 @@
         },
         {
           "command": "purebasic.findSymbols",
+          "when": "editorLangId == purebasic"
+        },
+        {
+          "command": "purebasic.buildActiveTarget",
           "when": "editorLangId == purebasic"
         }
       ],

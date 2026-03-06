@@ -5,7 +5,7 @@
  *  - using pb-project-files (.pbp) context when available,
  *  - falling back to non-.pbp sources when no project is active or the helper extension is missing.
  *
- * It intentionally returns a normalized view that can be consumed by:
+ * It returns a normalized view that can be consumed by:
  *  - LSP bridge payload creation,
  *  - host-side pbcompiler build commands,
  *  - debugger configuration (launch.json) generation.
@@ -71,7 +71,7 @@ export interface UnifiedContext {
     projectFiles: string[];
 
     // --- Normalized build/run information
-    workingDir?: string;
+    workingDir?: string; // run-cwd (from target.directory via resolveBuildEntry)
     inputFile?: string;
     outputFile?: string;
     executable?: string;
@@ -94,11 +94,9 @@ export interface ResolveUnifiedContextParams {
 /**
  * Resolves the active context from pb-project-files if available; otherwise falls back.
  *
- * If no file-backed active document is available, null is returned.
+ * If no file-backed active document is available in fallback mode, null is returned.
  */
-export async function resolveUnifiedContext(
-    params: ResolveUnifiedContextParams,
-): Promise<UnifiedContext | null> {
+export async function resolveUnifiedContext(params: ResolveUnifiedContextParams): Promise<UnifiedContext | null> {
     const doc = params.activeDocument?.uri.scheme === 'file' ? params.activeDocument : undefined;
 
     // Prefer .pbp context (pb-project-files) when available and not explicitly disabled.

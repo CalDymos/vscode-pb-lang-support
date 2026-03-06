@@ -29,6 +29,8 @@
   "command.clearSymbolCache.title": "PureBasic: Clear Symbol Cache",
   "command.formatDocument.title": "PureBasic: Format Document",
   "command.findSymbols.title": "PureBasic: Find Symbols in Workspace",
+  "command.buildActiveTarget.title": "PureBasic: Build Active Target",
+  "config.purebasic.build.compiler.description": "Path to the PureBasic command line compiler (pbcompiler). Leave empty to use 'pbcompiler' from PATH.",
   "config.purebasic.build.fallbackSource.description": "Build context source when no .pbp project is active (No Project mode or pb-project-files not installed).",
   "config.purebasic.build.fallbackSource.sourceMetadata.description": "Read build settings from the IDE metadata block at the end of the current source file ('; IDE Options = ...').",
   "config.purebasic.build.fallbackSource.launchJson.description": "Read build settings from .vscode/launch.json (purebasic configuration entry).",

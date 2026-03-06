@@ -29,6 +29,8 @@
   "command.clearSymbolCache.title": "PureBasic: Symbol-Cache leeren",
   "command.formatDocument.title": "PureBasic: Dokument formatieren",
   "command.findSymbols.title": "PureBasic: Symbole im Arbeitsbereich suchen",
+  "command.buildActiveTarget.title": "PureBasic: Aktives Target bauen",
+  "config.purebasic.build.compiler.description": "Pfad zum PureBasic Kommandozeilen-Compiler (pbcompiler). Leer lassen, um 'pbcompiler' aus PATH zu verwenden.",
   "config.purebasic.build.fallbackSource.description": "Quelle für Build-Einstellungen, wenn kein .pbp-Projekt aktiv ist (\"No Project\"-Modus oder pb-project-files nicht installiert).",
   "config.purebasic.build.fallbackSource.sourceMetadata.description": "Build-Einstellungen aus dem IDE-Metadaten-Block am Ende der aktuellen Quelldatei lesen ('; IDE Options = ...').",
   "config.purebasic.build.fallbackSource.launchJson.description": "Build-Einstellungen aus der .vscode/launch.json lesen (PureBasic-Konfigurationseintrag).",
