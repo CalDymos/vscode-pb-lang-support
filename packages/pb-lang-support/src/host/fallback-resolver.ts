@@ -74,8 +74,8 @@ export class FallbackResolver {
             const json = parse(text) as { configurations?: unknown[] };
             const cfgs  = json.configurations ?? [];
 
-            // Prefer first purebasic configuration
-            const cfg = (cfgs.find((c: any) => c.type === 'purebasic') ?? cfgs[0]) as any;
+            // Only use a purebasic-typed configuration – never fall back to an unrelated entry
+            const cfg = cfgs.find((c: any) => c.type === 'purebasic') as any | undefined;
             if (!cfg) return null;
 
             const base = wsFolder.uri.fsPath;
