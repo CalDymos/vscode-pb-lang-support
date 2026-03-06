@@ -2,7 +2,7 @@
   "name": "pb-lang-support",
   "displayName": "PureBasic Language Services",
   "description": "%extension.description%",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "publisher": "CalDymos",
   "author": {
     "name": "CalDymos"
@@ -349,7 +349,9 @@
               },
               "compilerArgs": {
                 "type": "array",
-                "items": { "type": "string" },
+                "items": {
+                  "type": "string"
+                },
                 "description": "%debugger.launch.compilerArgs.description%"
               },
               "cwd": {
@@ -366,7 +368,9 @@
               },
               "runArgs": {
                 "type": "array",
-                "items": { "type": "string" },
+                "items": {
+                  "type": "string"
+                },
                 "description": "%debugger.launch.runArgs.description%"
               },
               "transport": {
