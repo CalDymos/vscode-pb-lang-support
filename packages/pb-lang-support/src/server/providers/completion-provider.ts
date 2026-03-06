@@ -19,7 +19,7 @@ import {
 import { stripInlineComment } from '../utils/string-utils';
 import { ApiFunctionListing } from '../utils/api-function-listing';
 import { getModuleFunctionCompletions as getModuleFunctions, getAvailableModules, getModuleExports } from '../utils/module-resolver';
-import { analyzeScopesAndVariables, getActiveUsedModules } from '../utils/scope-manager';
+import { analyzeScopesAndVariables, getActiveUsedModules, VariableInfo } from '../utils/scope-manager';
 import { parseIncludeFiles } from '../utils/module-resolver';
 import * as fs from 'fs';
 
@@ -81,13 +81,52 @@ function handleCompletionInternal(
         return { isIncomplete: false, items: [] };
     }
 
-    // Structure member access completion var\member
+    // Structure member access completion var\member  (also handles chained var\a\b\prefix)
     if (context.isAfterStructAccess) {
         const documentText = document.getText();
         const scopeAnalysis = analyzeScopesAndVariables(documentText, position.line);
-        const normalizeVar = (n: string) => n.replace(/^\*/, '').replace(/\([^)]*\)$/, '');
-        const targetVar = normalizeVar(context.structVarName);
-        const varInfo = scopeAnalysis.availableVariables.find(v => v.name.toLowerCase() === targetVar.toLowerCase());
+        const structIndex = buildStructureIndex(document, documentCache);
+
+        // Resolve the struct type – either direct variable or chained member access.
+        const resolvedType = resolveStructAccessType(
+            linePrefix,
+            scopeAnalysis.availableVariables,
+            structIndex
+        );
+        if (!resolvedType) {
+            return { isIncomplete: false, items: [] };
+        }
+
+        const members = structIndex.get(resolvedType) || [];
+        const items = members
+            .filter(m => m.name.toLowerCase().startsWith(context.structMemberPrefix.toLowerCase()))
+            .map((m, idx) => ({
+                label: m.name,
+                kind: CompletionItemKind.Field,
+                data: `struct_${resolvedType}_${m.name}_${idx}`,
+                detail: `${resolvedType}\\${m.name}${m.type ? ' : ' + m.type : ''}`,
+                documentation: `Structure ${resolvedType} member ${m.name}${m.type ? ' of type ' + m.type : ''}`
+            }));
+
+        return { isIncomplete: false, items };
+    }
+
+    // With-block member access: \member (no variable prefix)
+    if (context.isAfterWithAccess) {
+        const documentText = document.getText();
+        const docLines = documentText.split('\n');
+
+        // Find the variable bound by the innermost active With block
+        const withVarName = findActiveWithVariable(docLines, position.line);
+        if (!withVarName) {
+            return { isIncomplete: false, items: [] };
+        }
+
+        const scopeAnalysis = analyzeScopesAndVariables(documentText, position.line);
+        const normalizeVar = (n: string) => n.replace(/^\*/, '');
+        const varInfo = scopeAnalysis.availableVariables.find(
+            v => v.name.toLowerCase() === normalizeVar(withVarName).toLowerCase()
+        );
         if (!varInfo) {
             return { isIncomplete: false, items: [] };
         }
@@ -100,13 +139,13 @@ function handleCompletionInternal(
         const structIndex = buildStructureIndex(document, documentCache);
         const members = structIndex.get(baseType) || [];
         const items = members
-            .filter(m => m.name.toLowerCase().startsWith(context.structMemberPrefix.toLowerCase()))
+            .filter(m => m.name.toLowerCase().startsWith(context.withMemberPrefix.toLowerCase()))
             .map((m, idx) => ({
                 label: m.name,
                 kind: CompletionItemKind.Field,
-                data: `struct_${baseType}_${m.name}_${idx}`,
-                detail: `${baseType}::${m.name}${m.type ? ' : ' + m.type : ''}`,
-                documentation: `Structure ${baseType} member ${m.name}${m.type ? ' of type ' + m.type : ''}`
+                data: `with_${baseType}_${m.name}_${idx}`,
+                detail: `${baseType}\\${m.name}${m.type ? ' : ' + m.type : ''}`,
+                documentation: `With ${withVarName}: Structure ${baseType} member ${m.name}${m.type ? ' of type ' + m.type : ''}`
             }));
 
         return { isIncomplete: false, items };
@@ -788,6 +827,8 @@ function getTriggerContext(linePrefix: string): {
     isAfterStructAccess: boolean;
     structVarName: string;
     structMemberPrefix: string;
+    isAfterWithAccess: boolean;
+    withMemberPrefix: string;
 } {
     // isInString – strip content after ';' before counting quotes,
     // otherwise a comment like  ; say "hello"  would corrupt the count.
@@ -820,6 +861,21 @@ function getTriggerContext(linePrefix: string): {
     const structVarName = structMatch ? structMatch[1] : '';
     const structMemberPrefix = structMatch ? structMatch[2] : '';
 
+    // With-block access – \member without a preceding variable name.
+    // In PureBasic, inside a With/EndWith block, members are accessed as \Name
+    // without repeating the variable. The regex matches a \ that is preceded only
+    // by whitespace, an operator, or start-of-line (but NOT by an identifier, which
+    // is already handled by isAfterStructAccess above).
+    // Examples:
+    //   "  \na"          → isAfterWithAccess=true,  withMemberPrefix="na" 
+    //   "  myVar\na"     → isAfterStructAccess=true, isAfterWithAccess=false 
+    //   "x = \field"     → isAfterWithAccess=true,  withMemberPrefix="field" 
+    const withAccessMatch = !isAfterStructAccess
+        ? linePrefix.match(/(?:^|[\s=+\-*/(<,;])\\(\w*)$/)
+        : null;
+    const isAfterWithAccess = !!withAccessMatch;
+    const withMemberPrefix = withAccessMatch ? (withAccessMatch[1] ?? '') : '';
+
     // Get current word prefix
     const match = linePrefix.match(/([a-zA-Z_][a-zA-Z0-9_]*)$/);
     const prefix = match ? match[1] : '';
@@ -836,7 +892,9 @@ function getTriggerContext(linePrefix: string): {
         moduleConstPrefix,
         isAfterStructAccess,
         structVarName,
-        structMemberPrefix
+        structMemberPrefix,
+        isAfterWithAccess,
+        withMemberPrefix
     };
 }
 
@@ -972,11 +1030,11 @@ function analyzeDocumentSymbols(document: TextDocument, symbols: SymbolCollectio
         // Regex breakdown: ^Procedure(?:C|DLL|CDLL)?  → all calling conventions
         //                  (?:\.(\w+))?               → optional return type (.i, .s, …)
         //                  \s+(\w+)\s*\(([^)]*)\)     → name + parameter list
-        // Testfälle:
-        //   Procedure.i MyFunc(a.i)   → name=MyFunc, ret=i ✅
-        //   ProcedureC MyExport()     → name=MyExport     ✅
-        //   ProcedureDLL MyDll(x.l)  → name=MyDll        ✅
-        //   ProcedureCDLL.s Fn(a)    → name=Fn, ret=s    ✅
+        // Examples:
+        //   Procedure.i MyFunc(a.i)   → name=MyFunc, ret=i 
+        //   ProcedureC MyExport()     → name=MyExport     
+        //   ProcedureDLL MyDll(x.l)  → name=MyDll        
+        //   ProcedureCDLL.s Fn(a)    → name=Fn, ret=s    
         const procMatch = line.match(/^Procedure(?:C|DLL|CDLL)?(?:\.(\w+))?\s+(\w+)\s*\(([^)]*)\)/i);
         if (procMatch) {
             const returnType = procMatch[1] || '';
@@ -1046,6 +1104,99 @@ function analyzeDocumentSymbols(document: TextDocument, symbols: SymbolCollectio
             });
         }
     }
+}
+
+/**
+ * Resolve the struct type at the end of a member-access chain.
+ *
+ * Handles both simple  (myVar\prefix)  and chained  (myVar\a\b\prefix)  access.
+ *
+ * Algorithm:
+ *  1. Extract the full chain before the final partial member name.
+ *     e.g.  "foo()\address\str"  → chain = ["foo()", "address"], prefix = "str"
+ *  2. Look up the root name (chain[0]) in availableVariables to get its type.
+ *  3. For each subsequent segment, look up the member in the struct index and
+ *     advance the current type to that member's type.
+ *  4. Return the type of the last fully-resolved segment, or null on any failure.
+ */
+function resolveStructAccessType(
+    linePrefix: string,
+    variables: VariableInfo[],
+    structIndex: Map<string, Array<{name: string; type?: string}>>
+): string | null {
+    // Split at every backslash to get the access chain.
+    // The last segment is the (possibly partial) member being typed → drop it.
+    const backslashIdx = linePrefix.lastIndexOf('\\');
+    if (backslashIdx === -1) return null;
+
+    const chainPart = linePrefix.substring(0, backslashIdx);
+
+    // Extract segments – split by \, take only the identifier part of each segment
+    // (strip leading * and trailing call-parens, e.g. "GetPtr()").
+    const rawSegments = chainPart.split('\\');
+    if (rawSegments.length === 0) return null;
+
+    // Normalize: strip pointer prefix and trailing () from each segment
+    const normalize = (s: string) => s.replace(/^\*/, '').replace(/\([^)]*\)$/, '').trim();
+
+    const rootName = normalize(rawSegments[0]);
+    if (!rootName) return null;
+
+    // Step 1 – root must be a known scope variable
+    const rootVar = variables.find(v => v.name.toLowerCase() === rootName.toLowerCase());
+    if (!rootVar) return null;
+
+    let currentType = getBaseType(rootVar.type);
+    if (!currentType) return null;
+
+    // Step 2 – walk down each intermediate member
+    for (let i = 1; i < rawSegments.length; i++) {
+        const memberName = normalize(rawSegments[i]);
+        if (!memberName) return null;
+
+        const members = structIndex.get(currentType) || [];
+        const member = members.find(m => m.name.toLowerCase() === memberName.toLowerCase());
+        if (!member || !member.type) return null;
+
+        currentType = member.type;
+    }
+
+    return currentType || null;
+}
+
+/**
+ * Find the variable bound by the innermost active With block at the given line.
+ *
+ * Scans backwards from (currentLine - 1), counting EndWith/With pairs to find
+ * the With that is still open at currentLine.
+ *
+ * Returns the raw variable name (may include leading *) or null if not in a With block.
+ */
+function findActiveWithVariable(lines: string[], currentLine: number): string | null {
+    let depth = 0;
+    for (let i = currentLine - 1; i >= 0; i--) {
+        const line = lines[i].trim();
+        if (line.startsWith(';') || line === '') continue;
+
+        // EndWith closes a With → increase nesting depth
+        if (/^EndWith\b/i.test(line)) {
+            depth++;
+            continue;
+        }
+
+        // With opens a block
+        const withMatch = line.match(/^With\s+(\*?[A-Za-z_][A-Za-z0-9_]*(?:\([^)]*\))?)/i);
+        if (withMatch) {
+            if (depth > 0) {
+                // This With is closed by a later EndWith we already counted
+                depth--;
+                continue;
+            }
+            // This With is the one active at currentLine
+            return withMatch[1];
+        }
+    }
+    return null;
 }
 
 /**
