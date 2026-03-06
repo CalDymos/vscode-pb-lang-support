@@ -1,11 +1,13 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as os from 'os';
 import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from 'vscode-languageclient/node';
 import { PureBasicDebugAdapterDescriptorFactory } from './debug/debugAdapterDescriptorFactory';
 import type { PbpProject, PbpTarget } from '@caldymos/pb-project-core';
 import { FallbackResolver } from './host/fallback-resolver';
 import { resolveUnifiedContext, type PbProjectFilesApi } from './host/unified-context';
 import { buildActiveTarget } from './host/pbcompiler/build-active-target';
+import { buildPbCompilerArgs } from './host/pbcompiler/pbcompiler-args';
 import {splitPbFile, PbFileSplit} from './host/utils/pb-metadata';
 
 
@@ -17,6 +19,35 @@ let fileWatcher: vscode.FileSystemWatcher;
 let projectFilesApi: PbProjectFilesApi | undefined;
 
 // ---------------------------------------------------------------------------
+
+async function tryActivateProjectFilesApi(): Promise<PbProjectFilesApi | undefined> {
+    if (projectFilesApi) return projectFilesApi;
+
+    const ext = vscode.extensions.getExtension('CalDymos.pb-project-files');
+    if (!ext) return undefined;
+
+    try {
+        const api = (await ext.activate()) as PbProjectFilesApi | undefined;
+        if (api && api.version === 3) {
+            projectFilesApi = api;
+            return api;
+        } else {
+            debugChannel.appendLine(
+                `[pb-project-files] Unexpected API version (got ${(api as any)?.version}, expected 3). ` +
+                'Running without project integration.'
+            );
+        }
+    } catch {
+        // ignore (optional integration)
+    }
+    return undefined;
+}
+
+function makeTempDebugOutputPath(sourceFile: string): string {
+  const base = path.basename(sourceFile, path.extname(sourceFile));
+  const suffix = process.platform === 'win32' ? '.exe' : '';
+  return path.join(os.tmpdir(), `pb_debug_${base}_${Date.now()}${suffix}`);
+}
 
 function formatInternalError(err: unknown): string {
     if (err instanceof Error) {
@@ -403,41 +434,112 @@ function registerFoldingProvider(context: vscode.ExtensionContext) : void {
     );
 }
 
-
 function registerDebugProvider(context: vscode.ExtensionContext): void {
-    context.subscriptions.push(
-        vscode.debug.registerDebugConfigurationProvider('purebasic', {
-            resolveDebugConfiguration(
-                _folder: vscode.WorkspaceFolder | undefined,
-                config: vscode.DebugConfiguration,
-            ): vscode.ProviderResult<vscode.DebugConfiguration> {
-                // If launched via F5 with no launch.json, supply defaults
-                if (!config.type && !config.request && !config.name) {
-                    const editor = vscode.window.activeTextEditor;
-                    if (editor && editor.document.languageId === 'purebasic') {
-                        config.type = 'purebasic';
-                        config.name = 'Debug PureBasic';
-                        config.request = 'launch';
-                        config.program = editor.document.fileName;
-                        config.stopOnEntry = false;
-                    }
-                }
-                if (!config.program) {
-                    return vscode.window.showInformationMessage(
-                        'Cannot find a PureBasic file to debug. Open a .pb file first.',
-                    ).then(() => undefined);
-                }
-                return config;
-            },
-        }),
-    );
+  context.subscriptions.push(
+    vscode.debug.registerDebugConfigurationProvider('purebasic', {
+      async resolveDebugConfiguration(
+        _folder: vscode.WorkspaceFolder | undefined,
+        config: vscode.DebugConfiguration,
+      ): Promise<vscode.DebugConfiguration | undefined> {
 
-    context.subscriptions.push(
-        vscode.debug.registerDebugAdapterDescriptorFactory(
-            'purebasic',
-            new PureBasicDebugAdapterDescriptorFactory(context),
-        ),
-    );
+        // F5 without launch.json: defaults
+        if (!config.type && !config.request && !config.name) {
+          const editor = vscode.window.activeTextEditor;
+          if (editor && editor.document.languageId === 'purebasic') {
+            config.type = 'purebasic';
+            config.name = 'Debug PureBasic';
+            config.request = 'launch';
+            config.program = editor.document.fileName;
+            config.stopOnEntry = true;
+          }
+        }
+
+        const editor = vscode.window.activeTextEditor;
+        const activeDoc = editor?.document?.languageId === 'purebasic' ? editor.document : undefined;
+
+        // Determine a "seed" URI even when file isn't opened
+        const seedUri =
+          activeDoc?.uri ??
+          (typeof config.program === 'string' && config.program ? vscode.Uri.file(config.program) : undefined);
+
+        if (!seedUri || seedUri.scheme !== 'file') {
+          await vscode.window.showInformationMessage('Cannot find a PureBasic file to debug. Open a .pb file first.');
+          return undefined;
+        }
+
+        const api = await tryActivateProjectFilesApi();
+        const fallbackResolver = new FallbackResolver();
+
+        const uctx = await resolveUnifiedContext({
+          api,
+          fallbackResolver,
+          activeDocument: activeDoc,
+          activeUri: seedUri,
+        });
+
+        // Decide program: if the user didn't explicitly set a different program, prefer target input file
+        const seedProgram = seedUri.fsPath;
+        const ctxProgram = uctx?.inputFile ?? seedProgram;
+
+        if (!config.program || config.program === seedProgram) {
+          config.program = ctxProgram;
+        }
+
+        const programPath = String(config.program);
+        if (!programPath) {
+          await vscode.window.showInformationMessage('Missing "program" for PureBasic debug configuration.');
+          return undefined;
+        }
+
+        // Compiler path: prefer user config setting, then keep launch.json compiler, else let adapter auto-detect
+        const compilerSetting = (vscode.workspace.getConfiguration('purebasic.build').get<string>('compiler') ?? '').trim();
+        if (compilerSetting && !config.compiler) {
+          config.compiler = compilerSetting;
+        }
+
+        // Compile cwd: projectDir preferred, else source dir
+        const compileCwd = uctx?.projectDir ?? path.dirname(programPath);
+        config.cwd = compileCwd;
+
+        // Run cwd: target workingDir preferred, else compile cwd
+        config.runCwd = uctx?.workingDir ?? compileCwd;
+
+        // Temp output for debug build
+        const tempOutput = makeTempDebugOutputPath(programPath);
+        config.output = tempOutput;
+
+        // pbcompiler args (full argv including source file)
+        if (uctx) {
+          const mapped = buildPbCompilerArgs(uctx, {
+            platform: process.platform,
+            purpose: 'debug',
+            outputOverride: tempOutput,
+          });
+
+          if (mapped.args.length > 0) {
+            config.compilerArgs = mapped.args;
+          }
+        } else {
+          // Very defensive fallback (should rarely happen due to resolveUnifiedContext using seedUri)
+          config.compilerArgs = [programPath, '--debugger', '--linenumbering', '--output', tempOutput];
+        }
+
+        // Default stopOnEntry
+        if (typeof config.stopOnEntry !== 'boolean') {
+          config.stopOnEntry = true;
+        }
+
+        return config;
+      },
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.debug.registerDebugAdapterDescriptorFactory(
+      'purebasic',
+      new PureBasicDebugAdapterDescriptorFactory(context),
+    ),
+  );
 }
 
 function registerCommands(context: vscode.ExtensionContext) {

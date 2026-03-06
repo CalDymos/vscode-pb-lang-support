@@ -89,6 +89,7 @@ export interface ResolveUnifiedContextParams {
     api?: PbProjectFilesApi;
     fallbackResolver: FallbackResolver;
     activeDocument?: vscode.TextDocument;
+    activeUri?: vscode.Uri;
 }
 
 /**
@@ -97,7 +98,9 @@ export interface ResolveUnifiedContextParams {
  * If no file-backed active document is available in fallback mode, null is returned.
  */
 export async function resolveUnifiedContext(params: ResolveUnifiedContextParams): Promise<UnifiedContext | null> {
-    const doc = params.activeDocument?.uri.scheme === 'file' ? params.activeDocument : undefined;
+    const docFileUri =
+    (params.activeDocument?.uri.scheme === 'file' ? params.activeDocument.uri : undefined) ??
+    (params.activeUri?.scheme === 'file' ? params.activeUri : undefined);
 
     // Prefer .pbp context (pb-project-files) when available and not explicitly disabled.
     if (params.api) {
@@ -113,7 +116,7 @@ export async function resolveUnifiedContext(params: ResolveUnifiedContextParams)
                 : undefined;
 
             // If target info is missing, fall back to the active editor for the input file.
-            const inputFile = resolvedBuild?.inputFile || doc?.uri.fsPath;
+            const inputFile = resolvedBuild?.inputFile || docFileUri?.fsPath;
             const workingDir = resolvedBuild?.workingDir
                 || (inputFile ? path.dirname(inputFile) : payload.projectDir);
 
@@ -139,10 +142,10 @@ export async function resolveUnifiedContext(params: ResolveUnifiedContextParams)
     }
 
     // Fallback mode requires an active file document.
-    if (!doc) return null;
+    if (!docFileUri) return null;
 
-    const fb = await params.fallbackResolver.resolve(doc.uri);
-    const inputFile = doc.uri.fsPath;
+    const fb = await params.fallbackResolver.resolve(docFileUri);
+    const inputFile = docFileUri.fsPath;
     const workingDir = path.dirname(inputFile);
 
     return {

@@ -7,14 +7,22 @@ export interface LaunchRequestArguments extends DebugProtocol.LaunchRequestArgum
   program: string;
   /** Path to PureBasic compiler executable (pbcompiler/pbcompiler.exe). */
   compiler?: string;
+  /** Extra command-line arguments to pass to pbcompiler (full argv, including source file). */
+  compilerArgs?: string[];
+  /** Working directory for the compiler invocation. */
+  cwd?: string;
+  /** Expected output file path produced by the compiler (debug build). */
+  output?: string;
+  /** Working directory for the debuggee process. */
+  runCwd?: string;
+  /** Arguments passed to the debuggee process. */
+  runArgs?: string[];
   /** Stop at the first executable line when launching. Default: true. */
   stopOnEntry?: boolean;
   /** Enable verbose trace logging from the adapter. Default: false. */
   trace?: boolean;
   /** Enable full-value trace logs (may include debuggee data). Default: false. */
   secureTrace?: boolean;
-  /** Extra command-line arguments to pass to pbcompiler. */
-  compilerArgs?: string[];
   /** Debug transport mode. auto: win32->pipe, macOS/linux->fifo. */
   transport?: LaunchTransportMode;
   /** Network debug host used when transport resolves to network. */

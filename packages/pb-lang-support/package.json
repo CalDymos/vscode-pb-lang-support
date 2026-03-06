@@ -329,6 +329,28 @@
                 "description": "%debugger.launch.compiler.description%",
                 "default": "pbcompiler"
               },
+              "compilerArgs": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "%debugger.launch.compilerArgs.description%"
+              },
+              "cwd": {
+                "type": "string",
+                "description": "%debugger.launch.cwd.description%"
+              },
+              "output": {
+                "type": "string",
+                "description": "%debugger.launch.output.description%"
+              },
+              "runCwd": {
+                "type": "string",
+                "description": "%debugger.launch.runCwd.description%"
+              },
+              "runArgs": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "%debugger.launch.runArgs.description%"
+              },
               "transport": {
                 "type": "string",
                 "enum": [

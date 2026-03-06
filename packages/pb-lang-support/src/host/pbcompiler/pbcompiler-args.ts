@@ -47,7 +47,11 @@ export function buildPbCompilerArgs(ctx: UnifiedContext, opt: PbCompilerArgBuild
     // Build output
     // ---------------------------------------------------------------------
     const requestedOutput = (opt.outputOverride ?? ctx.outputFile ?? '').trim();
+    if (opt.purpose === 'debug' && !requestedOutput) {
+        warnings.push('Debug build requires outputOverride (missing output path).');
+    }
 
+    // format.exe handling (best-effort, only when target exists)
     const formatExe = normalizeFormatExe(target);
     const isDllFormat = formatExe === 'dll';
 
