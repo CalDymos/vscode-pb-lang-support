@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from 'vscode-languageclient/node';
 import { PureBasicDebugAdapterDescriptorFactory } from './debug/debugAdapterDescriptorFactory';
+import { resolveUnifiedContext, type PbProjectFilesApi } from './host/unified-context';
 import type { PbpProject, PbpTarget } from '@caldymos/pb-project-core';
 import { FallbackResolver } from './host/fallback-resolver';
 import {splitPbFile, PbFileSplit} from './host/utils/pb-metadata';
@@ -10,37 +11,6 @@ import {splitPbFile, PbFileSplit} from './host/utils/pb-metadata';
 let client: LanguageClient;
 let debugChannel: vscode.OutputChannel;
 let fileWatcher: vscode.FileSystemWatcher;
-
-// ---------------------------------------------------------------------------
-// pb-project-files API (v3)
-// Mirrors PbProjectFilesApi from pb-project-files/src/api.ts.
-// Only the subset used by this bridge is declared here – unknown fields are
-// ignored at runtime, so the declaration stays lean.
-// ---------------------------------------------------------------------------
-interface PbProjectContextPayload {
-    noProject?: boolean;
-    projectFile?: string;
-    projectDir?: string;
-    projectName?: string;
-    targetName?: string;
-    projectFiles?: string[];
-    /** Full parsed project model. */
-    project?: PbpProject;
-    /** Active target model. */
-    target?: PbpTarget;
-}
-
-interface PbpProjectMinimal {
-    projectFile: string;
-    projectDir: string;
-}
-
-interface PbProjectFilesApi {
-    readonly version: 3;
-    getActiveContextPayload(): PbProjectContextPayload;
-    getProjectForFile(fileUri: vscode.Uri): PbpProjectMinimal | undefined;
-    readonly onDidChangeActiveContext: vscode.Event<PbProjectContextPayload>;
-}
 
 // ---------------------------------------------------------------------------
 
@@ -246,28 +216,32 @@ async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promis
     const fallbackResolver = new FallbackResolver();
 
     const sendProjectContext = async () => {
-        const ctx = api!.getActiveContextPayload();
+        const ed = vscode.window.activeTextEditor;
+        const uctx = await resolveUnifiedContext({
+            api,
+            fallbackResolver,
+            activeDocument: ed?.document,
+        });
+        if (!uctx) return;
 
-        if (ctx.noProject) {
-            const ed       = vscode.window.activeTextEditor;
-            const fallback = ed ? await fallbackResolver.resolve(ed.document.uri) : null;
+        if (uctx.mode === 'fallback') {
             client.sendNotification('purebasic/projectContext', {
-                version:      3,
-                noProject:    true,
-                projectFiles: fallback?.projectFiles ?? [],
+                version: 3,
+                noProject: true,
+                projectFiles: uctx.projectFiles,
             });
             return;
         }
 
         client.sendNotification('purebasic/projectContext', {
-            version:        3,
-            projectFileUri: ctx.projectFile ? vscode.Uri.file(ctx.projectFile).toString() : undefined,
-            projectDir:     ctx.projectDir,
-            projectName:    ctx.projectName,
-            targetName:     ctx.targetName,
-            projectFiles:   ctx.projectFiles ?? [],
-            project: ctx.project ? stripProjectForLsp(ctx.project) : null,
-            target: ctx.target ? stripTargetForLsp(ctx.target) : null,
+            version: 3,
+            projectFileUri: uctx.projectFileUri,
+            projectDir: uctx.projectDir,
+            projectName: uctx.projectName,
+            targetName: uctx.targetName,
+            projectFiles: uctx.projectFiles,
+            project: uctx.project ? stripProjectForLsp(uctx.project) : null,
+            target: uctx.target ? stripTargetForLsp(uctx.target) : null,
         });
     };
 
@@ -315,15 +289,21 @@ async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promis
 }
 
 async function activateFallbackMode(context: vscode.ExtensionContext): Promise<void> {
-    const resolver = new FallbackResolver();
+    const fallbackResolver = new FallbackResolver();
 
     const send = async (doc: vscode.TextDocument | undefined) => {
         if (!doc || doc.uri.scheme !== 'file') return;
-        const fallback = await resolver.resolve(doc.uri);
+
+        const uctx = await resolveUnifiedContext({
+            fallbackResolver,
+            activeDocument: doc,
+        });
+        if (!uctx) return;
+
         client.sendNotification('purebasic/projectContext', {
-            version:      3,
-            noProject:    true,
-            projectFiles: fallback?.projectFiles ?? [],
+            version: 3,
+            noProject: true,
+            projectFiles: uctx.projectFiles,
         });
     };
 
