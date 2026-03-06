@@ -9,6 +9,13 @@ export interface PbProjectContext {
 }
 
 export interface PbProjectContextPayload {
+    /**
+     * True if the user has explicitly selected "No Project".
+     * Consumer can then fall back to an internal fallback, for example.
+     * All other fields are undefined if this flag is set.
+     */
+    noProject?: boolean;
+
     /** Absolute path to the .pbp file */
     projectFile?: string;
     /** Absolute path to the project directory */

@@ -14,7 +14,10 @@ import { PureBasicSymbol } from '../symbols/types';
 import { symbolCache } from '../symbols/symbol-cache';
 
 export interface ProjectContextLspPayload {
-    version: 2;
+    version: 3;
+
+    /** set if "No Project" is selected */
+    noProject?: boolean;
 
     projectFileUri?: string;
     projectDir?: string;
@@ -31,7 +34,7 @@ export interface ProjectContextLspPayload {
 }
 
 export interface FileProjectLspPayload {
-    version: 1;
+    version: 3;
 
     documentUri: string;
     projectFileUri?: string;
@@ -68,8 +71,24 @@ export class ProjectManager {
 
     public constructor(private readonly connection: Connection) {}
 
+    private static readonly FALLBACK_KEY = '__fallback__';
+
     public setActiveContext(payload: ProjectContextLspPayload): void {
-        if (!payload || payload.version !== 2) return;
+        if (!payload || payload.version !== 3) return;
+
+    if (payload.noProject === true) {
+        this.activeProjectFileUri = ProjectManager.FALLBACK_KEY;
+        // Clear stale per-file project mappings so they cannot override fallback context.
+        this.fileToProject.clear();
+        this.fileScope.clear();
+        const ctx = this.getOrCreateProject(ProjectManager.FALLBACK_KEY);
+        ctx.projectFiles  = new Set(payload.projectFiles?.filter(Boolean) ?? []);
+        ctx.projectFileUris = new Set(
+            (payload.projectFiles ?? []).filter(Boolean).map(p => URI.file(p).toString())
+        );
+        ctx.lastModified = Date.now();
+        return;
+    }
 
         this.activeProjectFileUri = payload.projectFileUri;
         this.activeTargetName = payload.targetName;
@@ -99,7 +118,7 @@ export class ProjectManager {
     }
 
     public setFileProjectMapping(payload: FileProjectLspPayload): void {
-        if (!payload || payload.version !== 1) return;
+        if (!payload || payload.version !== 3) return;
 
         if (payload.scope === 'internal' || payload.scope === 'external') {
             this.fileScope.set(payload.documentUri, payload.scope);
