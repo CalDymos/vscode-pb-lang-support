@@ -40,6 +40,16 @@ export async function buildActiveTarget(deps: BuildActiveTargetDeps): Promise<bo
         return false;
     }
 
+
+    // In fallback mode the active document is used directly as inputFile.
+    // Reject non-PureBasic files so pbcompiler is never fed arbitrary input.
+    // (In pbp mode the inputFile comes from the project, so this check is not needed.)
+    if (uctx.mode === 'fallback' && editor.document.languageId !== 'purebasic') {
+        void vscode.window.showWarningMessage(
+            'Build Active Target requires an active PureBasic (.pb / .pbi) file.');
+        return false;
+    }
+
     const compiler = await resolveCompilerPath();
     if (!compiler) {
         void vscode.window.showErrorMessage('PureBasic compiler not found. Configure purebasic.build.compiler or add pbcompiler to PATH.');
