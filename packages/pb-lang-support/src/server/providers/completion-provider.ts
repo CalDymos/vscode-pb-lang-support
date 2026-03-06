@@ -75,6 +75,12 @@ function handleCompletionInternal(
     // Get the context that triggers completion
     const context = getTriggerContext(linePrefix);
 
+    // No completions inside string literals.
+    // isInString is correctly calculated in getTriggerContext (with comment-strip).
+    if (context.isInString) {
+        return { isIncomplete: false, items: [] };
+    }
+
     // Structure member access completion var\member
     if (context.isAfterStructAccess) {
         const documentText = document.getText();
@@ -266,15 +272,20 @@ function handleCompletionInternal(
         }
     });
 
-    // Add constants (constants are usually global)
+    // Add constants
+    // label and insertText must include '#' – PureBasic constants are always
+    // referenced as #Name. Without this, the inserted text would be invalid PureBasic.
+    // The isConstantContext branch (line ~116) is already correct; this branch was not.
     documentSymbols.constants.forEach((constant, index) => {
         if (constant.name.toLowerCase().startsWith(context.prefix.toLowerCase())) {
             completionItems.push({
-                label: constant.name,
+                label: `#${constant.name}`,
                 kind: CompletionItemKind.Constant,
                 data: 'const_' + index,
-                detail: `Constant ${constant.name}`,
-                documentation: `Constant: ${constant.name} = ${constant.value || 'unknown'}`
+                detail: `Constant #${constant.name}`,
+                documentation: `Constant: #${constant.name} = ${constant.value || 'unknown'}`,
+                insertText: `#${constant.name}`,
+                insertTextFormat: InsertTextFormat.PlainText
             });
         }
     });
@@ -538,46 +549,178 @@ function handleCompletionInternal(
 
 
     // Add code snippets
+    // All inline comments changed from // to ; (PureBasic comment syntax).
+    // Added: Select/Case, Repeat/Until, With/EndWith, Macro/EndMacro,
+    //        CompilerIf/CompilerEndIf, Declare, repeat-forever (ForEver),
+    //        DisableExplicit/EnableExplicit, Data/Read/Restore.
     const snippets = [
         {
             label: 'if',
             kind: CompletionItemKind.Snippet,
-            insertText: 'If ${1:condition}\n\t${2:// code}\nEndIf',
+            insertText: 'If ${1:condition}\n\t${2:; code}\nEndIf',
             insertTextFormat: InsertTextFormat.Snippet,
             detail: 'If statement',
             documentation: 'If-EndIf control structure'
         },
         {
+            label: 'ifel',
+            kind: CompletionItemKind.Snippet,
+            insertText: 'If ${1:condition}\n\t${2:; code}\nElse\n\t${3:; code}\nEndIf',
+            insertTextFormat: InsertTextFormat.Snippet,
+            detail: 'If-Else statement',
+            documentation: 'If-Else-EndIf control structure'
+        },
+        {
+            label: 'ifelseif',
+            kind: CompletionItemKind.Snippet,
+            insertText: 'If ${1:condition}\n\t${2:; code}\nElseIf ${3:condition}\n\t${4:; code}\nElse\n\t${5:; code}\nEndIf',
+            insertTextFormat: InsertTextFormat.Snippet,
+            detail: 'If-ElseIf-Else statement',
+            documentation: 'If-ElseIf-Else-EndIf control structure'
+        },
+        {
             label: 'for',
             kind: CompletionItemKind.Snippet,
-            insertText: 'For ${1:i} = ${2:0} To ${3:10}\n\t${4:// code}\nNext',
+            insertText: 'For ${1:i} = ${2:0} To ${3:10}\n\t${4:; code}\nNext ${1:i}',
             insertTextFormat: InsertTextFormat.Snippet,
             detail: 'For loop',
             documentation: 'For-Next loop structure'
         },
         {
+            label: 'forstep',
+            kind: CompletionItemKind.Snippet,
+            insertText: 'For ${1:i} = ${2:0} To ${3:10} Step ${4:2}\n\t${5:; code}\nNext ${1:i}',
+            insertTextFormat: InsertTextFormat.Snippet,
+            detail: 'For loop with Step',
+            documentation: 'For-Next loop with custom step value'
+        },
+        {
+            label: 'foreach',
+            kind: CompletionItemKind.Snippet,
+            insertText: 'ForEach ${1:ListName}()\n\t${2:; code}\nNext',
+            insertTextFormat: InsertTextFormat.Snippet,
+            detail: 'ForEach Loop',
+            documentation: 'Iterate through all elements in a list or map'
+        },
+        {
             label: 'while',
             kind: CompletionItemKind.Snippet,
-            insertText: 'While ${1:condition}\n\t${2:// code}\nWend',
+            insertText: 'While ${1:condition}\n\t${2:; code}\nWend',
             insertTextFormat: InsertTextFormat.Snippet,
             detail: 'While loop',
             documentation: 'While-Wend loop structure'
         },
         {
+            label: 'repeat',
+            kind: CompletionItemKind.Snippet,
+            insertText: 'Repeat\n\t${1:; code}\nUntil ${2:condition}',
+            insertTextFormat: InsertTextFormat.Snippet,
+            detail: 'Repeat-Until loop',
+            documentation: 'Repeat-Until loop – executes at least once, then checks condition'
+        },
+        {
+            label: 'forever',
+            kind: CompletionItemKind.Snippet,
+            insertText: 'Repeat\n\t${1:; code}\n\tIf ${2:exitCondition} : Break : EndIf\nForEver',
+            insertTextFormat: InsertTextFormat.Snippet,
+            detail: 'Infinite loop (ForEver)',
+            documentation: 'Repeat-ForEver infinite loop with Break exit'
+        },
+        {
+            label: 'select',
+            kind: CompletionItemKind.Snippet,
+            insertText: 'Select ${1:variable}\n\tCase ${2:value1}\n\t\t${3:; code}\n\tCase ${4:value2}\n\t\t${5:; code}\n\tDefault\n\t\t${6:; code}\nEndSelect',
+            insertTextFormat: InsertTextFormat.Snippet,
+            detail: 'Select-Case statement',
+            documentation: 'Select-Case-EndSelect multi-branch structure'
+        },
+        {
             label: 'procedure',
             kind: CompletionItemKind.Snippet,
-            insertText: 'Procedure ${1:Name}(${2:parameters})\n\t${3:// code}\nEndProcedure',
+            insertText: 'Procedure ${1:Name}(${2:parameters})\n\t${3:; code}\nEndProcedure',
             insertTextFormat: InsertTextFormat.Snippet,
             detail: 'Procedure',
             documentation: 'Procedure definition'
         },
         {
+            label: 'procedurer',
+            kind: CompletionItemKind.Snippet,
+            insertText: 'Procedure.${1:i} ${2:Name}(${3:parameters})\n\t${4:; code}\n\tProcedureReturn ${5:result}\nEndProcedure',
+            insertTextFormat: InsertTextFormat.Snippet,
+            detail: 'Procedure with return value',
+            documentation: 'Procedure with typed return value and ProcedureReturn'
+        },
+        {
+            label: 'declare',
+            kind: CompletionItemKind.Snippet,
+            insertText: 'Declare${1|,C,DLL,CDLL|} ${2:Name}(${3:parameters})',
+            insertTextFormat: InsertTextFormat.Snippet,
+            detail: 'Declare (forward declaration)',
+            documentation: 'Forward declaration for a procedure'
+        },
+        {
             label: 'structure',
             kind: CompletionItemKind.Snippet,
-            insertText: 'Structure ${1:Name}\n\t${2:// fields}\nEndStructure',
+            insertText: 'Structure ${1:Name}\n\t${2:field}.${3:i}\nEndStructure',
             insertTextFormat: InsertTextFormat.Snippet,
             detail: 'Structure',
             documentation: 'Structure definition'
+        },
+        {
+            label: 'interface',
+            kind: CompletionItemKind.Snippet,
+            insertText: 'Interface ${1:Name}\n\t${2:Method}(${3:parameters})\nEndInterface',
+            insertTextFormat: InsertTextFormat.Snippet,
+            detail: 'Interface',
+            documentation: 'Interface definition (COM/object interface)'
+        },
+        {
+            label: 'enumeration',
+            kind: CompletionItemKind.Snippet,
+            insertText: 'Enumeration ${1:Name}\n\t#${2:Value1}\n\t#${3:Value2}\nEndEnumeration',
+            insertTextFormat: InsertTextFormat.Snippet,
+            detail: 'Enumeration',
+            documentation: 'Enumeration definition'
+        },
+        {
+            label: 'enumerationbinary',
+            kind: CompletionItemKind.Snippet,
+            insertText: 'EnumerationBinary ${1:Name}\n\t#${2:Flag1}\n\t#${3:Flag2}\nEndEnumeration',
+            insertTextFormat: InsertTextFormat.Snippet,
+            detail: 'EnumerationBinary',
+            documentation: 'Binary (power-of-two) enumeration for flags/bitmasks'
+        },
+        {
+            label: 'macro',
+            kind: CompletionItemKind.Snippet,
+            insertText: 'Macro ${1:Name}(${2:param})\n\t${3:; code}\nEndMacro',
+            insertTextFormat: InsertTextFormat.Snippet,
+            detail: 'Macro',
+            documentation: 'Macro definition – inlined at compile time'
+        },
+        {
+            label: 'module',
+            kind: CompletionItemKind.Snippet,
+            insertText: 'DeclareModule ${1:Name}\n\t${2:; public declarations}\nEndDeclareModule\n\nModule ${1:Name}\n\t${3:; implementation}\nEndModule',
+            insertTextFormat: InsertTextFormat.Snippet,
+            detail: 'Module',
+            documentation: 'DeclareModule / Module pair – PureBasic namespace/module'
+        },
+        {
+            label: 'compilerif',
+            kind: CompletionItemKind.Snippet,
+            insertText: 'CompilerIf ${1:#PB_Compiler_OS} = ${2:#PB_OS_Windows}\n\t${3:; code}\nCompilerEndIf',
+            insertTextFormat: InsertTextFormat.Snippet,
+            detail: 'CompilerIf',
+            documentation: 'Compile-time conditional compilation block'
+        },
+        {
+            label: 'with',
+            kind: CompletionItemKind.Snippet,
+            insertText: 'With ${1:variable}\n\t${2:\\field} = ${3:value}\nEndWith',
+            insertTextFormat: InsertTextFormat.Snippet,
+            detail: 'With-EndWith',
+            documentation: 'With-EndWith – shorthand for structure member access'
         },
         {
             label: 'array',
@@ -604,12 +747,20 @@ function handleCompletionInternal(
             documentation: 'Create a new associative array (map)'
         },
         {
-            label: 'foreach',
+            label: 'data',
             kind: CompletionItemKind.Snippet,
-            insertText: 'ForEach ${1:ListName}()\n\t${2:// code}\nNext',
+            insertText: 'DataSection\n\t${1:MyLabel}:\n\tData.${2:i} ${3:1, 2, 3}\nEndDataSection\n\nRestore ${1:MyLabel}\nRead.${2:i} ${4:variable}',
             insertTextFormat: InsertTextFormat.Snippet,
-            detail: 'ForEach Loop',
-            documentation: 'Iterate through all elements in a list'
+            detail: 'DataSection / Read',
+            documentation: 'DataSection with Data/Restore/Read pattern'
+        },
+        {
+            label: 'prototype',
+            kind: CompletionItemKind.Snippet,
+            insertText: 'Prototype${1|,C|}.${2:i} ${3:Name}(${4:parameters})',
+            insertTextFormat: InsertTextFormat.Snippet,
+            detail: 'Prototype',
+            documentation: 'Prototype – defines a function pointer type'
         }
     ];
 
@@ -626,7 +777,6 @@ function handleCompletionInternal(
  */
 function getTriggerContext(linePrefix: string): {
     prefix: string;
-    isAfterDot: boolean;
     isInString: boolean;
     isAfterModuleOperator: boolean;
     moduleName: string;
@@ -639,12 +789,16 @@ function getTriggerContext(linePrefix: string): {
     structVarName: string;
     structMemberPrefix: string;
 } {
-    // Check if in string
-    const quoteCount = (linePrefix.match(/"/g) || []).length;
+    // isInString – strip content after ';' before counting quotes,
+    // otherwise a comment like  ; say "hello"  would corrupt the count.
+    // Only the code portion of the line matters for string detection.
+    const codePart = stripInlineComment(linePrefix);
+    const quoteCount = (codePart.match(/"/g) || []).length;
     const isInString = quoteCount % 2 === 1;
 
-    // Check if after period (member access)
-    const isAfterDot = linePrefix.trim().endsWith('.');
+    // isAfterDot removed. In PureBasic '.' is the type-annotation separator
+    // (e.g. var.i, Procedure.s), NOT a member-access operator. Member access uses '\'.
+    // isAfterDot was also never read anywhere in handleCompletionInternal → dead code.
 
     // Check if it follows the module operator: Module:: or Module::# or Module:: prefix
     const moduleConstMatch = linePrefix.match(/([a-zA-Z_]\w*)::#([a-zA-Z_]\w*\$?)?$/);
@@ -672,7 +826,6 @@ function getTriggerContext(linePrefix: string): {
 
     return {
         prefix,
-        isAfterDot,
         isInString,
         isAfterModuleOperator,
         moduleName,
@@ -723,6 +876,17 @@ function buildStructureIndex(document: TextDocument, documentCache: Map<string, 
             if (start) { current = start[1]; continue; }
             if (line.match(/^EndStructure\b/i)) { current = null; continue; }
             if (current) {
+                // Collection members (Array/List/Map) inside a Structure have the form:
+                //   Array images.i(10)
+                //   List  items.s()
+                //   Map   lookup.s()
+                // Without a guard, /^(\*?)(\w+)/ would capture "Array"/"List"/"Map"
+                // as the member name instead of the actual name after the keyword.
+                if (/^(?:Array|List|Map)\s+/i.test(line)) {
+                    const cm = line.match(/^(?:Array|List|Map)\s+\*?(\w+)/i);
+                    if (cm) pushMember(current, { name: cm[1], type: undefined });
+                    continue;
+                }
                 const m = line.match(/^(\*?)(\w+)(?:\.(\w+))?/);
                 if (m) {
                     const name = m[2];
@@ -804,7 +968,16 @@ function analyzeDocumentSymbols(document: TextDocument, symbols: SymbolCollectio
         const line = lines[i].trim();
 
         // Look for procedure definition
-        const procMatch = line.match(/^Procedure(?:\.(\w+))?\s+(\w+)\s*\(([^)]*)\)/i);
+        // ProcedureC / ProcedureDLL / ProcedureCDLL variants added.
+        // Regex breakdown: ^Procedure(?:C|DLL|CDLL)?  → all calling conventions
+        //                  (?:\.(\w+))?               → optional return type (.i, .s, …)
+        //                  \s+(\w+)\s*\(([^)]*)\)     → name + parameter list
+        // Testfälle:
+        //   Procedure.i MyFunc(a.i)   → name=MyFunc, ret=i ✅
+        //   ProcedureC MyExport()     → name=MyExport     ✅
+        //   ProcedureDLL MyDll(x.l)  → name=MyDll        ✅
+        //   ProcedureCDLL.s Fn(a)    → name=Fn, ret=s    ✅
+        const procMatch = line.match(/^Procedure(?:C|DLL|CDLL)?(?:\.(\w+))?\s+(\w+)\s*\(([^)]*)\)/i);
         if (procMatch) {
             const returnType = procMatch[1] || '';
             const name = procMatch[2];
@@ -842,9 +1015,35 @@ function analyzeDocumentSymbols(document: TextDocument, symbols: SymbolCollectio
         }
 
         // Look for enumeration definition
-        const enumMatch = line.match(/^Enumeration\s+(\w+)\b/i);
+        // EnumerationBinary added.
+        const enumMatch = line.match(/^Enumeration(?:Binary)?\s+(\w+)\b/i);
         if (enumMatch) {
             symbols.enumerations.push({ name: enumMatch[1] });
+        }
+
+        // Macro added
+        // PureBasic macros are usable like procedures.
+        // Parameterless macros are also valid: `Macro SimpleTag`
+        const macroMatch = line.match(/^Macro\s+(\w+)/i);
+        if (macroMatch) {
+            const name = macroMatch[1];
+            symbols.procedures.push({
+                name,
+                signature: name,
+                insertText: `${name}(`
+            });
+        }
+
+        // Prototype / PrototypeC added
+        // Prototype defines a callable function-pointer type.
+        const protoMatch = line.match(/^Prototype(?:C)?(?:\.(\w+))?\s+(\w+)\s*\(/i);
+        if (protoMatch) {
+            const name = protoMatch[2];
+            symbols.procedures.push({
+                name,
+                signature: name,
+                insertText: `${name}(`
+            });
         }
     }
 }
