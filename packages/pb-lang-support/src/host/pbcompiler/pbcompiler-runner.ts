@@ -4,7 +4,6 @@
 
 import * as cp from 'child_process';
 import * as path from 'path';
-import * as fs from 'fs';
 
 export interface PbCompilerRunOptions {
     compiler: string;
@@ -64,31 +63,28 @@ export async function runPbCompiler(opt: PbCompilerRunOptions): Promise<PbCompil
     });
 }
 
-/**
- * Best-effort PUREBASIC_HOME detection:
- *  - macOS .app bundle: /xxx/PureBasic.app/Contents/Resources/compilers/pbcompiler
- *  - others: /xxx/purebasic/compilers/pbcompiler
- */
+  /**
+   * Detect PUREBASIC_HOME from compiler path.
+   * For macOS .app bundle: /xxx/PureBasic.app/Contents/Resources/compilers/pbcompiler
+   * For Linux/others: /xxx/purebasic/compilers/pbcompiler
+   */
 function detectPureBasicHome(compilerPath: string): string | undefined {
+    // No directory component → PATH invocation; cannot infer home.
+    if (!path.isAbsolute(compilerPath) && !compilerPath.includes(path.sep)) {
+        return undefined;
+    }
+    // Normalize path
     const normalized = path.normalize(compilerPath);
 
-    const appMatch = normalized.match(/(.+\.app\/Contents\/Resources)/i);
+    // Check if it's inside an .app bundle (macOS)
+    const appMatch = normalized.match(/(.+\.app[\/]Contents[\/]Resources)/i);
     if (appMatch) {
         return appMatch[1];
     }
 
+    // Check if it's in a compilers subdirectory
     const idx = normalized.toLowerCase().indexOf(path.sep + 'compilers' + path.sep);
-    if (idx > 0) {
-        return normalized.substring(0, idx);
-    }
+    if (idx > 0) { return normalized.substring(0, idx); }
 
-    const parent = path.dirname(normalized);
-    if (parent && parent !== normalized) {
-        try {
-            if (fs.existsSync(parent)) return parent;
-        } catch {
-            return undefined;
-        }
-    }
     return undefined;
 }

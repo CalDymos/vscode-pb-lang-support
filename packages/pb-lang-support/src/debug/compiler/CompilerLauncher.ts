@@ -279,27 +279,23 @@ export class CompilerLauncher {
    * For Linux/others: /xxx/purebasic/compilers/pbcompiler
    */
   private static detectPureBasicHome(compilerPath: string): string | undefined {
+   // No directory component → PATH invocation; cannot infer home.
+   if (!path.isAbsolute(compilerPath) && !compilerPath.includes(path.sep)) {
+     return undefined;
+   }
     // Normalize path
     const normalized = path.normalize(compilerPath);
     
     // Check if it's inside an .app bundle (macOS)
-    const appMatch = normalized.match(/(.+\.app\/Contents\/Resources)/i);
+    const appMatch = normalized.match(/(.+\.app[\/]Contents[\/]Resources)/i);
     if (appMatch) {
       return appMatch[1];
     }
     
     // Check if it's in a compilers subdirectory
-    const compilersIdx = normalized.toLowerCase().indexOf('/compilers/');
-    if (compilersIdx > 0) {
-      return normalized.substring(0, compilersIdx);
-    }
-    
-    // Check if parent directory exists and might be the home
-    const parentDir = path.dirname(normalized);
-    if (parentDir && parentDir !== normalized) {
-      return parentDir;
-    }
-    
+    const idx = normalized.toLowerCase().indexOf(path.sep + 'compilers' + path.sep);
+    if (idx > 0) { return normalized.substring(0, idx); }
+        
     return undefined;
   }
 
