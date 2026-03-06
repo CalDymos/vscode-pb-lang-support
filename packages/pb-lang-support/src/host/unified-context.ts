@@ -99,46 +99,52 @@ export interface ResolveUnifiedContextParams {
  */
 export async function resolveUnifiedContext(params: ResolveUnifiedContextParams): Promise<UnifiedContext | null> {
     const docFileUri =
-    (params.activeDocument?.uri.scheme === 'file' ? params.activeDocument.uri : undefined) ??
-    (params.activeUri?.scheme === 'file' ? params.activeUri : undefined);
+        (params.activeDocument?.uri.scheme === 'file' ? params.activeDocument.uri : undefined) ??
+        (params.activeUri?.scheme === 'file' ? params.activeUri : undefined);
 
     // Prefer .pbp context (pb-project-files) when available and not explicitly disabled.
     if (params.api) {
         const payload = params.api.getActiveContextPayload();
 
-        if (!payload.noProject) {
-            const projectFiles = Array.isArray(payload.projectFiles) ? payload.projectFiles : [];
-            const project = payload.project;
-            const target = payload.target;
-
-            const resolvedBuild = (project && target)
-                ? resolveBuildEntry(project, target)
-                : undefined;
-
-            // If target info is missing, fall back to the active editor for the input file.
-            const inputFile = resolvedBuild?.inputFile || docFileUri?.fsPath;
-            const workingDir = resolvedBuild?.workingDir
-                || (inputFile ? path.dirname(inputFile) : payload.projectDir);
-
+        // payload.noProject: explicit "No Project" – notify server immediately.
+        // No active document is required; there is nothing to resolve.
+        if (payload.noProject) {
             return {
-                mode: 'pbp',
-                noProject: false,
-                projectFile: payload.projectFile,
-                projectFileUri: payload.projectFile ? vscode.Uri.file(payload.projectFile).toString() : undefined,
-                projectDir: payload.projectDir,
-                projectName: payload.projectName,
-                targetName: payload.targetName,
-                projectFiles,
-                workingDir,
-                inputFile,
-                outputFile: resolvedBuild?.outputFile || target?.outputFile?.fsPath,
-                executable: resolvedBuild?.executable || target?.executable?.fsPath || target?.outputFile?.fsPath,
-                project,
-                target,
-                resolvedBuild,
+                mode: 'fallback',
+                noProject: true,
+                projectFiles: [],
             };
         }
-        // payload.noProject: explicit "No Project" selection → use fallback
+        const projectFiles = Array.isArray(payload.projectFiles) ? payload.projectFiles : [];
+        const project = payload.project;
+        const target = payload.target;
+
+        const resolvedBuild = (project && target)
+            ? resolveBuildEntry(project, target)
+            : undefined;
+
+        // If target info is missing, fall back to the active editor for the input file.
+        const inputFile = resolvedBuild?.inputFile || docFileUri?.fsPath;
+        const workingDir = resolvedBuild?.workingDir
+            || (inputFile ? path.dirname(inputFile) : payload.projectDir);
+
+        return {
+            mode: 'pbp',
+            noProject: false,
+            projectFile: payload.projectFile,
+            projectFileUri: payload.projectFile ? vscode.Uri.file(payload.projectFile).toString() : undefined,
+            projectDir: payload.projectDir,
+            projectName: payload.projectName,
+            targetName: payload.targetName,
+            projectFiles,
+            workingDir,
+            inputFile,
+            outputFile: resolvedBuild?.outputFile || target?.outputFile?.fsPath,
+            executable: resolvedBuild?.executable || target?.executable?.fsPath || target?.outputFile?.fsPath,
+            project,
+            target,
+            resolvedBuild,
+        };
     }
 
     // Fallback mode requires an active file document.
