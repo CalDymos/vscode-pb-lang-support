@@ -103,7 +103,7 @@ function formatPureBasicCode(text: string, options: FormattingOptions, initialSt
     let caseActive = initialState?.caseActive ?? false;
 
     const isClosing = (l: string): boolean => /^(EndProcedure|EndModule|EndStructure|EndIf|Next|Wend|Until|ForEver|EndWith|EndDeclareModule|EndInterface|EndEnumeration|EndMacro|EndDataSection|CompilerEndIf|CompilerEndSelect)\b/i.test(l);
-    const isOpening = (l: string): boolean => /^(Procedure(?:C|DLL|CDLL)?\b|Module\b|Structure\b|If\b|For\b|ForEach\b|While\b|Repeat\b|With\b|DeclareModule\b|Interface\b|Enumeration\b|Macro\b|DataSection\b|CompilerIf\b|CompilerSelect\b)/i.test(l);
+    const isOpening = (l: string): boolean => /^(Procedure(?:C|DLL|CDLL)?\b|Module\b|Structure\b|If\b|For\b|ForEach\b|While\b|Repeat\b|With\b|DeclareModule\b|Interface\b|Enumeration(?:Binary)?\b|Macro\b|DataSection\b|CompilerIf\b|CompilerSelect\b)/i.test(l);
     const isEndSelect = (l: string): boolean => /^EndSelect\b/i.test(l);
     const isSelect = (l: string): boolean => /^Select\b/i.test(l);
     const isCase = (l: string): boolean => /^(Case\b|Default\b)/i.test(l);
@@ -124,7 +124,7 @@ function formatPureBasicCode(text: string, options: FormattingOptions, initialSt
             (contains(/\bDeclareModule\b/i) && contains(/\bEndDeclareModule\b/i)) ||
             (contains(/\bStructure\b/i) && contains(/\bEndStructure\b/i)) ||
             (contains(/\bInterface\b/i) && contains(/\bEndInterface\b/i)) ||
-            (contains(/\bEnumeration\b/i) && contains(/\bEndEnumeration\b/i)) ||
+            (contains(/\bEnumeration(?:Binary)?\b/i) && contains(/\bEndEnumeration\b/i)) ||
             (contains(/\bMacro\b/i) && contains(/\bEndMacro\b/i)) ||
             (contains(/\bDataSection\b/i) && contains(/\bEndDataSection\b/i)) ||
             (contains(/\bCompilerIf\b/i) && contains(/\bCompilerEndIf\b/i)) ||
@@ -235,13 +235,12 @@ interface FormatterState {
  * Compute indentation context before a line (initial state for range formatting)
  */
 function computeInitialFormatterState(linesBefore: string[]): FormatterState {
-    // Reuse the same predicate logic from formatPureBasicCode
-    const isClosing = (l: string): boolean => /^(EndProcedure|EndModule|EndStructure|EndIf|Next|Wend|Until|ForEver|EndWith|EndDeclareModule|EndInterface|EndEnumeration)\b/i.test(l);
-    const isOpening = (l: string): boolean => /^(Procedure(?:C|DLL|CDLL)?\b|Module\b|Structure\b|If\b|For\b|ForEach\b|While\b|Repeat\b|With\b|DeclareModule\b|Interface\b|Enumeration\b)/i.test(l);
+    const isClosing = (l: string): boolean => /^(EndProcedure|EndModule|EndStructure|EndIf|Next|Wend|Until|ForEver|EndWith|EndDeclareModule|EndInterface|EndEnumeration|EndMacro|EndDataSection|CompilerEndIf|CompilerEndSelect)\b/i.test(l);
+    const isOpening = (l: string): boolean => /^(Procedure(?:C|DLL|CDLL)?\b|Module\b|Structure\b|If\b|For\b|ForEach\b|While\b|Repeat\b|With\b|DeclareModule\b|Interface\b|Enumeration(?:Binary)?\b|Macro\b|DataSection\b|CompilerIf\b|CompilerSelect\b)/i.test(l);
     const isEndSelect = (l: string): boolean => /^EndSelect\b/i.test(l);
     const isSelect = (l: string): boolean => /^Select\b/i.test(l);
     const isCase = (l: string): boolean => /^(Case\b|Default\b)/i.test(l);
-    const isMiddle = (l: string): boolean => /^(Else\b|ElseIf\b)/i.test(l);
+    const isMiddle = (l: string): boolean => /^(Else\b|ElseIf\b|CompilerElse\b|CompilerElseIf\b)/i.test(l);
 
     const hasInlineNetZero = (code: string): boolean => {
         const contains = (re: RegExp) => re.test(code);
@@ -257,7 +256,11 @@ function computeInitialFormatterState(linesBefore: string[]): FormatterState {
             (contains(/\bDeclareModule\b/i) && contains(/\bEndDeclareModule\b/i)) ||
             (contains(/\bStructure\b/i) && contains(/\bEndStructure\b/i)) ||
             (contains(/\bInterface\b/i) && contains(/\bEndInterface\b/i)) ||
-            (contains(/\bEnumeration\b/i) && contains(/\bEndEnumeration\b/i))
+            (contains(/\bEnumeration(?:Binary)?\b/i) && contains(/\bEndEnumeration\b/i)) ||
+            (contains(/\bMacro\b/i) && contains(/\bEndMacro\b/i)) ||
+            (contains(/\bDataSection\b/i) && contains(/\bEndDataSection\b/i)) ||
+            (contains(/\bCompilerIf\b/i) && contains(/\bCompilerEndIf\b/i)) ||
+            (contains(/\bCompilerSelect\b/i) && contains(/\bCompilerEndSelect\b/i))
         );
     };
 
@@ -315,129 +318,36 @@ function computeInitialFormatterState(linesBefore: string[]): FormatterState {
 }
 
 /**
- * Strip strings and trailing comments, returning pure code for keyword matching
+ * Strip string literals and trailing comments, returning only code tokens
+ * for keyword matching.
+ *
+ * PureBasic string literals are delimited exclusively by double quotes (").
+ * Single quotes (') are NOT string delimiters in PureBasic – removing the
+ * previous 'inSq' toggle prevents mis-stripping when an apostrophe appears
+ * inside a double-quoted string such as  Pos("'", text$).
+ * PureBasic escape-strings ( ~"text\n" ) are handled correctly: the leading
+ * tilde is emitted as code, then the "…" block is stripped as usual.
  */
 function stripStringsAndComments(line: string): string {
     let out = '';
     let inDq = false;
-    let inSq = false;
     for (let i = 0; i < line.length; i++) {
         const ch = line[i];
-        if (!inDq && !inSq && ch === ';') {
-            // start of line comment
+        // ';' outside a string = line comment → stop
+        if (!inDq && ch === ';') {
             break;
         }
-        if (!inSq && ch === '"') {
+        // '"' toggles double-quote string state
+        if (ch === '"') {
             inDq = !inDq;
-            continue; // Skip string content
+            continue; // quote character itself is not emitted
         }
-        if (!inDq && ch === '\'') {
-            inSq = !inSq;
-            continue; // Skip string content
-        }
-        if (!inDq && !inSq) {
+        // Emit only characters that are outside a string literal
+        if (!inDq) {
             out += ch;
         }
     }
     return out;
-}
-
-/**
- * Calculate indent level (reserved, not yet used)
- */
-function calculateIndentLevel(
-    line: string,
-    inProcedure: boolean,
-    inModule: boolean,
-    inStructure: boolean
-): number {
-    let level = 0;
-
-    if (inProcedure) level++;
-    if (inModule) level++;
-    if (inStructure) level++;
-
-    return level;
-}
-
-/**
- * Update formatting state (reserved, not yet used)
- */
-function updateFormattingState(
-    line: string,
-    inProcedure: boolean,
-    inModule: boolean,
-    inStructure: boolean,
-    currentIndent: number
-): {
-    newInProcedure: boolean;
-    newInModule: boolean;
-    newInStructure: boolean;
-    lineIndent: number;
-} {
-    const lower = line.toLowerCase();
-    let newIndent = currentIndent;
-
-    // Structure check complete
-    if (lower.match(/^endprocedure\b/)) {
-        return {
-            newInProcedure: false,
-            newInModule: inModule,
-            newInStructure: inStructure,
-            lineIndent: Math.max(0, currentIndent - 1)
-        };
-    }
-
-    if (lower.match(/^endmodule\b/)) {
-        return {
-            newInProcedure: inProcedure,
-            newInModule: false,
-            newInStructure: inStructure,
-            lineIndent: Math.max(0, currentIndent - 1)
-        };
-    }
-
-    if (lower.match(/^endstructure\b/)) {
-        return {
-            newInProcedure: inProcedure,
-            newInModule: inModule,
-            newInStructure: false,
-            lineIndent: Math.max(0, currentIndent - 1)
-        };
-    }
-
-    // Check control structure end
-    if (lower.match(/^(endif|next|wend|until|forever|endselect|endwith)\b/)) {
-        newIndent = Math.max(0, currentIndent - 1);
-    }
-
-    // Check structure start
-    let newInProcedure = inProcedure;
-    let newInModule = inModule;
-    let newInStructure = inStructure;
-
-    if (lower.match(/^procedure(?:c|dll|cdll)?\b/)) {
-        newInProcedure = true;
-        newIndent = currentIndent;
-    } else if (lower.match(/^module\b/)) {
-        newInModule = true;
-        newIndent = currentIndent;
-    } else if (lower.match(/^structure\b/)) {
-        newInStructure = true;
-        newIndent = currentIndent;
-    }
-
-    // Check control structure start
-    else if (lower.match(/^(if|for|foreach|while|repeat|select|with)\b/)) {
-        newIndent = currentIndent;
-    }
-
-    return {
-        newInProcedure,
-        newInModule,
-        newInStructure,
-        lineIndent: newIndent
-    };
 }
 
 /**
