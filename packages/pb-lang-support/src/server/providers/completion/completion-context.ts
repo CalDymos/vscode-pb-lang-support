@@ -1,6 +1,6 @@
 /**
- * 补全上下文分析器
- * 负责分析代码补全的上下文信息
+ * Contextual Analysis Module
+ * Responsible for analyzing contextual information for code completion
  */
 
 import { Position, TextDocument } from 'vscode-languageserver';
