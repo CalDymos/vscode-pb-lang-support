@@ -27,6 +27,7 @@ export function handleDocumentSymbol(
 
     let currentModule: DocumentSymbol | null = null;
     let currentStructure: DocumentSymbol | null = null;
+    let currentInterface: DocumentSymbol | null = null;   // track Interface body
     let currentProcedure: DocumentSymbol | null = null;
     let currentEnumeration: DocumentSymbol | null = null;
 
@@ -140,22 +141,37 @@ export function handleDocumentSymbol(
             } else {
                 symbols.push(interfaceSymbol);
             }
+            currentInterface = interfaceSymbol;   // FIX: was missing
             continue;
         }
 
-        // Enumeration definition
-        const enumMatch = trimmedLine.match(/^Enumeration\s+(\w+)?\b/i);
+        // End of Interface
+        // EndInterface resetting currentInterface
+        if (trimmedLine.match(/^EndInterface\b/i)) {
+            currentInterface = null;
+            continue;
+        }
+
+        // Enumeration / EnumerationBinary definition
+        // “Enumeration” (without names) are
+        // matched using \s*; "Step" lookahead prevents it from
+        // being incorrectly identified as an enumeration name.
+        const enumMatch = trimmedLine.match(/^(Enumeration(?:Binary)?)\s*(?!Step\b)(\w+)?/i);
         if (enumMatch) {
-            const name = enumMatch[1] || 'Anonymous';
-            const nameStart = enumMatch[1] ? safeIndexOf(line, enumMatch[1]) : 0;
-            const selectionRange = createSafeRange(i, nameStart, (enumMatch[1] || '').length || line.trim().length, line.length);
+            const enumKeyword = enumMatch[1];                // 'Enumeration' or 'EnumerationBinary'
+            const enumName    = enumMatch[2];                // may be undefined for anonymous blocks
+            const name        = enumName || 'Anonymous';
+            const displayName = `${name} [${enumKeyword}]`;
+            const nameStart   = enumName ? safeIndexOf(line, enumName) : 0;
+            const nameLen     = enumName ? enumName.length : line.trim().length;
+            const selectionRange = createSafeRange(i, nameStart, nameLen, line.length);
             const blockRange: Range = {
                 start: { line: i, character: 0 },
                 end: { line: i, character: line.length }
             };
 
             currentEnumeration = {
-                name,
+                name: displayName,
                 kind: SymbolKind.Enum,
                 range: blockRange,
                 selectionRange,
@@ -173,6 +189,68 @@ export function handleDocumentSymbol(
         // End of enumeration
         if (trimmedLine.match(/^EndEnumeration\b/i)) {
             currentEnumeration = null;
+            continue;
+        }
+
+        // Macro definition
+        // Parameterless macros (no '(' after name)
+        // are also valid in PureBasic.
+        const macroMatch = trimmedLine.match(/^Macro\s+(\w+)/i);
+        if (macroMatch) {
+            const name = macroMatch[1];
+            const nameStart = safeIndexOf(line, name);
+            const selectionRange = createSafeRange(i, nameStart, name.length, line.length);
+            const blockRange: Range = {
+                start: { line: i, character: 0 },
+                end: { line: i, character: line.length }
+            };
+
+            const macroSymbol: DocumentSymbol = {
+                name: `${name} [Macro]`,
+                kind: SymbolKind.Function,
+                range: blockRange,
+                selectionRange,
+                children: [],
+                detail: 'Macro'
+            };
+
+            if (currentModule) {
+                currentModule.children!.push(macroSymbol);
+            } else {
+                symbols.push(macroSymbol);
+            }
+            continue;
+        }
+
+        // End of Macro
+        if (trimmedLine.match(/^EndMacro\b/i)) {
+            continue;
+        }
+
+        // Prototype / PrototypeC definition
+        const protoMatch = trimmedLine.match(/^Prototype(?:C)?(?:\.(\w+))?\s+(\w+)\s*\(/i);
+        if (protoMatch) {
+            const returnType = protoMatch[1];
+            const name       = protoMatch[2];
+            const displayName = returnType ? `${name}() : ${returnType}` : `${name}()`;
+            const nameStart = safeIndexOf(line, name);
+            const selectionRange = createSafeRange(i, nameStart, name.length, line.length);
+            const declarationRange = createLineRange(i, line.length);
+
+            const protoSymbol: DocumentSymbol = {
+                name: displayName,
+                kind: SymbolKind.Function,
+                range: declarationRange,
+                selectionRange,
+                detail: 'Prototype'
+            };
+            nonExpandableSymbols.add(protoSymbol);
+
+            if (currentModule) {
+                currentModule.children!.push(protoSymbol);
+            } else {
+                symbols.push(protoSymbol);
+            }
             continue;
         }
 
@@ -265,7 +343,7 @@ export function handleDocumentSymbol(
         }
 
         // Global variables
-        const globalMatch = trimmedLine.match(/^(Global|Protected|Static)\s+(?:\w+\s+)?(\*?\w+)(?:\.(\w+))?/i);
+        const globalMatch = trimmedLine.match(/^(Global|Protected|Static|Threaded|Define|Dim)\s+(?:\w+\s+)?(\*?\w+)(?:\.(\w+))?/i);
         if (globalMatch) {
             const scope = globalMatch[1];
             const name = globalMatch[2];
@@ -297,33 +375,51 @@ export function handleDocumentSymbol(
 
         // Structure members
         if (currentStructure) {
-            const memberMatch = trimmedLine.match(/^(\*?\w+)(?:\.(\w+))?/);
-            if (memberMatch && !trimmedLine.match(/^(Global|Protected|Static|Procedure|EndStructure|;)/i)) {
-                const name = memberMatch[1];
-                const type = memberMatch[2] || 'unknown';
+            // Array/List/Map collection members have a leading keyword;
+            // extract the actual member name from the second word.
+            const collectionMember = trimmedLine.match(/^(?:Array|List|Map)\s+\*?(\w+)(?:\.(\w+))?/i);
+            if (collectionMember) {
+                const name = collectionMember[1];
+                const type = collectionMember[2] || 'unknown';
                 const displayName = `${name} : ${type}`;
                 const nameStart = safeIndexOf(line, name);
                 const selectionRange = createSafeRange(i, nameStart, name.length, line.length);
+                const blockRange: Range = { start: { line: i, character: 0 }, end: { line: i, character: line.length } };
+                currentStructure.children!.push({ name: displayName, kind: SymbolKind.Field, range: blockRange, selectionRange });
+            } else {
+                // Exclusion list 
+                const memberMatch = trimmedLine.match(/^(\*?\w+)(?:\.(\w+))?/);
+                if (memberMatch && !trimmedLine.match(/^(Global|Protected|Static|Procedure|EndStructure|Array|List|Map|Enumeration|Interface|Declare|Structure|Macro|Prototype|;)/i)) {
+                    const name = memberMatch[1];
+                    const type = memberMatch[2] || 'unknown';
+                    const displayName = `${name} : ${type}`;
+                    const nameStart = safeIndexOf(line, name);
+                    const selectionRange = createSafeRange(i, nameStart, name.length, line.length);
+                    const blockRange: Range = { start: { line: i, character: 0 }, end: { line: i, character: line.length } };
+                    currentStructure.children!.push({ name: displayName, kind: SymbolKind.Field, range: blockRange, selectionRange });
+                }
+            }
+        }
 
-                const blockRange: Range = {
-                    start: { line: i, character: 0 },
-                    end: { line: i, character: line.length }
-                };
-
-                const memberSymbol: DocumentSymbol = {
-                    name: displayName,
-                    kind: SymbolKind.Field,
-                    range: blockRange,
-                    selectionRange
-                };
-
-                currentStructure.children!.push(memberSymbol);
+        // Interface methods as children
+        // tracked with SymbolKind.Method.
+        // PureBasic interface method syntax: MethodName[.ReturnType]([params])
+        if (currentInterface) {
+            const methodMatch = trimmedLine.match(/^(\w+)(?:\.(\w+))?\s*\(/);
+            if (methodMatch && !trimmedLine.match(/^(EndInterface|;)/i)) {
+                const name = methodMatch[1];
+                const returnType = methodMatch[2];
+                const displayName = returnType ? `${name}() : ${returnType}` : `${name}()`;
+                const nameStart = safeIndexOf(line, name);
+                const selectionRange = createSafeRange(i, nameStart, name.length, line.length);
+                const blockRange: Range = { start: { line: i, character: 0 }, end: { line: i, character: line.length } };
+                currentInterface.children!.push({ name: displayName, kind: SymbolKind.Method, range: blockRange, selectionRange });
             }
         }
 
         // Local variables (within a procedure)
         if (currentProcedure) {
-            const localVarMatch = trimmedLine.match(/^(Protected|Static|Define|Dim)\s+(?:\w+\s+)?(\*?\w+)(?:\.(\w+))?/i);
+            const localVarMatch = trimmedLine.match(/^(Protected|Static|Define|Dim|Shared)\s+(?:\w+\s+)?(\*?\w+)(?:\.(\w+))?/i);
             if (localVarMatch) {
                 const scope = localVarMatch[1];
                 const name = localVarMatch[2];
@@ -391,7 +487,12 @@ function updateSymbolRanges(symbols: DocumentSymbol[], lines: string[], nonExpan
         } else if (symbol.kind === SymbolKind.Enum) {
             updateSymbolEnd(symbol, lines, /^EndEnumeration\b/i);
         } else if (symbol.kind === SymbolKind.Function && !nonExpandableSymbols.has(symbol)) {
-            updateSymbolEnd(symbol, lines, /^EndProcedure\b/i);
+            // Macro symbols use EndMacro; Procedure symbols use EndProcedure.
+            if (symbol.detail === 'Macro') {
+                updateSymbolEnd(symbol, lines, /^EndMacro\b/i);
+            } else {
+                updateSymbolEnd(symbol, lines, /^EndProcedure\b/i);
+            }
         }
 
         // Recursively update sub-symbols
