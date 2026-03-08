@@ -83,17 +83,17 @@ function getWordAtPosition(text: string, position: Position): string | null {
     const line = lines[position.line];
     const char = position.character;
 
-    // Find word boundary (support :: syntax)
+    // Find word boundary (support :: syntax and # prefix for constants).
     let start = char;
     let end = char;
 
-    // Search forward to find word start
-    while (start > 0 && /[a-zA-Z0-9_:]/.test(line[start - 1])) {
+    // Search backward to find word start
+    while (start > 0 && /[a-zA-Z0-9_:#]/.test(line[start - 1])) {
         start--;
     }
 
-    // Search backward to find word end
-    while (end < line.length && /[a-zA-Z0-9_:]/.test(line[end])) {
+    // Search forward to find word end
+    while (end < line.length && /[a-zA-Z0-9_:#]/.test(line[end])) {
         end++;
     }
 
@@ -135,18 +135,12 @@ function getModuleFunctionFromPosition(text: string, position: Position): {
     const line = lines[position.line];
     const char = position.character;
 
-    // Find module call syntax Module::Function
-    const beforeCursor = line.substring(0, char);
-    const afterCursor = line.substring(char);
-
-    const fullContext = beforeCursor + afterCursor;
-    const moduleMatch = fullContext.match(/(\w+)::(\w+)/);
-
-    if (moduleMatch) {
-        // Check if cursor is on this module call
-        const matchStart = line.indexOf(moduleMatch[0]);
-        const matchEnd = matchStart + moduleMatch[0].length;
-
+    //  uses a /g exec-loop to check every occurrence against the cursor position.
+    const re = /(\w+)::(\w+)/g;
+    let moduleMatch: RegExpExecArray | null;
+    while ((moduleMatch = re.exec(line)) !== null) {
+        const matchStart = moduleMatch.index;
+        const matchEnd   = matchStart + moduleMatch[0].length;
         if (char >= matchStart && char <= matchEnd) {
             return {
                 moduleName: moduleMatch[1],
@@ -208,7 +202,7 @@ function findModuleFunctionReferences(
 
             // Find Procedure definition inside module
             if (includeDeclaration && inModule) {
-                const procMatch = line.match(new RegExp(`^\\s*Procedure(?:\\.\\w+)?\\s+(${safeFn})\\s*\\(`, 'i'));
+                const procMatch = line.match(new RegExp(`^\\s*Procedure(?:C|DLL|CDLL)?(?:\\.\\w+)?\\s+(${safeFn})\\s*\\(`, 'i'));
                 if (procMatch) {
                     const startChar = line.indexOf(procMatch[1]);
                     references.push({
@@ -326,11 +320,13 @@ function findDefinitionReference(
 ): Location | null {
     const safeWord = escapeRegExp(word);
     const patterns = [
-        new RegExp(`^Procedure(?:\\.\\w+)?\\s+(${safeWord})\\s*\\(`, 'i'),
+        new RegExp(`^Procedure(?:C|DLL|CDLL)?(?:\\.\\w+)?\\s+(${safeWord})\\s*\\(`, 'i'),
+        new RegExp(`^Macro\\s+(${safeWord})\\b`, 'i'),
+        new RegExp(`^Prototype(?:C)?(?:\\.\\w+)?\\s+(${safeWord})\\s*\\(`, 'i'),
         new RegExp(`^Structure\\s+(${safeWord})\\b`, 'i'),
         new RegExp(`^Interface\\s+(${safeWord})\\b`, 'i'),
-        new RegExp(`^Enumeration\\s+(${safeWord})\\b`, 'i'),
-        new RegExp(`^(?:Global|Protected|Static|Define|Dim)\\s+(?:\\w+\\s+)?\\*?(${safeWord})(?:\\.\\w+|\\[|\\s|$)`, 'i'),
+        new RegExp(`^Enumeration(?:Binary)?\\s+(${safeWord})\\b`, 'i'),
+        new RegExp(`^(?:Global|Protected|Static|Define|Dim|Shared|Threaded)\\s+(?:\\w+\\s+)?\\*?(${safeWord})(?:\\.\\w+|\\[|\\s|$)`, 'i'),
     ];
 
     for (const pattern of patterns) {
@@ -405,19 +401,18 @@ function getModuleSymbolFromPosition(text: string, position: Position): { module
     if (position.line >= lines.length) return null;
     const line = lines[position.line];
     const char = position.character;
-    const before = line.substring(0, char);
-    const after = line.substring(char);
-    const full = before + after;
-    let m = full.match(/(\w+)::#(\w+)/);
-    if (m) {
-        const start = line.indexOf(m[0]);
-        const end = start + m[0].length;
+
+    //  Pass 1: prefer constant form  Module::#Ident
+    const constRe = /(\w+)::#(\w+)/g;
+    let m: RegExpExecArray | null;
+    while ((m = constRe.exec(line)) !== null) {
+        const start = m.index, end = start + m[0].length;
         if (char >= start && char <= end) return { moduleName: m[1], ident: m[2] };
     }
-    m = full.match(/(\w+)::(\w+)/);
-    if (m) {
-        const start = line.indexOf(m[0]);
-        const end = start + m[0].length;
+    // Pass 2: plain form  Module::Ident
+    const funcRe = /(\w+)::(\w+)/g;
+    while ((m = funcRe.exec(line)) !== null) {
+        const start = m.index, end = start + m[0].length;
         if (char >= start && char <= end) return { moduleName: m[1], ident: m[2] };
     }
     return null;
@@ -493,7 +488,7 @@ function findModuleSymbolReferences(
             const defMatchers = [
                 new RegExp(`^Structure\\s+(${safeIdent})\\b`, 'i'),
                 new RegExp(`^Interface\\s+(${safeIdent})\\b`, 'i'),
-                new RegExp(`^Enumeration\\s+(${safeIdent})\\b`, 'i'),
+                new RegExp(`^Enumeration(?:Binary)?\\s+(${safeIdent})\\b`, 'i'),
             ];
             for (const r of defMatchers) {
                 const mm = trimmed.match(r);
