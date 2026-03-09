@@ -25,7 +25,7 @@ export interface ProjectContextLspPayload {
 
     targetName?: string;
 
-    projectFiles?: string[];
+    projectFiles?: { fsPath: string; scan: boolean }[];
 
     /** Full parsed project model forwarded from pb-project-files. null = explicitly cleared. */
     project?: PbpProject | null;
@@ -52,6 +52,11 @@ export interface ProjectContext {
     projectFiles: Set<string>;
     /** file:// URIs of all project files – derived from projectFiles for fast lookup. */
     projectFileUris: Set<string>;
+
+    /** Subset of projectFiles where scan === true. */
+    scanFiles: Set<string>;
+    /** file:// URIs of scan-enabled project files. */
+    scanFileUris: Set<string>;
 
     /** Full parsed project model (from pb-project-files, via LSP notification). */
     project?: PbpProject;
@@ -82,10 +87,11 @@ export class ProjectManager {
         this.fileToProject.clear();
         this.fileScope.clear();
         const ctx = this.getOrCreateProject(ProjectManager.FALLBACK_KEY);
-        ctx.projectFiles  = new Set(payload.projectFiles?.filter(Boolean) ?? []);
-        ctx.projectFileUris = new Set(
-            (payload.projectFiles ?? []).filter(Boolean).map(p => URI.file(p).toString())
-        );
+        const entries = payload.projectFiles?.filter(e => Boolean(e?.fsPath)) ?? [];
+        ctx.projectFiles    = new Set(entries.map(e => e.fsPath));
+        ctx.projectFileUris = new Set(entries.map(e => URI.file(e.fsPath).toString()));
+        ctx.scanFiles       = new Set(entries.filter(e => e.scan).map(e => e.fsPath));
+        ctx.scanFileUris    = new Set(entries.filter(e => e.scan).map(e => URI.file(e.fsPath).toString()));
         ctx.lastModified = Date.now();
         return;
     }
@@ -101,10 +107,11 @@ export class ProjectManager {
         ctx.targetName = payload.targetName;
 
         if (Array.isArray(payload.projectFiles)) {
-            ctx.projectFiles = new Set(payload.projectFiles.filter(Boolean));
-            ctx.projectFileUris = new Set(
-                payload.projectFiles.filter(Boolean).map(p => URI.file(p).toString())
-            );
+            const entries = payload.projectFiles.filter(e => Boolean(e?.fsPath));
+            ctx.projectFiles    = new Set(entries.map(e => e.fsPath));
+            ctx.projectFileUris = new Set(entries.map(e => URI.file(e.fsPath).toString()));
+            ctx.scanFiles       = new Set(entries.filter(e => e.scan).map(e => e.fsPath));
+            ctx.scanFileUris    = new Set(entries.filter(e => e.scan).map(e => URI.file(e.fsPath).toString()));
         }
 
         if (payload.project !== undefined) {
@@ -153,9 +160,20 @@ export class ProjectManager {
     }
 
     /**
-     * Returns the project-related file list for the project associated with the given document.
+     * Returns only scan-enabled project files for the project associated with the given document.
+     * Use this for symbol indexing and LSP search operations.
      */
     public getProjectFilesForDocument(documentUri: string): string[] {
+        const projectKey = this.getProjectKeyForDocument(documentUri);
+        const ctx = projectKey ? this.projects.get(projectKey) : undefined;
+        return ctx ? Array.from(ctx.scanFiles) : [];
+    }
+
+    /**
+     * Returns all project files (regardless of scan flag) for the project associated
+     * with the given document.
+     */
+    public getAllProjectFilesForDocument(documentUri: string): string[] {
         const projectKey = this.getProjectKeyForDocument(documentUri);
         const ctx = projectKey ? this.projects.get(projectKey) : undefined;
         return ctx ? Array.from(ctx.projectFiles) : [];
@@ -231,6 +249,8 @@ export class ProjectManager {
             projectFileUri,
             projectFiles: new Set(),
             projectFileUris: new Set(),
+            scanFiles: new Set(),
+            scanFileUris: new Set(),
             lastModified: Date.now(),
         };
 
