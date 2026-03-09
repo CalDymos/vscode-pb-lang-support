@@ -1,101 +1,101 @@
 /**
- * 代码补全相关类型定义
+ * Type definitions for the code completion subsystem
  */
-
-import { CompletionItem, CompletionItemKind, Position, TextDocument } from 'vscode-languageserver';
+import { TextDocument } from 'vscode-languageserver-textdocument';
+import { CompletionItem, CompletionItemKind, Position } from 'vscode-languageserver';
 import { PureBasicSymbol, SymbolKind } from '../../symbols/types';
 
-/** 补全上下文信息 */
+/** Completion context — all information available at the cursor position */
 export interface CompletionContext {
-    /** 文档内容 */
+    /** Source document */
     document: TextDocument;
-    /** 当前位置 */
+    /** Cursor position */
     position: Position;
-    /** 当前行文本 */
+    /** Full text of the current line */
     lineText: string;
-    /** 当前单词 */
+    /** Word (identifier fragment) under the cursor */
     currentWord: string;
-    /** 前一个单词 */
+    /** First word preceding the cursor on the same line */
     previousWord: string;
-    /** 行前缀文本 */
+    /** Line text from the start up to the cursor */
     linePrefix: string;
-    /** 是否在引号内 */
+    /** True when the cursor is inside a string literal */
     isInQuotes: boolean;
-    /** 是否在注释中 */
+    /** True when the cursor is inside a comment */
     isInComment: boolean;
-    /** 行号 */
+    /** 0-based line number of the cursor */
     lineNumber: number;
 }
 
-/** 补全提取器接口 */
+/** Extractor — retrieves PureBasicSymbol candidates for a given context */
 export interface CompletionExtractor {
-    /** 提取器名称 */
+    /** Unique name identifying this extractor */
     name: string;
-    /** 是否支持给定的上下文 */
+    /** Returns true when this extractor can provide candidates for the given context */
     supports(context: CompletionContext): boolean;
-    /** 提取符号 */
+    /** Returns matching symbols for the given context */
     extract(context: CompletionContext): Promise<PureBasicSymbol[]>;
 }
 
-/** 补全处理器接口 */
+/** Handler — converts PureBasicSymbol candidates into LSP CompletionItems */
 export interface CompletionHandler {
-    /** 处理器名称 */
+    /** Unique name identifying this handler */
     name: string;
-    /** 处理的符号类型 */
+    /** Symbol kinds this handler is responsible for */
     symbolTypes: SymbolKind[];
-    /** 处理补全项 */
+    /** Converts the given symbols into LSP CompletionItem objects */
     handle(context: CompletionContext, symbols: PureBasicSymbol[]): Promise<CompletionItem[]>;
 }
 
-/** 补全配置 */
+/** Configuration options for the completion provider */
 export interface CompletionConfig {
-    /** 最大补全项数量 */
+    /** Maximum number of items returned in a single completion response */
     maxItems: number;
-    /** 是否启用智能过滤 */
+    /** Enable context-aware filtering of candidates */
     enableSmartFilter: boolean;
-    /** 是否包含内置函数 */
+    /** Include PureBasic built-in functions in the completion list */
     includeBuiltins: boolean;
-    /** 是否包含文档符号 */
+    /** Include symbols extracted from the current document */
     includeDocumentSymbols: boolean;
-    /** 是否包含模块符号 */
+    /** Include symbols exported from modules */
     includeModuleSymbols: boolean;
 }
 
-/** 补全统计信息 */
+/** Runtime statistics collected by the completion provider */
 export interface CompletionStats {
-    /** 总请求数 */
+    /** Total number of completion requests handled */
     totalRequests: number;
-    /** 缓存命中数 */
+    /** Number of requests served from cache */
     cacheHits: number;
-    /** 平均响应时间 */
+    /** Average response time in milliseconds */
     averageResponseTime: number;
-    /** 补全项生成数 */
+    /** Total number of completion items generated */
     itemsGenerated: number;
-    /** 错误数 */
+    /** Number of errors encountered during completion */
     errors: number;
 }
 
-/** 符号提取结果 */
+/** Aggregated result from all registered extractors */
 export interface SymbolExtractResult {
-    /** 文档符号 */
+    /** Symbols extracted from the current document */
     documentSymbols: PureBasicSymbol[];
-    /** 模块符号 */
+    /** Symbols exported from modules */
     moduleSymbols: PureBasicSymbol[];
-    /** 结构体符号 */
+    /** Structure-type symbols */
     structureSymbols: PureBasicSymbol[];
-    /** 内置符号 */
+    /** Built-in function and keyword symbols */
     builtinSymbols: PureBasicSymbol[];
 }
 
-/** 补全项工厂配置 */
+/** Configuration for CompletionFactory — controls detail level of generated items */
 export interface CompletionFactoryConfig {
-    /** 是否包含文档 */
+    /** Attach documentation strings to generated items */
     includeDocumentation: boolean;
-    /** 是否包含类型信息 */
+    /** Attach type information (detail field) to generated items */
     includeTypeInfo: boolean;
-    /** 是否包含模块信息 */
+    /** Attach module origin to generated items */
     includeModuleInfo: boolean;
-    /** 排序权重 */
+    /** Sort weights controlling item ordering by origin */
     sortWeights: {
         local: number;
         module: number;

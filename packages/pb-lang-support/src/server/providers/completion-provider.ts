@@ -15,7 +15,7 @@ import {keywords, types, typeSuffixes, windowsApiFunctions, parsePureBasicConsta
 import { allBuiltinNames, findBuiltin } from '../utils/builtin-functions';
 import { stripInlineComment } from '../utils/pb-lexer-utils';
 import { ApiFunctionListing } from '../utils/api-function-listing';
-import { getModuleFunctionCompletions as getModuleFunctions, getAvailableModules, getModuleExports } from '../utils/module-resolver';
+import { getAvailableModules, getModuleExports } from '../utils/module-resolver';
 import { analyzeScopesAndVariables, getActiveUsedModules, VariableInfo } from '../utils/scope-manager';
 import { parseIncludeFiles } from '../utils/module-resolver';
 import * as fs from 'fs';
