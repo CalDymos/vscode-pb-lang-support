@@ -6,10 +6,7 @@
 import { DiagnosticSeverity } from 'vscode-languageserver/node';
 import { ValidatorFunction } from './types';
 import { keywords, parsePureBasicConstantDefinition } from '../utils/constants';
-import { allBuiltinNames } from '../utils/builtin-functions';
-
-/** Flat Set of all built-in names for O(1) lookup in validateGeneric. */
-const builtinNameSet = new Set(allBuiltinNames());
+import { builtinFunctionMap } from '../utils/builtin-functions';
 
 /**
  * Validates generic syntax rules
@@ -61,7 +58,7 @@ export const validateGeneric: ValidatorFunction = (
             line.startsWith('*') ||         // pointer variable (e.g., *Ptr in structures)
             line.startsWith('@') ||         // address operator
             keywords.some(kw => line.startsWith(kw)) ||   // starts with a keyword
-            [...line.matchAll(/\b\w+\b/g)].some(m => builtinNameSet.has(m[0])); // contains a built-in
+            [...line.matchAll(/\b\w+\b/g)].some(m => builtinFunctionMap.has(m[0].toLowerCase())); // contains a built-in
 
         if (!isValidSpecialCase) {
             diagnostics.push({
