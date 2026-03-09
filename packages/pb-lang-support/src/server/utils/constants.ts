@@ -3,23 +3,135 @@
  * Contains keywords, built-in types, built-in functions, etc.
  */
 
-export const keywords = [
-    'If', 'Then', 'Else', 'ElseIf', 'EndIf', 'For', 'Next', 'Step', 'To',
-    'While', 'Wend', 'Repeat', 'Until', 'ForEver', 'Select', 'Case', 'Default', 'EndSelect',
-    'Break', 'Continue', 'Goto', 'Gosub', 'Return', 'End',
-    'Procedure', 'ProcedureC', 'ProcedureDLL', 'ProcedureCDLL',
-    'EndProcedure', 'ProcedureReturn', 'Declare', 'DeclareC', 'DeclareDLL', 'DeclareCDLL', 'Prototype', 'Interface', 'EndInterface',
-    'Structure', 'EndStructure', 'Enumeration', 'EndEnumeration', 'Data', 'Read',
-    'Restore', 'NewList', 'AddElement', 'InsertElement', 'DeleteElement',
-    'ClearList', 'ListIndex', 'ResetList', 'NextElement', 'PreviousElement',
-    'ForEach', 'With', 'EndWith', 'Module', 'EndModule', 'DeclareModule',
-    'EndDeclareModule', 'UseModule', 'UnuseModule', 'EnableExplicit', 'DisableExplicit'
+/**
+ * PureBasic keyword list (structural / flow-control keywords that are not
+ * in pb-builtin-functions.json because they are language constructs, not
+ * callable functions).
+ * 
+ * Single source of truth for keyword names and documentation.
+ *
+ * Consumers that only need names use the derived `keywords` array below.
+ * Consumers that need descriptions (e.g. symbol-extractor) import 'pbKeywordDefinitions' directly.
+ */
+export const pbKeywordDefinitions: ReadonlyArray<{ name: string; documentation: string }> = [
+    { name: 'If',                documentation: 'Conditional statement' },
+    { name: 'Else',              documentation: 'Else branch' },
+    { name: 'ElseIf',            documentation: 'Else-if branch' },
+    { name: 'EndIf',             documentation: 'End of If block' },
+    { name: 'For',               documentation: 'For … Next loop' },
+    { name: 'ForEach',           documentation: 'ForEach … Next loop (linked list / map)' },
+    { name: 'Next',              documentation: 'End of For / ForEach loop' },
+    { name: 'While',             documentation: 'While … Wend loop' },
+    { name: 'Wend',              documentation: 'End of While loop' },
+    { name: 'Repeat',            documentation: 'Repeat … Until loop' },
+    { name: 'Until',             documentation: 'Condition that ends Repeat loop' },
+    { name: 'ForEver',           documentation: 'Infinite loop (use Break to exit)' },
+    { name: 'Break',             documentation: 'Exit the innermost loop' },
+    { name: 'Continue',          documentation: 'Skip to next loop iteration' },
+    { name: 'Select',            documentation: 'Select … EndSelect multi-branch' },
+    { name: 'Case',              documentation: 'Case branch inside Select' },
+    { name: 'Default',           documentation: 'Default branch inside Select' },
+    { name: 'EndSelect',         documentation: 'End of Select block' },
+    { name: 'With',              documentation: 'With … EndWith shorthand for structure access' },
+    { name: 'EndWith',           documentation: 'End of With block' },
+    { name: 'Procedure',         documentation: 'Define a procedure' },
+    { name: 'ProcedureC',        documentation: 'Define a C-calling-convention procedure' },
+    { name: 'ProcedureDLL',      documentation: 'Define a DLL-exported procedure' },
+    { name: 'ProcedureCDLL',     documentation: 'Define a C-calling-convention DLL procedure' },
+    { name: 'EndProcedure',      documentation: 'End of Procedure block' },
+    { name: 'ProcedureReturn',   documentation: 'Return a value from a procedure' },
+    { name: 'Declare',           documentation: 'Forward-declare a procedure' },
+    { name: 'DeclareC',          documentation: 'Forward-declare a C-convention procedure' },
+    { name: 'DeclareDLL',        documentation: 'Forward-declare a DLL procedure' },
+    { name: 'DeclareCDLL',       documentation: 'Forward-declare a C-convention DLL procedure' },
+    { name: 'Macro',             documentation: 'Define a macro' },
+    { name: 'EndMacro',          documentation: 'End of Macro block' },
+    { name: 'Prototype',         documentation: 'Define a function pointer prototype' },
+    { name: 'PrototypeC',        documentation: 'Define a C-convention function pointer prototype' },
+    { name: 'Structure',         documentation: 'Define a structure' },
+    { name: 'EndStructure',      documentation: 'End of Structure block' },
+    { name: 'StructureUnion',    documentation: 'Union inside a Structure' },
+    { name: 'EndStructureUnion', documentation: 'End of StructureUnion block' },
+    { name: 'Interface',         documentation: 'Define an OOP interface' },
+    { name: 'EndInterface',      documentation: 'End of Interface block' },
+    { name: 'Enumeration',       documentation: 'Define an enumeration' },
+    { name: 'EnumerationBinary', documentation: 'Define a binary (power-of-two) enumeration' },
+    { name: 'EndEnumeration',    documentation: 'End of Enumeration block' },
+    { name: 'DeclareModule',     documentation: 'Declare the public interface of a module' },
+    { name: 'EndDeclareModule',  documentation: 'End of DeclareModule block' },
+    { name: 'Module',            documentation: 'Define a module implementation' },
+    { name: 'EndModule',         documentation: 'End of Module block' },
+    { name: 'UseModule',         documentation: 'Import module symbols into the current scope' },
+    { name: 'UnuseModule',       documentation: 'Remove module symbols from the current scope' },
+    { name: 'Global',            documentation: 'Declare a global variable' },
+    { name: 'Protected',         documentation: 'Declare a procedure-local variable' },
+    { name: 'Static',            documentation: 'Declare a static (persistent) local variable' },
+    { name: 'Shared',            documentation: 'Share a global variable inside a procedure' },
+    { name: 'Threaded',          documentation: 'Declare a thread-local variable' },
+    { name: 'Define',            documentation: 'Define the default type for untyped variables' },
+    { name: 'Dim',               documentation: 'Declare an array' },
+    { name: 'ReDim',             documentation: 'Resize an existing array' },
+    { name: 'NewList',           documentation: 'Declare a linked list' },
+    { name: 'NewMap',            documentation: 'Declare a map (hash table)' },
+    { name: 'DataSection',       documentation: 'Start a data section' },
+    { name: 'EndDataSection',    documentation: 'End of DataSection block' },
+    { name: 'Data',              documentation: 'Inline data values' },
+    { name: 'Read',              documentation: 'Read the next Data value into a variable' },
+    { name: 'Restore',           documentation: 'Reset the Data read pointer to a label' },
+    { name: 'Goto',              documentation: 'Unconditional jump to a label' },
+    { name: 'Gosub',             documentation: 'Call a subroutine label' },
+    { name: 'Return',            documentation: 'Return from a Gosub subroutine' },
+    { name: 'End',               documentation: 'Terminate the program' },
+    { name: 'Import',            documentation: 'Import symbols from an external library' },
+    { name: 'EndImport',         documentation: 'End of Import block' },
+    { name: 'ImportC',           documentation: 'Import C-convention symbols from an external library' },
+    { name: 'IncludeFile',       documentation: 'Include a source file at compile time' },
+    { name: 'XIncludeFile',      documentation: 'Include a source file only once' },
+    { name: 'IncludePath',       documentation: 'Add a directory to the include search path' },
+    { name: 'CompilerIf',        documentation: 'Conditional compilation – if' },
+    { name: 'CompilerElse',      documentation: 'Conditional compilation – else' },
+    { name: 'CompilerElseIf',    documentation: 'Conditional compilation – else if' },
+    { name: 'CompilerEndIf',     documentation: 'End of CompilerIf block' },
+    { name: 'CompilerSelect',    documentation: 'Conditional compilation – select' },
+    { name: 'CompilerCase',      documentation: 'Conditional compilation – case' },
+    { name: 'CompilerDefault',   documentation: 'Conditional compilation – default' },
+    { name: 'CompilerEndSelect', documentation: 'End of CompilerSelect block' },
+    { name: 'CompilerError',     documentation: 'Emit a compile-time error message' },
+    { name: 'CompilerWarning',   documentation: 'Emit a compile-time warning message' },
+    { name: 'Debug',             documentation: 'Output a debug message (statement, not a function)' },
+    { name: 'EnableExplicit',    documentation: 'Require all variables to be declared before use' },
+    { name: 'DisableExplicit',   documentation: 'Allow implicit variable declarations' },
+    { name: 'EnableASM',         documentation: 'Allow inline assembler' },
+    { name: 'DisableASM',        documentation: 'Disallow inline assembler' },
+    { name: 'Align',             documentation: 'Structure alignment modifier' },
+    { name: 'And',               documentation: 'Logical/bitwise AND keyword' },
+    { name: 'Array',             documentation: 'Array keyword for parameters / structure fields' },
+    { name: 'As',                documentation: 'Rename imported symbol / alias in declarations' },
+    { name: 'CallDebugger',      documentation: 'Invoke the debugger immediately' },
+    { name: 'DebugLevel',        documentation: 'Set the current debug output level' },
+    { name: 'DisableDebugger',   documentation: 'Disable debugger checks for following code' },
+    { name: 'DisablePureLibrary',documentation: 'Disable a PureLibrary for this program' },
+    { name: 'EnableDebugger',    documentation: 'Enable debugger checks for following code' },
+    { name: 'EndHeaderSection',  documentation: 'End of HeaderSection block' },
+    { name: 'Extends',           documentation: 'Extend a structure or interface' },
+    { name: 'FakeReturn',        documentation: 'Simulate Return when leaving a Gosub via Goto' },
+    { name: 'HeaderSection',     documentation: 'Insert C/ASM code outside main()' },
+    { name: 'IncludeBinary',     documentation: 'Include binary data at compile time' },
+    { name: 'List',              documentation: 'List keyword for parameters / structure fields' },
+    { name: 'MacroExpandedCount',documentation: 'Macro expansion counter' },
+    { name: 'Map',               documentation: 'Map keyword for parameters / structure fields' },
+    { name: 'Not',               documentation: 'Logical/bitwise NOT keyword' },
+    { name: 'Or',                documentation: 'Logical/bitwise OR keyword' },
+    { name: 'Runtime',           documentation: 'Expose objects to runtime lookup' },
+    { name: 'Step',              documentation: 'Step value in For / Enumeration' },
+    { name: 'Swap',              documentation: 'Swap two variables or elements' },
+    { name: 'To',                documentation: 'Upper bound / range keyword' },
+    { name: 'UndefineMacro',     documentation: 'Remove a previously defined macro' },
+    { name: 'XOr',               documentation: 'Logical/bitwise XOR keyword' },
 ];
 
-export const types = [
-    'Integer', 'Long', 'Word', 'Byte', 'Character', 'String', 'FixedString',
-    'Float', 'Double', 'Quad', 'Ascii', 'Unicode'
-];
+/** Flat name-only list derived from PB_KEYWORDS – for consumers that only need names. */
+export const keywords: readonly string[] = pbKeywordDefinitions.map(keyword => keyword.name);
 
 export const builtInFunctions = [
     'OpenWindow', 'CreateGadgetList', 'EventWindow', 'EventGadget', 'EventMenu',
@@ -40,29 +152,8 @@ export const builtInFunctions = [
     'PathRequester', 'ColorRequester', 'FontRequester'
 ];
 
-// Array functions
-export const arrayFunctions = [
-    'ArraySize', 'FreeArray', 'ClearArray', 'CopyArray', 'ResizeArray',
-    'SortArray', 'SortStructuredArray', 'RandomizeArray'
-];
-
-// List functions
-export const listFunctions = [
-    'NewList', 'AddElement', 'InsertElement', 'DeleteElement', 'ClearList',
-    'ListIndex', 'ListSize', 'ResetList', 'NextElement', 'PreviousElement',
-    'FirstElement', 'LastElement', 'SelectElement', 'ChangeCurrentElement',
-    'MoveElement', 'SwapElements', 'SortList', 'SortStructuredList',
-    'PushListPosition', 'PopListPosition', 'CopyList', 'FreeList'
-];
-
-// Map functions
-export const mapFunctions = [
-    'NewMap', 'DeleteMapElement', 'ClearMap', 'CopyMap', 'FreeMap',
-    'MapSize', 'AddMapElement', 'FindMapElement', 'NextMapElement',
-    'PreviousMapElement', 'ResetMap'
-];
-
-// Windows API functions
+// Minimal fallback list of common Windows API functions.
+// Used for completions when APIFunctionListing.txt is not configured or unavailable.
 export const windowsApiFunctions = [
     'MessageBox_', 'GetWindowText_', 'SetWindowText_', 'FindWindow_',
     'GetDesktopWindow_', 'GetForegroundWindow_', 'SetForegroundWindow_',
@@ -73,61 +164,9 @@ export const windowsApiFunctions = [
     'RegOpenKeyEx_', 'RegQueryValueEx_', 'RegSetValueEx_', 'RegCloseKey_'
 ];
 
-// Graphics and game-related functions
-export const graphicsFunctions = [
-    'InitSprite', 'LoadSprite', 'FreeSprite', 'SpriteWidth', 'SpriteHeight',
-    'DisplaySprite', 'DisplayTransparentSprite', 'RotateSprite', 'ZoomSprite',
-    'OpenScreen', 'CloseScreen', 'FlipBuffers', 'ClearScreen', 'ScreenOutput',
-    'Point', 'Line', 'Box', 'Circle', 'Ellipse', 'Plot', 'RGB', 'Red', 'Green', 'Blue',
-    'LoadImage', 'SaveImage', 'CreateImage', 'FreeImage', 'ImageOutput',
-    'ImageWidth', 'ImageHeight', 'GrabImage', 'DrawImage', 'DrawAlphaImage',
-    'InitSound', 'LoadSound', 'FreeSound', 'PlaySound', 'StopSound', 'SoundStatus',
-    'SoundVolume', 'SetSoundFrequency', 'GetSoundPosition', 'SetSoundPosition'
-];
-
-// Network functions
-export const networkFunctions = [
-    'InitNetwork', 'CreateNetworkServer', 'CreateNetworkClient', 'CloseNetworkServer',
-    'CloseNetworkClient', 'NetworkServerEvent', 'NetworkClientEvent',
-    'SendNetworkString', 'ReceiveNetworkString', 'SendNetworkData', 'ReceiveNetworkData',
-    'IPString', 'HostIP', 'GetClientIP'
-];
-
-// Database functions
-export const databaseFunctions = [
-    'OpenDatabase', 'CloseDatabase', 'DatabaseQuery', 'NextDatabaseRow',
-    'GetDatabaseString', 'GetDatabaseLong', 'GetDatabaseFloat', 'GetDatabaseDouble',
-    'SetDatabaseString', 'SetDatabaseLong', 'SetDatabaseFloat', 'SetDatabaseDouble',
-    'DatabaseUpdate', 'DatabaseColumnName', 'DatabaseColumns'
-];
-
-// Thread functions
-export const threadFunctions = [
-    'CreateThread', 'WaitThread', 'KillThread', 'ThreadID', 'IsThread',
-    'CreateMutex', 'LockMutex', 'UnlockMutex', 'FreeMutex',
-    'CreateSemaphore', 'SignalSemaphore', 'WaitSemaphore', 'FreeSemaphore'
-];
-
-// Merged list of all built-in functions
-export const allBuiltInFunctions = [
-    ...builtInFunctions,
-    ...arrayFunctions,
-    ...listFunctions,
-    ...mapFunctions,
-    ...graphicsFunctions,
-    ...networkFunctions,
-    ...databaseFunctions,
-    ...threadFunctions
-];
-
-// Common zero-parameter built-in functions (used to determine whether completion should insert () and not trigger parameter hints)
-export const zeroParamBuiltInFunctions = [
-    'EventWindow',
-    'EventGadget',
-    'EventMenu',
-    'WindowEvent',
-    'CountProgramParameters',
-    'GetCurrentDirectory'
+export const types = [
+    'Integer', 'Long', 'Word', 'Byte', 'Character', 'String', 
+    'Float', 'Double', 'Quad', 'Ascii', 'Unicode'
 ];
 
 // PureBasic type suffixes

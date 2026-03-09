@@ -12,10 +12,9 @@ import {
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import {
-    keywords, types, allBuiltInFunctions, arrayFunctions, listFunctions, mapFunctions,
-    windowsApiFunctions, graphicsFunctions, networkFunctions, databaseFunctions, threadFunctions,
-    zeroParamBuiltInFunctions, parsePureBasicConstantDefinition
+    keywords, types, windowsApiFunctions, parsePureBasicConstantDefinition
 } from '../utils/constants';
+import { allBuiltinNames, findBuiltin } from '../utils/builtin-functions';
 import { stripInlineComment } from '../utils/string-utils';
 import { ApiFunctionListing } from '../utils/api-function-listing';
 import { getModuleFunctionCompletions as getModuleFunctions, getAvailableModules, getModuleExports } from '../utils/module-resolver';
@@ -484,52 +483,25 @@ function handleCompletionInternal(
         }
     });
 
-    // Add built-in function completion
-    allBuiltInFunctions.forEach((func, index) => {
-        if (func.toLowerCase().startsWith(context.prefix.toLowerCase())) {
-            // Most built-in functions have parameters, so only insert function name and left parenthesis
-            // Let VS Code automatically show parameter hints
-            const hasZeroParams = zeroParamBuiltInFunctions.includes(func);
-            const insertText = hasZeroParams ? `${func}()` : `${func}(`;
+    // Add built-in function completion from pb-builtin-functions.json.
+    // hasZeroParams is derived from the JSON parameter list.
+    allBuiltinNames().forEach((func, index) => {
+        if (!func.toLowerCase().startsWith(context.prefix.toLowerCase())) return;
 
-            // Determine function type
-            let functionType = 'PureBasic Built-in Function';
-            let documentation = `PureBasic built-in function: ${func}()`;
+        const entry = findBuiltin(func)!;
+        const hasZeroParams = entry.parameters.length === 0;
+        const insertText = hasZeroParams ? `${func}()` : `${func}(`;
 
-            if (arrayFunctions.includes(func)) {
-                functionType = 'Array Function';
-                documentation = `Array function: ${func}() - Operations on arrays`;
-            } else if (listFunctions.includes(func)) {
-                functionType = 'List Function';
-                documentation = `List function: ${func}() - Operations on linked lists`;
-            } else if (mapFunctions.includes(func)) {
-                functionType = 'Map Function';
-                documentation = `Map function: ${func}() - Operations on associative arrays`;
-            } else if (graphicsFunctions.includes(func)) {
-                functionType = 'Graphics/Game Function';
-                documentation = `Graphics function: ${func}() - 2D graphics, sprites, sounds`;
-            } else if (networkFunctions.includes(func)) {
-                functionType = 'Network Function';
-                documentation = `Network function: ${func}() - Network communication`;
-            } else if (databaseFunctions.includes(func)) {
-                functionType = 'Database Function';
-                documentation = `Database function: ${func}() - Database operations`;
-            } else if (threadFunctions.includes(func)) {
-                functionType = 'Threading Function';
-                documentation = `Threading function: ${func}() - Multi-threading and synchronization`;
-            }
-
-            completionItems.push({
-                label: func,
-                kind: CompletionItemKind.Function,
-                data: 'builtin_' + index,
-                detail: functionType,
-                documentation: documentation,
-                insertText: insertText,
-                insertTextFormat: InsertTextFormat.PlainText,
-                command: hasZeroParams ? undefined : { command: 'editor.action.triggerParameterHints', title: 'Trigger Parameter Hints' }
-            });
-        }
+        completionItems.push({
+            label: func,
+            kind: CompletionItemKind.Function,
+            data: 'builtin_' + index,
+            detail: 'PureBasic Built-in Function',
+            documentation: entry.description,
+            insertText,
+            insertTextFormat: InsertTextFormat.PlainText,
+            command: hasZeroParams ? undefined : { command: 'editor.action.triggerParameterHints', title: 'Trigger Parameter Hints' }
+        });
     });
 
     // Add OS API function completion from PureBasic APIFunctionListing.txt (native API calls)
