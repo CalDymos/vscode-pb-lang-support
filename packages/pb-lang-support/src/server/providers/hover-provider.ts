@@ -13,7 +13,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { analyzeScopesAndVariables } from '../utils/scope-manager';
 import { getModuleExports } from '../utils/module-resolver';
 import { parsePureBasicConstantDefinition} from '../utils/constants';
-import { stripInlineComment, escapeRegExp, getWordAtPosition } from '../utils/string-utils';
+import { stripInlineComment, escapeRegExp, getWordAtPosition, normalizeConstantName } from '../utils/string-utils';
 import type { ApiFunctionListing } from '../utils/api-function-listing';
 import { findBuiltin } from '../utils/builtin-functions';
 
@@ -121,11 +121,6 @@ function getModuleExportHover(
     }
     return null;
 }
-
-function normalizeConstantName(name: string): string {
-    return name.replace(/\$$/, '').toLowerCase();
-}
-
 
 function getStructAccessFromPosition(line: string, character: number): { varName: string; memberName: string } | null {
     const re = /(\w+)\\(\w+)/g;

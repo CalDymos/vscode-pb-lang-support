@@ -14,26 +14,9 @@ import {
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { analyzeScopesAndVariables } from '../utils/scope-manager';
 import { parsePureBasicConstantDefinition, parsePureBasicConstantDeclaration, keywords, types } from '../utils/constants';
-import { escapeRegExp, getWordAtPosition } from '../utils/string-utils';
+import { escapeRegExp, getWordAtPosition, normalizeConstantName } from '../utils/string-utils';
 import { readFileIfExistsSync, resolveIncludePath, fsPathToUri, normalizeDirPath } from '../utils/fs-utils';
 import { getWorkspaceRootForUri } from '../indexer/workspace-index';
-
-/**
- * Normalizes a constant name.
- *
- * Removes an optional trailing `$` character
- * and converts the entire string to lowercase.
- *
- * @param name - The constant name to normalize.
- * @returns The cleaned and lowercased name.
- *
- * @example
- * normalizeConstantName("VALUE$") // "value"
- * normalizeConstantName("TEST")   // "test"
- */
-function normalizeConstantName(name: string): string {
-    return name.replace(/\$$/, '').toLowerCase();
-}
 
 /**
  * Preparing to rename - Checking if renaming is possible

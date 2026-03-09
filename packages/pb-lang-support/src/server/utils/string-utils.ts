@@ -177,3 +177,20 @@ export function getWordAtPosition(line: string, character: number): string | nul
 
     return line.substring(start, end);
 }
+
+/**
+ * Normalizes a constant name.
+ *
+ * Removes an optional trailing `$` character
+ * and converts the entire string to lowercase.
+ *
+ * @param name - The constant name to normalize.
+ * @returns The cleaned and lowercased name.
+ *
+ * @example
+ * normalizeConstantName("VALUE$") // "value"
+ * normalizeConstantName("TEST")   // "test"
+ */
+export function normalizeConstantName(name: string): string {
+    return name.replace(/\$$/, '').toLowerCase();
+}

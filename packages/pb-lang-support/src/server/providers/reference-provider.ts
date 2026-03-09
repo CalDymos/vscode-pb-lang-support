@@ -12,7 +12,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { readFileIfExistsSync, resolveIncludePath, fsPathToUri, normalizeDirPath } from '../utils/fs-utils';
 import { getWorkspaceRootForUri  } from '../indexer/workspace-index';
 import { parsePureBasicConstantDefinition} from '../utils/constants';
-import { escapeRegExp, getWordAtPosition } from '../utils/string-utils';
+import { escapeRegExp, getWordAtPosition, normalizeConstantName } from '../utils/string-utils';
 
 /**
  * Handle references request
@@ -460,10 +460,6 @@ function findModuleSymbolReferences(
         }
     }
     return refs;
-}
-
-function normalizeConstantName(name: string): string {
-    return name.replace(/\$$/, '').toLowerCase();
 }
 
 /**

@@ -15,7 +15,7 @@ import { readFileIfExistsSync, resolveIncludePath, fsPathToUri, normalizeDirPath
 import { getWorkspaceRootForUri  } from '../indexer/workspace-index';
 import { analyzeScopesAndVariables } from '../utils/scope-manager';
 import { parsePureBasicConstantDefinition, parsePureBasicConstantDeclaration } from '../utils/constants';
-import { escapeRegExp, getWordAtPosition } from '../utils/string-utils';
+import { escapeRegExp, getWordAtPosition, normalizeConstantName } from '../utils/string-utils';
 import * as path from 'path';
 
 /**
@@ -482,10 +482,6 @@ function findModuleSymbolDefinition(
         }
     }
     return defs;
-}
-
-function normalizeConstantName(name: string): string {
-    return name.replace(/\$$/, '').toLowerCase();
 }
 
 /**
