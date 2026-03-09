@@ -194,3 +194,49 @@ export function getWordAtPosition(line: string, character: number): string | nul
 export function normalizeConstantName(name: string): string {
     return name.replace(/\$$/, '').toLowerCase();
 }
+
+/** Result of resolving a Module::Symbol or Module::#Const reference at a cursor position. */
+export interface ModuleSymbolMatch {
+    moduleName: string;
+    symbolName: string;
+    /** true when the matched form was Module::#Const, false for Module::Symbol */
+    isConstant: boolean;
+}
+
+/**
+ * Resolves a `Module::Symbol` or `Module::#Const` reference at the cursor position.
+ *
+ * Two-pass strategy: constant form (`Module::#Ident`) is preferred so the
+ * `#`-prefix is never swallowed by the plain-identifier pattern.
+ *
+ * @param line      The source line text.
+ * @param character 0-based cursor column.
+ */
+export function getModuleSymbolAtPosition(
+    line: string,
+    character: number
+): ModuleSymbolMatch | null {
+    let m: RegExpExecArray | null;
+
+    // Pass 1 – prefer constant form  Module::#Const
+    const constRe = /(\w+)::#(\w+)/g;
+    while ((m = constRe.exec(line)) !== null) {
+        const start = m.index;
+        const end   = start + m[0].length;
+        if (character >= start && character <= end) {
+            return { moduleName: m[1], symbolName: m[2], isConstant: true };
+        }
+    }
+
+    // Pass 2 – plain form  Module::Ident
+    const identRe = /(\w+)::(\w+)/g;
+    while ((m = identRe.exec(line)) !== null) {
+        const start = m.index;
+        const end   = start + m[0].length;
+        if (character >= start && character <= end) {
+            return { moduleName: m[1], symbolName: m[2], isConstant: false };
+        }
+    }
+
+    return null;
+}

@@ -14,7 +14,7 @@ import {
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { analyzeScopesAndVariables } from '../utils/scope-manager';
 import { parsePureBasicConstantDefinition, parsePureBasicConstantDeclaration, keywords, types } from '../utils/constants';
-import { escapeRegExp, getWordAtPosition, normalizeConstantName } from '../utils/string-utils';
+import { escapeRegExp, getWordAtPosition, normalizeConstantName, getModuleSymbolAtPosition } from '../utils/string-utils';
 import { readFileIfExistsSync, resolveIncludePath, fsPathToUri, normalizeDirPath } from '../utils/fs-utils';
 import { getWorkspaceRootForUri } from '../indexer/workspace-index';
 
@@ -95,15 +95,24 @@ export function handleRename(
     // Build the full search scope once – all helpers below receive it directly
     const searchDocs = collectSearchDocuments(document, documentCache);
 
-    // Check whether this is a module call
-    const moduleMatch = getModuleCallFromPosition(line, position.character);
+    // Handle module syntax: Module::Function or Module::#Const / Module::Type
+    const moduleMatch = getModuleSymbolAtPosition(line, position.character);
     if (moduleMatch) {
-        return handleModuleFunctionRename(
-            moduleMatch.moduleName,
-            moduleMatch.functionName,
-            newName,
-            searchDocs
-        );
+        if (!moduleMatch.isConstant) {
+            return handleModuleFunctionRename(
+                moduleMatch.moduleName,
+                moduleMatch.symbolName,
+                newName,
+                searchDocs
+            );
+        } else {
+            return handleModuleSymbolRename(
+                moduleMatch.moduleName,
+                moduleMatch.symbolName,
+                newName,
+                searchDocs
+            );
+        }
     }
 
     // Structure member rename
@@ -113,17 +122,6 @@ export function handleRename(
         if (structName) {
             return handleStructMemberRename(structName, structLoc2.memberName, newName, searchDocs);
         }
-    }
-
-    // Module symbol (non-function) rename: Module::Name / Module::#CONST
-    const modSym = getModuleSymbolFromLine(line, position.character);
-    if (modSym) {
-        return handleModuleSymbolRename(
-            modSym.moduleName,
-            modSym.ident,
-            newName,
-            searchDocs
-        );
     }
 
     // Regular symbol rename
@@ -257,30 +255,6 @@ function isUserDefinedSymbol(
     }
 
     return false;
-}
-
-/**
- * Get module call information from cursor position.
- * Uses a /g exec-loop so every occurrence is checked against the cursor.
- */
-function getModuleCallFromPosition(line: string, character: number): {
-    moduleName: string;
-    functionName: string;
-} | null {
-    const re = /(\w+)::(\w+)/g;
-    let moduleMatch: RegExpExecArray | null;
-    while ((moduleMatch = re.exec(line)) !== null) {
-        const matchStart = moduleMatch.index;
-        const matchEnd   = matchStart + moduleMatch[0].length;
-        if (character >= matchStart && character <= matchEnd) {
-            return {
-                moduleName: moduleMatch[1],
-                functionName: moduleMatch[2]
-            };
-        }
-    }
-
-    return null;
 }
 
 /**
@@ -504,27 +478,6 @@ function handleModuleSymbolRename(
     }
 
     return Object.keys(changes).length ? { changes } : null;
-}
-
-/**
- * Get module symbol position (constant/structure/interface/enumeration).
- * Uses a /g exec-loop; constants (Module::#Ident) are checked first.
- */
-function getModuleSymbolFromLine(line: string, character: number): { moduleName: string; ident: string } | null {
-    // Pass 1: prefer constant form  Module::#Ident
-    const constRe = /(\w+)::#(\w+)/g;
-    let m: RegExpExecArray | null;
-    while ((m = constRe.exec(line)) !== null) {
-        const start = m.index, end = start + m[0].length;
-        if (character >= start && character <= end) return { moduleName: m[1], ident: m[2] };
-    }
-    // Pass 2: plain symbol form  Module::Ident
-    const symRe = /(\w+)::(\w+)/g;
-    while ((m = symRe.exec(line)) !== null) {
-        const start = m.index, end = start + m[0].length;
-        if (character >= start && character <= end) return { moduleName: m[1], ident: m[2] };
-    }
-    return null;
 }
 
 /**

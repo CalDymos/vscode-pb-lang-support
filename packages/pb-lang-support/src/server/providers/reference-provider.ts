@@ -12,7 +12,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { readFileIfExistsSync, resolveIncludePath, fsPathToUri, normalizeDirPath } from '../utils/fs-utils';
 import { getWorkspaceRootForUri  } from '../indexer/workspace-index';
 import { parsePureBasicConstantDefinition} from '../utils/constants';
-import { escapeRegExp, getWordAtPosition, normalizeConstantName } from '../utils/string-utils';
+import { escapeRegExp, getWordAtPosition, normalizeConstantName, getModuleSymbolAtPosition } from '../utils/string-utils';
 
 /**
  * Handle references request
@@ -39,70 +39,38 @@ export function handleReferences(
     // Find references
     const references: Location[] = [];
 
-    // Handle module call syntax (functions)
-    const moduleMatch = getModuleFunctionFromPosition(text, position);
+    // Handle module syntax: Module::Symbol or Module::#Const
+    const moduleMatch = getModuleSymbolAtPosition(lines[position.line], position.character);
     if (moduleMatch) {
-        // Find all references for module function
-        const moduleReferences = findModuleFunctionReferences(
-            moduleMatch.moduleName,
-            moduleMatch.functionName,
-            searchDocs,
-            params.context.includeDeclaration
-        );
-        references.push(...moduleReferences);
-    } else {
-        // Handle module symbols (constants/structures/interfaces/enumerations): Module::Name or Module::#CONST
-        const modSym = getModuleSymbolFromPosition(text, position);
-        if (modSym) {
+        if (!moduleMatch.isConstant) {
+            // Module::Function – search for procedure references
+            const moduleReferences = findModuleFunctionReferences(
+                moduleMatch.moduleName,
+                moduleMatch.symbolName,
+                searchDocs,
+                params.context.includeDeclaration
+            );
+            references.push(...moduleReferences);
+        } else {
+            // Module::#Const – search for constant/structure/interface/enumeration references
             const modSymRefs = findModuleSymbolReferences(
-                modSym.moduleName,
-                modSym.ident,
+                moduleMatch.moduleName,
+                moduleMatch.symbolName,
                 searchDocs,
                 params.context.includeDeclaration
             );
             references.push(...modSymRefs);
-            return references;
         }
-        // Regular reference finding: traverse all search documents
-        for (const doc of searchDocs.values()) {
-            const docReferences = findReferencesInDocument(doc, word, params.context.includeDeclaration);
-            references.push(...docReferences);
-        }
+        return references;
+    }
+
+    // Regular reference finding: traverse all search documents
+    for (const doc of searchDocs.values()) {
+        const docReferences = findReferencesInDocument(doc, word, params.context.includeDeclaration);
+        references.push(...docReferences);
     }
 
     return references;
-}
-
-/**
- * Get module function call information
- */
-function getModuleFunctionFromPosition(text: string, position: Position): {
-    moduleName: string;
-    functionName: string;
-} | null {
-    const lines = text.split('\n');
-    if (position.line >= lines.length) {
-        return null;
-    }
-
-    const line = lines[position.line];
-    const char = position.character;
-
-    //  uses a /g exec-loop to check every occurrence against the cursor position.
-    const re = /(\w+)::(\w+)/g;
-    let moduleMatch: RegExpExecArray | null;
-    while ((moduleMatch = re.exec(line)) !== null) {
-        const matchStart = moduleMatch.index;
-        const matchEnd   = matchStart + moduleMatch[0].length;
-        if (char >= matchStart && char <= matchEnd) {
-            return {
-                moduleName: moduleMatch[1],
-                functionName: moduleMatch[2]
-            };
-        }
-    }
-
-    return null;
 }
 
 /**
@@ -344,31 +312,6 @@ function findUsageReference(
         });
     }
     return results;
-}
-
-/**
- * Get module symbol (other than functions, such as constants/structures/interfaces/enumerations) call position
- */
-function getModuleSymbolFromPosition(text: string, position: Position): { moduleName: string; ident: string } | null {
-    const lines = text.split('\n');
-    if (position.line >= lines.length) return null;
-    const line = lines[position.line];
-    const char = position.character;
-
-    //  Pass 1: prefer constant form  Module::#Ident
-    const constRe = /(\w+)::#(\w+)/g;
-    let m: RegExpExecArray | null;
-    while ((m = constRe.exec(line)) !== null) {
-        const start = m.index, end = start + m[0].length;
-        if (char >= start && char <= end) return { moduleName: m[1], ident: m[2] };
-    }
-    // Pass 2: plain form  Module::Ident
-    const funcRe = /(\w+)::(\w+)/g;
-    while ((m = funcRe.exec(line)) !== null) {
-        const start = m.index, end = start + m[0].length;
-        if (char >= start && char <= end) return { moduleName: m[1], ident: m[2] };
-    }
-    return null;
 }
 
 /**

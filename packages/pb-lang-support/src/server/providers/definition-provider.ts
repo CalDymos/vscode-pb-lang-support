@@ -15,7 +15,7 @@ import { readFileIfExistsSync, resolveIncludePath, fsPathToUri, normalizeDirPath
 import { getWorkspaceRootForUri  } from '../indexer/workspace-index';
 import { analyzeScopesAndVariables } from '../utils/scope-manager';
 import { parsePureBasicConstantDefinition, parsePureBasicConstantDeclaration } from '../utils/constants';
-import { escapeRegExp, getWordAtPosition, normalizeConstantName } from '../utils/string-utils';
+import { escapeRegExp, getWordAtPosition, normalizeConstantName, getModuleSymbolAtPosition } from '../utils/string-utils';
 import * as path from 'path';
 
 /**
@@ -61,32 +61,31 @@ export function handleDefinition(
         }
     }
 
-    // First check module constants/structures etc: Module::#CONST / Module::Type
-    const moduleSymbol = getModuleSymbolFromPosition(document.getText(), position);
-    if (moduleSymbol) {
+    // Handle module syntax: Module::#Const / Module::Type / Module::Function
+    const moduleMatch = getModuleSymbolAtPosition(lines[position.line], position.character);
+    if (moduleMatch?.isConstant) {
+        // Module::#Const or Module::Type – look for constant/structure/interface/enumeration
         const moduleSymbolDefs = findModuleSymbolDefinition(
-            moduleSymbol.moduleName,
-            moduleSymbol.ident,
+            moduleMatch.moduleName,
+            moduleMatch.symbolName,
             searchDocs
         );
         definitions.push(...moduleSymbolDefs);
         if (definitions.length > 0) return definitions;
     }
 
-    // Handle module function call syntax
-    const moduleMatch = getModuleFunctionFromPosition(document.getText(), position);
-    if (moduleMatch) {
-        // Look for function definition inside module
+    if (moduleMatch && !moduleMatch.isConstant) {
+        // Module::Function – look for procedure definition, then also check symbols
         const moduleDefinitions = findModuleFunctionDefinition(
             moduleMatch.moduleName,
-            moduleMatch.functionName,
+            moduleMatch.symbolName,
             searchDocs
         );
         definitions.push(...moduleDefinitions);
-        // Look for module constants/structures definitions
+        // Also try as a symbol in case the ident is a type/constant with the same name
         const moduleSymbolDefs = findModuleSymbolDefinition(
             moduleMatch.moduleName,
-            moduleMatch.functionName,
+            moduleMatch.symbolName,
             searchDocs
         );
         definitions.push(...moduleSymbolDefs);
@@ -110,37 +109,6 @@ export function handleDefinition(
     }
 
     return definitions;
-}
-
-/**
- * Get module function call information at a position
- */
-function getModuleFunctionFromPosition(text: string, position: Position): {
-    moduleName: string;
-    functionName: string;
-} | null {
-    const lines = text.split('\n');
-    if (position.line >= lines.length) {
-        return null;
-    }
-
-    const line = lines[position.line];
-    const char = position.character;
-
-    // Find module call syntax Module::Function
-    const moduleRe = /(\w+)::(\w+)/g;
-    let moduleMatch: RegExpExecArray | null;
-    while ((moduleMatch = moduleRe.exec(line)) !== null) {
-        const matchStart = moduleMatch.index;
-        const matchEnd = matchStart + moduleMatch[0].length;
-        if (char >= matchStart && char <= matchEnd) {
-            return {
-                moduleName: moduleMatch[1],
-                functionName: moduleMatch[2]
-            };
-        }
-    }
-    return null;
 }
 
 /**
@@ -386,30 +354,6 @@ function findDefinitionsInDocument(document: TextDocument, word: string): Locati
     }
 
     return definitions;
-}
-
-/**
- * Get module symbol (function or constant/structure) call location: supports Module::Name and Module::#CONST
- */
-function getModuleSymbolFromPosition(text: string, position: Position): { moduleName: string; ident: string } | null {
-    const lines = text.split('\n');
-    if (position.line >= lines.length) return null;
-    const line = lines[position.line];
-    const char = position.character;
-    const constRe = /(\w+)::#(\w+)/g;
-    let m: RegExpExecArray | null;
-    while ((m = constRe.exec(line)) !== null) {
-        const start = m.index;
-        const end = start + m[0].length;
-        if (char >= start && char <= end) return { moduleName: m[1], ident: m[2] };
-    }
-    const funcRe = /(\w+)::(\w+)/g;
-    while ((m = funcRe.exec(line)) !== null) {
-        const start = m.index;
-        const end = start + m[0].length;
-        if (char >= start && char <= end) return { moduleName: m[1], ident: m[2] };
-    }
-    return null;
 }
 
 /**

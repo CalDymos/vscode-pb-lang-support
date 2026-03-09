@@ -13,7 +13,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { analyzeScopesAndVariables } from '../utils/scope-manager';
 import { getModuleExports } from '../utils/module-resolver';
 import { parsePureBasicConstantDefinition} from '../utils/constants';
-import { stripInlineComment, escapeRegExp, getWordAtPosition, normalizeConstantName } from '../utils/string-utils';
+import { stripInlineComment, escapeRegExp, getWordAtPosition, normalizeConstantName, getModuleSymbolAtPosition } from '../utils/string-utils';
 import type { ApiFunctionListing } from '../utils/api-function-listing';
 import { findBuiltin } from '../utils/builtin-functions';
 
@@ -44,11 +44,11 @@ export function handleHover(
     }
 
     // Check if it's a module call
-    const moduleMatch = getModuleCallFromPosition(line, position.character);
+    const moduleMatch = getModuleSymbolAtPosition(line, position.character);
     if (moduleMatch) {
         const moduleHover = getModuleFunctionHover(
             moduleMatch.moduleName,
-            moduleMatch.functionName,
+            moduleMatch.symbolName,
             document,
             documentCache
         );
@@ -57,7 +57,7 @@ export function handleHover(
         }
         const exportHover = getModuleExportHover(
             moduleMatch.moduleName,
-            moduleMatch.functionName,
+            moduleMatch.symbolName,
             document,
             documentCache
         );
@@ -141,42 +141,6 @@ function getBaseType(typeStr: string): string {
     const noPtr = cleaned.startsWith('*') ? cleaned.substring(1) : cleaned;
     const arrIdx = noPtr.indexOf('[');
     return arrIdx > -1 ? noPtr.substring(0, arrIdx) : noPtr;
-}
-
-/**
- * Get module call information
- * Original used .match() (first hit only) + line.indexOf() → wrong result
- * when the same line contains multiple Module::Symbol expressions.
- * Now uses /g exec-loop so every occurrence is checked against the cursor position.
- * Constants (Module::#Const) are tried first so they take precedence over the
- * plain-identifier pattern (Module::Ident) which would also match.
- */
-function getModuleCallFromPosition(line: string, character: number): {
-    moduleName: string;
-    functionName: string;
-} | null {
-    // Pass 1 – prefer constant form  Module::#Const
-    const constRe = /(\w+)::#(\w+)/g;
-    let m: RegExpExecArray | null;
-    while ((m = constRe.exec(line)) !== null) {
-        const start = m.index;
-        const end   = start + m[0].length;
-        if (character >= start && character <= end) {
-            return { moduleName: m[1], functionName: m[2] };
-        }
-    }
-
-    // Pass 2 – plain form  Module::Ident
-    const funcRe = /(\w+)::(\w+)/g;
-    while ((m = funcRe.exec(line)) !== null) {
-        const start = m.index;
-        const end   = start + m[0].length;
-        if (character >= start && character <= end) {
-            return { moduleName: m[1], functionName: m[2] };
-        }
-    }
-
-    return null;
 }
 
 /**
