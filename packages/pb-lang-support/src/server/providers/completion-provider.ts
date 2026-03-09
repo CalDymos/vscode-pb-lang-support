@@ -99,13 +99,17 @@ function handleCompletionInternal(
         const members = structIndex.get(resolvedType) || [];
         const items = members
             .filter(m => m.name.toLowerCase().startsWith(context.structMemberPrefix.toLowerCase()))
-            .map((m, idx) => ({
-                label: m.name,
-                kind: CompletionItemKind.Field,
-                data: `struct_${resolvedType}_${m.name}_${idx}`,
-                detail: `${resolvedType}\\${m.name}${m.type ? ' : ' + m.type : ''}`,
-                documentation: `Structure ${resolvedType} member ${m.name}${m.type ? ' of type ' + m.type : ''}`
-            }));
+            .map((m, idx) => {
+                const ptrPrefix = m.isPointer ? '*' : '';
+                const typeStr = m.type ? ` : ${ptrPrefix}${m.type}` : (m.isPointer ? ' : *' : '');
+                return {
+                    label: m.name,
+                    kind: CompletionItemKind.Field,
+                    data: `struct_${resolvedType}_${m.name}_${idx}`,
+                    detail: `${resolvedType}\\${ptrPrefix}${m.name}${typeStr}`,
+                    documentation: `Structure ${resolvedType} member ${ptrPrefix}${m.name}${typeStr}`
+                };
+            });
 
         return { isIncomplete: false, items };
     }
@@ -139,13 +143,17 @@ function handleCompletionInternal(
         const members = structIndex.get(baseType) || [];
         const items = members
             .filter(m => m.name.toLowerCase().startsWith(context.withMemberPrefix.toLowerCase()))
-            .map((m, idx) => ({
-                label: m.name,
-                kind: CompletionItemKind.Field,
-                data: `with_${baseType}_${m.name}_${idx}`,
-                detail: `${baseType}\\${m.name}${m.type ? ' : ' + m.type : ''}`,
-                documentation: `With ${withVarName}: Structure ${baseType} member ${m.name}${m.type ? ' of type ' + m.type : ''}`
-            }));
+            .map((m, idx) => {
+                const ptrPrefix = m.isPointer ? '*' : '';
+                const typeStr = m.type ? ` : ${ptrPrefix}${m.type}` : (m.isPointer ? ' : *' : '');
+                return {
+                    label: m.name,
+                    kind: CompletionItemKind.Field,
+                    data: `with_${baseType}_${m.name}_${idx}`,
+                    detail: `${baseType}\\${ptrPrefix}${m.name}${typeStr}`,
+                    documentation: `With ${withVarName}: Structure ${baseType} member ${ptrPrefix}${m.name}${typeStr}`
+                };
+            });
 
         return { isIncomplete: false, items };
     }
@@ -885,10 +893,10 @@ function getBaseType(typeStr: string): string {
 }
 
 // Build structure index: structure name -> member list
-function buildStructureIndex(document: TextDocument, documentCache: Map<string, TextDocument>): Map<string, Array<{name: string; type?: string}>> {
-    const map = new Map<string, Array<{name: string; type?: string}>>();
+function buildStructureIndex(document: TextDocument, documentCache: Map<string, TextDocument>): Map<string, Array<{name: string; type?: string; isPointer?: boolean}>> {
+    const map = new Map<string, Array<{name: string; type?: string; isPointer?: boolean}>>();
 
-    const pushMember = (structName: string, member: {name: string; type?: string}) => {
+    const pushMember = (structName: string, member: {name: string; type?: string; isPointer?: boolean}) => {
         const list = map.get(structName) || [];
         // Deduplicate by name
         if (!list.some(m => m.name === member.name)) list.push(member);
@@ -913,15 +921,13 @@ function buildStructureIndex(document: TextDocument, documentCache: Map<string, 
                 // Without a guard, /^(\*?)(\w+)/ would capture "Array"/"List"/"Map"
                 // as the member name instead of the actual name after the keyword.
                 if (/^(?:Array|List|Map)\s+/i.test(line)) {
-                    const cm = line.match(/^(?:Array|List|Map)\s+\*?(\w+)/i);
-                    if (cm) pushMember(current, { name: cm[1], type: undefined });
+                    const cm = line.match(/^(?:Array|List|Map)\s+(\*?)(\w+)(?:\.(\w+))?/i);
+                    if (cm) pushMember(current, { name: cm[2], type: cm[3], isPointer: cm[1] === '*' });
                     continue;
                 }
                 const m = line.match(/^(\*?)(\w+)(?:\.(\w+))?/);
                 if (m) {
-                    const name = m[2];
-                    const type = m[3];
-                    pushMember(current, { name, type });
+                    pushMember(current, { name: m[2], type: m[3], isPointer: m[1] === '*' });
                 }
             }
         }
