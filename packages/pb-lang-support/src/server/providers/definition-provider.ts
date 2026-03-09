@@ -562,8 +562,8 @@ function collectSearchDocuments(
     }
     // Add project files (pbp-derived) if available
     try {
-        if (typeof projectManager?.getProjectFilesForDocument === 'function') {
-            const projectFiles = projectManager.getProjectFilesForDocument(rootDocUri);
+        if (typeof projectManager?.getAllProjectFilesForDocument === 'function') {
+            const projectFiles = projectManager.getAllProjectFilesForDocument(rootDocUri);
             if (Array.isArray(projectFiles) && projectFiles.length > 0) {
                 for (const fsPath of projectFiles) {
                     const incUri = fsPathToUri(fsPath);
