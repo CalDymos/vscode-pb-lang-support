@@ -269,7 +269,7 @@ async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promis
             client.sendNotification('purebasic/projectContext', {
                 version: 3,
                 noProject: true,
-                projectFiles: uctx.projectFiles,
+                projectFiles: uctx.projectFiles.map(fsPath => ({ fsPath, scan: true })),
             });
             return;
         }
