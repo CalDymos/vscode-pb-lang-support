@@ -14,22 +14,8 @@ import { getModuleFunctionCompletions as getModuleFunctions } from '../utils/mod
 import { getActiveUsedModules } from '../utils/scope-manager';
 import { escapeRegExp} from '../utils/string-utils';
 import { ApiFunctionListing } from '../utils/api-function-listing';
+import { findBuiltin } from '../utils/builtin-functions';
 
-import builtinFunctions from '../../data/pb-builtin-functions.json';
-
-/** Single entry in the built-in function data file. */
-interface BuiltinFunctionEntry {
-    signature: string;
-    description: string;
-    parameters: string[];
-    /** Optional link to the official PureBasic documentation page. */
-    docUrl?: string;
-}
-
-const builtinFunctionMap = new Map<string, BuiltinFunctionEntry>(
-    Object.entries(builtinFunctions as Record<string, BuiltinFunctionEntry>)
-        .map(([name, entry]) => [name.toLowerCase(), entry])
-);
 /**
  * Handle signature help request
  */
@@ -319,16 +305,23 @@ function getApiFunctionSignature(
     return { signature, documentation, parameters };
 }
 
-/**
- * Get built-in function signature
- */
-function getBuiltInFunctionSignature(functionName: string) {
-    const entry = builtinFunctionMap.get(functionName.toLowerCase());
+function getBuiltInFunctionSignature(functionName: string): {
+    signature: string;
+    documentation: string;
+    parameters: ParameterInformation[];
+} | null {
+    const entry = findBuiltin(functionName);
     if (!entry) return null;
+
+    const parameters: ParameterInformation[] = entry.parameters.map(p => ({
+        label: p,
+        documentation: ''
+    }));
+
     return {
-        signature:     entry.signature,
+        signature: entry.signature,
         documentation: entry.description,
-        parameters:    entry.parameters.map(p => ({ label: p, documentation: '' }))
+        parameters
     };
 }
 

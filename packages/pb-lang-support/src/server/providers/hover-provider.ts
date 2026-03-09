@@ -14,17 +14,10 @@ import { analyzeScopesAndVariables } from '../utils/scope-manager';
 import { getModuleExports } from '../utils/module-resolver';
 import { parsePureBasicConstantDefinition} from '../utils/constants';
 import { stripInlineComment, escapeRegExp } from '../utils/string-utils';
-import type { ApiFunctionListing, ApiFunctionEntry } from '../utils/api-function-listing';
-import builtinFunctions from '../../data/pb-builtin-functions.json';
+import type { ApiFunctionListing } from '../utils/api-function-listing';
+import { findBuiltin } from '../utils/builtin-functions';
 
 /** Single entry in the built-in function data file. */
-interface BuiltinFunctionEntry {
-    signature: string;
-    description: string;
-    parameters: string[];
-    /** Optional link to the official PureBasic documentation page. */
-    docUrl?: string;
-}
 
 /**
  * Handle hover requests
@@ -518,24 +511,13 @@ function escapeMarkdown(text: string): string {
 }
 
 /**
- * Build a case-insensitive lookup map once at module load time.
- * Key: lowercase function name → value: [canonicalName, entry]
- */
-const builtinFunctionMap = new Map<string, [string, BuiltinFunctionEntry]>(
-    Object.entries(builtinFunctions as Record<string, BuiltinFunctionEntry>)
-        .map(([name, entry]) => [name.toLowerCase(), [name, entry]])
-);
-
-/**
- * Get built-in function hover information from the data file.
+ * Get built-in function hover information from pb-builtin-functions.json
+ * via the shared builtin-functions utility.
  */
 function getBuiltinFunctionInfo(functionName: string): Hover | null {
-    const hit = builtinFunctionMap.get(functionName.toLowerCase());
-    if (!hit) {
-        return null;
-    }
+    const entry = findBuiltin(functionName);
+    if (!entry) return null;
 
-    const [, entry] = hit;
     const paramInfo = entry.parameters.length > 0
         ? '\n\n**Parameters:**\n' + entry.parameters.map(p => `- ${p}`).join('\n')
         : '';
