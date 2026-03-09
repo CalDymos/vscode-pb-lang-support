@@ -13,8 +13,10 @@ import {
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { analyzeScopesAndVariables } from '../utils/scope-manager';
-import { parsePureBasicConstantDefinition, parsePureBasicConstantDeclaration } from '../utils/constants';
-import { escapeRegExp} from '../utils/string-utils';
+import { parsePureBasicConstantDefinition, parsePureBasicConstantDeclaration, keywords, types } from '../utils/constants';
+import { escapeRegExp } from '../utils/string-utils';
+import { readFileIfExistsSync, resolveIncludePath, fsPathToUri, normalizeDirPath } from '../utils/fs-utils';
+import { getWorkspaceFiles, getWorkspaceRootForUri } from '../indexer/workspace-index';
 
 /**
  * Normalizes a constant name.
@@ -56,8 +58,11 @@ export function handlePrepareRename(
         return null;
     }
 
+    // Build the full search scope once – used for symbol existence check
+    const searchDocs = collectSearchDocuments(document, documentCache);
+
     // Check if it is a renameable symbol
-    if (isRenameableSymbol(word, document, documentCache, position)) {
+    if (isRenameableSymbol(word, searchDocs, position)) {
         const range = getWordRange(line, position.line, position.character);
         return {
             range,
@@ -104,6 +109,9 @@ export function handleRename(
         return null;
     }
 
+    // Build the full search scope once – all helpers below receive it directly
+    const searchDocs = collectSearchDocuments(document, documentCache);
+
     // Check whether this is a module call
     const moduleMatch = getModuleCallFromPosition(line, position.character);
     if (moduleMatch) {
@@ -111,8 +119,7 @@ export function handleRename(
             moduleMatch.moduleName,
             moduleMatch.functionName,
             newName,
-            document,
-            documentCache
+            searchDocs
         );
     }
 
@@ -121,7 +128,7 @@ export function handleRename(
     if (structLoc2) {
         const structName = getVariableStructureAt(document, position.line, structLoc2.varName);
         if (structName) {
-            return handleStructMemberRename(structName, structLoc2.memberName, newName, document, documentCache);
+            return handleStructMemberRename(structName, structLoc2.memberName, newName, searchDocs);
         }
     }
 
@@ -132,13 +139,12 @@ export function handleRename(
             modSym.moduleName,
             modSym.ident,
             newName,
-            document,
-            documentCache
+            searchDocs
         );
     }
 
     // Regular symbol rename
-    const edits = findAllOccurrences(oldName, document, documentCache);
+    const edits = findAllOccurrences(oldName, searchDocs);
 
     if (edits.length === 0) {
         return null;
@@ -233,60 +239,21 @@ function isValidIdentifier(name: string): boolean {
  */
 function isRenameableSymbol(
     word: string,
-    document: TextDocument,
-    documentCache: Map<string, TextDocument>,
+    searchDocs: Map<string, TextDocument>,
     position: Position
 ): boolean {
     // Do not allow renaming of PureBasic keywords.
     // Info: PureBasic types are expressed as dot-suffixes (.i/.s/.f/.d).
-    const keywords = [
-        // Conditionals
-        'If', 'EndIf', 'Else', 'ElseIf',
-        // Loops
-        'For', 'ForEach', 'Next', 'While', 'Wend', 'Repeat', 'Until', 'ForEver',
-        // With
-        'With', 'EndWith',
-        // Select / Case
-        'Select', 'EndSelect', 'Case', 'Default',
-        // Procedures / Declarations
-        'Procedure', 'ProcedureC', 'ProcedureDLL', 'ProcedureCDLL',
-        'EndProcedure', 'ProcedureReturn',
-        'Declare', 'DeclareC', 'DeclareDLL', 'DeclareCDLL',
-        // Modules
-        'Module', 'EndModule', 'DeclareModule', 'EndDeclareModule',
-        // Structures / Interfaces / Enumerations
-        'Structure', 'EndStructure', 'StructureUnion', 'EndStructureUnion',
-        'Interface', 'EndInterface',
-        'Enumeration', 'EnumerationBinary', 'EndEnumeration',
-        // Macros
-        'Macro', 'EndMacro',
-        // Data
-        'DataSection', 'EndDataSection', 'Data', 'Read', 'Restore',
-        // Variable scopes / modifiers
-        'Global', 'Protected', 'Static', 'Define', 'Shared', 'Threaded',
-        'Dim', 'NewList', 'NewMap', 'NewArray',
-        // Compiler directives
-        'CompilerIf', 'CompilerElse', 'CompilerElseIf', 'CompilerEndIf',
-        'CompilerSelect', 'CompilerCase', 'CompilerDefault', 'CompilerEndSelect',
-        'CompilerError', 'CompilerWarning',
-        // Miscellaneous
-        'End', 'Import', 'EndImport', 'ImportC',
-        'IncludeFile', 'XIncludeFile', 'IncludePath',
-        'EnableExplicit', 'DisableExplicit', 'EnableASM', 'DisableASM',
-        'Goto', 'Gosub', 'Return', 'Break', 'Continue',
-        // Built-in PureBasic type names used in typed declarations
-        // (e.g. Define x.Byte, Structure fields, SizeOf(Byte)).
-        // Note: These behave like type identifiers, not primitive variables
-        // (the primitive shorthand would be x.b, x.w, x.l, etc.).
-        'Byte', 'Word', 'Long', 'Quad', 'Character', 'Ascii', 'Unicode', 'String', 'Integer', 'Float', 'Double',
-    ];
 
     if (keywords.some(kw => kw.toLowerCase() === word.toLowerCase())) {
         return false;
     }
+    if (types.some(kw => kw.toLowerCase() == word.toLocaleLowerCase())) {
+        return false;
+    }
 
     // Check whether it is a user-defined symbol
-    return isUserDefinedSymbol(word, document, documentCache, position);
+    return isUserDefinedSymbol(word, searchDocs);
 }
 
 /**
@@ -294,14 +261,11 @@ function isRenameableSymbol(
  */
 function isUserDefinedSymbol(
     word: string,
-    document: TextDocument,
-    documentCache: Map<string, TextDocument>,
-    position: Position
+    searchDocs: Map<string, TextDocument>
 ): boolean {
-    const searchDocuments = [document, ...Array.from(documentCache.values())];
     const safeWord = escapeRegExp(word);
 
-    for (const doc of searchDocuments) {
+    for (const doc of searchDocs.values()) {
         const text = doc.getText();
         const lines = text.split('\n');
 
@@ -311,10 +275,10 @@ function isUserDefinedSymbol(
             // Procedure definition (all calling conventions)
             if (line.match(new RegExp(`^Procedure(?:C|DLL|CDLL)?(?:\\.\\w+)?\\s+(${safeWord})\\s*\\(`, 'i'))) return true;
 
-            // Macro definition – FIX: was missing entirely.
+            // Macro definition
             if (line.match(new RegExp(`^Macro\\s+(${safeWord})\\b`, 'i'))) return true;
 
-            // Prototype / PrototypeC – FIX: was missing entirely.
+            // Prototype / PrototypeC
             if (line.match(new RegExp(`^Prototype(?:C)?(?:\\.\\w+)?\\s+(${safeWord})\\s*\\(`, 'i'))) return true;
 
             // Variable declarations (all scope keywords)
@@ -327,10 +291,10 @@ function isUserDefinedSymbol(
             // Structure definition
             if (line.match(new RegExp(`^Structure\\s+(${safeWord})\\b`, 'i'))) return true;
 
-            // Interface definition – FIX: was missing entirely.
+            // Interface definition
             if (line.match(new RegExp(`^Interface\\s+(${safeWord})\\b`, 'i'))) return true;
 
-            // Enumeration / EnumerationBinary – FIX: both were missing entirely.
+            // Enumeration / EnumerationBinary
             if (line.match(new RegExp(`^Enumeration(?:Binary)?\\s+(${safeWord})\\b`, 'i'))) return true;
 
             // Module / DeclareModule definition
@@ -343,7 +307,7 @@ function isUserDefinedSymbol(
 
 /**
  * Get module call information from cursor position.
- * uses a /g exec-loop so every occurrence is checked against the cursor.
+ * Uses a /g exec-loop so every occurrence is checked against the cursor.
  */
 function getModuleCallFromPosition(line: string, character: number): {
     moduleName: string;
@@ -372,15 +336,13 @@ function handleModuleFunctionRename(
     moduleName: string,
     functionName: string,
     newName: string,
-    document: TextDocument,
-    documentCache: Map<string, TextDocument>
+    searchDocs: Map<string, TextDocument>
 ): WorkspaceEdit | null {
     const edits: Array<{ uri: string; range: Range }> = [];
-    const searchDocuments = [document, ...Array.from(documentCache.values())];
     const safeModule = escapeRegExp(moduleName);
     const safeFn = escapeRegExp(functionName);
 
-    for (const doc of searchDocuments) {
+    for (const doc of searchDocs.values()) {
         const text = doc.getText();
         const lines = text.split('\n');
         let inModule = false;
@@ -397,7 +359,7 @@ function handleModuleFunctionRename(
                     continue;
                 }
 
-                // Skip matches within the string
+                // Skip matches within strings
                 const beforeMatch = line.substring(0, match.index);
                 const quoteCount = (beforeMatch.match(/"/g) || []).length;
                 if (quoteCount % 2 === 1) {
@@ -465,15 +427,13 @@ function handleModuleFunctionRename(
 
 /**
  * Find all occurrences of a word across all search documents.
- * for constants is used a negative lookbehind (?<!\w) at the start.
+ * For constants a negative lookbehind (?<!\w) is used at the start.
  */
 function findAllOccurrences(
     word: string,
-    document: TextDocument,
-    documentCache: Map<string, TextDocument>
+    searchDocs: Map<string, TextDocument>
 ): Array<{ uri: string; range: Range }> {
     const occurrences: Array<{ uri: string; range: Range }> = [];
-    const searchDocuments = [document, ...Array.from(documentCache.values())];
     const safe = escapeRegExp(word);
     const isConstant = word.startsWith('#');
     // For #constants : (?<!\w)#Name\b  – no leading \b because '#' is not a word char
@@ -482,7 +442,7 @@ function findAllOccurrences(
         ? new RegExp(`(?<!\\w)${safe}\\b`, 'gi')
         : new RegExp(`\\b${safe}\\b`, 'gi');
 
-    for (const doc of searchDocuments) {
+    for (const doc of searchDocs.values()) {
         const text = doc.getText();
         const lines = text.split('\n');
 
@@ -525,15 +485,13 @@ function handleModuleSymbolRename(
     moduleName: string,
     ident: string,
     newName: string,
-    document: TextDocument,
-    documentCache: Map<string, TextDocument>
+    searchDocs: Map<string, TextDocument>
 ): WorkspaceEdit | null {
     const changes: { [uri: string]: TextEdit[] } = {};
-    const searchDocuments = [document, ...Array.from(documentCache.values())];
     const safeModule = escapeRegExp(moduleName);
     const safeIdent = escapeRegExp(ident);
 
-    for (const doc of searchDocuments) {
+    for (const doc of searchDocs.values()) {
         const text = doc.getText();
         const lines = text.split('\n');
         const edits: TextEdit[] = [];
@@ -551,7 +509,7 @@ function handleModuleSymbolRename(
                     continue;
                 }
 
-                // Skip matches within the string
+                // Skip matches within strings
                 const beforeMatch = raw.substring(0, m.index);
                 const quoteCount = (beforeMatch.match(/"/g) || []).length;
                 if (quoteCount % 2 === 1) {
@@ -596,7 +554,7 @@ function handleModuleSymbolRename(
 
 /**
  * Get module symbol position (constant/structure/interface/enumeration).
- * uses a /g exec-loop; constants (Module::#Ident) are checked first.
+ * Uses a /g exec-loop; constants (Module::#Ident) are checked first.
  */
 function getModuleSymbolFromLine(line: string, character: number): { moduleName: string; ident: string } | null {
     // Pass 1: prefer constant form  Module::#Ident
@@ -668,17 +626,15 @@ function handleStructMemberRename(
     structName: string,
     memberName: string,
     newName: string,
-    document: TextDocument,
-    documentCache: Map<string, TextDocument>
+    searchDocs: Map<string, TextDocument>
 ): WorkspaceEdit | null {
     const changes: { [uri: string]: TextEdit[] } = {};
-    const searchDocuments = [document, ...Array.from(documentCache.values())];
     const safeStructName = escapeRegExp(structName);
     const safeMemberName = escapeRegExp(memberName);
 
     // Collect variable names of the struct type per document
     const structVarsPerDoc = new Map<string, string[]>();
-    for (const doc of searchDocuments) {
+    for (const doc of searchDocs.values()) {
         const analysis = analyzeScopesAndVariables(doc.getText(), Number.MAX_SAFE_INTEGER);
         const vars = analysis.availableVariables
             .filter(v => {
@@ -693,7 +649,7 @@ function handleStructMemberRename(
         structVarsPerDoc.set(doc.uri, vars);
     }
 
-    for (const doc of searchDocuments) {
+    for (const doc of searchDocs.values()) {
         const text = doc.getText();
         const lines = text.split('\n');
         const edits: TextEdit[] = [];
@@ -706,7 +662,7 @@ function handleStructMemberRename(
             if (line.match(new RegExp(`^Structure\\s+${safeStructName}\\b`, 'i'))) { inStruct = true; continue; }
             if (inStruct && line.match(/^EndStructure\b/i)) { inStruct = false; continue; }
             if (inStruct) {
-                // Structure members can be prefixed with Array/List/Map keywords, e.g. "Array arrField.i(5)". 
+                // Structure members can be prefixed with Array/List/Map keywords, e.g. "Array arrField.i(5)".
                 const collectionMatch = line.match(
                     new RegExp(`^(?:Array|List|Map)\\s+\\*?(${safeMemberName})(?:\\.|\\s|\\[|$)`, 'i')
                 );
@@ -765,4 +721,95 @@ function handleStructMemberRename(
     }
 
     return Object.keys(changes).length ? { changes } : null;
+}
+
+/**
+ * Collect search documents: current document + all open documents +
+ * recursively resolved IncludeFile / XIncludeFile chains + workspace files.
+ *
+ * This ensures that Rename operates on the same document set as
+ * Go-to-Definition, so symbols in non-open included files are also renamed.
+ */
+function collectSearchDocuments(
+    document: TextDocument,
+    allDocuments: Map<string, TextDocument>,
+    maxDepth = 3
+): Map<string, TextDocument> {
+    const workspaceRoot = getWorkspaceRootForUri(document.uri);
+    const result = new Map<string, TextDocument>();
+    const visited = new Set<string>();
+
+    const addDoc = (doc: TextDocument) => {
+        if (!result.has(doc.uri)) {
+            result.set(doc.uri, doc);
+        }
+    };
+
+    addDoc(document);
+    for (const [, doc] of allDocuments) addDoc(doc);
+
+    const queue: Array<{ uri: string; depth: number }> = [{ uri: document.uri, depth: 0 }];
+
+    while (queue.length) {
+        const { uri, depth } = queue.shift()!;
+        if (visited.has(uri) || depth > maxDepth) continue;
+        visited.add(uri);
+
+        const baseDoc = result.get(uri);
+        if (!baseDoc) continue;
+        const text = baseDoc.getText();
+        const lines = text.split('\n');
+
+        // Maintain current IncludePath search directories (newest first)
+        const includeDirs: string[] = [];
+
+        for (const line of lines) {
+            // IncludePath directive
+            const ip = line.match(/^\s*IncludePath\s+"([^"]+)"/i);
+            if (ip) {
+                const dir = normalizeDirPath(uri, ip[1]);
+                if (!includeDirs.includes(dir)) includeDirs.unshift(dir);
+                continue;
+            }
+
+            const m = line.match(/^\s*(?:X?IncludeFile)\s+"([^"]+)"/i);
+            if (!m) continue;
+            const inc = m[1];
+            const fsPath = resolveIncludePath(uri, inc, includeDirs, workspaceRoot);
+            if (!fsPath) continue;
+            const incUri = fsPathToUri(fsPath);
+            if (result.has(incUri)) {
+                if (!visited.has(incUri)) queue.push({ uri: incUri, depth: depth + 1 });
+                continue;
+            }
+            const opened = allDocuments.get(incUri);
+            if (opened) {
+                addDoc(opened);
+                queue.push({ uri: incUri, depth: depth + 1 });
+                continue;
+            }
+            const content = readFileIfExistsSync(fsPath);
+            if (content != null) {
+                const tempDoc = TextDocument.create(incUri, 'purebasic', 0, content);
+                addDoc(tempDoc);
+                queue.push({ uri: incUri, depth: depth + 1 });
+            }
+        }
+    }
+
+    // Include workspace files for completeness
+    try {
+        const files = getWorkspaceFiles();
+        for (const fsPath of files) {
+            const incUri = fsPathToUri(fsPath);
+            if (result.has(incUri)) continue;
+            const content = readFileIfExistsSync(fsPath);
+            if (content != null) {
+                const tempDoc = TextDocument.create(incUri, 'purebasic', 0, content);
+                result.set(incUri, tempDoc);
+            }
+        }
+    } catch {}
+
+    return result;
 }
