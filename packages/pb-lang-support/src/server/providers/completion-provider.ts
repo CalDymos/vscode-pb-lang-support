@@ -13,7 +13,7 @@ import {
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { keywords, types, typeSuffixDefinitions, windowsApiFunctions, parsePureBasicConstantDefinition } from '../utils/constants';
 import { allBuiltinNames, findBuiltin } from '../utils/builtin-functions';
-import { stripInlineComment } from '../utils/pb-lexer-utils';
+import { stripInlineComment, isPositionInString } from '../utils/pb-lexer-utils';
 import { ApiFunctionListing } from '../utils/api-function-listing';
 import { getAvailableModules, getModuleExports } from '../utils/module-resolver';
 import { analyzeScopesAndVariables, getActiveUsedModules, VariableInfo } from '../utils/scope-manager';
@@ -883,12 +883,11 @@ function getTriggerContext(linePrefix: string): {
     isAfterTypeAnnotation: boolean;
     typeAnnotationPrefix: string;
 } {
-    // isInString – strip content after ';' before counting quotes,
-    // otherwise a comment like  ; say "hello"  would corrupt the count.
-    // Only the code portion of the line matters for string detection.
-    const codePart = stripInlineComment(linePrefix);
-    const quoteCount = (codePart.match(/"/g) || []).length;
-    const isInString = quoteCount % 2 === 1;
+    // isInString – use the lexer-aware scanner that correctly handles both
+    // regular "..." strings and escape ~"..." strings (where \" does not
+    // terminate the string).  Simple quote-count parity would mis-classify
+    // escape strings that contain \" sequences.
+    const isInString = isPositionInString(linePrefix, linePrefix.length);
 
     // isAfterDot removed. In PureBasic '.' is the type-annotation separator
     // (e.g. var.i, Procedure.s), NOT a member-access operator. Member access uses '\'.
