@@ -34,7 +34,8 @@ import { serverCapabilities } from './config/capabilities';
 import { defaultSettings, globalSettings, PureBasicSettings } from './config/settings';
 
 // Import validator
-import { initValidator, validateDocument } from './validation/validator';
+import { initValidator } from './validation/validator';
+import { runDiagnostics } from './validation/diagnostics-runner';
 
 // Import code completion provider
 import { initCompletionProvider, handleCompletion, handleCompletionResolve } from './providers/completion-provider';
@@ -58,7 +59,7 @@ import { handleDocumentFormatting, handleDocumentRangeFormatting } from './provi
 
 // Import symbol management
 import { initSymbolManager, parseDocumentSymbols } from './symbols/symbol-manager';
-import { setWorkspaceRoots } from './indexer/workspace-index';
+import { setWorkspaceRoots, getWorkspaceRootForUri } from './indexer/workspace-index';
 import { symbolCache } from './symbols/symbol-cache';
 import { SymbolInformation, SymbolKind as LSPSymbolKind, WorkspaceSymbolParams } from 'vscode-languageserver/node';
 import { SymbolKind as PBSymbolKind, PureBasicSymbol } from './symbols/types';
@@ -363,15 +364,9 @@ const safeValidateTextDocument = (textDocument: TextDocument): Promise<void> => 
     // Parse symbols
     parseDocumentSymbols(textDocument.uri, text);
 
-    // Validate document
-    let diagnostics = validateDocument(text);
-
-    // Limit number of diagnostics
-    if (diagnostics.length > settings.maxNumberOfProblems) {
-        diagnostics = diagnostics.slice(0, settings.maxNumberOfProblems);
-    }
-
-    // Send diagnostics
+    // Run all validators and send results
+    const workspaceRoot = getWorkspaceRootForUri(textDocument.uri);
+    const diagnostics = runDiagnostics(textDocument, settings, workspaceRoot);
     connection.sendDiagnostics({ uri: textDocument.uri, diagnostics });
     });
 };
