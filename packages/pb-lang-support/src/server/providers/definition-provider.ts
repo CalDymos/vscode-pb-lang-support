@@ -103,7 +103,11 @@ export function handleDefinition(
 }
 
 /**
- * Find function definition inside a module
+ * Find function definition inside a module.
+ *
+ * Searches two block types for the named module:
+ *   - DeclareModule ... EndDeclareModule  ->  Declare / DeclareC signature
+ *   - Module ... EndModule                ->  Procedure / ProcedureC / ProcedureDLL / ProcedureCDLL
  */
 function findModuleFunctionDefinition(
     moduleName: string,
@@ -113,40 +117,52 @@ function findModuleFunctionDefinition(
     const definitions: Location[] = [];
     const safeModuleName = escapeRegExp(moduleName);
     const safeFunctionName = escapeRegExp(functionName);
+    const declareRe = new RegExp(`^DeclareModule\\s+${safeModuleName}\\b`, 'i');
+    const moduleRe  = new RegExp(`^Module\\s+${safeModuleName}\\b`, 'i');
+    const procRe    = new RegExp(`^Procedure(?:C|DLL|CDLL)?(?:\\.\\w+)?\\s+(${safeFunctionName})\\s*\\(`, 'i');
+    const declFnRe  = new RegExp(`^Declare(?:C)?(?:\\.\\w+)?\\s+(${safeFunctionName})\\s*\\(`, 'i');
 
     for (const doc of searchDocs.values()) {
         const text = doc.getText();
         const lines = text.split('\n');
-        let inModule = false;
-        let moduleStartLine = -1;
+        let inDeclare = false;
+        let inModule  = false;
 
         for (let i = 0; i < lines.length; i++) {
-            const line = lines[i].trim();
+            const raw  = lines[i];
+            const line = raw.trim();
 
-            // Check module start
-            const moduleMatch = line.match(new RegExp(`^Module\\s+${safeModuleName}\\b`, 'i'));
-            if (moduleMatch) {
-                inModule = true;
-                moduleStartLine = i;
-                continue;
-            }
+            // Block boundary detection
+            if (declareRe.test(line))               { inDeclare = true;  continue; }
+            if (line.match(/^EndDeclareModule\b/i)) { inDeclare = false; continue; }
+            if (moduleRe.test(line))                { inModule  = true;  continue; }
+            if (line.match(/^EndModule\b/i))        { inModule  = false; continue; }
 
-            // Check module end
-            if (line.match(/^EndModule\b/i)) {
-                inModule = false;
-                continue;
-            }
-
-            // Find function definition inside module
-            if (inModule) {
-                const procMatch = line.match(new RegExp(`^Procedure(?:C|DLL|CDLL)?(?:\\.\\w+)?\\s+(${safeFunctionName})\\s*\\(`, 'i'));
-                if (procMatch) {
-                    const startChar = lines[i].indexOf(procMatch[1]);
+            // Declare / DeclareC signature inside DeclareModule
+            if (inDeclare) {
+                const m = line.match(declFnRe);
+                if (m) {
+                    const startChar = raw.indexOf(m[1]);
                     definitions.push({
                         uri: doc.uri,
                         range: {
                             start: { line: i, character: startChar },
-                            end: { line: i, character: startChar + functionName.length }
+                            end:   { line: i, character: startChar + functionName.length }
+                        }
+                    });
+                }
+            }
+
+            // Procedure* implementation inside Module
+            if (inModule) {
+                const m = line.match(procRe);
+                if (m) {
+                    const startChar = raw.indexOf(m[1]);
+                    definitions.push({
+                        uri: doc.uri,
+                        range: {
+                            start: { line: i, character: startChar },
+                            end:   { line: i, character: startChar + functionName.length }
                         }
                     });
                 }
