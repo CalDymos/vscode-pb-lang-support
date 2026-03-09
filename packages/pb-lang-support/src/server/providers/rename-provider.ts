@@ -16,7 +16,7 @@ import { analyzeScopesAndVariables } from '../utils/scope-manager';
 import { parsePureBasicConstantDefinition, parsePureBasicConstantDeclaration, keywords, types } from '../utils/constants';
 import { escapeRegExp } from '../utils/string-utils';
 import { readFileIfExistsSync, resolveIncludePath, fsPathToUri, normalizeDirPath } from '../utils/fs-utils';
-import { getWorkspaceFiles, getWorkspaceRootForUri } from '../indexer/workspace-index';
+import { getWorkspaceRootForUri } from '../indexer/workspace-index';
 
 /**
  * Normalizes a constant name.
@@ -746,7 +746,6 @@ function collectSearchDocuments(
     };
 
     addDoc(document);
-    for (const [, doc] of allDocuments) addDoc(doc);
 
     const queue: Array<{ uri: string; depth: number }> = [{ uri: document.uri, depth: 0 }];
 
@@ -796,20 +795,6 @@ function collectSearchDocuments(
             }
         }
     }
-
-    // Include workspace files for completeness
-    try {
-        const files = getWorkspaceFiles();
-        for (const fsPath of files) {
-            const incUri = fsPathToUri(fsPath);
-            if (result.has(incUri)) continue;
-            const content = readFileIfExistsSync(fsPath);
-            if (content != null) {
-                const tempDoc = TextDocument.create(incUri, 'purebasic', 0, content);
-                result.set(incUri, tempDoc);
-            }
-        }
-    } catch {}
 
     return result;
 }

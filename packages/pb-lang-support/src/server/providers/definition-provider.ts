@@ -12,7 +12,7 @@ import {
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { ProjectManager } from '../managers/project-manager';
 import { readFileIfExistsSync, resolveIncludePath, fsPathToUri, normalizeDirPath } from '../utils/fs-utils';
-import { getWorkspaceFiles, getWorkspaceRootForUri  } from '../indexer/workspace-index';
+import { getWorkspaceRootForUri  } from '../indexer/workspace-index';
 import { analyzeScopesAndVariables } from '../utils/scope-manager';
 import { parsePureBasicConstantDefinition, parsePureBasicConstantDeclaration } from '../utils/constants';
 import { escapeRegExp } from '../utils/string-utils';
@@ -637,7 +637,6 @@ function collectSearchDocuments(
     };
 
     addDoc(document);
-    for (const [, doc] of allDocuments) addDoc(doc);
 
     const rootDocUri = document.uri;
     const queue: Array<{ uri: string; depth: number }> = [{ uri: rootDocUri, depth: 0 }];
@@ -694,27 +693,24 @@ function collectSearchDocuments(
             }
         }
     }
-    // Add workspace files (with limit) to avoid missing unopened files
+    // Add project files (pbp-derived) if available
     try {
-        // Prefer project file list (pbp-derived) over a full workspace scan
-        let files: string[] | undefined;
         if (typeof projectManager?.getProjectFilesForDocument === 'function') {
             const projectFiles = projectManager.getProjectFilesForDocument(rootDocUri);
-            files = Array.isArray(projectFiles) && projectFiles.length > 0 ? projectFiles : undefined;
-        }
-
-        const filesToScan = files ?? getWorkspaceFiles();
-        for (const fsPath of filesToScan) {
-            const incUri = fsPathToUri(fsPath);
-            if (result.has(incUri)) continue;
-            const content = readFileIfExistsSync(fsPath);
-            if (content != null) {
-                const tempDoc = TextDocument.create(incUri, 'purebasic', 0, content);
-                result.set(incUri, tempDoc);
+            if (Array.isArray(projectFiles) && projectFiles.length > 0) {
+                for (const fsPath of projectFiles) {
+                    const incUri = fsPathToUri(fsPath);
+                    if (result.has(incUri)) continue;
+                    const content = readFileIfExistsSync(fsPath);
+                    if (content != null) {
+                        const tempDoc = TextDocument.create(incUri, 'purebasic', 0, content);
+                        result.set(incUri, tempDoc);
+                    }
+                }
             }
         }
     } catch (error) {
-        // Ignore errors during workspace scanning
+        // Ignore errors during project file scanning
     }
 
     return result;
