@@ -342,33 +342,43 @@ export function handleDocumentSymbol(
             continue;
         }
 
-        // Global variables
-        const globalMatch = trimmedLine.match(/^(Global|Protected|Static|Threaded|Define|Dim)\s+(?:\w+\s+)?(\*?\w+)(?:\.(\w+))?/i);
-        if (globalMatch) {
-            const scope = globalMatch[1];
-            const name = globalMatch[2];
-            const type = globalMatch[3] || 'unknown';
-            const displayName = `${name} : ${type}`;
-            const nameStart = safeIndexOf(line, name);
-            const selectionRange = createSafeRange(i, nameStart, name.length, line.length);
-
+        // Global variables — multi-variable declaration support
+        // e.g. "Global a.i, *b.MyType, c" → three symbols
+        const globalScopeRe = /^(Global|Protected|Static|Threaded|Define|Dim)\s+(?:(?:NewList|NewMap|NewArray)\s+)?/i;
+        const globalHeadMatch = trimmedLine.match(globalScopeRe);
+        if (globalHeadMatch) {
+            const scope      = globalHeadMatch[1];
+            const keywordEnd = globalHeadMatch[0].length;          // offset within trimmedLine
+            const remaining  = trimmedLine.substring(keywordEnd);
+            const lineIndent = line.length - line.trimStart().length;
             const blockRange: Range = {
                 start: { line: i, character: 0 },
-                end: { line: i, character: line.length }
+                end:   { line: i, character: line.length }
             };
 
-            const varSymbol: DocumentSymbol = {
-                name: displayName,
-                kind: SymbolKind.Variable,
-                range: blockRange,
-                selectionRange,
-                detail: scope
-            };
+            const nameRe = /(?:^|,)\s*\*?(\w+)(?:\.(\w+))?/g;
+            let nm: RegExpExecArray | null;
+            while ((nm = nameRe.exec(remaining)) !== null) {
+                const name = nm[1];
+                const type = nm[2] || 'unknown';
+                const displayName = `${name} : ${type}`;
+                const posInRemaining = nm.index + nm[0].indexOf(name);
+                const startChar      = lineIndent + keywordEnd + posInRemaining;
+                const selectionRange = createSafeRange(i, startChar, name.length, line.length);
 
-            if (currentModule) {
-                currentModule.children!.push(varSymbol);
-            } else {
-                symbols.push(varSymbol);
+                const varSymbol: DocumentSymbol = {
+                    name: displayName,
+                    kind: SymbolKind.Variable,
+                    range: blockRange,
+                    selectionRange,
+                    detail: scope
+                };
+
+                if (currentModule) {
+                    currentModule.children!.push(varSymbol);
+                } else {
+                    symbols.push(varSymbol);
+                }
             }
             continue;
         }
@@ -417,31 +427,41 @@ export function handleDocumentSymbol(
             }
         }
 
-        // Local variables (within a procedure)
+        // Local variables (within a procedure) — multi-variable declaration support
+        // e.g. "Protected a.i, *b.MyType, c" → three child symbols
         if (currentProcedure) {
-            const localVarMatch = trimmedLine.match(/^(Protected|Static|Define|Dim|Shared)\s+(?:\w+\s+)?(\*?\w+)(?:\.(\w+))?/i);
-            if (localVarMatch) {
-                const scope = localVarMatch[1];
-                const name = localVarMatch[2];
-                const type = localVarMatch[3] || 'unknown';
-                const displayName = `${name} : ${type}`;
-                const nameStart = safeIndexOf(line, name);
-                const selectionRange = createSafeRange(i, nameStart, name.length, line.length);
-
+            const localScopeRe = /^(Protected|Static|Define|Dim|Shared)\s+(?:(?:NewList|NewMap|NewArray)\s+)?/i;
+            const localHeadMatch = trimmedLine.match(localScopeRe);
+            if (localHeadMatch) {
+                const scope      = localHeadMatch[1];
+                const keywordEnd = localHeadMatch[0].length;
+                const remaining  = trimmedLine.substring(keywordEnd);
+                const lineIndent = line.length - line.trimStart().length;
                 const blockRange: Range = {
                     start: { line: i, character: 0 },
-                    end: { line: i, character: line.length }
+                    end:   { line: i, character: line.length }
                 };
 
-                const varSymbol: DocumentSymbol = {
-                    name: displayName,
-                    kind: SymbolKind.Variable,
-                    range: blockRange,
-                    selectionRange,
-                    detail: scope
-                };
+                const nameRe = /(?:^|,)\s*\*?(\w+)(?:\.(\w+))?/g;
+                let nm: RegExpExecArray | null;
+                while ((nm = nameRe.exec(remaining)) !== null) {
+                    const name = nm[1];
+                    const type = nm[2] || 'unknown';
+                    const displayName = `${name} : ${type}`;
+                    const posInRemaining = nm.index + nm[0].indexOf(name);
+                    const startChar      = lineIndent + keywordEnd + posInRemaining;
+                    const selectionRange = createSafeRange(i, startChar, name.length, line.length);
 
-                currentProcedure.children!.push(varSymbol);
+                    const varSymbol: DocumentSymbol = {
+                        name: displayName,
+                        kind: SymbolKind.Variable,
+                        range: blockRange,
+                        selectionRange,
+                        detail: scope
+                    };
+
+                    currentProcedure.children!.push(varSymbol);
+                }
             }
         }
     }
