@@ -169,20 +169,27 @@ export const types = [
     'Float', 'Double', 'Quad', 'Ascii', 'Unicode'
 ];
 
-// PureBasic type suffixes
-export const typeSuffixes = [
-    'i',    // Integer
-    'l',    // Long
-    'w',    // Word
-    'b',    // Byte
-    'c',    // Character
-    's',    // String
-    'f',    // Float
-    'd',    // Double
-    'q',    // Quad
-    'a',    // Ascii
-    'u'     // Unicode
+/**
+ * PureBasic type suffixes with documentation.
+ * Single source of truth — consumers that only need names use the derived
+ * `typeSuffixes` array below.
+ */
+export const typeSuffixDefinitions: ReadonlyArray<{ name: string; documentation: string }> = [
+    { name: 'i', documentation: 'Integer – platform-native integer (4 or 8 bytes)' },
+    { name: 'l', documentation: 'Long – 32-bit signed integer' },
+    { name: 'w', documentation: 'Word – 16-bit signed integer' },
+    { name: 'b', documentation: 'Byte – 8-bit signed integer' },
+    { name: 'c', documentation: 'Character – Unicode character (2 bytes)' },
+    { name: 's', documentation: 'String – string reference' },
+    { name: 'f', documentation: 'Float – 32-bit floating-point' },
+    { name: 'd', documentation: 'Double – 64-bit floating-point' },
+    { name: 'q', documentation: 'Quad – 64-bit signed integer' },
+    { name: 'a', documentation: 'Ascii – 8-bit ASCII character' },
+    { name: 'u', documentation: 'Unicode – 16-bit Unicode character' },
 ];
+
+/** Flat name-only list derived from typeSuffixDefinitions. */
+export const typeSuffixes: readonly string[] = typeSuffixDefinitions.map(s => s.name);
 
 const pureBasicConstantNamePattern = '[a-zA-Z_][a-zA-Z0-9_]*\\$?';
 // NOTE: This regex captures the full value including inline comments e.g. (42 ; comment).

@@ -11,7 +11,7 @@ import {
     InsertTextFormat
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
-import {keywords, types, typeSuffixes, windowsApiFunctions, parsePureBasicConstantDefinition } from '../utils/constants';
+import { keywords, types, typeSuffixDefinitions, windowsApiFunctions, parsePureBasicConstantDefinition } from '../utils/constants';
 import { allBuiltinNames, findBuiltin } from '../utils/builtin-functions';
 import { stripInlineComment } from '../utils/pb-lexer-utils';
 import { ApiFunctionListing } from '../utils/api-function-listing';
@@ -162,34 +162,19 @@ function handleCompletionInternal(
         const p = context.typeAnnotationPrefix.toLowerCase();
         const items: CompletionItem[] = [];
 
-        // Type suffix documentation map (single-letter PureBasic type suffixes)
-        const suffixDocs: Record<string, string> = {
-            i: 'Integer – platform-native integer (4 or 8 bytes)',
-            l: 'Long – 32-bit signed integer',
-            w: 'Word – 16-bit signed integer',
-            b: 'Byte – 8-bit signed integer',
-            c: 'Character – Unicode character (2 bytes)',
-            s: 'String – string reference',
-            f: 'Float – 32-bit floating-point',
-            d: 'Double – 64-bit floating-point',
-            q: 'Quad – 64-bit signed integer',
-            a: 'Ascii – 8-bit ASCII character',
-            u: 'Unicode – 16-bit Unicode character',
-        };
-
         // 1) Single-letter type suffixes
-        typeSuffixes
-            .filter(s => !p || s.startsWith(p))
-            .forEach((s, idx) => {
+        typeSuffixDefinitions
+            .filter(def => !p || def.name.startsWith(p))
+            .forEach((def, idx) => {
                 items.push({
-                    label: s,
+                    label: def.name,
                     kind: CompletionItemKind.TypeParameter,
                     data: 'tsuffix_' + idx,
-                    detail: `Type suffix .${s}`,
-                    documentation: suffixDocs[s] ?? `PureBasic type suffix .${s}`,
-                    insertText: s,
+                    detail: `Type suffix .${def.name}`,
+                    documentation: def.documentation,
+                    insertText: def.name,
                     insertTextFormat: InsertTextFormat.PlainText,
-                    sortText: '0_' + s,
+                    sortText: '0_' + def.name,
                 });
             });
 
