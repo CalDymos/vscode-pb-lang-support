@@ -1,103 +1,102 @@
 /**
- * 缓存工具类型定义
+ * Cache utility type definitions
  */
 
-import { CancellationToken } from './generics';
-import { Disposable } from '../core/config';
+import { CancellationToken, Disposable } from './generics';
 
-/** 缓存条目 */
+/** Cache entry */
 export interface CacheEntry<T> {
-    /** 缓存值 */
+    /** Cached value */
     value: T;
-    /** 创建时间 */
+    /** Creation time */
     createdAt: number;
-    /** 最后访问时间 */
+    /** Last access time */
     lastAccessed: number;
-    /** 访问次数 */
+    /** Access count */
     accessCount: number;
-    /** 过期时间 */
+    /** Expiration time */
     expiresAt?: number;
-    /** 大小（字节） */
+    /** Size (bytes) */
     size?: number;
-    /** 元数据 */
+    /** Metadata */
     metadata?: Record<string, unknown>;
 }
 
-/** 缓存选项 */
+/** Cache options */
 export interface CacheOptions<K, V> {
-    /** 最大条目数 */
+    /** Maximum number of entries */
     maxSize?: number;
-    /** TTL（毫秒） */
+    /** TTL (milliseconds) */
     ttl?: number;
-    /** 是否启用LRU淘汰 */
+    /** Whether to enable LRU eviction */
     enableLRU?: boolean;
-    /** 是否启用TTL淘汰 */
+    /** Whether to enable TTL eviction */
     enableTTL?: boolean;
-    /** 键序列化函数 */
+    /** Key serialization function */
     keySerializer?: (key: K) => string;
-    /** 值序列化函数 */
+    /** Value serialization function */
     valueSerializer?: (value: V) => string;
-    /** 值反序列化函数 */
+    /** Value deserialization function */
     valueDeserializer?: (serialized: string) => V;
-    /** 大小计算函数 */
+    /** Size calculation function */
     sizeCalculator?: (value: V) => number;
-    /** 清理回调 */
+    /** Eviction callback */
     onEvict?: (key: K, entry: CacheEntry<V>) => void;
-    /** 清理间隔（毫秒） */
+    /** Cleanup interval (milliseconds) */
     cleanupInterval?: number;
 }
 
-/** 缓存统计 */
+/** Cache statistics */
 export interface CacheStats {
-    /** 命中次数 */
+    /** Hit count */
     hits: number;
-    /** 未命中次数 */
+    /** Miss count */
     misses: number;
-    /** 命中率 */
+    /** Hit rate */
     hitRate: number;
-    /** 总条目数 */
+    /** Total entries */
     totalEntries: number;
-    /** 总大小（字节） */
+    /** Total size (bytes) */
     totalSize: number;
-    /** 过期条目数 */
+    /** Expired entries */
     expiredEntries: number;
-    /** 淘汰条目数 */
+    /** Evicted entries */
     evictedEntries: number;
-    /** 平均访问时间 */
+    /** Average access time */
     averageAccessTime: number;
-    /** 创建时间 */
+    /** Creation time */
     createdAt: number;
 }
 
-/** 缓存接口 */
+/** Cache interface */
 export interface Cache<K, V> {
-    /** 获取值 */
+    /** Get value */
     get(key: K): V | undefined;
-    /** 设置值 */
+    /** Set value */
     set(key: K, value: V, options?: CacheSetOptions<V>): void;
-    /** 检查是否存在 */
+    /** Check if exists */
     has(key: K): boolean;
-    /** 删除值 */
+    /** Delete value */
     delete(key: K): boolean;
-    /** 清空缓存 */
+    /** Clear cache */
     clear(): void;
-    /** 获取所有键 */
+    /** Get all keys */
     keys(): K[];
-    /** 获取所有值 */
+    /** Get all values */
     values(): V[];
-    /** 获取所有条目 */
+    /** Get all entries */
     entries(): Array<[K, CacheEntry<V>]>;
-    /** 缓存大小 */
+    /** Cache size */
     readonly size: number;
-    /** 获取统计信息 */
+    /** Get statistics */
     getStats(): CacheStats;
-    /** 开始清理过期条目 */
+    /** Start cleanup of expired entries */
     startCleanup(): void;
-    /** 停止清理过期条目 */
+    /** Stop cleanup of expired entries */
     stopCleanup(): void;
 }
 
-/** 缓存设置选项 */
+/** Cache set options */
 export interface CacheSetOptions<V> {
     /** TTL（毫秒） */
     ttl?: number;
