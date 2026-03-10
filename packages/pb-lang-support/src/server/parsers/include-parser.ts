@@ -12,6 +12,13 @@ export interface IncludeFile {
     resolvedPath: string;
     lineNumber: number;
     isConditional: boolean;
+    /** True for IncludeBinary directives (binary data embed). */
+    isBinary: boolean;
+    /**
+     * True when the directive appears inside a DataSection…EndDataSection
+     * block. Only meaningful when isBinary is true.
+     */
+    insideDataSection: boolean;
 }
 
 export interface IncludeAnalysis {
@@ -41,11 +48,24 @@ export function parseIncludeFiles(document: TextDocument, workspaceRoot: string 
     // Latest entries first (unshift), as later IncludePath specifications may take precedence.
     const includeDirs: string[] = [];
 
+    // Track whether the current line is inside a DataSection…EndDataSection block.
+    let insideDataSection = false;
+
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
 
         // Skip comment lines
         if (line.startsWith(';')) {
+            continue;
+        }
+
+        // Track DataSection / EndDataSection boundaries.
+        if (/^DataSection\b/i.test(line)) {
+            insideDataSection = true;
+            continue;
+        }
+        if (/^EndDataSection\b/i.test(line)) {
+            insideDataSection = false;
             continue;
         }
 
@@ -90,7 +110,39 @@ export function parseIncludeFiles(document: TextDocument, workspaceRoot: string 
                 filePath: rawIncludePath,
                 resolvedPath,
                 lineNumber: i,
-                isConditional
+                isConditional,
+                isBinary: false,
+                insideDataSection
+            });
+            dependencies.get(currentFile)!.push(resolvedPath);
+            continue;
+        }
+
+        // Parse IncludeBinary directive.
+        // IncludeBinary resolves relative to the document directory (same rules as
+        // IncludeFile). It should always appear inside a DataSection block.
+        const binaryMatch = line.match(/^IncludeBinary\s+"([^"]+)"/i);
+        if (binaryMatch) {
+            const rawBinaryPath = binaryMatch[1];
+            const resolved = fsResolveIncludePath(
+                document.uri,
+                rawBinaryPath,
+                includeDirs,
+                workspaceRoot || undefined
+            );
+
+            const resolvedPath = resolved ?? rawBinaryPath;
+            if (resolved === null) {
+                missingFiles.push(rawBinaryPath);
+            }
+
+            includeFiles.push({
+                filePath: rawBinaryPath,
+                resolvedPath,
+                lineNumber: i,
+                isConditional: false,
+                isBinary: true,
+                insideDataSection
             });
             dependencies.get(currentFile)!.push(resolvedPath);
         }

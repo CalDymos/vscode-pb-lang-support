@@ -1,6 +1,7 @@
 /**
  * Include File Validator
- * Generates diagnostics for missing IncludeFile / XIncludeFile targets.
+ * Generates diagnostics for missing IncludeFile / XIncludeFile / IncludeBinary
+ * targets and for IncludeBinary directives placed outside a DataSection block.
  */
 
 import { Diagnostic, DiagnosticSeverity } from 'vscode-languageserver/node';
@@ -8,14 +9,19 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { parseIncludeFiles } from '../parsers/include-parser';
 
 /**
- * Validates that all IncludeFile / XIncludeFile targets exist on disk.
+ * Validates that all IncludeFile / XIncludeFile / IncludeBinary targets exist
+ * on disk, and that every IncludeBinary directive appears inside a
+ * DataSection…EndDataSection block.
  *
- * - Non-conditional includes that cannot be resolved → Error
- * - Conditional includes (CompilerIf ... : XIncludeFile) → Warning,
- *   because the file may legitimately be platform-specific.
+ * Severity rules:
+ * - Non-conditional source include not found        → Error
+ * - Conditional source include not found            → Warning
+ *   (file may legitimately be platform-specific)
+ * - IncludeBinary file not found                    → Error
+ * - IncludeBinary outside DataSection               → Warning
  *
- * @param document     The document being validated.
- * @param workspaceRoot  Optional workspace root passed to the path resolver.
+ * @param document      The document being validated.
+ * @param workspaceRoot Optional workspace root passed to the path resolver.
  */
 export function validateIncludes(
     document: TextDocument,
@@ -25,26 +31,16 @@ export function validateIncludes(
 
     const analysis = parseIncludeFiles(document, workspaceRoot ?? '');
 
-    // missingFiles contains the raw (unresolved) paths.
-    // Build a lookup Set for O(1) checks against includeFiles entries.
-    const missingSet = new Set(analysis.missingFiles);
-    if (missingSet.size === 0) {
-        return diagnostics;
-    }
-
     const lines = document.getText().split(/\r?\n/);
 
+    // missingFiles contains the raw (unresolved) paths.
+    const missingSet = new Set(analysis.missingFiles);
+
     for (const include of analysis.includeFiles) {
-        if (!missingSet.has(include.filePath)) {
-            continue;
-        }
+        const lineNum = include.lineNumber;
+        const rawLine = lines[lineNum] ?? '';
 
-        const lineNum  = include.lineNumber;
-        const rawLine  = lines[lineNum] ?? '';
-
-        // Highlight the quoted filename inside the directive, e.g.:
-        //   IncludeFile "utils/helpers.pbi"
-        //                ^^^^^^^^^^^^^^^^^
+        // Highlight the quoted filename inside the directive.
         const quoteStart = rawLine.indexOf('"');
         const quoteEnd   = rawLine.lastIndexOf('"');
 
@@ -59,20 +55,36 @@ export function validateIncludes(
                       end:   { line: lineNum, character: rawLine.length }
                   };
 
-        const severity = include.isConditional
-            ? DiagnosticSeverity.Warning
-            : DiagnosticSeverity.Error;
+        // --- "File not found" diagnostic (applies to all include types) ------
+        if (missingSet.has(include.filePath)) {
+            const severity = include.isConditional
+                ? DiagnosticSeverity.Warning
+                : DiagnosticSeverity.Error;
 
-        const hint = include.isConditional
-            ? ' (conditional include – may be platform-specific)'
-            : '';
+            const hint = include.isConditional
+                ? ' (conditional include – may be platform-specific)'
+                : '';
 
-        diagnostics.push({
-            severity,
-            range,
-            message: `Include file not found: "${include.filePath}"${hint}`,
-            source: 'purebasic'
-        });
+            const label = include.isBinary ? 'Binary include' : 'Include file';
+
+            diagnostics.push({
+                severity,
+                range,
+                message: `${label} not found: "${include.filePath}"${hint}`,
+                source: 'purebasic'
+            });
+        }
+
+        // --- IncludeBinary outside DataSection diagnostic --------------------
+        if (include.isBinary && !include.insideDataSection) {
+            diagnostics.push({
+                severity: DiagnosticSeverity.Warning,
+                range,
+                message:
+                    `'IncludeBinary' should be placed inside a DataSection…EndDataSection block.`,
+                source: 'purebasic'
+            });
+        }
     }
 
     return diagnostics;
