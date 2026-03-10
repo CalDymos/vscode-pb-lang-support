@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.16.1
+
+### Fixed
+
+- show pointer type in outline symbols
+
 ## 0.16.0
 
 ### Added
