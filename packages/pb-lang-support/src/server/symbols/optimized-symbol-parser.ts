@@ -33,9 +33,11 @@ export class OptimizedSymbolParser {
         const startTime = performance.now();
         const hash = generateHash(text);
 
-        // Cache hit: content unchanged since last parse
+        // Cache hit: content unchanged since last parse.
+        // getSymbols() returns null on a miss, so an empty-but-valid cached
+        // result (legitimate zero-symbol file) is correctly treated as a hit.
         const cached = symbolCache.getSymbols(uri, hash);
-        if (cached.length > 0) {
+        if (cached !== null) {
             return {
                 symbols: cached,
                 metrics: {

@@ -59,18 +59,20 @@ class EnhancedSymbolCache {
     }
 
     /**
-     * Get document symbols with hash validation support
+     * Get document symbols with hash validation support.
+     * Returns the cached symbol array (which may be empty) on a hit,
+     * or null when the entry does not exist or the hash has changed.
      */
-    getSymbols(uri: string, expectedHash?: string): PureBasicSymbol[] {
+    getSymbols(uri: string, expectedHash?: string): PureBasicSymbol[] | null {
         const entry = this.cache.get(uri);
         if (!entry) {
-            return [];
+            return null;
         }
 
         // Hash validation
         if (expectedHash && entry.hash !== expectedHash) {
             this.cache.delete(uri);
-            return [];
+            return null;
         }
 
         // Update access information
