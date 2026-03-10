@@ -5,7 +5,8 @@
 ### Added
 
 - Added a generated built-in PureBasic function dataset based on the official documentation and integrated it into hover, signature help and completion.
-- Added diagnostics for missing `IncludeFile` / `XIncludeFile` targets.
+- Added diagnostics for missing `IncludeFile` / `XIncludeFile / IncludeBinary` targets.
+- Added diagnostics `IncludeBinary` not in DataSection.
 - Added completion support for chained structure member access and `With` blocks.
 - Added type completion after `.` for type suffixes, built-in types, structures and interfaces.
 - Added a shared document collection utility for cross-file language features.
