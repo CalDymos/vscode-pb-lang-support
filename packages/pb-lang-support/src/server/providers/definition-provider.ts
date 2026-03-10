@@ -142,7 +142,8 @@ function findModuleFunctionDefinition(
             if (inDeclare) {
                 const m = line.match(declFnRe);
                 if (m) {
-                    const startChar = raw.indexOf(m[1]);
+                    const indent = raw.length - raw.trimStart().length;
+                    const startChar = indent + m[0].indexOf(m[1]);
                     definitions.push({
                         uri: doc.uri,
                         range: {
@@ -157,7 +158,8 @@ function findModuleFunctionDefinition(
             if (inModule) {
                 const m = line.match(procRe);
                 if (m) {
-                    const startChar = raw.indexOf(m[1]);
+                    const indent = raw.length - raw.trimStart().length;
+                    const startChar = indent + m[0].indexOf(m[1]);
                     definitions.push({
                         uri: doc.uri,
                         range: {
@@ -220,7 +222,8 @@ function findDefinitionsInDocument(document: TextDocument, word: string): Locati
         // Find procedure definition
         const procMatch = line.match(new RegExp(`^Procedure(?:C|DLL|CDLL)?(?:\\.\\w+)?\\s+(${safeWord})\\s*\\(`, 'i'));
         if (procMatch) {
-            const startChar = lines[i].indexOf(procMatch[1]);
+            const indent = lines[i].length - lines[i].trimStart().length;
+            const startChar = indent + procMatch[0].indexOf(procMatch[1]);
             definitions.push({
                 uri: document.uri,
                 range: {
@@ -233,7 +236,8 @@ function findDefinitionsInDocument(document: TextDocument, word: string): Locati
         // Find structure definition
         const structMatch = line.match(new RegExp(`^Structure\\s+(${safeWord})\\b`, 'i'));
         if (structMatch) {
-            const startChar = lines[i].indexOf(structMatch[1]);
+            const indent = lines[i].length - lines[i].trimStart().length;
+            const startChar = indent + structMatch[0].indexOf(structMatch[1]);
             definitions.push({
                 uri: document.uri,
                 range: {
@@ -246,7 +250,8 @@ function findDefinitionsInDocument(document: TextDocument, word: string): Locati
         // Find interface definition
         const interfaceMatch = line.match(new RegExp(`^Interface\\s+(${safeWord})\\b`, 'i'));
         if (interfaceMatch) {
-            const startChar = lines[i].indexOf(interfaceMatch[1]);
+            const indent = lines[i].length - lines[i].trimStart().length;
+            const startChar = indent + interfaceMatch[0].indexOf(interfaceMatch[1]);
             definitions.push({
                 uri: document.uri,
                 range: {
@@ -259,7 +264,8 @@ function findDefinitionsInDocument(document: TextDocument, word: string): Locati
         // Find enumeration / EnumerationBinary definition
         const enumMatch = line.match(new RegExp(`^Enumeration(?:Binary)?\\s+(${safeWord})\\b`, 'i'));
         if (enumMatch) {
-            const startChar = lines[i].indexOf(enumMatch[1]);
+            const indent = lines[i].length - lines[i].trimStart().length;
+            const startChar = indent + enumMatch[0].indexOf(enumMatch[1]);
             definitions.push({
                 uri: document.uri,
                 range: {
@@ -272,7 +278,8 @@ function findDefinitionsInDocument(document: TextDocument, word: string): Locati
         // Find Macro definition
         const macroMatch = line.match(new RegExp(`^Macro\\s+(${safeWord})\\b`, 'i'));
         if (macroMatch) {
-            const startChar = lines[i].indexOf(macroMatch[1]);
+            const indent = lines[i].length - lines[i].trimStart().length;
+            const startChar = indent + macroMatch[0].indexOf(macroMatch[1]);
             definitions.push({
                 uri: document.uri,
                 range: {
@@ -285,7 +292,8 @@ function findDefinitionsInDocument(document: TextDocument, word: string): Locati
         // Find Prototype definition
         const protoMatch = line.match(new RegExp(`^Prototype(?:C)?(?:\\.\\w+)?\\s+(${safeWord})\\s*\\(`, 'i'));
         if (protoMatch) {
-            const startChar = lines[i].indexOf(protoMatch[1]);
+            const indent = lines[i].length - lines[i].trimStart().length;
+            const startChar = indent + protoMatch[0].indexOf(protoMatch[1]);
             definitions.push({
                 uri: document.uri,
                 range: {
@@ -298,7 +306,8 @@ function findDefinitionsInDocument(document: TextDocument, word: string): Locati
         // Find module definition
         const moduleMatch = line.match(new RegExp(`^Module\\s+(${safeWord})\\b`, 'i'));
         if (moduleMatch) {
-            const startChar = lines[i].indexOf(moduleMatch[1]);
+            const indent = lines[i].length - lines[i].trimStart().length;
+            const startChar = indent + moduleMatch[0].indexOf(moduleMatch[1]);
             definitions.push({
                 uri: document.uri,
                 range: {
@@ -349,7 +358,8 @@ function findDefinitionsInDocument(document: TextDocument, word: string): Locati
             new RegExp(`^(NewList|NewMap|NewArray)\\s+(${safeWord})(?=\\.|\\[|\\s*\\(|\\s*$)`, 'i')
         );
         if (newCollMatch) {
-            const startChar = lines[i].indexOf(newCollMatch[2], newCollMatch[1].length);
+            const indent = lines[i].length - lines[i].trimStart().length;
+            const startChar = indent + newCollMatch[0].indexOf(newCollMatch[2]);
             definitions.push({
                 uri: document.uri,
                 range: {
@@ -400,17 +410,20 @@ function findModuleSymbolDefinition(
                 }
                 const structMatch = line.match(new RegExp(`^Structure\\s+(${safeIdent})\\b`, 'i'));
                 if (structMatch) {
-                    const startChar = raw.indexOf(structMatch[1]);
+                    const indent = raw.length - raw.trimStart().length;
+                    const startChar = indent + structMatch[0].indexOf(structMatch[1]);
                     defs.push({ uri: doc.uri, range: { start: { line: i, character: startChar }, end: { line: i, character: startChar + ident.length } } });
                 }
                 const ifaceMatch = line.match(new RegExp(`^Interface\\s+(${safeIdent})\\b`, 'i'));
                 if (ifaceMatch) {
-                    const startChar = raw.indexOf(ifaceMatch[1]);
+                    const indent = raw.length - raw.trimStart().length;
+                    const startChar = indent + ifaceMatch[0].indexOf(ifaceMatch[1]);
                     defs.push({ uri: doc.uri, range: { start: { line: i, character: startChar }, end: { line: i, character: startChar + ident.length } } });
                 }
                 const enumMatch = line.match(new RegExp(`^Enumeration(?:Binary)?\\s+(${safeIdent})\\b`, 'i'));
                 if (enumMatch) {
-                    const startChar = raw.indexOf(enumMatch[1]);
+                    const indent = raw.length - raw.trimStart().length;
+                    const startChar = indent + enumMatch[0].indexOf(enumMatch[1]);
                     defs.push({ uri: doc.uri, range: { start: { line: i, character: startChar }, end: { line: i, character: startChar + ident.length } } });
                 }
             }
@@ -426,7 +439,8 @@ function findModuleSymbolDefinition(
                 }
                 const structMatch = line.match(new RegExp(`^Structure\\s+(${safeIdent})\\b`, 'i'));
                 if (structMatch) {
-                    const startChar = raw.indexOf(structMatch[1]);
+                    const indent = raw.length - raw.trimStart().length;
+                    const startChar = indent + structMatch[0].indexOf(structMatch[1]);
                     defs.push({ uri: doc.uri, range: { start: { line: i, character: startChar }, end: { line: i, character: startChar + ident.length } } });
                 }
             }
@@ -458,18 +472,21 @@ function findStructureMemberDefinition(
             if (inStruct) {
                 const mm = line.match(new RegExp(`^(?:\\*?)(${safeMemberName})\\b`));
                 if (mm) {
+                    const indent = raw.length - raw.trimStart().length;
+                    // Returns the position of the capture group within the entire match string.
+                    const startChar = indent + mm[0].indexOf(mm[1]);
+
                     // Skip matches within comments
-                    if (raw.substring(0, raw.indexOf(mm[1])).includes(';')) {
+                    if (raw.substring(0, startChar).includes(';')) {
                         continue;
                     }
 
                     // Skip matches within the string
-                    const beforeMatch = raw.substring(0, raw.indexOf(mm[1]));
+                    const beforeMatch = raw.substring(0, startChar);
                     const quoteCount = (beforeMatch.match(/"/g) || []).length;
                     if (quoteCount % 2 === 1) {
                         continue;
                     }
-                    const startChar = raw.indexOf(mm[1]);
                     matches.push({
                         uri: doc.uri,
                         range: {

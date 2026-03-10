@@ -128,7 +128,8 @@ function findModuleFunctionReferences(
             if (includeDeclaration && inModule) {
                 const procMatch = line.match(new RegExp(`^\\s*Procedure(?:C|DLL|CDLL)?(?:\\.\\w+)?\\s+(${safeFn})\\s*\\(`, 'i'));
                 if (procMatch) {
-                    const startChar = line.indexOf(procMatch[1]);
+                    // Returns the position of the capture group within the entire match string.
+                    const startChar = procMatch[0].indexOf(procMatch[1]);
                     references.push({
                         uri: doc.uri,
                         range: {
@@ -255,7 +256,9 @@ function findDefinitionReference(
     for (const pattern of patterns) {
         const match = trimmedLine.match(pattern);
         if (match) {
-            const startChar = line.indexOf(match[1]);
+            const indent = line.length - line.trimStart().length;
+            // Returns the position of the capture group within the entire match string.
+            const startChar = indent + match[0].indexOf(match[1]);
             return {
                 uri,
                 range: {
@@ -391,7 +394,9 @@ function findModuleSymbolReferences(
             for (const r of defMatchers) {
                 const mm = trimmed.match(r);
                 if (mm) {
-                    const startChar = line.indexOf(mm[1]);
+                    const indent = line.length - line.trimStart().length;
+                    // Returns the position of the capture group within the entire match string.
+                    const startChar = indent + mm[0].indexOf(mm[1]);
                     refs.push({
                         uri: doc.uri,
                         range: {
