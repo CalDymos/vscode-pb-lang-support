@@ -2,7 +2,7 @@
   "name": "pb-lang-support",
   "displayName": "PureBasic Language Services",
   "description": "%extension.description%",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "publisher": "CalDymos",
   "author": {
     "name": "CalDymos"
