@@ -13,12 +13,8 @@
 import * as path from 'path';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { ProjectManager } from '../managers/project-manager';
-import {
-    readFileIfExistsSync,
-    resolveIncludePath,
-    fsPathToUri,
-    normalizeDirPath,
-} from '../utils/fs-utils';
+import { resolveIncludePath, fsPathToUri, normalizeDirPath } from '../utils/fs-utils';
+import { readFileCached } from '../utils/file-cache';
 import { getWorkspaceRootForUri } from '../indexer/workspace-index';
 
 /**
@@ -123,7 +119,7 @@ export function collectSearchDocuments(
                 continue;
             }
 
-            const content = readFileIfExistsSync(fsPath);
+            const content = readFileCached(fsPath);
             if (content != null) {
                 const tempDoc = TextDocument.create(incUri, 'purebasic', 0, content);
                 addDoc(tempDoc);
@@ -147,7 +143,7 @@ export function collectSearchDocuments(
                     if (result.has(incUri)) {
                         continue;
                     }
-                    const content = readFileIfExistsSync(fsPath);
+                    const content = readFileCached(fsPath);
                     if (content != null) {
                         result.set(
                             incUri,
