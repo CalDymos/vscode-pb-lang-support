@@ -345,11 +345,6 @@ const safeValidateTextDocument = (textDocument: TextDocument): Promise<void> => 
         return;
     }
 
-    // Skip syntax validation for .pbp project files (they are XML, not PureBasic code)
-    if (textDocument.uri.endsWith('.pbp')) {
-        return;
-    }
-
     const text = textDocument.getText();
     const newHash = generateHash(text);
     const oldHash = documentHashes.get(textDocument.uri);

@@ -4,7 +4,7 @@
   "workspaces": [
     "packages/*"
   ],
-  "version": "0.17.2",
+  "version": "0.17.3",
   "engines": {
     "vscode": "^1.85.0"
   },

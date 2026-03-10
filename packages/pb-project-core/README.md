@@ -8,7 +8,7 @@ Tasks/content:
 
 - ✅ .pbp parser
 
-- ⏳ .pbp writer (TODO: still need to add this)
+- ✅ .pbp writer (TODO: still need to add this)
 
 - ⏳ Target selection rules (default/enabled/preferred)
 

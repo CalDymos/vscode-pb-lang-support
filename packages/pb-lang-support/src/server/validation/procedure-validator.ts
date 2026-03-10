@@ -7,7 +7,6 @@ import { DiagnosticSeverity } from 'vscode-languageserver/node';
 import { ValidationContext, ValidatorFunction } from './types';
 import { isValidType } from '../utils/constants';
 import { validateParameters } from './parameter-validator';
-import { stripInlineComment } from '../utils/pb-lexer-utils';
 
 /**
  * Validate procedure related syntax
@@ -20,12 +19,12 @@ export const validateProcedure: ValidatorFunction = (
     diagnostics
 ) => {
     if (/^Procedure(?:C|DLL|CDLL)?\b/i.test(line) && !/^ProcedureReturn\b/i.test(line)) {
-        // Single-line Procedure/ProcedureC/ProcedureDLL/ProcedureCDLL ... : EndProcedure -> not pushed to stack
-        const hasInlineEnd = /\bEndProcedure\b/i.test(line);
-        if (hasInlineEnd) {
+        // Single-line Procedure ... : EndProcedure -> not pushed to stack
+        if (/\bEndProcedure\b/i.test(line)) {
             return;
         }
-        // Validate procedure definition syntax (support calling conventions; get return type and procedure name first)
+
+        // Validate procedure header (calling convention, optional return type, name)
         const headerMatch = line.match(/^Procedure(?:C|DLL|CDLL)?\s*(?:\.(\w+))?\s*([a-zA-Z_][a-zA-Z0-9_]*)/i);
         if (!headerMatch) {
             diagnostics.push({
@@ -39,7 +38,6 @@ export const validateProcedure: ValidatorFunction = (
             });
         } else {
             const [, returnType, procName] = headerMatch;
-            const codeLine = stripInlineComment(line);
             context.procedureStack.push({ name: procName, line: lineNum });
 
             // Validate return type
@@ -56,13 +54,12 @@ export const validateProcedure: ValidatorFunction = (
                 });
             }
 
-            // Parameter syntax validation: Supports nested parentheses such as "()"" within parameters like List/Array/Map
-            // First remove inline comments to prevent parentheses within comments from interfering with parameter parsing
-            const lineWithoutComment = stripInlineComment(codeLine);
-            const openIdx = lineWithoutComment.indexOf('(');
-            const closeIdx = lineWithoutComment.lastIndexOf(')');
+            // `line` is already comment-stripped by the caller (validator.ts).
+            // Extract parameter list between the outermost parentheses.
+            const openIdx = line.indexOf('(');
+            const closeIdx = line.lastIndexOf(')');
             if (openIdx !== -1 && closeIdx !== -1 && closeIdx > openIdx) {
-                const params = lineWithoutComment.substring(openIdx + 1, closeIdx);
+                const params = line.substring(openIdx + 1, closeIdx);
                 if (params.trim().length > 0) {
                     validateParameters(params, lineNum, originalLine, diagnostics);
                 }

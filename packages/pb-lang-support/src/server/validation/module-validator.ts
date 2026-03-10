@@ -17,10 +17,8 @@ export const validateModules: ValidatorFunction = (
     diagnostics
 ) => {
     // Module validation
-    if (line.startsWith('Module ')) {
-        // Single-line Module ... : EndModule -> not pushed to stack
-        const hasInlineEnd = /\bEndModule\b/.test(line);
-        const moduleMatch = line.match(/^Module\s+([a-zA-Z_][a-zA-Z0-9_]*)/);
+    if (/^Module\s/i.test(line)) {
+        const moduleMatch = line.match(/^Module\s+([a-zA-Z_][a-zA-Z0-9_]*)/i);
         if (!moduleMatch) {
             diagnostics.push({
                 severity: DiagnosticSeverity.Error,
@@ -31,10 +29,10 @@ export const validateModules: ValidatorFunction = (
                 message: 'Invalid Module syntax. Expected: Module Name',
                 source: 'purebasic'
             });
-        } else if (!hasInlineEnd) {
+        } else if (!/\bEndModule\b/i.test(line)) {
             context.moduleStack.push({ name: moduleMatch[1], line: lineNum });
         }
-    } else if (/^EndModule\b/.test(line)) {
+    } else if (/^EndModule\b/i.test(line)) {
         if (context.moduleStack.length === 0) {
             diagnostics.push({
                 severity: DiagnosticSeverity.Error,
@@ -51,9 +49,8 @@ export const validateModules: ValidatorFunction = (
     }
 
     // DeclareModule validation
-    else if (line.startsWith('DeclareModule ')) {
-        const hasInlineEnd = /\bEndDeclareModule\b/.test(line);
-        const declModMatch = line.match(/^DeclareModule\s+([a-zA-Z_][a-zA-Z0-9_]*)/);
+    else if (/^DeclareModule\s/i.test(line)) {
+        const declModMatch = line.match(/^DeclareModule\s+([a-zA-Z_][a-zA-Z0-9_]*)/i);
         if (!declModMatch) {
             diagnostics.push({
                 severity: DiagnosticSeverity.Error,
@@ -64,10 +61,10 @@ export const validateModules: ValidatorFunction = (
                 message: 'Invalid DeclareModule syntax. Expected: DeclareModule Name',
                 source: 'purebasic'
             });
-        } else if (!hasInlineEnd) {
+        } else if (!/\bEndDeclareModule\b/i.test(line)) {
             context.declareModuleStack.push({ name: declModMatch[1], line: lineNum });
         }
-    } else if (/^EndDeclareModule\b/.test(line)) {
+    } else if (/^EndDeclareModule\b/i.test(line)) {
         if (context.declareModuleStack.length === 0) {
             diagnostics.push({
                 severity: DiagnosticSeverity.Error,
@@ -84,8 +81,8 @@ export const validateModules: ValidatorFunction = (
     }
 
     // UseModule validation
-    else if (line.startsWith('UseModule ')) {
-        const useModMatch = line.match(/^UseModule\s+([a-zA-Z_][a-zA-Z0-9_]*)/);
+    else if (/^UseModule\s/i.test(line)) {
+        const useModMatch = line.match(/^UseModule\s+([a-zA-Z_][a-zA-Z0-9_]*)/i);
         if (!useModMatch) {
             diagnostics.push({
                 severity: DiagnosticSeverity.Error,
@@ -100,8 +97,8 @@ export const validateModules: ValidatorFunction = (
     }
 
     // UnuseModule validation
-    else if (line.startsWith('UnuseModule ')) {
-        const unuseModMatch = line.match(/^UnuseModule\s+([a-zA-Z_][a-zA-Z0-9_]*)/);
+    else if (/^UnuseModule\s/i.test(line)) {
+        const unuseModMatch = line.match(/^UnuseModule\s+([a-zA-Z_][a-zA-Z0-9_]*)/i);
         if (!unuseModMatch) {
             diagnostics.push({
                 severity: DiagnosticSeverity.Error,

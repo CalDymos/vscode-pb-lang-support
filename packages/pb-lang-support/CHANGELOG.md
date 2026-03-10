@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.16.3
+
+### Fixed
+
+data-structure-validator.ts
+- Add /i flag to all keyword tests (PureBasic is case-insensitive)
+- Deduplicate structMatch regex (was evaluated twice per branch)
+- Check EnumerationBinary before Enumeration to avoid prefix match
+
+module-validator.ts
+- Add /i flag to all keyword tests
+- Replace startsWith() with /^Keyword\s/i.test() for consistency
+
+procedure-validator.ts
+- Remove redundant stripInlineComment calls; line is already
+  comment-stripped by the caller in validator.ts
+
+variable-validator.ts
+- Remove outer isInStringLiteral guard (too broad: drops valid lines
+  like `x.Type = "str"`); isPositionInString per match is sufficient
+- Fix diagnostics parameter type: any[] -> Diagnostic[]
+
+generic-validator.ts
+- Remove redundant empty-line and comment guards; validator.ts
+  already skips those before dispatching to sub-validators
+- Remove unnecessary .trim() calls on already-trimmed line
+
+control-structure-validator.ts
+- Pass line (comment-stripped) to splitStatements instead of
+  originalLine to stay consistent with all other validators
+
 ## 0.16.2
 
 ### Fixed
