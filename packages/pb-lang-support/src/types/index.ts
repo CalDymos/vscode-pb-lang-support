@@ -1,5 +1,5 @@
 /**
- * PureBasic VSCode Extension 类型定义统一导出
+ * PureBasic VSCode Extension Unified Type Definition Export
  */
 
 // Core types

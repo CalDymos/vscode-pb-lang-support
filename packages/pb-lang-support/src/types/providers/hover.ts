@@ -1,5 +1,5 @@
 /**
- * 悬停提供者相关类型定义
+ * Hover provider related type definitions
  */
 
 import { TextDocument, Position, Range, Hover, MarkedString } from 'vscode-languageserver';
@@ -7,420 +7,420 @@ import { CancellationToken } from '../utils/generics';
 import { Result, AsyncResult } from '../utils/generics';
 import { PureBasicSymbol } from '../core/symbol';
 
-/** 悬停上下文 */
+/** Hover context */
 export interface HoverContext {
-    /** 文档位置 */
+    /** Document position */
     position: Position;
-    /** 文档 */
+    /** Document */
     document: TextDocument;
-    /** 词汇 */
+    /** Word */
     word: string;
-    /** 行文本 */
+    /** Line text */
     lineText: string;
-    /** 前缀文本 */
+    /** Prefix text */
     prefix: string;
-    /** 后缀文本 */
+    /** Suffix text */
     suffix: string;
-    /** 范围 */
+    /** Range */
     range: Range;
-    /** 是否在字符串中 */
+    /** Whether inside a string */
     inString: boolean;
-    /** 是否在注释中 */
+    /** Whether inside a comment */
     inComment: boolean;
-    /** 作用域 */
+    /** Scope */
     scope?: HoverScope;
 }
 
-/** 悬停作用域 */
+/** Hover scope */
 export interface HoverScope {
-    /** 当前模块 */
+    /** Current module */
     module?: string;
-    /** 当前过程 */
+    /** Current procedure */
     procedure?: string;
-    /** 可见符号 */
+    /** Visible symbols */
     visibleSymbols: PureBasicSymbol[];
-    /** 导入符号 */
+    /** Imported symbols */
     importedSymbols: PureBasicSymbol[];
-    /** 全局符号 */
+    /** Global symbols */
     globalSymbols: PureBasicSymbol[];
 }
 
-/** 扩展的悬停信息 */
+/** Extended hover information */
 export interface ExtendedHover extends Hover {
-    /** 符号信息 */
+    /** Symbol information */
     symbol?: PureBasicSymbol;
-    /** 来源 */
+    /** Source */
     source?: HoverSource;
-    /** 置信度 */
+    /** Confidence */
     confidence?: number;
-    /** 相关符号 */
+    /** Related symbols */
     relatedSymbols?: PureBasicSymbol[];
-    /** 示例 */
+    /** Examples */
     examples?: HoverExample[];
-    /** 链接 */
+    /** Links */
     links?: HoverLink[];
-    /** 行动 */
+    /** Actions */
     actions?: HoverAction[];
 }
 
-/** 悬停来源 */
+/** Hover source */
 export enum HoverSource {
-    /** 本地符号 */
+    /** Local symbol */
     LocalSymbol = 'local-symbol',
-    /** 全局符号 */
+    /** Global symbol */
     GlobalSymbol = 'global-symbol',
-    /** 系统API */
+    /** System API */
     SystemAPI = 'system-api',
-    /** 库函数 */
+    /** Library function */
     LibraryFunction = 'library-function',
-    /** 关键字 */
+    /** Keyword */
     Keyword = 'keyword',
-    /** 常量 */
+    /** Constant */
     Constant = 'constant',
-    /** 类型 */
+    /** Type */
     Type = 'type',
-    /** 注释 */
+    /** Comment */
     Comment = 'comment',
-    /** 字符串 */
+    /** String */
     String = 'string',
-    /** 错误 */
+    /** Error */
     Error = 'error',
-    /** 警告 */
+    /** Warning */
     Warning = 'warning',
-    /** 缓存 */
+    /** Cached */
     Cached = 'cached'
 }
 
-/** 悬停示例 */
+/** Hover example */
 export interface HoverExample {
-    /** 描述 */
+    /** Description */
     description: string;
-    /** 代码 */
+    /** Code */
     code: string;
-    /** 语言 */
+    /** Language */
     language?: string;
-    /** 输出 */
+    /** Output */
     output?: string;
-    /** 注意事项 */
+    /** Notes */
     notes?: string[];
 }
 
-/** 悬停链接 */
+/** Hover link */
 export interface HoverLink {
-    /** 标题 */
+    /** Title */
     title: string;
     /** URL */
     url: string;
-    /** 描述 */
+    /** Description */
     description?: string;
-    /** 图标 */
+    /** Icon */
     icon?: string;
 }
 
-/** 悬停行动 */
+/** Hover action */
 export interface HoverAction {
-    /** 标题 */
+    /** Title */
     title: string;
-    /** 命令 */
+    /** Command */
     command: string;
-    /** 参数 */
+    /** Arguments */
     arguments?: any[];
-    /** 图标 */
+    /** Icon */
     icon?: string;
-    /** 当 */
+    /** When */
     when?: string;
 }
 
-/** 悬停内容 */
+/** Hover content */
 export interface HoverContent {
-    /** 主要内容 */
+    /** Main content */
     main: HoverContentPart[];
-    /** 详细信息 */
+    /** Details */
     details?: HoverContentPart[];
-    /** 元数据 */
+    /** Metadata */
     metadata?: HoverMetadata;
 }
 
-/** 悬停内容部分 */
+/** Hover content part */
 export interface HoverContentPart {
-    /** 内容类型 */
+    /** Content type */
     type: 'text' | 'code' | 'table' | 'list' | 'image' | 'link';
-    /** 内容 */
+    /** Content */
     content: string | TableContent | ListContent | ImageContent | LinkContent;
-    /** 样式 */
+    /** Style */
     style?: HoverContentStyle;
-    /** 语言 */
+    /** Language */
     language?: string;
 }
 
-/** 表格内容 */
+/** Table content */
 export interface TableContent {
-    /** 表头 */
+    /** Headers */
     headers: string[];
-    /** 行 */
+    /** Rows */
     rows: string[][];
-    /** 样式 */
+    /** Style */
     style?: TableStyle;
 }
 
-/** 表格样式 */
+/** Table style */
 export interface TableStyle {
-    /** 边框 */
+    /** Border */
     border?: boolean;
-    /** 对齐 */
+    /** Alignment */
     alignment?: 'left' | 'center' | 'right';
-    /** 颜色 */
+    /** Color */
     color?: string;
-    /** 背景色 */
+    /** Background color */
     backgroundColor?: string;
 }
 
-/** 列表内容 */
+/** List content */
 export interface ListContent {
-    /** 项目 */
+    /** Items */
     items: string[];
-    /** 类型 */
+    /** Type */
     type: 'ordered' | 'unordered' | 'task';
-    /** 样式 */
+    /** Style */
     style?: ListStyle;
 }
 
-/** 列表样式 */
+/** List style */
 export interface ListStyle {
-    /** 标记 */
+    /** Marker */
     marker?: string;
-    /** 颜色 */
+    /** Color */
     color?: string;
-    /** 缩进 */
+    /** Indentation */
     indent?: number;
 }
 
-/** 图像内容 */
+/** Image content */
 export interface ImageContent {
     /** URL */
     url: string;
-    /** 替代文本 */
+    /** Alternative text */
     altText: string;
-    /** 宽度 */
+    /** Width */
     width?: number;
-    /** 高度 */
+    /** Height */
     height?: number;
-    /** 标题 */
+    /** Title */
     title?: string;
 }
 
-/** 链接内容 */
+/** Link content */
 export interface LinkContent {
-    /** 文本 */
+    /** Text */
     text: string;
     /** URL */
     url: string;
-    /** 标题 */
+    /** Title */
     title?: string;
-    /** 目标 */
+    /** Target */
     target?: '_blank' | '_self' | '_parent' | '_top';
 }
 
-/** 悬停内容样式 */
+/** Hover content style */
 export interface HoverContentStyle {
-    /** 粗体 */
+    /** Bold */
     bold?: boolean;
-    /** 斜体 */
+    /** Italic */
     italic?: boolean;
-    /** 下划线 */
+    /** Underline */
     underline?: boolean;
-    /** 代码样式 */
+    /** Code style */
     code?: boolean;
-    /** 颜色 */
+    /** Color */
     color?: string;
-    /** 背景色 */
+    /** Background color */
     backgroundColor?: string;
-    /** 字体大小 */
+    /** Font size */
     fontSize?: number;
-    /** 字体系列 */
+    /** Font family */
     fontFamily?: string;
-    /** 对齐 */
+    /** Alignment */
     alignment?: 'left' | 'center' | 'right';
 }
 
-/** 悬停元数据 */
+/** Hover metadata */
 export interface HoverMetadata {
-    /** 来源 */
+    /** Source */
     source: HoverSource;
-    /** 创建时间 */
+    /** Created at */
     createdAt: number;
-    /** 过期时间 */
+    /** Expiration time */
     expiresAt?: number;
-    /** 版本 */
+    /** Version */
     version?: string;
-    /** 标签 */
+    /** Tags */
     tags: string[];
-    /** 置信度 */
+    /** Confidence */
     confidence: number;
-    /** 符号信息 */
+    /** Symbol information */
     symbol?: PureBasicSymbol;
 }
 
-/** 悬停提供者 */
+/** Hover provider */
 export interface HoverProvider {
-    /** 提供者名称 */
+    /** Provider name */
     name: string;
-    /** 提供悬停信息 */
+    /** Provide hover information */
     provideHover(
         document: TextDocument,
         position: Position,
         context: HoverContext,
         token: CancellationToken
     ): AsyncResult<ExtendedHover, Error>;
-    /** 是否支持给定文档 */
+    /** Whether the given document is supported */
     supports(document: TextDocument): boolean;
-    /** 获取优先级 */
+    /** Get priority */
     getPriority?(context: HoverContext): number;
-    /** 重置状态 */
+    /** Reset state */
     reset?(): void;
 }
 
-/** 悬停解析器 */
+/** Hover resolver */
 export interface HoverResolver {
-    /** 解析器名称 */
+    /** Resolver name */
     name: string;
-    /** 解析类型 */
+    /** Resolver type */
     type: HoverType;
-    /** 解析悬停信息 */
+    /** Resolve hover information */
     resolve(
         document: TextDocument,
         position: Position,
         context: HoverContext,
         token: CancellationToken
     ): AsyncResult<ExtendedHover, Error>;
-    /** 是否支持给定位置 */
+    /** Whether the given position is supported */
     supports(context: HoverContext): boolean;
-    /** 获取优先级 */
+    /** Get priority */
     getPriority(): number;
 }
 
-/** 悬停类型 */
+/** Hover type */
 export enum HoverType {
-    /** 符号悬停 */
+    /** Symbol hover */
     Symbol = 'symbol',
-    /** 关键字悬停 */
+    /** Keyword hover */
     Keyword = 'keyword',
-    /** 常量悬停 */
+    /** Constant hover */
     Constant = 'constant',
-    /** 类型悬停 */
+    /** Type hover */
     Type = 'type',
-    /** 函数悬停 */
+    /** Function hover */
     Function = 'function',
-    /** 变量悬停 */
+    /** Variable hover */
     Variable = 'variable',
-    /** 参数悬停 */
+    /** Parameter hover */
     Parameter = 'parameter',
-    /** 结构悬停 */
+    /** Structure hover */
     Structure = 'structure',
-    /** 枚举悬停 */
+    /** Enum hover */
     Enum = 'enum',
-    /** 注释悬停 */
+    /** Comment hover */
     Comment = 'comment',
-    /** 字符串悬停 */
+    /** String hover */
     String = 'string',
-    /** 错误悬停 */
+    /** Error hover */
     Error = 'error',
-    /** 警告悬停 */
+    /** Warning hover */
     Warning = 'warning',
-    /** 自定义悬停 */
+    /** Custom hover */
     Custom = 'custom'
 }
 
-/** 悬停配置 */
+/** Hover configuration */
 export interface HoverConfig {
-    /** 是否启用 */
+    /** Whether enabled */
     enabled: boolean;
-    /** 启用缓存 */
+    /** Enable cache */
     enableCache: boolean;
-    /** 缓存大小 */
+    /** Cache size */
     cacheSize: number;
-    /** 缓存过期时间（毫秒） */
+    /** Cache expiration time (milliseconds) */
     cacheTTL: number;
-    /** 启用并行解析 */
+    /** Enable parallel resolution */
     enableParallel: boolean;
-    /** 最大并行数 */
+    /** Maximum parallel count */
     maxParallel: number;
-    /** 超时时间（毫秒） */
+    /** Timeout (milliseconds) */
     timeout: number;
-    /** 内容格式 */
+    /** Content format */
     contentFormat: 'plaintext' | 'markdown';
-    /** 最大内容长度 */
+    /** Maximum content length */
     maxContentLength: number;
-    /** 提供者配置 */
+    /** Provider configuration */
     providers: HoverProviderConfig[];
 }
 
-/** 悬停提供者配置 */
+/** Hover provider configuration */
 export interface HoverProviderConfig {
-    /** 提供者名称 */
+    /** Provider name */
     name: string;
-    /** 是否启用 */
+    /** Whether enabled */
     enabled: boolean;
-    /** 优先级 */
+    /** Priority */
     priority: number;
-    /** 语言 */
+    /** Languages */
     languages?: string[];
-    /** 文件模式 */
+    /** File patterns */
     filePatterns?: string[];
-    /** 作用域 */
+    /** Scopes */
     scopes?: string[];
-    /** 配置选项 */
+    /** Configuration options */
     options?: Record<string, unknown>;
 }
 
-/** 悬停统计 */
+/** Hover statistics */
 export interface HoverStats {
-    /** 请求总数 */
+    /** Total requests */
     totalRequests: number;
-    /** 成功请求数 */
+    /** Successful requests */
     successfulRequests: number;
-    /** 失败请求数 */
+    /** Failed requests */
     failedRequests: number;
-    /** 平均响应时间 */
+    /** Average response time */
     averageResponseTime: number;
-    /** 缓存命中率 */
+    /** Cache hit rate */
     cacheHitRate: number;
-    /** 按提供者统计 */
+    /** Statistics by provider */
     byProvider: Record<string, HoverProviderStats>;
-    /** 按类型统计 */
+    /** Statistics by type */
     byType: Record<string, number>;
 }
 
-/** 悬停提供者统计 */
+/** Hover provider statistics */
 export interface HoverProviderStats {
-    /** 提供者名称 */
+    /** Provider name */
     name: string;
-    /** 请求数 */
+    /** Request count */
     requests: number;
-    /** 成功数 */
+    /** Successful count */
     successful: number;
-    /** 失败数 */
+    /** Failed count */
     failed: number;
-    /** 平均时间 */
+    /** Average time */
     averageTime: number;
-    /** 缓存命中率 */
+    /** Cache hit rate */
     cacheHitRate: number;
 }
 
-/** 悬停缓存项 */
+/** Hover cache item */
 export interface HoverCacheItem {
-    /** 键 */
+    /** Key */
     key: string;
-    /** 悬停信息 */
+    /** Hover information */
     hover: ExtendedHover;
-    /** 上下文 */
+    /** Context */
     context: HoverContext;
-    /** 过期时间 */
+    /** Expiration time */
     expiresAt: number;
-    /** 创建时间 */
+    /** Created at */
     createdAt: number;
-    /** 使用次数 */
+    /** Usage count */
     useCount: number;
-    /** 最后使用时间 */
+    /** Last used time */
     lastUsed: number;
 }

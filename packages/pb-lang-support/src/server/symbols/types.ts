@@ -1,5 +1,5 @@
 /**
- * 符号相关类型定义
+ * Symbol-related type definitions
  */
 
 export interface PureBasicSymbol {
@@ -11,10 +11,10 @@ export interface PureBasicSymbol {
     };
     detail?: string;
     documentation?: string;
-    module?: string; // 所属模块名称
-    isPublic?: boolean; // 是否为公共符号
-    parameters?: string[]; // 参数列表
-    returnType?: string; // 返回类型
+    module?: string; // Associated module name
+    isPublic?: boolean; // Whether it is a public symbol
+    parameters?: string[]; // Parameter list
+    returnType?: string; // Return type
 }
 
 export enum SymbolKind {

@@ -169,11 +169,11 @@ function findReferencesInDocument(
         if (isConstant) {
             // Constants: search all occurrences (definition + usage)
             const baseName = normalizeConstantName(word.replace(/^#/, ''));
-            const ref = findConstantReference(line, i, baseName, document.uri);
-            if (ref) {
+            const refs = findConstantReference(line, i, baseName, document.uri);
+            if (refs.length > 0) {
                 const isDef = parsePureBasicConstantDefinition(trimmedLine) !== null;
                 if (!isDef || includeDeclaration) {
-                    references.push(ref);
+                    references.push(...refs);
                 }
             }
             continue;
@@ -196,40 +196,39 @@ function findReferencesInDocument(
 }
 
 /**
- * Find a constant reference (#NAME or #NAME$) in a line.
+ * Find all constant references (#NAME or #NAME$) in a line.
+ * Returns all occurrences, not just the first (analogous to findUsageReference).
  */
 function findConstantReference(
     line: string,
     lineIndex: number,
     baseName: string,
     uri: string
-): Location | null {
-    const searchName = '#' + baseName;
-    const lowerLine = line.toLowerCase();
-    const idx = lowerLine.indexOf(searchName);
-    if (idx === -1) { return null; }
+): Location[] {
+    const results: Location[] = [];
+    const re = new RegExp('#' + escapeRegExp(baseName) + '(?:\\$)?\\b', 'gi');
+    const commentStart = getCommentStart(line);
 
-    // Skip if match is inside an inline comment
-    if (line.substring(0, idx).includes(';')) { return null; }
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(line)) !== null) {
+        // Skip if inside or after a comment
+        if (commentStart !== -1 && m.index >= commentStart) { break; }
 
-    // Skip if match is inside a string literal
-    const quoteCount = (line.substring(0, idx).match(/"/g) || []).length;
-    if (quoteCount % 2 === 1) { return null; }
+        // Skip if inside a string literal
+        const quoteCount = (line.substring(0, m.index).match(/"/g) || []).length;
+        if (quoteCount % 2 === 1) { continue; }
 
-    const afterIdx = idx + searchName.length;
-    const hasDollar = lowerLine[afterIdx] === '$';
-    const nextChar = lowerLine[afterIdx + (hasDollar ? 1 : 0)];
-    if (nextChar && /[a-z0-9_$]/.test(nextChar)) { return null; } // not a word boundary
-
-    const startChar = idx + 1; // skip #
-    const matchLength = baseName.length + (hasDollar ? 1 : 0);
-    return {
-        uri,
-        range: {
-            start: { line: lineIndex, character: startChar },
-            end: { line: lineIndex, character: startChar + matchLength }
-        }
-    };
+        const startChar = m.index + 1; // skip leading #
+        const matchLength = m[0].length - 1; // exclude #
+        results.push({
+            uri,
+            range: {
+                start: { line: lineIndex, character: startChar },
+                end:   { line: lineIndex, character: startChar + matchLength }
+            }
+        });
+    }
+    return results;
 }
 
 /**
