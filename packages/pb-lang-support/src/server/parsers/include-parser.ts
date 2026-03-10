@@ -5,7 +5,7 @@
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { URI } from 'vscode-uri';
 import { parsePureBasicConstantDefinition } from '../utils/constants';
-import { resolveIncludePath as fsResolveIncludePath } from '../utils/fs-utils';
+import { resolveIncludePath as fsResolveIncludePath, normalizeDirPath } from '../utils/fs-utils';
 
 export interface IncludeFile {
     filePath: string;
@@ -53,7 +53,7 @@ export function parseIncludeFiles(document: TextDocument, workspaceRoot: string 
         // PureBasic syntax is `IncludePath "directory"` – only double quotation marks.
         const includePathMatch = line.match(/^IncludePath\s+"([^"]+)"/i);
         if (includePathMatch) {
-            const dir = includePathMatch[1].replace(/\\/g, '/').replace(/\/?$/, '/');
+            const dir = normalizeDirPath(document.uri, includePathMatch[1]);
             if (!includeDirs.includes(dir)) {
                 includeDirs.unshift(dir);
             }
