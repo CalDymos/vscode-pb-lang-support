@@ -92,6 +92,22 @@
         }
       }
     },
+    "languages": [
+      {
+        "id": "purebasic-project",
+        "aliases": [
+          "PureBasic Project File",
+          "purebasic project"
+        ],
+        "extensions": [
+          ".pbp"
+        ],
+        "icon": {
+          "light": "./icons/purebasic.png",
+          "dark": "./icons/purebasic.png"
+        }
+      }
+    ],
     "commands": [
       {
         "command": "pbProjectFiles.pickProject",
