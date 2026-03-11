@@ -39,10 +39,6 @@ async function resolvePbfLanguageId(): Promise<string | undefined> {
     return "purebasic-form";   
   }
 
-  if (languages.has("purebasic")) {
-    return "purebasic";       
-  }
-
   return undefined;
 }
 
