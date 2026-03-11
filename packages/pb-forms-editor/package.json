@@ -2,7 +2,7 @@
   "name": "pb-forms-editor",
   "displayName": "PureBasic Forms Editor",
   "description": "Custom Editor for PureBasic .pbf forms with a webview designer.",
-  "version": "0.7.15",
+  "version": "0.8.0",
   "publisher": "CalDymos",
   "author": {
     "name": "CalDymos"
@@ -192,7 +192,28 @@
           "description": "%purebasicFormsDesigner.expectedPbVersion.description%"
         }
       }
-    }
+    },
+    "languages": [
+      {
+        "id": "purebasic-form",
+        "aliases": [
+          "PureBasic Form",
+          "purebasic-form"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icon.png",
+          "dark": "./icon.png"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "purebasic-form",
+        "scopeName": "source.purebasic.form",
+        "path": "./syntaxes/purebasic-form.tmLanguage.json"
+      }
+    ]
   },
   "scripts": {
     "compile": "tsc -p .",

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.18.0
+
+### Added
+
+- Added purebasic language support for .pbf text mode used by pb-forms-editor.
+
 ## 0.17.2
 
 ### Fixed

@@ -2,7 +2,7 @@
   "name": "pb-lang-support",
   "displayName": "PureBasic Language Services",
   "description": "%extension.description%",
-  "version": "0.17.2",
+  "version": "0.18.0",
   "publisher": "CalDymos",
   "author": {
     "name": "CalDymos"
@@ -321,6 +321,21 @@
           "light": "./icons/purebasic.png",
           "dark": "./icons/purebasic.png"
         }
+      },
+      {
+        "id": "purebasic-form",
+        "aliases": [
+          "PureBasic Form",
+          "purebasic-form"
+        ],
+        "extensions": [
+          ".pbf"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/purebasic.png",
+          "dark": "./icons/purebasic.png"
+        }
       }
     ],
     "grammars": [
@@ -328,6 +343,11 @@
         "language": "purebasic",
         "scopeName": "source.purebasic",
         "path": "./syntaxes/purebasic.tmLanguage.json"
+      },
+      {
+        "language": "purebasic-form",
+        "scopeName": "source.purebasic.form",
+        "path": "./syntaxes/purebasic-form.tmLanguage.json"
       }
     ],
     "snippets": [
