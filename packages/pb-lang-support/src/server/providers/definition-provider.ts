@@ -11,11 +11,10 @@ import {
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { ProjectManager } from '../managers/project-manager';
-import { readFileIfExistsSync, resolveIncludePath, fsPathToUri, normalizeDirPath } from '../utils/fs-utils';
-import { getWorkspaceFiles, getWorkspaceRootForUri  } from '../indexer/workspace-index';
+import { collectSearchDocuments } from '../utils/document-collector';
 import { analyzeScopesAndVariables } from '../utils/scope-manager';
 import { parsePureBasicConstantDefinition, parsePureBasicConstantDeclaration } from '../utils/constants';
-import { escapeRegExp } from '../utils/string-utils';
+import { escapeRegExp, getWordAtPosition, normalizeConstantName, getModuleSymbolAtPosition, getBaseType, getStructAccessFromLine, normalizeVarName } from '../utils/pb-lexer-utils';
 
 /**
  * Handle definition requests
@@ -30,7 +29,9 @@ export function handleDefinition(
     const position = params.position;
 
     // Get the word at the current position
-    const word = getWordAtPosition(text, position);
+    const lines = text.split('\n');
+    if (position.line >= lines.length) return [];
+    const word = getWordAtPosition(lines[position.line], position.character);
     if (!word) {
         return [];
     }
@@ -42,7 +43,7 @@ export function handleDefinition(
     const definitions: Location[] = [];
 
     // Struct member access: var\\member → jump to structure member definition
-    const structAccess = getStructAccessFromPosition(text, position);
+    const structAccess = getStructAccessFromLine(lines[position.line], position.character);
     if (structAccess) {
         const scopeInfo = analyzeScopesAndVariables(text, position.line);
         const varInfo = scopeInfo.availableVariables.find(v => v.name.toLowerCase() === normalizeVarName(structAccess.varName).toLowerCase());
@@ -58,103 +59,53 @@ export function handleDefinition(
         }
     }
 
-    // First check module constants/structures etc: Module::#CONST / Module::Type
-    const moduleSymbol = getModuleSymbolFromPosition(document.getText(), position);
-    if (moduleSymbol) {
-        const moduleSymbolDefs = findModuleSymbolDefinition(
-            moduleSymbol.moduleName,
-            moduleSymbol.ident,
-            searchDocs
-        );
-        definitions.push(...moduleSymbolDefs);
-        if (definitions.length > 0) return definitions;
+    // Handle module syntax: Module::#Const / Module::Type / Module::Function
+    const moduleMatch = getModuleSymbolAtPosition(lines[position.line], position.character);
+    if (moduleMatch) {
+        if (moduleMatch.kind === 'function') {
+            // Module::Func( – look for procedure definition only
+            definitions.push(...findModuleFunctionDefinition(
+                moduleMatch.moduleName,
+                moduleMatch.symbolName,
+                searchDocs
+            ));
+        } else {
+            // 'constant' (Module::#Const) or 'type' (Module::Struct/Enum/Interface)
+            definitions.push(...findModuleSymbolDefinition(
+                moduleMatch.moduleName,
+                moduleMatch.symbolName,
+                searchDocs
+            ));
+        }
+        return definitions;
     }
 
-    // Handle module function call syntax
-    const moduleMatch = getModuleFunctionFromPosition(document.getText(), position);
-    if (moduleMatch) {
-        // Look for function definition inside module
-        const moduleDefinitions = findModuleFunctionDefinition(
-            moduleMatch.moduleName,
-            moduleMatch.functionName,
-            searchDocs
-        );
-        definitions.push(...moduleDefinitions);
-        // Look for module constants/structures definitions
-        const moduleSymbolDefs = findModuleSymbolDefinition(
-            moduleMatch.moduleName,
-            moduleMatch.functionName,
-            searchDocs
-        );
-        definitions.push(...moduleSymbolDefs);
-    } else {
-        // First search in project symbols
-        if (projectManager) {
-            const projectSymbol = projectManager.findSymbolDefinition(word, document.uri);
-            if (projectSymbol) {
-                // Convert project symbol to Location
-                try {
-                    const lines = projectSymbol.file.split('\n');
-                    const definitionLine = lines[projectSymbol.line] || '';
-                    const startPos = definitionLine.indexOf(word);
-                    if (startPos !== -1) {
-                        definitions.push({
-                            uri: projectSymbol.file,
-                            range: {
-                                start: { line: projectSymbol.line, character: startPos },
-                                end: { line: projectSymbol.line, character: startPos + word.length }
-                            }
-                        });
-                    }
-                } catch (error) {
-                    // Ignore conversion errors
-                }
-            }
+    // First search in project symbols
+    if (projectManager) {
+        const projectSymbol = projectManager.findSymbolDefinition(word, document.uri);
+        if (projectSymbol) {
+            definitions.push({
+                uri: projectSymbol.uri,
+                range: projectSymbol.symbol.range
+            });
         }
+    }
 
-        // Regular search: traverse all search documents
-        for (const doc of searchDocs.values()) {
-            const docDefinitions = findDefinitionsInDocument(doc, word);
-            definitions.push(...docDefinitions);
-        }
+    // Regular search: traverse all search documents
+    for (const doc of searchDocs.values()) {
+        const docDefinitions = findDefinitionsInDocument(doc, word);
+        definitions.push(...docDefinitions);
     }
 
     return definitions;
 }
 
 /**
- * Get module function call information at a position
- */
-function getModuleFunctionFromPosition(text: string, position: Position): {
-    moduleName: string;
-    functionName: string;
-} | null {
-    const lines = text.split('\n');
-    if (position.line >= lines.length) {
-        return null;
-    }
-
-    const line = lines[position.line];
-    const char = position.character;
-
-    // Find module call syntax Module::Function
-    const moduleRe = /(\w+)::(\w+)/g;
-    let moduleMatch: RegExpExecArray | null;
-    while ((moduleMatch = moduleRe.exec(line)) !== null) {
-        const matchStart = moduleMatch.index;
-        const matchEnd = matchStart + moduleMatch[0].length;
-        if (char >= matchStart && char <= matchEnd) {
-            return {
-                moduleName: moduleMatch[1],
-                functionName: moduleMatch[2]
-            };
-        }
-    }
-    return null;
-}
-
-/**
- * Find function definition inside a module
+ * Find function definition inside a module.
+ *
+ * Searches two block types for the named module:
+ *   - DeclareModule ... EndDeclareModule  ->  Declare / DeclareC signature
+ *   - Module ... EndModule                ->  Procedure / ProcedureC / ProcedureDLL / ProcedureCDLL
  */
 function findModuleFunctionDefinition(
     moduleName: string,
@@ -164,40 +115,54 @@ function findModuleFunctionDefinition(
     const definitions: Location[] = [];
     const safeModuleName = escapeRegExp(moduleName);
     const safeFunctionName = escapeRegExp(functionName);
+    const declareRe = new RegExp(`^DeclareModule\\s+${safeModuleName}\\b`, 'i');
+    const moduleRe  = new RegExp(`^Module\\s+${safeModuleName}\\b`, 'i');
+    const procRe    = new RegExp(`^Procedure(?:C|DLL|CDLL)?(?:\\.\\w+)?\\s+(${safeFunctionName})\\s*\\(`, 'i');
+    const declFnRe  = new RegExp(`^Declare(?:C)?(?:\\.\\w+)?\\s+(${safeFunctionName})\\s*\\(`, 'i');
 
     for (const doc of searchDocs.values()) {
         const text = doc.getText();
         const lines = text.split('\n');
-        let inModule = false;
-        let moduleStartLine = -1;
+        let inDeclare = false;
+        let inModule  = false;
 
         for (let i = 0; i < lines.length; i++) {
-            const line = lines[i].trim();
+            const raw  = lines[i];
+            const line = raw.trim();
 
-            // Check module start
-            const moduleMatch = line.match(new RegExp(`^Module\\s+${safeModuleName}\\b`, 'i'));
-            if (moduleMatch) {
-                inModule = true;
-                moduleStartLine = i;
-                continue;
-            }
+            // Block boundary detection
+            if (declareRe.test(line))               { inDeclare = true;  continue; }
+            if (line.match(/^EndDeclareModule\b/i)) { inDeclare = false; continue; }
+            if (moduleRe.test(line))                { inModule  = true;  continue; }
+            if (line.match(/^EndModule\b/i))        { inModule  = false; continue; }
 
-            // Check module end
-            if (line.match(/^EndModule\b/i)) {
-                inModule = false;
-                continue;
-            }
-
-            // Find function definition inside module
-            if (inModule) {
-                const procMatch = line.match(new RegExp(`^Procedure(?:C|DLL|CDLL)?(?:\\.\\w+)?\\s+(${safeFunctionName})\\s*\\(`, 'i'));
-                if (procMatch) {
-                    const startChar = lines[i].indexOf(procMatch[1]);
+            // Declare / DeclareC signature inside DeclareModule
+            if (inDeclare) {
+                const m = line.match(declFnRe);
+                if (m) {
+                    const indent = raw.length - raw.trimStart().length;
+                    const startChar = indent + m[0].indexOf(m[1]);
                     definitions.push({
                         uri: doc.uri,
                         range: {
                             start: { line: i, character: startChar },
-                            end: { line: i, character: startChar + functionName.length }
+                            end:   { line: i, character: startChar + functionName.length }
+                        }
+                    });
+                }
+            }
+
+            // Procedure* implementation inside Module
+            if (inModule) {
+                const m = line.match(procRe);
+                if (m) {
+                    const indent = raw.length - raw.trimStart().length;
+                    const startChar = indent + m[0].indexOf(m[1]);
+                    definitions.push({
+                        uri: doc.uri,
+                        range: {
+                            start: { line: i, character: startChar },
+                            end:   { line: i, character: startChar + functionName.length }
                         }
                     });
                 }
@@ -241,55 +206,6 @@ function findDefinitionsInIncludes(
 }
 
 /**
- * Get the word at a position (supports module syntax Module::Function)
- */
-function getWordAtPosition(text: string, position: Position): string | null {
-    const lines = text.split('\n');
-    if (position.line >= lines.length) {
-        return null;
-    }
-
-    const line = lines[position.line];
-    const char = position.character;
-
-    // Find word boundaries (support :: syntax)
-    let start = char;
-    let end = char;
-
-    // Search forward for word start
-    while (start > 0 && /[a-zA-Z0-9_:]/.test(line[start - 1])) {
-        start--;
-    }
-
-    // Search backward for word end
-    while (end < line.length && /[a-zA-Z0-9_:]/.test(line[end])) {
-        end++;
-    }
-
-    if (start === end) {
-        return null;
-    }
-
-    const fullWord = line.substring(start, end);
-
-    // Handle module call syntax Module::Function
-    if (fullWord.includes('::')) {
-        const parts = fullWord.split('::');
-        if (parts.length === 2) {
-            // Check if cursor is on module name or function name
-            const moduleEnd = start + parts[0].length;
-            if (char <= moduleEnd) {
-                return parts[0]; // Return module name
-            } else {
-                return parts[1]; // Return function name
-            }
-        }
-    }
-
-    return fullWord;
-}
-
-/**
  * Search for definitions within a document
  */
 function findDefinitionsInDocument(document: TextDocument, word: string): Location[] {
@@ -304,7 +220,8 @@ function findDefinitionsInDocument(document: TextDocument, word: string): Locati
         // Find procedure definition
         const procMatch = line.match(new RegExp(`^Procedure(?:C|DLL|CDLL)?(?:\\.\\w+)?\\s+(${safeWord})\\s*\\(`, 'i'));
         if (procMatch) {
-            const startChar = lines[i].indexOf(procMatch[1]);
+            const indent = lines[i].length - lines[i].trimStart().length;
+            const startChar = indent + procMatch[0].indexOf(procMatch[1]);
             definitions.push({
                 uri: document.uri,
                 range: {
@@ -317,7 +234,8 @@ function findDefinitionsInDocument(document: TextDocument, word: string): Locati
         // Find structure definition
         const structMatch = line.match(new RegExp(`^Structure\\s+(${safeWord})\\b`, 'i'));
         if (structMatch) {
-            const startChar = lines[i].indexOf(structMatch[1]);
+            const indent = lines[i].length - lines[i].trimStart().length;
+            const startChar = indent + structMatch[0].indexOf(structMatch[1]);
             definitions.push({
                 uri: document.uri,
                 range: {
@@ -330,7 +248,8 @@ function findDefinitionsInDocument(document: TextDocument, word: string): Locati
         // Find interface definition
         const interfaceMatch = line.match(new RegExp(`^Interface\\s+(${safeWord})\\b`, 'i'));
         if (interfaceMatch) {
-            const startChar = lines[i].indexOf(interfaceMatch[1]);
+            const indent = lines[i].length - lines[i].trimStart().length;
+            const startChar = indent + interfaceMatch[0].indexOf(interfaceMatch[1]);
             definitions.push({
                 uri: document.uri,
                 range: {
@@ -343,7 +262,8 @@ function findDefinitionsInDocument(document: TextDocument, word: string): Locati
         // Find enumeration / EnumerationBinary definition
         const enumMatch = line.match(new RegExp(`^Enumeration(?:Binary)?\\s+(${safeWord})\\b`, 'i'));
         if (enumMatch) {
-            const startChar = lines[i].indexOf(enumMatch[1]);
+            const indent = lines[i].length - lines[i].trimStart().length;
+            const startChar = indent + enumMatch[0].indexOf(enumMatch[1]);
             definitions.push({
                 uri: document.uri,
                 range: {
@@ -356,7 +276,8 @@ function findDefinitionsInDocument(document: TextDocument, word: string): Locati
         // Find Macro definition
         const macroMatch = line.match(new RegExp(`^Macro\\s+(${safeWord})\\b`, 'i'));
         if (macroMatch) {
-            const startChar = lines[i].indexOf(macroMatch[1]);
+            const indent = lines[i].length - lines[i].trimStart().length;
+            const startChar = indent + macroMatch[0].indexOf(macroMatch[1]);
             definitions.push({
                 uri: document.uri,
                 range: {
@@ -369,7 +290,8 @@ function findDefinitionsInDocument(document: TextDocument, word: string): Locati
         // Find Prototype definition
         const protoMatch = line.match(new RegExp(`^Prototype(?:C)?(?:\\.\\w+)?\\s+(${safeWord})\\s*\\(`, 'i'));
         if (protoMatch) {
-            const startChar = lines[i].indexOf(protoMatch[1]);
+            const indent = lines[i].length - lines[i].trimStart().length;
+            const startChar = indent + protoMatch[0].indexOf(protoMatch[1]);
             definitions.push({
                 uri: document.uri,
                 range: {
@@ -382,7 +304,8 @@ function findDefinitionsInDocument(document: TextDocument, word: string): Locati
         // Find module definition
         const moduleMatch = line.match(new RegExp(`^Module\\s+(${safeWord})\\b`, 'i'));
         if (moduleMatch) {
-            const startChar = lines[i].indexOf(moduleMatch[1]);
+            const indent = lines[i].length - lines[i].trimStart().length;
+            const startChar = indent + moduleMatch[0].indexOf(moduleMatch[1]);
             definitions.push({
                 uri: document.uri,
                 range: {
@@ -433,7 +356,8 @@ function findDefinitionsInDocument(document: TextDocument, word: string): Locati
             new RegExp(`^(NewList|NewMap|NewArray)\\s+(${safeWord})(?=\\.|\\[|\\s*\\(|\\s*$)`, 'i')
         );
         if (newCollMatch) {
-            const startChar = lines[i].indexOf(newCollMatch[2], newCollMatch[1].length);
+            const indent = lines[i].length - lines[i].trimStart().length;
+            const startChar = indent + newCollMatch[0].indexOf(newCollMatch[2]);
             definitions.push({
                 uri: document.uri,
                 range: {
@@ -445,30 +369,6 @@ function findDefinitionsInDocument(document: TextDocument, word: string): Locati
     }
 
     return definitions;
-}
-
-/**
- * Get module symbol (function or constant/structure) call location: supports Module::Name and Module::#CONST
- */
-function getModuleSymbolFromPosition(text: string, position: Position): { moduleName: string; ident: string } | null {
-    const lines = text.split('\n');
-    if (position.line >= lines.length) return null;
-    const line = lines[position.line];
-    const char = position.character;
-    const constRe = /(\w+)::#(\w+)/g;
-    let m: RegExpExecArray | null;
-    while ((m = constRe.exec(line)) !== null) {
-        const start = m.index;
-        const end = start + m[0].length;
-        if (char >= start && char <= end) return { moduleName: m[1], ident: m[2] };
-    }
-    const funcRe = /(\w+)::(\w+)/g;
-    while ((m = funcRe.exec(line)) !== null) {
-        const start = m.index;
-        const end = start + m[0].length;
-        if (char >= start && char <= end) return { moduleName: m[1], ident: m[2] };
-    }
-    return null;
 }
 
 /**
@@ -508,17 +408,20 @@ function findModuleSymbolDefinition(
                 }
                 const structMatch = line.match(new RegExp(`^Structure\\s+(${safeIdent})\\b`, 'i'));
                 if (structMatch) {
-                    const startChar = raw.indexOf(structMatch[1]);
+                    const indent = raw.length - raw.trimStart().length;
+                    const startChar = indent + structMatch[0].indexOf(structMatch[1]);
                     defs.push({ uri: doc.uri, range: { start: { line: i, character: startChar }, end: { line: i, character: startChar + ident.length } } });
                 }
                 const ifaceMatch = line.match(new RegExp(`^Interface\\s+(${safeIdent})\\b`, 'i'));
                 if (ifaceMatch) {
-                    const startChar = raw.indexOf(ifaceMatch[1]);
+                    const indent = raw.length - raw.trimStart().length;
+                    const startChar = indent + ifaceMatch[0].indexOf(ifaceMatch[1]);
                     defs.push({ uri: doc.uri, range: { start: { line: i, character: startChar }, end: { line: i, character: startChar + ident.length } } });
                 }
                 const enumMatch = line.match(new RegExp(`^Enumeration(?:Binary)?\\s+(${safeIdent})\\b`, 'i'));
                 if (enumMatch) {
-                    const startChar = raw.indexOf(enumMatch[1]);
+                    const indent = raw.length - raw.trimStart().length;
+                    const startChar = indent + enumMatch[0].indexOf(enumMatch[1]);
                     defs.push({ uri: doc.uri, range: { start: { line: i, character: startChar }, end: { line: i, character: startChar + ident.length } } });
                 }
             }
@@ -534,50 +437,14 @@ function findModuleSymbolDefinition(
                 }
                 const structMatch = line.match(new RegExp(`^Structure\\s+(${safeIdent})\\b`, 'i'));
                 if (structMatch) {
-                    const startChar = raw.indexOf(structMatch[1]);
+                    const indent = raw.length - raw.trimStart().length;
+                    const startChar = indent + structMatch[0].indexOf(structMatch[1]);
                     defs.push({ uri: doc.uri, range: { start: { line: i, character: startChar }, end: { line: i, character: startChar + ident.length } } });
                 }
             }
         }
     }
     return defs;
-}
-
-function normalizeConstantName(name: string): string {
-    return name.replace(/\$$/, '').toLowerCase();
-}
-
-/**
- * Struct member access match: var\\member (cursor on that segment)
- */
-function getStructAccessFromPosition(text: string, position: Position): { varName: string; memberName: string } | null {
-    const lines = text.split('\n');
-    if (position.line >= lines.length) return null;
-    const line = lines[position.line];
-    const char = position.character;
-
-    const re = /([A-Za-z_][A-Za-z0-9_]*|\*[A-Za-z_][A-Za-z0-9_]*)(?:\([^)]*\))?\\(\w+)/g;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(line)) !== null) {
-        const start = m.index;
-        const end = start + m[0].length;
-        if (char >= start && char <= end) {
-            return { varName: m[1], memberName: m[2] };
-        }
-    }
-    return null;
-}
-
-function normalizeVarName(n: string): string {
-    return n.replace(/^\*/, '').replace(/\([^)]*\)$/, '');
-}
-
-function getBaseType(typeStr: string): string {
-    if (!typeStr) return '';
-    const cleaned = typeStr.split(' ')[0];
-    const noPtr = cleaned.startsWith('*') ? cleaned.substring(1) : cleaned;
-    const arrIdx = noPtr.indexOf('[');
-    return arrIdx > -1 ? noPtr.substring(0, arrIdx) : noPtr;
 }
 
 /**
@@ -603,18 +470,21 @@ function findStructureMemberDefinition(
             if (inStruct) {
                 const mm = line.match(new RegExp(`^(?:\\*?)(${safeMemberName})\\b`));
                 if (mm) {
+                    const indent = raw.length - raw.trimStart().length;
+                    // Returns the position of the capture group within the entire match string.
+                    const startChar = indent + mm[0].indexOf(mm[1]);
+
                     // Skip matches within comments
-                    if (raw.substring(0, raw.indexOf(mm[1])).includes(';')) {
+                    if (raw.substring(0, startChar).includes(';')) {
                         continue;
                     }
 
                     // Skip matches within the string
-                    const beforeMatch = raw.substring(0, raw.indexOf(mm[1]));
+                    const beforeMatch = raw.substring(0, startChar);
                     const quoteCount = (beforeMatch.match(/"/g) || []).length;
                     if (quoteCount % 2 === 1) {
                         continue;
                     }
-                    const startChar = raw.indexOf(mm[1]);
                     matches.push({
                         uri: doc.uri,
                         range: {
@@ -627,106 +497,4 @@ function findStructureMemberDefinition(
         }
     }
     return matches;
-}
-
-/**
- * Collect search documents: current + open + recursively included
- */
-function collectSearchDocuments(
-    document: TextDocument,
-    allDocuments: Map<string, TextDocument>,
-    projectManager?: ProjectManager,
-    maxDepth = 3
-): Map<string, TextDocument> {
-    const workspaceRoot = getWorkspaceRootForUri(document.uri);
-    const result = new Map<string, TextDocument>();
-    const visited = new Set<string>();
-
-    const addDoc = (doc: TextDocument) => {
-        if (!result.has(doc.uri)) {
-            result.set(doc.uri, doc);
-        }
-    };
-
-    addDoc(document);
-    for (const [, doc] of allDocuments) addDoc(doc);
-
-    const rootDocUri = document.uri;
-    const queue: Array<{ uri: string; depth: number }> = [{ uri: rootDocUri, depth: 0 }];
-
-    while (queue.length) {
-        const { uri, depth } = queue.shift()!;
-        if (visited.has(uri) || depth > maxDepth) continue;
-        visited.add(uri);
-
-        const baseDoc = result.get(uri);
-        if (!baseDoc) continue;
-        const text = baseDoc.getText();
-        const lines = text.split('\n');
-
-        // Maintain current IncludePath search directories (newest first)
-        // Seed with project include directories from pb-project-files if available.
-        const includeDirs: string[] = typeof projectManager?.getIncludeDirsForDocument === 'function'
-            ? (projectManager.getIncludeDirsForDocument(uri) ?? []).slice()
-            : [];
-
-        for (const line of lines) {
-            // IncludePath directive
-            const ip = line.match(/^\s*IncludePath\s+\"([^\"]+)\"/i);
-            if (ip) {
-                const dir = normalizeDirPath(uri, ip[1]);
-                // Newest first
-                if (!includeDirs.includes(dir)) includeDirs.unshift(dir);
-                continue;
-            }
-
-            // IncludeFile / XIncludeFile directives
-            const m = line.match(/^\s*(?:X?IncludeFile)\s+\"([^\"]+)\"/i);
-            if (!m) continue;
-            const inc = m[1];
-            const fsPath = resolveIncludePath(uri, inc, includeDirs, workspaceRoot);
-            if (!fsPath) continue;
-            const incUri = fsPathToUri(fsPath);
-            if (result.has(incUri)) {
-                if (!visited.has(incUri)) queue.push({ uri: incUri, depth: depth + 1 });
-                continue;
-            }
-            const opened = allDocuments.get(incUri);
-            if (opened) {
-                addDoc(opened);
-                queue.push({ uri: incUri, depth: depth + 1 });
-                continue;
-            }
-            const content = readFileIfExistsSync(fsPath);
-            if (content != null) {
-                const tempDoc = TextDocument.create(incUri, 'purebasic', 0, content);
-                addDoc(tempDoc);
-                queue.push({ uri: incUri, depth: depth + 1 });
-            }
-        }
-    }
-    // Add workspace files (with limit) to avoid missing unopened files
-    try {
-        // Prefer project file list (pbp-derived) over a full workspace scan
-        let files: string[] | undefined;
-        if (typeof projectManager?.getProjectFilesForDocument === 'function') {
-            const projectFiles = projectManager.getProjectFilesForDocument(rootDocUri);
-            files = Array.isArray(projectFiles) && projectFiles.length > 0 ? projectFiles : undefined;
-        }
-
-        const filesToScan = files ?? getWorkspaceFiles();
-        for (const fsPath of filesToScan) {
-            const incUri = fsPathToUri(fsPath);
-            if (result.has(incUri)) continue;
-            const content = readFileIfExistsSync(fsPath);
-            if (content != null) {
-                const tempDoc = TextDocument.create(incUri, 'purebasic', 0, content);
-                result.set(incUri, tempDoc);
-            }
-        }
-    } catch (error) {
-        // Ignore errors during workspace scanning
-    }
-
-    return result;
 }

@@ -1,12 +1,13 @@
 /**
- * 性能优化的符号解析器
- * 支持大文件、增量解析和智能缓存
+ * Performance-optimized symbol parser
+ * Supports large files, incremental parsing, and intelligent caching
  */
 
 import { PureBasicSymbol, SymbolKind } from './types';
 import { symbolCache } from './symbol-cache';
 import { parsePureBasicConstantDefinition } from '../utils/constants';
-import { stripInlineComment } from '../utils/string-utils';
+import { stripInlineComment } from '../utils/pb-lexer-utils';
+import { generateHash } from '../utils/hash-utils';
 
 export interface ParsedDocument {
     symbols: PureBasicSymbol[];
@@ -20,56 +21,55 @@ export interface ParsedDocument {
 }
 
 /**
- * 优化的文档符号解析器
+ * Optimized document symbol parser
  */
 export class OptimizedSymbolParser {
-    private lastParsedVersions = new Map<string, string>();
 
     /**
-     * 解析文档符号（性能优化版本）
+     * Parse document symbols with hash-based cache.
+     * Returns cached result immediately if content is unchanged (~16x faster).
      */
     async parseDocumentSymbols(uri: string, text: string): Promise<ParsedDocument> {
         const startTime = performance.now();
+        const hash = generateHash(text);
 
-        // 简单的预分析 - 根据文本长度选择策略
-        const preAnalysis = {
-            strategy: text.length > 10000 ? 'minimal' : 'full'
-        };
-
-        // 根据预分析结果选择解析策略
-        let result: ParsedDocument;
-
-        switch (preAnalysis.strategy) {
-            case 'minimal':
-                result = await this.parseMinimalSymbols(uri, text, preAnalysis);
-                break;
-            case 'full':
-            default:
-                result = await this.parseFull(uri, text, preAnalysis);
-                break;
+        // Cache hit: content unchanged since last parse.
+        // getSymbols() returns null on a miss, so an empty-but-valid cached
+        // result (legitimate zero-symbol file) is correctly treated as a hit.
+        const cached = symbolCache.getSymbols(uri, hash);
+        if (cached !== null) {
+            return {
+                symbols: cached,
+                metrics: {
+                    parseTime: performance.now() - startTime,
+                    symbolCount: cached.length,
+                    cacheHits: 1,
+                    memoryUsage: 0
+                },
+                strategy: 'cache'
+            };
         }
 
-        const totalTime = performance.now() - startTime;
-        result.metrics.parseTime = totalTime;
-
-        // 更新缓存
-        symbolCache.setSymbols(uri, result.symbols);
+        // Cache miss: parse and store with content hash
+        const result = await this.parseFull(uri, text, {});
+        result.metrics.parseTime = performance.now() - startTime;
+        symbolCache.setSymbols(uri, result.symbols, hash);
 
         return result;
     }
 
     /**
-     * 批量解析多个文档（优化性能）
+     * Batch parsing of multiple documents (performance optimization)
      */
     async parseMultipleDocuments(
         documents: Array<{ uri: string; text: string }>
     ): Promise<Map<string, ParsedDocument>> {
         const results = new Map<string, ParsedDocument>();
 
-        // 按文档大小排序，先处理小文档
+        // Sort by document size and process smaller documents first
         const sortedDocs = [...documents].sort((a, b) => a.text.length - b.text.length);
 
-        // 并行处理（限制并发数）
+        // Parallel Processing (Limiting Concurrency)
         const concurrency = 3;
         const chunks: Array<Array<{ uri: string; text: string }>> = [];
 
@@ -93,25 +93,33 @@ export class OptimizedSymbolParser {
     }
 
     /**
-     * 获取解析性能统计
+     * Retrieve parsing performance statistics
      */
     getPerformanceStats() {
+        const stats = symbolCache.getCacheStats();
         return {
-            totalParsedDocuments: this.lastParsedVersions.size,
+            totalParsedDocuments: stats.totalDocuments,
             averageParseTime: 0,
             cacheHitRate: 0
         };
     }
 
     /**
-     * 清理性能缓存
+     * Remove cached parse result for a specific document (e.g. on close).
      */
-    cleanup() {
-        this.lastParsedVersions.clear();
+    invalidate(uri: string): void {
+        symbolCache.clearSymbols(uri);
+    }
+
+    /**
+     * Clear all cached parse results.
+     */
+    cleanup(): void {
+        symbolCache.clearAll();
     }
 
     private async parseFull(uri: string, text: string, preAnalysis: any): Promise<ParsedDocument> {
-        // 直接解析整个文档
+        // Directly parse the entire document
         const symbols = this.parseBasicSymbols(text);
 
         return {
@@ -126,81 +134,7 @@ export class OptimizedSymbolParser {
         };
     }
 
-    private async parseStreaming(uri: string, text: string, preAnalysis: any): Promise<ParsedDocument> {
-        // 流式解析 - 按行解析
-        const symbols = this.parseBasicSymbols(text);
 
-        return {
-            symbols,
-            metrics: {
-                parseTime: performance.now(),
-                symbolCount: symbols.length,
-                cacheHits: 0,
-                memoryUsage: JSON.stringify(symbols).length
-            },
-            strategy: 'streaming'
-        };
-    }
-
-    private async parseMinimalSymbols(uri: string, text: string, preAnalysis: any): Promise<ParsedDocument> {
-        // 最小化解析 - 只解析关键符号
-        const lines = text.split('\n');
-        const symbols: PureBasicSymbol[] = [];
-        const maxLinesToScan = Math.min(lines.length, 100); // 只扫描前100行
-
-        for (let i = 0; i < maxLinesToScan; i++) {
-            const line = lines[i].trim();
-
-            // Skip comment lines
-            if (line.startsWith(';')) {
-                continue;
-            }
-
-            // 只解析过程定义（最重要的符号）
-            const procMatch = line.match(/^Procedure\s*(?:\.(\w+))?\s*([a-zA-Z_][a-zA-Z0-9_]*)/);
-            if (procMatch) {
-                symbols.push({
-                    name: procMatch[2],
-                    kind: SymbolKind.Procedure,
-                    range: {
-                        start: { line: i, character: 0 },
-                        end: { line: i, character: line.length }
-                    },
-                    detail: procMatch[1] ? `Procedure.${procMatch[1]}` : 'Procedure',
-                    documentation: `Procedure definition: ${procMatch[2]}`
-                });
-            }
-
-            // 解析模块定义（第二优先级）
-            const moduleMatch = line.match(/^(?:Module|DeclareModule)\s+([a-zA-Z_][a-zA-Z0-9_]*)/);
-            if (moduleMatch) {
-                symbols.push({
-                    name: moduleMatch[1],
-                    kind: SymbolKind.Module,
-                    range: {
-                        start: { line: i, character: 0 },
-                        end: { line: i, character: line.length }
-                    },
-                    detail: 'Module',
-                    documentation: `Module definition: ${moduleMatch[1]}`
-                });
-            }
-        }
-
-        const parseTime = performance.now();
-        const memoryUsage = JSON.stringify(symbols).length;
-
-        return {
-            symbols,
-            metrics: {
-                parseTime: 0,
-                symbolCount: symbols.length,
-                cacheHits: 0,
-                memoryUsage
-            },
-            strategy: 'minimal'
-        };
-    }
 
     private parseBasicSymbols(text: string): PureBasicSymbol[] {
         const symbols: PureBasicSymbol[] = [];
@@ -214,8 +148,8 @@ export class OptimizedSymbolParser {
                 continue;
             }
 
-            // 解析过程定义
-            const procMatch = line.match(/^Procedure\s*(?:\.(\w+))?\s*([a-zA-Z_][a-zA-Z0-9_]*)/);
+            // Parsing Process Definition
+            const procMatch = line.match(/^Procedure(?:C|DLL|CDLL)?\s*(?:\.(\w+))?\s*([a-zA-Z_][a-zA-Z0-9_]*)/);
             if (procMatch) {
                 symbols.push({
                     name: procMatch[2],
@@ -229,7 +163,7 @@ export class OptimizedSymbolParser {
                 });
             }
 
-            // 解析结构定义
+            // Parsing Structure Definitions
             const structMatch = line.match(/^Structure\s+([a-zA-Z_][a-zA-Z0-9_]*)/);
             if (structMatch) {
                 symbols.push({
@@ -244,7 +178,7 @@ export class OptimizedSymbolParser {
                 });
             }
 
-            // 解析接口定义
+            // Parsing the interface definition
             const interfaceMatch = line.match(/^Interface\s+([a-zA-Z_][a-zA-Z0-9_]*)/);
             if (interfaceMatch) {
                 symbols.push({
@@ -259,8 +193,8 @@ export class OptimizedSymbolParser {
                 });
             }
 
-            // 解析枚举定义
-            const enumMatch = line.match(/^Enumeration\s+([a-zA-Z_][a-zA-Z0-9_]*)/);
+            // Parsing Enumeration Definitions
+            const enumMatch = line.match(/^Enumeration(?:Binary)?\s+([a-zA-Z_][a-zA-Z0-9_]*)/i);
             if (enumMatch) {
                 symbols.push({
                     name: enumMatch[1],
@@ -274,7 +208,7 @@ export class OptimizedSymbolParser {
                 });
             }
 
-            // 解析DeclareModule
+            // Parsing DeclareModule
             const declareModuleMatch = line.match(/^DeclareModule\s+([a-zA-Z_][a-zA-Z0-9_]*)/);
             if (declareModuleMatch) {
                 symbols.push({
@@ -289,7 +223,7 @@ export class OptimizedSymbolParser {
                 });
             }
 
-            // 解析Module
+            // Module Parsing
             const moduleMatch = line.match(/^Module\s+([a-zA-Z_][a-zA-Z0-9_]*)/);
             if (moduleMatch) {
                 symbols.push({
@@ -332,6 +266,36 @@ export class OptimizedSymbolParser {
                     },
                     detail: `Variable.${varMatch[2]}`,
                     documentation: `Variable definition: ${varMatch[1]}.${varMatch[2]}`
+                });
+            }
+
+            // Array definitions: Dim/Global/Protected/Static Name(...)
+            const arrayMatch = line.match(/^(?:Dim|Global|Protected|Static)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([^)]*)\)/);
+            if (arrayMatch) {
+                symbols.push({
+                    name: arrayMatch[1],
+                    kind: SymbolKind.Variable,
+                    range: {
+                        start: { line: i, character: 0 },
+                        end: { line: i, character: line.length }
+                    },
+                    detail: 'Array',
+                    documentation: `Array definition: ${arrayMatch[1]}(${arrayMatch[2]})`
+                });
+            }
+
+            // List definitions: NewList Name.Type
+            const listMatch = line.match(/^NewList\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*[.](\w+)/);
+            if (listMatch) {
+                symbols.push({
+                    name: listMatch[1],
+                    kind: SymbolKind.Variable,
+                    range: {
+                        start: { line: i, character: 0 },
+                        end: { line: i, character: line.length }
+                    },
+                    detail: 'List',
+                    documentation: `List definition: NewList ${listMatch[1]}.${listMatch[2]}`
                 });
             }
         }

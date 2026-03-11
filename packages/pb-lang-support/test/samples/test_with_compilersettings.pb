@@ -1,4 +1,8 @@
-﻿Define c.c
+﻿Define ch.c
+Define testvar.l
+ch = 'A'
+Debug "Short Test .pb File"
+
 
 ; IDE Options = PureBasic 6.30 (Windows - x86)
 ; ExecutableFormat = Console

@@ -4,12 +4,12 @@
  */
 
 import { DiagnosticSeverity } from 'vscode-languageserver/node';
+import { DIAGNOSTIC_SOURCE } from '../utils/constants';
 import { ValidationContext, ValidatorFunction } from './types';
 
-// Helper function to split a line into statements at ':' while respecting string literals and comments.
+// Split a line into statements at ':' while respecting string literals.
+// PureBasic escapes quotes inside strings with "" (double quote).
 const splitStatements = (srcLine: string): string[] => {
-    // Split at ':' but only outside of string literals.
-    // PureBasic escapes quotes inside strings with "" (double quote).
     const parts: string[] = [];
     let cur = '';
     let inStr = false;
@@ -28,8 +28,7 @@ const splitStatements = (srcLine: string): string[] => {
             continue;
         }
 
-        // If your pipeline already stripped comments, this is harmless.
-        // Otherwise it prevents splitting inside comments.
+        // Stop at inline comments (caller already strips them, but guard anyway).
         if (!inStr && ch === ';') {
             break;
         }
@@ -51,7 +50,8 @@ const splitStatements = (srcLine: string): string[] => {
 };
 
 /**
- * Verify matching of control structures (If-EndIf, For-Next, While-Wend, Repeat-Until/ForEver, Select-EndSelect, With-EndWith).
+ * Verify matching of control structures
+ * (If-EndIf, For-Next, While-Wend, Repeat-Until/ForEver, Select-EndSelect, With-EndWith)
  */
 export const validateControlStructures: ValidatorFunction = (
     line: string,
@@ -63,10 +63,10 @@ export const validateControlStructures: ValidatorFunction = (
 
     const validateStatement = (stmt: string) => {
         const s = stmt.trimStart();
-        // If-EndIf Structure - Supports single-line If: ... : EndIf (allows arbitrary whitespace/comments)
+
+        // If-EndIf structure
         if (/^If\b/i.test(s) && !/^IfElse\b/i.test(s)) {
-            const hasInlineEnd = /\bEndIf\b/i.test(s);
-            if (!hasInlineEnd) {
+            if (!/\bEndIf\b/i.test(s)) {
                 context.ifStack.push(lineNum);
             }
         } else if (/^EndIf\b/i.test(s)) {
@@ -78,18 +78,16 @@ export const validateControlStructures: ValidatorFunction = (
                         end: { line: lineNum, character: originalLine.length }
                     },
                     message: 'EndIf without matching If',
-                    source: 'purebasic'
+                    source: DIAGNOSTIC_SOURCE
                 });
             } else {
                 context.ifStack.pop();
             }
         }
 
-        //For-Next Structure (including ForEach)
-        else if (/^For\b/i.test(s) || /^ForEach\b/i.test(s)) {
-            // Single-line For...: Next
-            const hasInlineEnd = /\bNext\b/i.test(s);
-            if (!hasInlineEnd) {
+        // For-Next structure (including ForEach)
+        else if (/^For(?:Each)?\b/i.test(s)) {
+            if (!/\bNext\b/i.test(s)) {
                 context.forStack.push(lineNum);
             }
         } else if (/^Next\b/i.test(s)) {
@@ -101,18 +99,16 @@ export const validateControlStructures: ValidatorFunction = (
                         end: { line: lineNum, character: originalLine.length }
                     },
                     message: 'Next without matching For/ForEach',
-                    source: 'purebasic'
+                    source: DIAGNOSTIC_SOURCE
                 });
             } else {
                 context.forStack.pop();
             }
         }
 
-        // While-Wend Structure
+        // While-Wend structure
         else if (/^While\b/i.test(s)) {
-            // Single-line While ... : Wend
-            const hasInlineEnd = /\bWend\b/i.test(s);
-            if (!hasInlineEnd) {
+            if (!/\bWend\b/i.test(s)) {
                 context.whileStack.push(lineNum);
             }
         } else if (/^Wend\b/i.test(s)) {
@@ -124,23 +120,19 @@ export const validateControlStructures: ValidatorFunction = (
                         end: { line: lineNum, character: originalLine.length }
                     },
                     message: 'Wend without matching While',
-                    source: 'purebasic'
+                    source: DIAGNOSTIC_SOURCE
                 });
             } else {
                 context.whileStack.pop();
             }
         }
 
-        // Repeat-Until / Repeat-Forever Structures
+        // Repeat-Until / Repeat-ForEver structure
         else if (/^Repeat\b/i.test(s)) {
-            // Supports multiple statements per line: Repeat : ... : Until/ForEver
-            // If a closing keyword appears on the same line, it is not pushed onto the stack (net zero effect)
-            const hasInlineClose = /\bForEver\b/i.test(s) || /\bUntil\b/i.test(s);
-            if (!hasInlineClose) {
+            if (!/\b(?:ForEver|Until)\b/i.test(s)) {
                 context.repeatStack.push(lineNum);
             }
         } else if (/^ForEver\b/i.test(s)) {
-            // ForEver as a closure of Repeat
             if (context.repeatStack.length === 0) {
                 diagnostics.push({
                     severity: DiagnosticSeverity.Error,
@@ -149,12 +141,12 @@ export const validateControlStructures: ValidatorFunction = (
                         end: { line: lineNum, character: originalLine.length }
                     },
                     message: 'ForEver without matching Repeat',
-                    source: 'purebasic'
+                    source: DIAGNOSTIC_SOURCE
                 });
             } else {
                 context.repeatStack.pop();
             }
-        } else if (/^Until\b/i.test(s)) { // 'Until condition' or 'Until'
+        } else if (/^Until\b/i.test(s)) {
             if (context.repeatStack.length === 0) {
                 diagnostics.push({
                     severity: DiagnosticSeverity.Error,
@@ -163,7 +155,7 @@ export const validateControlStructures: ValidatorFunction = (
                         end: { line: lineNum, character: originalLine.length }
                     },
                     message: 'Until without matching Repeat',
-                    source: 'purebasic'
+                    source: DIAGNOSTIC_SOURCE
                 });
             } else {
                 context.repeatStack.pop();
@@ -172,9 +164,7 @@ export const validateControlStructures: ValidatorFunction = (
 
         // Select-EndSelect structure
         else if (/^Select\b/i.test(s)) {
-            // Single-line Select ... : EndSelect (extremely rare, still compatible)
-            const hasInlineEnd = /\bEndSelect\b/i.test(s);
-            if (!hasInlineEnd) {
+            if (!/\bEndSelect\b/i.test(s)) {
                 context.selectStack.push(lineNum);
             }
         } else if (/^EndSelect\b/i.test(s)) {
@@ -186,7 +176,7 @@ export const validateControlStructures: ValidatorFunction = (
                         end: { line: lineNum, character: originalLine.length }
                     },
                     message: 'EndSelect without matching Select',
-                    source: 'purebasic'
+                    source: DIAGNOSTIC_SOURCE
                 });
             } else {
                 context.selectStack.pop();
@@ -195,9 +185,7 @@ export const validateControlStructures: ValidatorFunction = (
 
         // With-EndWith structure
         else if (/^With\b/i.test(s)) {
-            //Single-line With ... : EndWith (Compatibility)
-            const hasInlineEnd = /\bEndWith\b/i.test(s);
-            if (!hasInlineEnd) {
+            if (!/\bEndWith\b/i.test(s)) {
                 context.withStack.push(lineNum);
             }
         } else if (/^EndWith\b/i.test(s)) {
@@ -209,7 +197,7 @@ export const validateControlStructures: ValidatorFunction = (
                         end: { line: lineNum, character: originalLine.length }
                     },
                     message: 'EndWith without matching With',
-                    source: 'purebasic'
+                    source: DIAGNOSTIC_SOURCE
                 });
             } else {
                 context.withStack.pop();
@@ -217,8 +205,8 @@ export const validateControlStructures: ValidatorFunction = (
         }
     };
 
-    // Line split into ":" statements and validated individually.
-    for (const stmt of splitStatements(originalLine)) {
+    // `line` is already comment-stripped; split into colon-separated statements.
+    for (const stmt of splitStatements(line)) {
         validateStatement(stmt);
     }
 };

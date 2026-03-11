@@ -5,7 +5,8 @@
 
 import { DiagnosticSeverity } from 'vscode-languageserver/node';
 import { ValidatorFunction } from './types';
-import { keywords, builtInFunctions, parsePureBasicConstantDefinition } from '../utils/constants';
+import { keywords, parsePureBasicConstantDefinition, DIAGNOSTIC_SOURCE } from '../utils/constants';
+import { builtinFunctionMap } from '../utils/builtin-functions';
 
 /**
  * Validates generic syntax rules
@@ -28,21 +29,19 @@ export const validateGeneric: ValidatorFunction = (
                     end: { line: lineNum, character: originalLine.length }
                 },
                 message: 'Invalid constant definition syntax. Expected: #NAME = value',
-                source: 'purebasic'
+                source: DIAGNOSTIC_SOURCE
             });
         }
     }
 
-    // Greatly simplified generic syntax validation to reduce false positives.
-    // Only checks for very obvious syntax issues; specialized validators handle their own rules.
-
-    // Skip comments, empty lines, and string literals
-    if (line.trim().startsWith(';') || line.trim() === '' || line.includes('"') || line.includes("'")) {
+    // Lines containing string literals are excluded from the pattern check below
+    // to avoid false positives on arbitrary string content.
+    if (line.includes('"') || line.includes("'")) {
         return;
     }
 
-    // Check for obviously invalid patterns:
-    // 1) Starts with an invalid character (but not a keyword, identifier, constant, or comment)
+    // Flag lines that start with an invalid character (not a keyword, identifier,
+    // constant, comment, pointer, or address-of operator).
     const invalidStartPattern = /^\s*[^a-zA-Z_#;*\\@]/;
 
     // Only report on genuinely invalid lines
@@ -54,10 +53,10 @@ export const validateGeneric: ValidatorFunction = (
             line.includes('[') ||           // array access
             line.includes('.') ||           // member access
             line.includes('\\') ||          // file path
-            line.startsWith('*') ||         // pointer variable (e.g., *Ptr in structures)
+            line.startsWith('*') ||         // pointer variable
             line.startsWith('@') ||         // address operator
-            keywords.some(kw => line.startsWith(kw)) ||  // starts with a keyword
-            builtInFunctions.some(fn => line.includes(fn)); // contains a built-in function
+            keywords.some(kw => line.startsWith(kw)) ||
+            [...line.matchAll(/\b\w+\b/g)].some(m => builtinFunctionMap.has(m[0].toLowerCase()));
 
         if (!isValidSpecialCase) {
             diagnostics.push({
@@ -67,7 +66,7 @@ export const validateGeneric: ValidatorFunction = (
                     end: { line: lineNum, character: originalLine.length }
                 },
                 message: 'Potentially invalid statement syntax',
-                source: 'purebasic'
+                source: DIAGNOSTIC_SOURCE
             });
         }
     }

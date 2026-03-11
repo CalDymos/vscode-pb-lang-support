@@ -8,6 +8,11 @@ import { CommandInfo } from '../types/debugTypes';
  * 1. Client sends: "CONNECT <version> DEBUGGER\n\n"
  * 2. Server responds: "<password>\n" (or just "\n" if no password)
  * 3. Client sends binary data after handshake
+ *
+ * TODO: Integrate into FifoTransport — clarify whether the PureBasic
+ *       debugger on macOS/Linux requires this text handshake before
+ *       switching to the binary protocol. If so, FifoTransport must
+ *       delegate incoming data to this handler until handshake is done.
  */
 export class TextProtocolHandler extends EventEmitter {
   private buffer = '';

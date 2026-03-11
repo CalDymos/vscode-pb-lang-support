@@ -2,6 +2,10 @@
  * Language Server settings configuration
  */
 
+import { LANGUAGE_ID } from '../../shared/constants';
+
+export const SETTINGS_SECTION = LANGUAGE_ID;
+
 export interface PureBasicSettings {
     maxNumberOfProblems: number;
     enableValidation: boolean;

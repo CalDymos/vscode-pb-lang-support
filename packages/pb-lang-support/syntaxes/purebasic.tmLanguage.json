@@ -1,45 +1,20 @@
 {
   "scopeName": "source.purebasic",
   "patterns": [
-    {
-      "include": "#comments"
-    },
-    {
-      "include": "#constants"
-    },
-    {
-      "include": "#keywords"
-    },
-    {
-      "include": "#numbers"
-    },
-    {
-      "include": "#strings"
-    },
-    {
-      "include": "#procedures"
-    },
-    {
-      "include": "#structures"
-    },
-    {
-      "include": "#functions"
-    },
-    {
-      "include": "#variables"
-    },
-    {
-      "include": "#operators"
-    },
-    {
-      "include": "#compiler-directives"
-    },
-    {
-      "include": "#types"
-    },
-    {
-      "include": "#labels"
-    }
+    { "include": "#inline-asm" },
+    { "include": "#comments" },
+    { "include": "#constants" },
+    { "include": "#keywords" },
+    { "include": "#numbers" },
+    { "include": "#strings" },
+    { "include": "#procedures" },
+    { "include": "#structures" },
+    { "include": "#functions" },
+    { "include": "#variables" },
+    { "include": "#operators" },
+    { "include": "#compiler-directives" },
+    { "include": "#types" },
+    { "include": "#labels" }
   ],
   "repository": {
     "comments": {
@@ -51,6 +26,7 @@
         }
       ]
     },
+
     "constants": {
       "patterns": [
         {
@@ -63,11 +39,13 @@
         }
       ]
     },
+
     "keywords": {
       "patterns": [
         {
+          "comment": "FIX: Removed phantom 'Then' (not a PB keyword), removed list-library functions (AddElement etc.), removed EnableExplicit/DisableExplicit (belong in compiler-directives only), removed Data/Read/Restore duplicate. Added Swap, Extends, NewMap, Threaded, Runtime.",
           "name": "keyword.control.purebasic",
-          "match": "\\b(If|Else|ElseIf|EndIf|Then|For|Next|Step|To|While|Wend|Repeat|Until|ForEver|Select|Case|Default|EndSelect|Break|Continue|Goto|Gosub|Return|End|Procedure|ProcedureReturn|EndProcedure|Declare|Prototype|Interface|EndInterface|Structure|EndStructure|Enumeration|EndEnumeration|Data|Read|Restore|NewList|AddElement|InsertElement|DeleteElement|ClearList|ListIndex|ResetList|NextElement|PreviousElement|ForEach|With|EndWith|Module|EndModule|DeclareModule|EndDeclareModule|UseModule|UnuseModule|EnableExplicit|DisableExplicit)\\b"
+          "match": "\\b(If|Else|ElseIf|EndIf|For|Next|Step|To|While|Wend|Repeat|Until|ForEver|Select|Case|Default|EndSelect|Break|Continue|Goto|Gosub|Return|End|ProcedureReturn|EndProcedure|Prototype|Interface|EndInterface|Structure|EndStructure|StructureUnion|EndStructureUnion|Enumeration|EndEnumeration|NewList|NewMap|ForEach|With|EndWith|Module|EndModule|DeclareModule|EndDeclareModule|UseModule|UnuseModule|Swap|Extends|Data|Read|Restore|CallDebugger|DebugLevel|DisableDebugger|EnableDebugger)\\b"
         },
         {
           "name": "keyword.operator.logical.purebasic",
@@ -78,23 +56,22 @@
           "match": "\\b(Integer|Long|Word|Byte|Character|String|FixedString|Float|Double|Quad|Ascii|Unicode)\\b"
         },
         {
+          "comment": "FIX: Added NewMap (was missing), Threaded, Runtime.",
           "name": "storage.modifier.purebasic",
-          "match": "\\b(Global|Protected|Shared|Static|Dim|ReDim|Array|List|Map|Define)\\b"
-        },
-        {
-          "name": "constant.language.purebasic",
-          "match": "\\b(#True|#False|#Null|#PB_Any|#PB_Default|#PI|#E)\\b"
+          "match": "\\b(Global|Protected|Shared|Static|Dim|ReDim|Array|List|Map|Define|Threaded|Runtime)\\b"
         },
         {
           "name": "keyword.other.import.purebasic",
           "match": "\\b(Import|EndImport|ImportC|EndImportC|IncludeFile|IncludeBinary|XIncludeFile)\\b"
         },
         {
+          "comment": "FIX: Removed duplicate EnableExplicit/DisableExplicit (now only here, not in keyword.control). Added CompilerError, CompilerWarning, EnableASM, DisableASM.",
           "name": "keyword.other.compiler.purebasic",
-          "match": "\\b(CompilerIf|CompilerElseIf|CompilerElse|CompilerEndIf|CompilerSelect|CompilerCase|CompilerDefault|CompilerEndSelect|EnableExplicit|DisableExplicit|Debug)\\b"
+          "match": "\\b(CompilerIf|CompilerElseIf|CompilerElse|CompilerEndIf|CompilerSelect|CompilerCase|CompilerDefault|CompilerEndSelect|CompilerError|CompilerWarning|EnableExplicit|DisableExplicit|EnableASM|DisableASM|Debug)\\b"
         }
       ]
     },
+
     "numbers": {
       "patterns": [
         {
@@ -107,10 +84,11 @@
         },
         {
           "name": "constant.numeric.binary.purebasic",
-          "match": "\\%[01]+"
+          "match": "%[01]+"
         }
       ]
     },
+
     "strings": {
       "patterns": [
         {
@@ -118,123 +96,86 @@
           "begin": "\"",
           "end": "\"",
           "beginCaptures": {
-            "0": {
-              "name": "punctuation.definition.string.begin.purebasic"
-            }
+            "0": { "name": "punctuation.definition.string.begin.purebasic" }
           },
           "endCaptures": {
-            "0": {
-              "name": "punctuation.definition.string.end.purebasic"
-            }
+            "0": { "name": "punctuation.definition.string.end.purebasic" }
           }
         },
         {
-          "name": "string.quoted.single.purebasic",
-          "begin": "'",
-          "end": "'",
-          "beginCaptures": {
-            "0": {
-              "name": "punctuation.definition.string.begin.purebasic"
-            }
-          },
-          "endCaptures": {
-            "0": {
-              "name": "punctuation.definition.string.end.purebasic"
-            }
-          }
+          "comment": "FIX: Single-quoted 'X' is a character literal (integer), not a string.",
+          "name": "constant.character.purebasic",
+          "match": "'[^']*'"
         }
       ]
     },
+
     "procedures": {
       "patterns": [
         {
           "name": "entity.name.function.definition.purebasic",
           "match": "\\b(Procedure(?:C|DLL|CDLL)?(?:\\.\\w+)?)\\s+([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
-            "1": {
-              "name": "storage.type.function.purebasic"
-            },
-            "2": {
-              "name": "entity.name.function.purebasic"
-            }
+            "1": { "name": "storage.type.function.purebasic" },
+            "2": { "name": "entity.name.function.purebasic" }
           }
         },
         {
           "name": "entity.name.function.declaration.purebasic",
           "match": "\\b(Declare(?:C|DLL|CDLL)?(?:\\.\\w+)?)\\s+([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
-            "1": {
-              "name": "storage.type.function.purebasic"
-            },
-            "2": {
-              "name": "entity.name.function.purebasic"
-            }
+            "1": { "name": "storage.type.function.purebasic" },
+            "2": { "name": "entity.name.function.purebasic" }
           }
         }
       ]
     },
+
     "structures": {
       "patterns": [
         {
           "name": "entity.name.type.structure.purebasic",
-          "match": "\\b(Structure|EndStructure|Interface|EndInterface|Enumeration|EndEnumeration)\\b"
+          "match": "\\b(Structure|EndStructure|StructureUnion|EndStructureUnion|Interface|EndInterface|Enumeration|EndEnumeration)\\b"
         },
         {
           "name": "entity.name.type.definition.purebasic",
           "match": "\\b(Structure|Interface|Enumeration)\\s+([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
-            "1": {
-              "name": "storage.type.purebasic"
-            },
-            "2": {
-              "name": "entity.name.type.purebasic"
-            }
+            "1": { "name": "storage.type.purebasic" },
+            "2": { "name": "entity.name.type.purebasic" }
           }
         }
       ]
     },
+
     "variables": {
       "patterns": [
         {
+          "comment": "FIX: Added '$' suffix support for legacy string variables (name$).",
           "name": "variable.other.purebasic",
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\$",
+          "captures": {
+            "1": { "name": "variable.name.purebasic" }
+          }
+        },
+        {
+          "name": "variable.other.typed.purebasic",
           "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\.([islfdqauc]|\\w+)\\b",
           "captures": {
-            "1": {
-              "name": "variable.name.purebasic"
-            },
-            "2": {
-              "name": "storage.type.purebasic"
-            }
+            "1": { "name": "variable.name.purebasic" },
+            "2": { "name": "storage.type.purebasic" }
           }
         },
         {
           "name": "variable.other.pointer.purebasic",
           "match": "\\*([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
-            "1": {
-              "name": "variable.name.purebasic"
-            }
+            "1": { "name": "variable.name.purebasic" }
           }
         }
       ]
     },
-    "functions": {
-      "patterns": [
-        {
-          "name": "support.function.purebasic",
-          "match": "\\b(OpenWindow|CreateGadgetList|EventWindow|EventGadget|EventMenu|WaitWindowEvent|WindowEvent|SetActiveWindow|CloseWindow|WindowID|WindowOutput|WindowX|WindowY|WindowWidth|WindowHeight|DesktopWidth|DesktopHeight|DesktopDepth|DesktopFrequency|Delay|CountProgramParameters|ProgramParameter|RunProgram|OpenFile|ReadFile|WriteFile|CloseFile|FileSeek|FileSize|Eof|ReadString|WriteString|ReadCharacter|WriteCharacter|ReadByte|WriteByte|ReadWord|WriteWord|ReadLong|WriteLong|ReadQuad|WriteQuad|ReadFloat|WriteFloat|ReadDouble|WriteDouble|CreateDirectory|DeleteFile|CopyFile|RenameFile|DirectoryEntry|DirectoryEntryType|DirectoryEntryName|DirectoryEntrySize|DirectoryEntryDate|DirectoryEntryAttributes|NextDirectoryEntry|FinishDirectory|ExamineDirectory|SetCurrentDirectory|GetCurrentDirectory|CreateFile|FileBuffers|FileID|FileError|MessageRequester|InputRequester|OpenFileRequester|SaveFileRequester|PathRequester|ColorRequester|FontRequester|DebuggerDisplay|DebuggerLevel|CompilerError|CompilerWarning|CompilerIf|CompilerElse|CompilerEndIf|CompilerError|CompilerWarning|IncludeFile|IncludeBinary|XIncludeFile|EnableExplicit|DisableExplicit|UseModule|UnuseModule|DeclareModule|EndDeclareModule|Module|EndModule|DeclareC|PrototypeC|Import|ImportC|EndImport|EndImportC|DefineMacro|UndefineMacro|Macro|EndMacro)\\s*(?=\\()"
-        },
-        {
-          "name": "entity.name.function.call.purebasic",
-          "match": "(?i)\\b([A-Za-z_]\\w*)\\s*(?=\\()",
-          "captures": {
-            "1": {
-              "name": "entity.name.function.purebasic"
-            }
-          }
-        }
-      ]
-    },
+
     "operators": {
       "patterns": [
         {
@@ -250,40 +191,90 @@
           "match": "(\\&|\\||\\^|\\~|\\<\\<|\\>\\>)"
         },
         {
-          "name": "keyword.operator.assignment.purebasic",
-          "match": "(\\=|\\+\\=|\\-\\=|\\*\\=|\\/\\=|\\%\\=|\\&\\=|\\|\\=|\\^\\=|\\<\\<\\=|\\>\\>\\=)"
-        },
-        {
           "name": "keyword.operator.address.purebasic",
-          "match": "(@|\\\\)"
+          "match": "@[A-Za-z_][A-Za-z0-9_]*"
         }
       ]
     },
+
     "compiler-directives": {
       "patterns": [
         {
-          "name": "meta.preprocessor.purebasic",
-          "match": "\\b(DefineMacro|UndefineMacro|Macro|EndMacro)\\b"
+          "comment": "FIX: Removed phantom 'DefineMacro'/'UndefineMacro' – these do not exist in PureBasic.",
+          "name": "meta.preprocessor.macro.purebasic",
+          "match": "\\b(Macro|EndMacro)\\b"
         },
         {
-          "name": "meta.preprocessor.purebasic",
-          "match": "\\b(DataSection|EndDataSection|Data|Read|Restore)\\b"
+          "name": "meta.preprocessor.data.purebasic",
+          "match": "\\b(DataSection|EndDataSection)\\b"
         }
       ]
     },
+
     "types": {
+      "comment": "FIX: Added missing #types repository. Covers inline type suffixes (.i .l .w .b .c .s .f .d .q .a .u) used in variable/field declarations.",
       "patterns": [
         {
-          "name": "storage.type.purebasic",
-          "match": "(?i)\\b([ilqbfwdsa]|i|l|q|b|f|d|w|s|a)\\b"
+          "name": "storage.type.suffix.purebasic",
+          "match": "\\.(?:i|l|w|b|c|s|f|d|q|a|u)\\b"
         }
       ]
     },
+
     "labels": {
+      "comment": "FIX: Added missing #labels repository. Covers label definitions (name:) and label-pointer expressions (?name).",
       "patterns": [
         {
           "name": "entity.name.label.purebasic",
-          "match": "^\\s*[A-Za-z_]\\w*:"
+          "match": "^\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*:",
+          "captures": {
+            "1": { "name": "entity.name.label.purebasic" }
+          }
+        },
+        {
+          "comment": "Pointer-to-label operator: ?LabelName",
+          "name": "constant.other.label-pointer.purebasic",
+          "match": "\\?[A-Za-z_][A-Za-z0-9_]*"
+        }
+      ]
+    },
+
+    "inline-asm": {
+      "comment": "FIX: Added missing inline ASM line pattern. Lines starting with '!' are passed directly to the assembler.",
+      "patterns": [
+        {
+          "name": "meta.embedded.asm.purebasic",
+          "match": "^\\s*(!.*)$",
+          "captures": {
+            "1": { "name": "source.asm.inline.purebasic" }
+          }
+        }
+      ]
+    },
+
+    "functions": {
+      "patterns": [
+        {
+          "name": "support.function.purebasic",
+          "match": "(?i)\\b(?:ACos|ACosH|AESDecoder|AESEncoder|ASin|ASinH|ATan|ATan2|ATanH|AbortFTPFile|AbortHTTP|Abs|Add3DArchive|AddBillboard|AddCipherBuffer|AddDate|AddEntityAnimationTime|AddFingerprintBuffer|AddGadgetColumn|AddGadgetItem|AddGadgetItem3D|AddImageFrame|AddJSONElement|AddJSONMember|AddKeyboardShortcut|AddMailAttachment|AddMailAttachmentData|AddMailRecipient|AddMaterialLayer|AddNodeAnimationTime|AddPackFile|AddPackMemory|AddPathArc|AddPathBox|AddPathCircle|AddPathCurve|AddPathEllipse|AddPathLine|AddPathSegments|AddPathText|AddScreenGadgetItem|AddStatusBarField|AddSubEntity|AddSysTrayIcon|AddTerrainTexture|AddVehicleWheel|AddVertexPoseReference|AddWindowTimer|AffectedDatabaseRows|AllocateMemory|Alpha|AlphaBlend|AmbientColor|AntialiasingMode|ApplyEntityForce|ApplyEntityImpulse|ApplyEntityTorque|ApplyEntityTorqueImpulse|ApplyVehicleBrake|ApplyVehicleForce|ApplyVehicleSteering|Asc|Ascii|AttachEntityObject|AttachNodeObject|AttachRibbonEffect|AudioCDLength|AudioCDName|AudioCDStatus|AudioCDTrackLength|AudioCDTrackSeconds|AudioCDTracks|AvailableProgramOutput|AvailableSerialPortInput|AvailableSerialPortOutput|BackColor|Base64Decoder|Base64DecoderBuffer|Base64Encoder|Base64EncoderBuffer|BeginVectorLayer|BillboardGroupCommonDirection|BillboardGroupCommonUpVector|BillboardGroupID|BillboardGroupMaterial|BillboardGroupX|BillboardGroupY|BillboardGroupZ|BillboardHeight|BillboardLocate|BillboardWidth|BillboardX|BillboardY|BillboardZ|Bin|Blue|BodyPick|Bool|Box|BoxedGradient|BuildTerrain|ButtonGadget|ButtonGadget3D|ButtonImageGadget|ButtonImageScreenGadget|ButtonScreenGadget|CGIBuffer|CGICookieName|CGICookieValue|CGIParameterData|CGIParameterDataSize|CGIParameterName|CGIParameterType|CGIParameterValue|CGIVariable|CPUName|CalendarGadget|CallCFunction|CallCFunctionFast|CallFunction|CallFunctionFast|CameraBackColor|CameraCustomParameter|CameraDirection|CameraDirectionX|CameraDirectionY|CameraDirectionZ|CameraFOV|CameraFixedYawAxis|CameraID|CameraLookAt|CameraPitch|CameraProjectionMode|CameraProjectionX|CameraProjectionY|CameraRange|CameraRenderMode|CameraRoll|CameraViewHeight|CameraViewWidth|CameraViewX|CameraViewY|CameraX|CameraY|CameraYaw|CameraZ|CanvasGadget|CanvasOutput|CanvasVectorOutput|CatchImage|CatchJSON|CatchMusic|CatchSound|CatchSprite|CatchXML|ChangeGamma|ChangeSysTrayIcon|CheckBoxGadget|CheckBoxGadget3D|CheckBoxScreenGadget|CheckDatabaseNull|CheckFTPConnection|CheckFilename|CheckObjectVisibility|ChildXMLNode|Chr|Circle|CircularGradient|ClearBillboards|ClearClipboard|ClearConsole|ClearDebugOutput|ClearGadgetItems|ClearGadgetItems3D|ClearJSONElements|ClearJSONMembers|ClearList|ClearMap|ClearScreen|ClearSpline|ClearStructure|ClipOutput|ClipPath|ClipSprite|CloseConsole|CloseCryptRandom|CloseDatabase|CloseDebugOutput|CloseFTP|CloseFile|CloseGadgetList|CloseGadgetList3D|CloseHelp|CloseLibrary|CloseNetworkConnection|CloseNetworkServer|ClosePack|ClosePath|ClosePreferences|CloseProgram|CloseScreen|CloseScreenGadgetList|CloseScreenWindow|CloseSerialPort|CloseSubMenu|CloseWindow|CloseWindow3D|ColorRequester|ComboBoxGadget|ComboBoxGadget3D|ComboBoxScreenGadget|CompareMemory|CompareMemoryString|ComposeJSON|ComposeXML|CompressMemory|ComputeSpline|ComputerName|ConeTwistJoint|ConicalGradient|ConnectionID|ConsoleColor|ConsoleCursor|ConsoleError|ConsoleLocate|ConsoleTitle|ContainerGadget|ContainerGadget3D|ContainerScreenGadget|ConvertCoordinateX|ConvertCoordinateY|ConvertLocalToWorldPosition|ConvertWorldToLocalPosition|CopyDebugOutput|CopyDirectory|CopyEntity|CopyFile|CopyImage|CopyLight|CopyMaterial|CopyMemory|CopyMemoryString|CopyMesh|CopySprite|CopyStructure|CopyTexture|CopyXMLNode|Cos|CosH|CountBillboards|CountCGICookies|CountCGIParameters|CountCPUs|CountGadgetItems|CountGadgetItems3D|CountLibraryFunctions|CountList|CountMaterialLayers|CountProgramParameters|CountRegularExpressionGroups|CountSplinePoints|CountString|CreateBillboardGroup|CreateCamera|CreateCapsule|CreateCone|CreateCube|CreateCubeMapTexture|CreateCylinder|CreateDialog|CreateDirectory|CreateEntity|CreateEntityBody|CreateFTPDirectory|CreateFile|CreateGadgetList|CreateIcoSphere|CreateImage|CreateImageMenu|CreateJSON|CreateLensFlareEffect|CreateLight|CreateMail|CreateMaterial|CreateMenu|CreateMesh|CreateMutex|CreateNetworkServer|CreateNode|CreateNodeAnimation|CreateNodeAnimationKeyFrame|CreatePack|CreateParticleEmitter|CreatePlane|CreatePopupImageMenu|CreatePopupMenu|CreatePreferences|CreateRegularExpression|CreateRenderTexture|CreateSemaphore|CreateSphere|CreateSpline|CreateSprite|CreateStatusBar|CreateTerrain|CreateTerrainBody|CreateTexture|CreateToolBar|CreateTorus|CreateTube|CreateVehicle|CreateVehicleBody|CreateVertexAnimation|CreateVertexPoseKeyFrame|CreateVertexTrack|CreateWater|CreateXML|CreateXMLNode|CryptRandom|CryptRandomData|DESFingerprint|DashPath|DatabaseColumnIndex|DatabaseColumnName|DatabaseColumnSize|DatabaseColumnType|DatabaseColumns|DatabaseDriverDescription|DatabaseDriverName|DatabaseError|DatabaseID|DatabaseQuery|DatabaseUpdate|Date|DateGadget|Day|DayOfWeek|DayOfYear|DebuggerError|DebuggerWarning|DefaultPrinter|DefineTerrainTile|Defined|Degree|Delay|DeleteDirectory|DeleteElement|DeleteFTPDirectory|DeleteFTPFile|DeleteFile|DeleteMapElement|DeleteXMLNode|DesktopDepth|DesktopFrequency|DesktopHeight|DesktopMouseX|DesktopMouseY|DesktopName|DesktopWidth|DesktopX|DesktopY|DetachEntityObject|DetachNodeObject|DetachRibbonEffect|DialogError|DialogGadget|DialogID|DialogWindow|DirectoryEntryAttributes|DirectoryEntryDate|DirectoryEntryName|DirectoryEntrySize|DirectoryEntryType|DisableEntityBody|DisableGadget|DisableGadget3D|DisableMaterialLighting|DisableMenuItem|DisableParticleEmitter|DisableScreenGadget|DisableScreenWindow|DisableToolBarButton|DisableWindow|DisableWindow3D|DisplaySprite|DisplayTransparentSprite|DotPath|DoubleClickTime|DragFiles|DragImage|DragPrivate|DragText|DrawAlphaImage|DrawImage|DrawRotatedText|DrawText|DrawVectorImage|DrawVectorParagraph|DrawVectorText|DrawingBuffer|DrawingBufferPitch|DrawingBufferPixelFormat|DrawingMode|EditorGadget|EditorGadget3D|EditorScreenGadget|EjectAudioCD|ElapsedMilliseconds|Ellipse|EllipticalGradient|EnableGadgetDrop|EnableGraphicalConsole|EnableHingeJointAngularMotor|EnableManualEntityBoneControl|EnableWindowDrop|EnableWorldCollisions|EnableWorldPhysics|EncodeImage|EndVectorLayer|Engine3DStatus|EntityAngularFactor|EntityAnimationBlendMode|EntityAnimationStatus|EntityBonePitch|EntityBoneRoll|EntityBoneX|EntityBoneY|EntityBoneYaw|EntityBoneZ|EntityBoundingBox|EntityCollide|EntityCubeMapTexture|EntityCustomParameter|EntityFixedYawAxis|EntityID|EntityLinearFactor|EntityLookAt|EntityMesh|EntityParentNode|EntityPitch|EntityRenderMode|EntityRoll|EntityVelocity|EntityX|EntityY|EntityYaw|EntityZ|EnvironmentVariableName|EnvironmentVariableValue|Eof|ErrorAddress|ErrorCode|ErrorFile|ErrorLine|ErrorMessage|ErrorRegister|ErrorTargetAddress|EscapeString|Event|EventClient|EventData|EventDropAction|EventDropBuffer|EventDropFiles|EventDropImage|EventDropPrivate|EventDropSize|EventDropText|EventDropType|EventDropX|EventDropY|EventGadget|EventGadget3D|EventMenu|EventScreenGadget|EventServer|EventTimer|EventType|EventType3D|EventWindow|EventWindow3D|EventlParam|EventwParam|ExamineAssembly|ExamineDatabaseDrivers|ExamineDesktops|ExamineDirectory|ExamineEnvironmentVariables|ExamineFTPDirectory|ExamineIPAddresses|ExamineJSONMembers|ExamineJoystick|ExamineKeyboard|ExamineLibraryFunctions|ExamineMouse|ExaminePack|ExaminePreferenceGroups|ExaminePreferenceKeys|ExamineRegularExpression|ExamineScreenModes|ExamineWorldCollisions|ExamineXMLAttributes|Exp|ExplorerComboGadget|ExplorerListGadget|ExplorerTreeGadget|ExportJSON|ExportJSONSize|ExportXML|ExportXMLSize|ExtractJSONStructure|ExtractXMLStructure|FTPDirectoryEntryAttributes|FTPDirectoryEntryDate|FTPDirectoryEntryName|FTPDirectoryEntryRaw|FTPDirectoryEntrySize|FTPDirectoryEntryType|FTPProgress|FetchEntityMaterial|FetchOrientation|FileBuffersSize|FileFingerprint|FileID|FileSeek|FileSize|FillArea|FillMemory|FillPath|FillVectorOutput|FindMapElement|FindString|Fingerprint|FinishCipher|FinishDatabaseQuery)\\b\\s*(?=\\()"
+        },
+        {
+          "name": "support.function.purebasic",
+          "match": "(?i)\\b(?:FinishDirectory|FinishFTPDirectory|FinishFastCGIRequest|FinishFingerprint|FinishHTTP|FirstDatabaseRow|FirstWorldCollisionEntity|FlipBuffers|FlipCoordinatesX|FlipCoordinatesY|FlushFileBuffers|FlushPreferenceBuffers|Fog|FontID|FontRequester|FormatDate|FormatNumber|FormatXML|FrameGadget|FrameGadget3D|FreeBillboardGroup|FreeCamera|FreeDialog|FreeEffect|FreeEntity|FreeEntityBody|FreeEntityJoints|FreeFont|FreeGadget|FreeGadget3D|FreeIP|FreeImage|FreeJSON|FreeLight|FreeMail|FreeMaterial|FreeMemory|FreeMenu|FreeMesh|FreeMovie|FreeMusic|FreeMutex|FreeNode|FreeNodeAnimation|FreeParticleEmitter|FreeRegularExpression|FreeScreenGadget|FreeSemaphore|FreeSound|FreeSound3D|FreeSpline|FreeSprite|FreeStaticGeometry|FreeStatusBar|FreeTerrain|FreeTerrainBody|FreeText3D|FreeTexture|FreeToolBar|FreeWater|FreeXML|FrontColor|GadgetHeight|GadgetHeight3D|GadgetID|GadgetID3D|GadgetItemID|GadgetToolTip|GadgetToolTip3D|GadgetType|GadgetType3D|GadgetWidth|GadgetWidth3D|GadgetX|GadgetX3D|GadgetY|GadgetY3D|GenericJoint|GetActiveGadget|GetActiveGadget3D|GetActiveWindow|GetActiveWindow3D|GetClientIP|GetClientPort|GetClipboardImage|GetClipboardText|GetCurrentDirectory|GetDatabaseBlob|GetDatabaseDouble|GetDatabaseFloat|GetDatabaseLong|GetDatabaseQuad|GetDatabaseString|GetEntityAnimationLength|GetEntityAnimationTime|GetEntityAnimationWeight|GetEntityAttribute|GetEntityCollisionGroup|GetEntityCollisionMask|GetEnvironmentVariable|GetExtensionPart|GetFTPDirectory|GetFileAttributes|GetFileDate|GetFilePart|GetFunction|GetFunctionEntry|GetGadgetAttribute|GetGadgetAttribute3D|GetGadgetColor|GetGadgetData|GetGadgetData3D|GetGadgetFont|GetGadgetItemAttribute|GetGadgetItemColor|GetGadgetItemData|GetGadgetItemData3D|GetGadgetItemState|GetGadgetItemState3D|GetGadgetItemText|GetGadgetItemText3D|GetGadgetState|GetGadgetState3D|GetGadgetText|GetGadgetText3D|GetHTTPHeader|GetHomeDirectory|GetImageFrame|GetImageFrameDelay|GetJSONBoolean|GetJSONDouble|GetJSONElement|GetJSONFloat|GetJSONInteger|GetJSONMember|GetJSONQuad|GetJSONString|GetLightColor|GetMailAttribute|GetMailBody|GetMaterialAttribute|GetMaterialColor|GetMenuItemState|GetMenuItemText|GetMenuTitleText|GetMusicPosition|GetMusicRow|GetNodeAnimationKeyFramePitch|GetNodeAnimationKeyFrameRoll|GetNodeAnimationKeyFrameTime|GetNodeAnimationKeyFrameX|GetNodeAnimationKeyFrameY|GetNodeAnimationKeyFrameYaw|GetNodeAnimationKeyFrameZ|GetNodeAnimationLength|GetNodeAnimationTime|GetNodeAnimationWeight|GetOriginX|GetOriginY|GetPathPart|GetRuntimeDouble|GetRuntimeInteger|GetRuntimeString|GetScreenGadgetState|GetScreenGadgetText|GetScriptMaterial|GetScriptParticleEmitter|GetScriptTexture|GetSerialPortStatus|GetSoundFrequency|GetSoundPosition|GetTemporaryDirectory|GetTerrainTileHeightAtPoint|GetTerrainTileLayerBlend|GetToolBarButtonState|GetURLPart|GetUserDirectory|GetVehicleAttribute|GetW|GetWindowColor|GetWindowData|GetWindowState|GetWindowTitle|GetWindowTitle3D|GetX|GetXMLAttribute|GetXMLEncoding|GetXMLNodeName|GetXMLNodeOffset|GetXMLNodeText|GetXMLStandalone|GetY|GetZ|GrabDrawingImage|GrabImage|GrabSprite|GradientColor|Green|HTTPProgress|HTTPProxy|Hex|HideBillboardGroup|HideEntity|HideGadget|HideGadget3D|HideLight|HideMenu|HideParticleEmitter|HideScreenGadget|HideScreenWindow|HideWindow|HideWindow3D|HingeJointMotorTarget|Hostname|Hour|HyperLinkGadget|IPAddressField|IPAddressGadget|IPString|ImageDepth|ImageFormat|ImageFrameCount|ImageGadget|ImageGadget3D|ImageHeight|ImageID|ImageOutput|ImageScreenGadget|ImageVectorOutput|ImageWidth|Infinity|InitAudioCD|InitCGI|InitEngine3D|InitFastCGI|InitJoystick|InitKeyboard|InitMouse|InitMovie|InitNetwork|InitScintilla|InitScreenGadgets|InitSound|InitSprite|InitializeStructure|Inkey|Input|InputEvent3D|InputRequester|InsertElement|InsertJSONStructure|InsertString|InsertXMLStructure|InstructionAddress|InstructionString|Int|IntQ|IsBillboardGroup|IsCamera|IsCipher|IsDatabase|IsDialog|IsDirectory|IsEffect|IsEntity|IsFTP|IsFile|IsFingerprint|IsFont|IsGadget|IsGadget3D|IsImage|IsInfinity|IsInsidePath|IsInsideStroke|IsJSON|IsJoint|IsLibrary|IsLight|IsMail|IsMaterial|IsMenu|IsMesh|IsMovie|IsMusic|IsNAN|IsNode|IsParticleEmitter|IsPathEmpty|IsProgram|IsRegularExpression|IsRuntime|IsScreenActive|IsScreenGadget|IsSerialPort|IsSound|IsSound3D|IsSprite|IsStaticGeometry|IsStatusBar|IsSysTrayIcon|IsText3D|IsTexture|IsThread|IsToolBar|IsWindow|IsWindow3D|IsXML|JSONArraySize|JSONErrorLine|JSONErrorMessage|JSONErrorPosition|JSONMemberKey|JSONMemberValue|JSONObjectSize|JSONType|JSONValue|JoystickAxisX|JoystickAxisY|JoystickAxisZ|JoystickButton|JoystickName|KeyboardInkey|KeyboardMode|KeyboardPushed|KeyboardReleased|KillProgram|KillThread|LCase|LSet|LTrim|Left|Len|LensFlareEffectColor|LibraryFunctionAddress|LibraryFunctionName|LibraryID|LightAttenuation|LightDirection|LightDirectionX|LightDirectionY|LightDirectionZ|LightID|LightPitch|LightRoll|LightX|LightY|LightYaw|LightZ|Line|LineXY|LinearGradient|ListIconGadget|ListIndex|ListViewGadget|ListViewGadget3D|ListViewScreenGadget|LoadFont|LoadImage|LoadJSON|LoadMesh|LoadMovie|LoadMusic|LoadSound|LoadSound3D|LoadSprite|LoadTexture|LoadWorld|LoadXML|Loc|LockMutex|Lof|Log|Log10|MDIGadget|MailProgress|MainXMLNode|MakeIPAddress|MapSize|MatchRegularExpression|MaterialAnimation|MaterialBlendingMode|MaterialCullingMode|MaterialFilteringMode|MaterialFog|MaterialID|MaterialShadingMode|MaterialShininess|MemorySize|MemoryStatus|MemoryStringLength|MenuBar|MenuHeight|MenuID|MenuItem|MenuTitle|MeshID|MeshPoseCount|MeshPoseName|MessageRequester|Mid|Minute|Mod|Month|MouseButton|MouseDeltaX|MouseDeltaY|MouseLocate|MousePick|MouseRayCast|MouseWheel|MouseX|MouseY|MoveBillboard|MoveBillboardGroup|MoveCamera|MoveEntity|MoveEntityBone|MoveLight|MoveMemory|MoveNode|MoveParticleEmitter|MovePathCursor|MoveText3D|MoveXMLNode|MovieAudio|MovieHeight|MovieInfo|MovieLength|MovieSeek|MovieStatus|MovieWidth|MusicVolume|NaN|NetworkClientEvent|NetworkServerEvent|NextDatabaseDriver|NextDatabaseRow|NextDirectoryEntry|NextElement|NextEnvironmentVariable|NextFTPDirectoryEntry|NextIPAddress|NextInstruction|NextJSONMember|NextLibraryFunction|NextMapElement|NextMapKey|NextPackEntry|NextPreferenceGroup|NextPreferenceKey|NextRegularExpressionMatch|NextScreenMode|NextSelectedFileName|NextWorldCollision|NextXMLAttribute|NextXMLNode|NewPrinterPage|NewVectorPage|NodeAnimationStatus|NodeFixedYawAxis|NodeID|NodeLookAt|NodePitch|NodeRoll|NodeX|NodeY|NodeYaw|NodeZ|NormalX|NormalY|NormalZ|OSVersion|OffsetOf|OnErrorDefault|OnErrorExit|OnErrorGoto|OpenConsole|OpenCryptRandom|OpenDatabase|OpenDatabaseRequester|OpenFTP|OpenFile|OpenFileRequester|OpenGLGadget|OpenGadgetList|OpenGadgetList3D|OpenHelp|OpenLibrary|OpenNetworkConnection|OpenPack|OpenPreferences|OpenScreen|OpenScreenGadgetList|OpenScreenWindow|OpenSerialPort|OpenSubMenu|OpenWindow|OpenWindow3D|OpenXMLDialog|OptionGadget|OptionGadget3D|OptionScreenGadget|OutputDepth|OutputHeight|OutputWidth|PackEntryName|PackEntrySize|PackEntryType|PanelGadget|PanelGadget3D|PanelScreenGadget|ParentXMLNode|Parse3DScripts|ParseDate|ParseJSON|ParseXML|ParticleAcceleration|ParticleColorFader|ParticleColorRange|ParticleEmissionRate|ParticleEmitterAngle|ParticleEmitterDirection|ParticleEmitterID|ParticleEmitterX|ParticleEmitterY|ParticleEmitterZ|ParticleMaterial|ParticleSize|ParticleSpeedFactor|ParticleTimeToLive|ParticleVelocity|PathBoundsHeight|PathBoundsWidth|PathBoundsX|PathBoundsY|PathCursorX|PathCursorY|PathLength|PathPointAngle|PathPointX|PathPointY|PathRequester|PathSegments|PauseAudioCD|PauseMovie|PauseSound|PauseThread|PeekA|PeekB|PeekC|PeekD|PeekF|PeekI|PeekL|PeekQ|PeekS|PeekU|PeekW|PickX|PickY|PickZ|Pitch|PlayAudioCD|PlayMovie|PlayMusic|PlaySound|PlaySound3D|Plot|Point|PointPick|PokeA|PokeB|PokeC|PokeD|PokeF|PokeI|PokeL|PokeQ|PokeS|PokeU|PokeW|PostEvent|Pow|PreferenceComment|PreferenceGroup|PreferenceGroupName|PreferenceKeyName|PreferenceKeyValue|PreviousDatabaseRow|PreviousElement|PreviousXMLNode|Print|PrintN|PrintRequester|PrinterOutput|PrinterPageHeight|PrinterPageWidth|PrinterVectorOutput|ProgramExitCode|ProgramFilename|ProgramID|ProgramParameter|ProgramRunning)\\b\\s*(?=\\()"
+        },
+        {
+          "name": "support.function.purebasic",
+          "match": "(?i)\\b(?:ProgressBarGadget|ProgressBarGadget3D|ProgressBarScreenGadget|PurifierGranularity|RGB|RGBA|RSet|RTrim|Radian|RaiseError|Random|RandomData|RandomSeed|RawKey|RayCast|RayCollide|RayPick|ReAllocateMemory|ReadAsciiCharacter|ReadByte|ReadCGI|ReadCharacter|ReadConsoleData|ReadData|ReadDouble|ReadFile|ReadFloat|ReadInteger|ReadLong|ReadPreferenceDouble|ReadPreferenceFloat|ReadPreferenceInteger|ReadPreferenceLong|ReadPreferenceQuad|ReadPreferenceString|ReadProgramData|ReadProgramError|ReadProgramString|ReadQuad|ReadSerialPortData|ReadString|ReadStringFormat|ReadUnicodeCharacter|ReadWord|ReceiveFTPFile|ReceiveHTTPFile|ReceiveHTTPMemory|ReceiveNetworkData|Red|RefreshDialog|RegisterFontFile|RegularExpressionError|RegularExpressionGroup|RegularExpressionGroupLength|RegularExpressionGroupPosition|RegularExpressionMatchLength|RegularExpressionMatchPosition|RegularExpressionMatchString|RegularExpressionNamedGroup|RegularExpressionNamedGroupLength|RegularExpressionNamedGroupPosition|ReleaseMouse|ReloadMaterial|RemoveBillboard|RemoveEnvironmentVariable|RemoveGadgetColumn|RemoveGadgetItem|RemoveGadgetItem3D|RemoveImageFrame|RemoveJSONElement|RemoveJSONMember|RemoveKeyboardShortcut|RemoveMailRecipient|RemoveMaterialLayer|RemovePreferenceGroup|RemovePreferenceKey|RemoveScreenGadgetItem|RemoveString|RemoveSysTrayIcon|RemoveWindowTimer|RemoveXMLAttribute|RenameFTPFile|RenameFile|RenderScreenGadgets|RenderWorld|ReplaceRegularExpression|ReplaceString|ResetCoordinates|ResetGradientColors|ResetList|ResetMaterial|ResetPath|ResetProfiler|ResetStructure|ResizeBillboard|ResizeCamera|ResizeGadget|ResizeGadget3D|ResizeImage|ResizeJSONElements|ResizeMovie|ResizeParticleEmitter|ResizeScreenGadget|ResizeScreenWindow|ResizeWindow|ResizeWindow3D|ResolveXMLAttributeName|ResolveXMLNodeName|RestoreVectorState|ResumeAudioCD|ResumeMovie|ResumeSound|ResumeThread|ReverseString|Right|Roll|RootXMLNode|RotateBillboardGroup|RotateCamera|RotateCoordinates|RotateEntity|RotateEntityBone|RotateLight|RotateMaterial|RotateNode|RotateSprite|Round|RoundBox|RunProgram|SaveDebugOutput|SaveFileRequester|SaveImage|SaveJSON|SaveRenderTexture|SaveSprite|SaveTerrain|SaveVectorState|SaveXML|ScaleCoordinates|ScaleEntity|ScaleMaterial|ScaleNode|ScaleText3D|ScintillaGadget|ScintillaSendMessage|ScreenDepth|ScreenEventType|ScreenGadgetHeight|ScreenGadgetSkin|ScreenGadgetType|ScreenGadgetWidth|ScreenGadgetX|ScreenGadgetY|ScreenHeight|ScreenModeDepth|ScreenModeHeight|ScreenModeRefreshRate|ScreenModeWidth|ScreenOutput|ScreenWidth|ScreenWindowAnimation|ScreenWindowEvent|ScrollAreaGadget|ScrollAreaGadget3D|ScrollAreaScreenGadget|ScrollBarGadget|ScrollBarGadget3D|ScrollBarScreenGadget|ScrollMaterial|Second|SecondWorldCollisionEntity|SelectedFilePattern|SelectedFontColor|SelectedFontName|SelectedFontSize|SelectedFontStyle|SendFTPFile|SendMail|SendNetworkData|SendNetworkString|SerialPortError|SerialPortID|SerialPortTimeouts|ServerID|SetActiveGadget|SetActiveGadget3D|SetActiveWindow|SetActiveWindow3D|SetClipboardImage|SetClipboardText|SetCurrentDirectory|SetDatabaseBlob|SetDatabaseDouble|SetDatabaseFloat|SetDatabaseLong|SetDatabaseNull|SetDatabaseQuad|SetDatabaseString|SetEntityAnimationLength|SetEntityAnimationTime|SetEntityAnimationWeight|SetEntityAttribute|SetEntityCollisionFilter|SetEntityMaterial|SetEnvironmentVariable|SetFTPDirectory|SetFileAttributes|SetFileDate|SetFrameRate|SetGUITheme3D|SetGadgetAttribute|SetGadgetAttribute3D|SetGadgetColor|SetGadgetData|SetGadgetData3D|SetGadgetItemAttribute|SetGadgetItemColor|SetGadgetItemData|SetGadgetItemData3D|SetGadgetItemImage|SetGadgetItemState|SetGadgetItemState3D|SetGadgetItemText|SetGadgetItemText3D|SetGadgetState|SetGadgetState3D|SetGadgetText|SetGadgetText3D|SetImageFrame|SetImageFrameDelay|SetJSONArray|SetJSONBoolean|SetJSONDouble|SetJSONFloat|SetJSONInteger|SetJSONNull|SetJSONObject|SetJSONQuad|SetJSONString|SetLightColor|SetMailAttribute|SetMailBody|SetMaterialAttribute|SetMaterialColor|SetMenuItemState|SetMenuItemText|SetMenuTitleText|SetMusicPosition|SetNodeAnimationKeyFramePosition|SetNodeAnimationKeyFrameRotation|SetNodeAnimationKeyFrameScale|SetNodeAnimationLength|SetNodeAnimationTime|SetNodeAnimationWeight|SetOrientation|SetOrigin|SetRenderQueue|SetRuntimeDouble|SetRuntimeInteger|SetRuntimeString|SetScreenGadgetFont|SetScreenGadgetState|SetScreenGadgetText|SetSerialPortStatus|SetSoundFrequency|SetSoundPosition|SetTerrainTileHeightAtPoint|SetTerrainTileLayerBlend|SetToolBarButtonState|SetURLPart|SetVehicleAttribute|SetWindowColor|SetWindowData|SetWindowState|SetWindowTitle|SetWindowTitle3D|SetXMLAttribute|SetXMLEncoding|SetXMLNodeName|SetXMLNodeOffset|SetXMLNodeText|SetXMLStandalone|SetupTerrains|ShortcutGadget|ShowAssemblyViewer|ShowCallstack|ShowDebugOutput|ShowGUI|ShowLibraryViewer|ShowMemoryViewer|ShowProfiler|ShowVariableViewer|ShowWatchlist|Sign|SignalSemaphore|Sin|SinH|SizeOf|SkewCoordinates|SkyBox|SkyDome|SliderJoint|SmartWindowRefresh|SoundCone3D|SoundID3D|SoundLength|SoundListenerLocate|SoundPan|SoundRange3D|SoundStatus|SoundVolume|SoundVolume3D|Space|SpinGadget|SpinGadget3D|SplinePointX|SplinePointY|SplinePointZ|SplineX|SplineY|SplineZ|SplitterGadget|SplitterScreenGadget|SpriteBlendingMode|SpriteCollision|SpriteDepth|SpriteHeight|SpriteID|SpriteOutput|SpritePixelCollision|SpriteQuality|SpriteWidth|Sqr|StartAESCipher|StartDrawing|StartEntityAnimation|StartFingerprint|StartNodeAnimation|StartPrinting|StartProfiler|StartVectorDrawing|StatusBarHeight|StatusBarID|StatusBarImage|StatusBarProgress|StatusBarText|StickyWindow|StopAudioCD|StopDrawing|StopEntityAnimation|StopMovie|StopMusic|StopNodeAnimation|StopPrinting|StopProfiler|StopSound|StopSound3D|StopVectorDrawing|Str|StrD|StrF|StrU|StringByteLength|StringField|StringFingerprint|StringGadget|StringGadget3D|StringScreenGadget|StrokePath|Subsystem|Sun|SwitchCamera|SysTrayIconToolTip|Tan|TanH|TerrainHeight|TerrainLocate|TerrainMousePick|TerrainRenderMode|TerrainTileHeightAtPosition|TerrainTileLayerMapSize|TerrainTilePointX|TerrainTilePointY|TerrainTileSize|Text3DID|Text3DX|Text3DY|Text3DZ|TextGadget|TextGadget3D|TextHeight|TextScreenGadget|TextWidth|TextureHeight|TextureID|TextureOutput|TextureWidth|ThreadID|ThreadPriority|ToolBarButtonText|ToolBarHeight|ToolBarID|ToolBarImageButton|ToolBarSeparator|ToolBarStandardButton|ToolBarToolTip|TrackBarGadget|TrackBarScreenGadget|TransformSprite|TranslateCoordinates|TransparentSpriteColor|TreeGadget|TreeGadget3D|Trim|TruncateFile|TryLockMutex|TrySemaphore|TypeOf|UCase|URLDecoder|URLEncoder|UTF8|UnclipOutput|UncompressMemory|UncompressPackFile|UncompressPackMemory|UnescapeString|Unicode|UnlockMutex|UpdateEntityAnimation|UpdateRenderTexture|UpdateSplinePoint|UpdateTerrain|UpdateTerrainTileLayerBlend|UpdateVertexPoseReference|UseAudioCD|UseBriefLZPacker|UseCRC32Fingerprint|UseFLACSoundDecoder|UseGIFImageDecoder|UseGadgetList|UseJCALG1Packer|UseJPEG2000ImageDecoder|UseJPEG2000ImageEncoder|UseJPEGImageDecoder|UseJPEGImageEncoder|UseLZMAPacker|UseMD5Fingerprint|UseODBCDatabase|UseOGGSoundDecoder|UsePNGImageDecoder|UsePNGImageEncoder|UsePostgreSQLDatabase|UseSHA1Fingerprint|UseSHA2Fingerprint|UseSHA3Fingerprint|UseSQLiteDatabase|UseTARPacker|UseTGAImageDecoder|UseTIFFImageDecoder|UseZipPacker|UserName|Val|ValD|ValF|VectorFont|VectorOutputHeight|VectorOutputWidth|VectorParagraphHeight|VectorResolutionX|VectorResolutionY|VectorSourceCircularGradient|VectorSourceColor|VectorSourceGradientColor|VectorSourceImage|VectorSourceLinearGradient|VectorTextHeight|VectorTextWidth|VectorUnit|VertexPoseReferenceCount|WaitFastCGIRequest|WaitProgram|WaitSemaphore|WaitThread|WaitWindowEvent|WaterColor|WaterHeight|WebGadget|WindowBounds|WindowEvent|WindowEvent3D|WindowHeight|WindowHeight3D|WindowID|WindowID3D|WindowMouseX|WindowMouseY|WindowOutput|WindowVectorOutput|WindowWidth|WindowWidth3D|WindowX|WindowX3D|WindowY|WindowY3D|WorldCollisionAppliedImpulse|WorldCollisionContact|WorldCollisionNormal|WorldDebug|WorldGravity|WorldShadows|WriteAsciiCharacter|WriteByte|WriteCGIData)\\b\\s*(?=\\()"
+        },
+        {
+          "name": "support.function.purebasic",
+          "match": "(?i)\\b(?:WriteCGIFile|WriteCGIHeader|WriteCGIString|WriteCGIStringN|WriteCharacter|WriteConsoleData|WriteData|WriteDouble|WriteFloat|WriteInteger|WriteLong|WritePreferenceDouble|WritePreferenceFloat|WritePreferenceInteger|WritePreferenceLong|WritePreferenceQuad|WritePreferenceString|WriteProgramData|WriteProgramString|WriteProgramStringN|WriteQuad|WriteSerialPortData|WriteSerialPortString|WriteString|WriteStringFormat|WriteStringN|WriteUnicodeCharacter|WriteWord|XMLAttributeName|XMLAttributeValue|XMLChildCount|XMLError|XMLErrorLine|XMLErrorPosition|XMLNodeFromID|XMLNodeFromPath|XMLNodePath|XMLNodeType|XMLStatus|Yaw|Year|ZoomSprite)\\b\\s*(?=\\()"
+        },
+        {
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\b\\s*(?=\\()",
+          "captures": {
+            "1": { "name": "entity.name.function.purebasic" }
+          }
         }
       ]
     }

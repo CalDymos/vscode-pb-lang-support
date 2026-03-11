@@ -88,7 +88,8 @@ export function analyzeScopesAndVariables(text: string, currentLine: number): {
         variables.push(...variablesInLine);
 
         // If it is a procedure definition, parse parameters
-        const procMatch = line.match(/^Procedure(?:\.(\w+))?\s+(\w+)\s*\(([^)]*)\)/i);
+        // ProcedureC / ProcedureDLL / ProcedureCDLL added to match detectScopeStart.
+        const procMatch = line.match(/^Procedure(?:C|DLL|CDLL)?(?:\.(\w+))?\s+(\w+)\s*\(([^)]*)\)/i);
         if (procMatch && currentScope.type === ScopeType.Procedure) {
             const params = procMatch[3] || '';
             const paramVariables = parseParameters(params, i, currentScope);
@@ -114,7 +115,10 @@ export function analyzeScopesAndVariables(text: string, currentLine: number): {
  */
 function detectScopeStart(line: string, lineNumber: number): ScopeInfo | null {
     // Procedure start
-    const procMatch = line.match(/^Procedure(?:\.(\w+))?\s+(\w+)/i);
+    // ProcedureC / ProcedureDLL / ProcedureCDLL added.
+    // Without this, those variants don't open a Procedure scope → their
+    // parameters are never parsed → varInfo lookup for struct params fails.
+    const procMatch = line.match(/^Procedure(?:C|DLL|CDLL)?(?:\.(\w+))?\s+(\w+)/i);
     if (procMatch) {
         return {
             type: ScopeType.Procedure,

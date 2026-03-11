@@ -2,7 +2,7 @@
   "name": "pb-lang-support",
   "displayName": "PureBasic Language Services",
   "description": "%extension.description%",
-  "version": "0.11.3",
+  "version": "0.18.0",
   "publisher": "CalDymos",
   "author": {
     "name": "CalDymos"
@@ -116,11 +116,7 @@
         },
         "purebasic.completion.triggerCharacters": {
           "type": "array",
-          "default": [
-            ".",
-            "(",
-            "["
-          ],
+          "default": [".", "(", "["],
           "description": "%config.purebasic.completion.triggerCharacters.description%"
         },
         "purebasic.completion.autoClosingPairs": {
@@ -180,6 +176,40 @@
           "default": 1048576,
           "minimum": 102400,
           "description": "%config.purebasic.performance.maxFileSize.description%"
+        },
+        "purebasic.build.fallbackSource": {
+          "type": "string",
+          "enum": [
+            "sourceMetadata",
+            "launchJson",
+            "fileCfg",
+            "projectCfg"
+          ],
+          "enumDescriptions": [
+            "%config.purebasic.build.fallbackSource.sourceMetadata.description%",
+            "%config.purebasic.build.fallbackSource.launchJson.description%",
+            "%config.purebasic.build.fallbackSource.fileCfg.description%",
+            "%config.purebasic.build.fallbackSource.projectCfg.description%"
+          ],
+          "default": "launchJson",
+          "description": "%config.purebasic.build.fallbackSource.description%"
+        },
+        "purebasic.build.compiler": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "%config.purebasic.build.compiler.description%"
+        },
+        "purebasic.run.mode": {
+          "type": "string",
+          "enum": ["spawn", "terminal"],
+          "enumDescriptions": [
+            "%config.purebasic.run.mode.spawn.description%",
+            "%config.purebasic.run.mode.terminal.description%"
+          ],
+          "default": "spawn",
+          "description": "%config.purebasic.run.mode.description%",
+          "scope": "resource"
         }
       }
     },
@@ -208,6 +238,21 @@
         "command": "purebasic.findSymbols",
         "title": "%command.findSymbols.title%",
         "category": "PureBasic"
+      },
+      {
+        "command": "purebasic.buildActiveTarget",
+        "title": "%command.buildActiveTarget.title%",
+        "category": "PureBasic"
+      },
+      {
+        "command": "purebasic.runActiveTarget",
+        "title": "%command.runActiveTarget.title%",
+        "category": "PureBasic"
+      },
+      {
+        "command": "purebasic.buildAndRunActiveTarget",
+        "title": "%command.buildAndRunActiveTarget.title%",
+        "category": "PureBasic"
       }
     ],
     "menus": {
@@ -230,6 +275,18 @@
         },
         {
           "command": "purebasic.findSymbols",
+          "when": "editorLangId == purebasic"
+        },
+        {
+          "command": "purebasic.buildActiveTarget",
+          "when": "editorLangId == purebasic"
+        },
+        {
+          "command": "purebasic.runActiveTarget",
+          "when": "editorLangId == purebasic"
+        },
+        {
+          "command": "purebasic.buildAndRunActiveTarget",
           "when": "editorLangId == purebasic"
         }
       ],
@@ -257,6 +314,21 @@
           "light": "./icons/purebasic.png",
           "dark": "./icons/purebasic.png"
         }
+      },
+      {
+        "id": "purebasic-form",
+        "aliases": [
+          "PureBasic Form",
+          "purebasic-form"
+        ],
+        "extensions": [
+          ".pbf"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/purebasic.png",
+          "dark": "./icons/purebasic.png"
+        }
       }
     ],
     "grammars": [
@@ -264,11 +336,20 @@
         "language": "purebasic",
         "scopeName": "source.purebasic",
         "path": "./syntaxes/purebasic.tmLanguage.json"
+      },
+      {
+        "language": "purebasic-form",
+        "scopeName": "source.purebasic.form",
+        "path": "./syntaxes/purebasic-form.tmLanguage.json"
       }
     ],
     "snippets": [
       {
         "language": "purebasic",
+        "path": "./snippets/purebasic.json"
+      },
+      {
+        "language": "purebasic-form",
         "path": "./snippets/purebasic.json"
       }
     ],
@@ -296,6 +377,32 @@
                 "type": "string",
                 "description": "%debugger.launch.compiler.description%",
                 "default": "pbcompiler"
+              },
+              "compilerArgs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "%debugger.launch.compilerArgs.description%"
+              },
+              "cwd": {
+                "type": "string",
+                "description": "%debugger.launch.cwd.description%"
+              },
+              "output": {
+                "type": "string",
+                "description": "%debugger.launch.output.description%"
+              },
+              "runCwd": {
+                "type": "string",
+                "description": "%debugger.launch.runCwd.description%"
+              },
+              "runArgs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "%debugger.launch.runArgs.description%"
               },
               "transport": {
                 "type": "string",
@@ -387,6 +494,7 @@
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "^1.0.1",
     "vscode-uri": "^3.1.0",
+    "jsonc-parser": "^3.2.0",
     "@caldymos/pb-project-core": "file:../pb-project-core"
   },
   "devDependencies": {

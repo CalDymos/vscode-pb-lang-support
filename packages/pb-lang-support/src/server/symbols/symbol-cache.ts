@@ -1,6 +1,6 @@
 /**
- * 增强的符号缓存
- * 支持智能缓存失效、分层缓存和内存优化
+ * Enhanced symbol cache
+ * Supports intelligent cache invalidation, layered caching, and memory optimization
  */
 
 import { PureBasicSymbol, SymbolKind } from './types';
@@ -11,7 +11,7 @@ interface CacheEntry {
     hash: string;
     lastAccess: number;
     accessCount: number;
-    priority: number; // 1-5, 5为最高优先级
+    priority: number; // 1-5, 5 is the highest priority
 }
 
 class EnhancedSymbolCache {
@@ -21,13 +21,13 @@ class EnhancedSymbolCache {
     private accessTimes: Array<{ uri: string; time: number }> = [];
 
     /**
-     * 智能设置文档符号
-     * @param uri 文档URI
-     * @param symbols 符号数组
-     * @param contentHash 文档内容哈希，用于智能缓存失效
+     * Intelligently set document symbols
+     * @param uri Document URI
+     * @param symbols Symbol array
+     * @param contentHash Document content hash, used for intelligent cache invalidation
      */
     setSymbols(uri: string, symbols: PureBasicSymbol[], contentHash?: string): void {
-        // 限制单个文档的符号数量
+        // Limit the number of symbols for a single document
         if (symbols.length > this.maxEntriesPerDocument) {
             symbols = this.prioritizeSymbols(symbols);
         }
@@ -35,14 +35,14 @@ class EnhancedSymbolCache {
         const existing = this.cache.get(uri);
         const hash = contentHash || generateHash(JSON.stringify(symbols));
 
-        // 如果哈希相同，只更新访问时间
+        // If the hash is the same, only update the access time
         if (existing && existing.hash === hash) {
             existing.lastAccess = Date.now();
             existing.accessCount++;
             return;
         }
 
-        // 计算文档优先级
+        // Calculate document priority
         const priority = this.calculateDocumentPriority(uri, symbols);
 
         const entry: CacheEntry = {
@@ -59,21 +59,23 @@ class EnhancedSymbolCache {
     }
 
     /**
-     * 获取文档符号，支持哈希验证
+     * Get document symbols with hash validation support.
+     * Returns the cached symbol array (which may be empty) on a hit,
+     * or null when the entry does not exist or the hash has changed.
      */
-    getSymbols(uri: string, expectedHash?: string): PureBasicSymbol[] {
+    getSymbols(uri: string, expectedHash?: string): PureBasicSymbol[] | null {
         const entry = this.cache.get(uri);
         if (!entry) {
-            return [];
+            return null;
         }
 
-        // 哈希验证
+        // Hash validation
         if (expectedHash && entry.hash !== expectedHash) {
             this.cache.delete(uri);
-            return [];
+            return null;
         }
 
-        // 更新访问信息
+        // Update access information
         entry.lastAccess = Date.now();
         entry.accessCount++;
         this.recordAccess(uri);
@@ -82,7 +84,7 @@ class EnhancedSymbolCache {
     }
 
     /**
-     * 获取缓存统计信息
+     * Get cache statistics
      */
     getCacheStats(): {
         totalDocuments: number;
@@ -125,7 +127,7 @@ class EnhancedSymbolCache {
     }
 
     /**
-     * 查找符号（增强版本）
+     * Find symbols (enhanced version)
      */
     findSymbol(name: string, uri?: string, kind?: SymbolKind): PureBasicSymbol[] {
         const results: PureBasicSymbol[] = [];
@@ -147,7 +149,7 @@ class EnhancedSymbolCache {
                 searchInSymbols(entry.symbols);
             }
         } else {
-            // 按优先级排序搜索
+            // Search sorted by priority
             const sortedEntries = Array.from(this.cache.entries())
                 .sort((a, b) => b[1].priority - a[1].priority);
 
@@ -160,7 +162,7 @@ class EnhancedSymbolCache {
     }
 
     /**
-     * 增强的详细符号查找
+     * Enhanced detailed symbol lookup
      */
     findSymbolDetailed(name: string, kind?: SymbolKind): Array<{ uri: string; symbol: PureBasicSymbol }> {
         const out: Array<{ uri: string; symbol: PureBasicSymbol }> = [];
@@ -176,7 +178,7 @@ class EnhancedSymbolCache {
             }
         }
 
-        // 按访问优先级排序
+        // Sort by access priority
         return out.sort((a, b) => {
             const entryA = this.cache.get(a.uri);
             const entryB = this.cache.get(b.uri);
@@ -186,7 +188,33 @@ class EnhancedSymbolCache {
     }
 
     /**
-     * 批量清除多个文档的符号
+     * Exact-match symbol lookup (case-insensitive equality, not substring).
+     * Use this for definition resolution where a substring hit would be wrong.
+     */
+    findSymbolExactDetailed(name: string, kind?: SymbolKind): Array<{ uri: string; symbol: PureBasicSymbol }> {
+        const out: Array<{ uri: string; symbol: PureBasicSymbol }> = [];
+        const searchName = name.toLowerCase();
+
+        for (const [uri, entry] of this.cache.entries()) {
+            for (const sym of entry.symbols) {
+                if (sym.name.toLowerCase() === searchName) {
+                    if (!kind || sym.kind === kind) {
+                        out.push({ uri, symbol: sym });
+                    }
+                }
+            }
+        }
+
+        return out.sort((a, b) => {
+            const entryA = this.cache.get(a.uri);
+            const entryB = this.cache.get(b.uri);
+            if (!entryA || !entryB) return 0;
+            return entryB.priority - entryA.priority;
+        });
+    }
+
+    /**
+     * Clear symbols for multiple documents in batch
      */
     clearMultipleSymbols(uris: string[]): void {
         for (const uri of uris) {
@@ -195,7 +223,7 @@ class EnhancedSymbolCache {
     }
 
     /**
-     * 清除低优先级缓存
+     * Clear low-priority cache entries
      */
     clearLowPriorityDocuments(): void {
         const entries = Array.from(this.cache.entries())
@@ -208,9 +236,9 @@ class EnhancedSymbolCache {
     }
 
     private calculateDocumentPriority(uri: string, symbols: PureBasicSymbol[]): number {
-        let priority = 1; // 基础优先级
+        let priority = 1; // Base priority
 
-        // 基于符号类型提升优先级
+        // Increase priority based on symbol types
         const hasProcedures = symbols.some(s => s.kind === SymbolKind.Procedure);
         const hasModules = symbols.some(s => s.kind === SymbolKind.Module);
         const hasStructures = symbols.some(s => s.kind === SymbolKind.Structure);
@@ -219,7 +247,7 @@ class EnhancedSymbolCache {
         if (hasModules) priority += 1;
         if (hasStructures) priority += 1;
 
-        // 基于文件路径提升优先级（例如，主文件）
+        // Increase priority based on file path (for example, main file)
         if (uri.includes('main') || uri.includes('index')) {
             priority += 1;
         }
@@ -228,7 +256,7 @@ class EnhancedSymbolCache {
     }
 
     private prioritizeSymbols(symbols: PureBasicSymbol[]): PureBasicSymbol[] {
-        // 优先级排序：过程 > 模块 > 结构 > 常量 > 变量
+        // Priority order: procedure > module > structure > constant > variable
         const kindPriority: Record<SymbolKind, number> = {
             [SymbolKind.Procedure]: 5,
             [SymbolKind.Function]: 5,
@@ -263,7 +291,7 @@ class EnhancedSymbolCache {
             return;
         }
 
-        // LRU策略：移除最近最少使用的文档
+        // LRU strategy: remove the least recently used documents
         const entries = Array.from(this.cache.entries())
             .sort((a, b) => a[1].lastAccess - b[1].lastAccess);
 
@@ -289,14 +317,14 @@ class EnhancedSymbolCache {
     }
 
     /**
-     * 清除文档的符号
+     * Clear symbols for a document
      */
     clearSymbols(uri: string): void {
         this.cache.delete(uri);
     }
 
     /**
-     * 清除所有符号
+     * Clear all symbols
      */
     clearAll(): void {
         this.cache.clear();

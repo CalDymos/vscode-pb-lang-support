@@ -9,10 +9,10 @@ import {
     Position
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
-import { readFileIfExistsSync, resolveIncludePath, fsPathToUri, normalizeDirPath } from '../utils/fs-utils';
-import { getWorkspaceFiles, getWorkspaceRootForUri  } from '../indexer/workspace-index';
+import { ProjectManager } from '../managers/project-manager';
 import { parsePureBasicConstantDefinition} from '../utils/constants';
-import { escapeRegExp} from '../utils/string-utils';
+import { escapeRegExp, getWordAtPosition, normalizeConstantName, getModuleSymbolAtPosition } from '../utils/pb-lexer-utils';
+import { collectSearchDocuments } from '../utils/document-collector';
 
 /**
  * Handle references request
@@ -20,142 +20,58 @@ import { escapeRegExp} from '../utils/string-utils';
 export function handleReferences(
     params: ReferenceParams,
     document: TextDocument,
-    allDocuments: Map<string, TextDocument>
+    allDocuments: Map<string, TextDocument>,
+    projectManager?: ProjectManager
 ): Location[] {
     const text = document.getText();
     const position = params.position;
 
     // Get word at current position
-    const word = getWordAtPosition(text, position);
+    const lines = text.split('\n');
+    if (position.line >= lines.length) return [];
+    const word = getWordAtPosition(lines[position.line], position.character);
     if (!word) {
         return [];
     }
 
     // Collect searchable documents: current + opened + recursive includes
-    const searchDocs = collectSearchDocuments(document, allDocuments);
+    const searchDocs = collectSearchDocuments(document, allDocuments, projectManager, 3, 'scan');
 
     // Find references
     const references: Location[] = [];
 
-    // Handle module call syntax (functions)
-    const moduleMatch = getModuleFunctionFromPosition(text, position);
+    // Handle module syntax: Module::#Const / Module::Type / Module::Function
+    const moduleMatch = getModuleSymbolAtPosition(lines[position.line], position.character);
     if (moduleMatch) {
-        // Find all references for module function
-        const moduleReferences = findModuleFunctionReferences(
-            moduleMatch.moduleName,
-            moduleMatch.functionName,
-            searchDocs,
-            params.context.includeDeclaration
-        );
-        references.push(...moduleReferences);
-    } else {
-        // Handle module symbols (constants/structures/interfaces/enumerations): Module::Name or Module::#CONST
-        const modSym = getModuleSymbolFromPosition(text, position);
-        if (modSym) {
+        if (moduleMatch.kind === 'function') {
+            // Module::Func( – search for procedure references
+            const moduleReferences = findModuleFunctionReferences(
+                moduleMatch.moduleName,
+                moduleMatch.symbolName,
+                searchDocs,
+                params.context.includeDeclaration
+            );
+            references.push(...moduleReferences);
+        } else {
+            // 'constant' (Module::#Const) or 'type' (Module::Struct/Enum/Interface)
             const modSymRefs = findModuleSymbolReferences(
-                modSym.moduleName,
-                modSym.ident,
+                moduleMatch.moduleName,
+                moduleMatch.symbolName,
                 searchDocs,
                 params.context.includeDeclaration
             );
             references.push(...modSymRefs);
-            return references;
         }
-        // Regular reference finding: traverse all search documents
-        for (const doc of searchDocs.values()) {
-            const docReferences = findReferencesInDocument(doc, word, params.context.includeDeclaration);
-            references.push(...docReferences);
-        }
+        return references;
+    }
+
+    // Regular reference finding: traverse all search documents
+    for (const doc of searchDocs.values()) {
+        const docReferences = findReferencesInDocument(doc, word, params.context.includeDeclaration);
+        references.push(...docReferences);
     }
 
     return references;
-}
-
-/**
- * Get word at position (support module syntax Module::Function)
- */
-function getWordAtPosition(text: string, position: Position): string | null {
-    const lines = text.split('\n');
-    if (position.line >= lines.length) {
-        return null;
-    }
-
-    const line = lines[position.line];
-    const char = position.character;
-
-    // Find word boundary (support :: syntax)
-    let start = char;
-    let end = char;
-
-    // Search forward to find word start
-    while (start > 0 && /[a-zA-Z0-9_:]/.test(line[start - 1])) {
-        start--;
-    }
-
-    // Search backward to find word end
-    while (end < line.length && /[a-zA-Z0-9_:]/.test(line[end])) {
-        end++;
-    }
-
-    if (start === end) {
-        return null;
-    }
-
-    const fullWord = line.substring(start, end);
-
-    // Handle module call syntax Module::Function
-    if (fullWord.includes('::')) {
-        const parts = fullWord.split('::');
-        if (parts.length === 2) {
-            // Check if cursor is on module name or function name
-            const moduleEnd = start + parts[0].length;
-            if (char <= moduleEnd) {
-                return parts[0]; // Return module name
-            } else {
-                return parts[1]; // Return function name
-            }
-        }
-    }
-
-    return fullWord;
-}
-
-/**
- * Get module function call information
- */
-function getModuleFunctionFromPosition(text: string, position: Position): {
-    moduleName: string;
-    functionName: string;
-} | null {
-    const lines = text.split('\n');
-    if (position.line >= lines.length) {
-        return null;
-    }
-
-    const line = lines[position.line];
-    const char = position.character;
-
-    // Find module call syntax Module::Function
-    const beforeCursor = line.substring(0, char);
-    const afterCursor = line.substring(char);
-
-    const fullContext = beforeCursor + afterCursor;
-    const moduleMatch = fullContext.match(/(\w+)::(\w+)/);
-
-    if (moduleMatch) {
-        // Check if cursor is on this module call
-        const matchStart = line.indexOf(moduleMatch[0]);
-        const matchEnd = matchStart + moduleMatch[0].length;
-
-        if (char >= matchStart && char <= matchEnd) {
-            return {
-                moduleName: moduleMatch[1],
-                functionName: moduleMatch[2]
-            };
-        }
-    }
-
-    return null;
 }
 
 /**
@@ -208,9 +124,10 @@ function findModuleFunctionReferences(
 
             // Find Procedure definition inside module
             if (includeDeclaration && inModule) {
-                const procMatch = line.match(new RegExp(`^\\s*Procedure(?:\\.\\w+)?\\s+(${safeFn})\\s*\\(`, 'i'));
+                const procMatch = line.match(new RegExp(`^\\s*Procedure(?:C|DLL|CDLL)?(?:\\.\\w+)?\\s+(${safeFn})\\s*\\(`, 'i'));
                 if (procMatch) {
-                    const startChar = line.indexOf(procMatch[1]);
+                    // Returns the position of the capture group within the entire match string.
+                    const startChar = procMatch[0].indexOf(procMatch[1]);
                     references.push({
                         uri: doc.uri,
                         range: {
@@ -251,11 +168,11 @@ function findReferencesInDocument(
         if (isConstant) {
             // Constants: search all occurrences (definition + usage)
             const baseName = normalizeConstantName(word.replace(/^#/, ''));
-            const ref = findConstantReference(line, i, baseName, document.uri);
-            if (ref) {
+            const refs = findConstantReference(line, i, baseName, document.uri);
+            if (refs.length > 0) {
                 const isDef = parsePureBasicConstantDefinition(trimmedLine) !== null;
                 if (!isDef || includeDeclaration) {
-                    references.push(ref);
+                    references.push(...refs);
                 }
             }
             continue;
@@ -278,40 +195,39 @@ function findReferencesInDocument(
 }
 
 /**
- * Find a constant reference (#NAME or #NAME$) in a line.
+ * Find all constant references (#NAME or #NAME$) in a line.
+ * Returns all occurrences, not just the first (analogous to findUsageReference).
  */
 function findConstantReference(
     line: string,
     lineIndex: number,
     baseName: string,
     uri: string
-): Location | null {
-    const searchName = '#' + baseName;
-    const lowerLine = line.toLowerCase();
-    const idx = lowerLine.indexOf(searchName);
-    if (idx === -1) { return null; }
+): Location[] {
+    const results: Location[] = [];
+    const re = new RegExp('#' + escapeRegExp(baseName) + '(?:\\$)?\\b', 'gi');
+    const commentStart = getCommentStart(line);
 
-    // Skip if match is inside an inline comment
-    if (line.substring(0, idx).includes(';')) { return null; }
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(line)) !== null) {
+        // Skip if inside or after a comment
+        if (commentStart !== -1 && m.index >= commentStart) { break; }
 
-    // Skip if match is inside a string literal
-    const quoteCount = (line.substring(0, idx).match(/"/g) || []).length;
-    if (quoteCount % 2 === 1) { return null; }
+        // Skip if inside a string literal
+        const quoteCount = (line.substring(0, m.index).match(/"/g) || []).length;
+        if (quoteCount % 2 === 1) { continue; }
 
-    const afterIdx = idx + searchName.length;
-    const hasDollar = lowerLine[afterIdx] === '$';
-    const nextChar = lowerLine[afterIdx + (hasDollar ? 1 : 0)];
-    if (nextChar && /[a-z0-9_$]/.test(nextChar)) { return null; } // not a word boundary
-
-    const startChar = idx + 1; // skip #
-    const matchLength = baseName.length + (hasDollar ? 1 : 0);
-    return {
-        uri,
-        range: {
-            start: { line: lineIndex, character: startChar },
-            end: { line: lineIndex, character: startChar + matchLength }
-        }
-    };
+        const startChar = m.index + 1; // skip leading #
+        const matchLength = m[0].length - 1; // exclude #
+        results.push({
+            uri,
+            range: {
+                start: { line: lineIndex, character: startChar },
+                end:   { line: lineIndex, character: startChar + matchLength }
+            }
+        });
+    }
+    return results;
 }
 
 /**
@@ -326,17 +242,21 @@ function findDefinitionReference(
 ): Location | null {
     const safeWord = escapeRegExp(word);
     const patterns = [
-        new RegExp(`^Procedure(?:\\.\\w+)?\\s+(${safeWord})\\s*\\(`, 'i'),
+        new RegExp(`^Procedure(?:C|DLL|CDLL)?(?:\\.\\w+)?\\s+(${safeWord})\\s*\\(`, 'i'),
+        new RegExp(`^Macro\\s+(${safeWord})\\b`, 'i'),
+        new RegExp(`^Prototype(?:C)?(?:\\.\\w+)?\\s+(${safeWord})\\s*\\(`, 'i'),
         new RegExp(`^Structure\\s+(${safeWord})\\b`, 'i'),
         new RegExp(`^Interface\\s+(${safeWord})\\b`, 'i'),
-        new RegExp(`^Enumeration\\s+(${safeWord})\\b`, 'i'),
-        new RegExp(`^(?:Global|Protected|Static|Define|Dim)\\s+(?:\\w+\\s+)?\\*?(${safeWord})(?:\\.\\w+|\\[|\\s|$)`, 'i'),
+        new RegExp(`^Enumeration(?:Binary)?\\s+(${safeWord})\\b`, 'i'),
+        new RegExp(`^(?:Global|Protected|Static|Define|Dim|Shared|Threaded)\\s+(?:\\w+\\s+)?\\*?(${safeWord})(?:\\.\\w+|\\[|\\s|$)`, 'i'),
     ];
 
     for (const pattern of patterns) {
         const match = trimmedLine.match(pattern);
         if (match) {
-            const startChar = line.indexOf(match[1]);
+            const indent = line.length - line.trimStart().length;
+            // Returns the position of the capture group within the entire match string.
+            const startChar = indent + match[0].indexOf(match[1]);
             return {
                 uri,
                 range: {
@@ -395,32 +315,6 @@ function findUsageReference(
         });
     }
     return results;
-}
-
-/**
- * Get module symbol (other than functions, such as constants/structures/interfaces/enumerations) call position
- */
-function getModuleSymbolFromPosition(text: string, position: Position): { moduleName: string; ident: string } | null {
-    const lines = text.split('\n');
-    if (position.line >= lines.length) return null;
-    const line = lines[position.line];
-    const char = position.character;
-    const before = line.substring(0, char);
-    const after = line.substring(char);
-    const full = before + after;
-    let m = full.match(/(\w+)::#(\w+)/);
-    if (m) {
-        const start = line.indexOf(m[0]);
-        const end = start + m[0].length;
-        if (char >= start && char <= end) return { moduleName: m[1], ident: m[2] };
-    }
-    m = full.match(/(\w+)::(\w+)/);
-    if (m) {
-        const start = line.indexOf(m[0]);
-        const end = start + m[0].length;
-        if (char >= start && char <= end) return { moduleName: m[1], ident: m[2] };
-    }
-    return null;
 }
 
 /**
@@ -493,12 +387,14 @@ function findModuleSymbolReferences(
             const defMatchers = [
                 new RegExp(`^Structure\\s+(${safeIdent})\\b`, 'i'),
                 new RegExp(`^Interface\\s+(${safeIdent})\\b`, 'i'),
-                new RegExp(`^Enumeration\\s+(${safeIdent})\\b`, 'i'),
+                new RegExp(`^Enumeration(?:Binary)?\\s+(${safeIdent})\\b`, 'i'),
             ];
             for (const r of defMatchers) {
                 const mm = trimmed.match(r);
                 if (mm) {
-                    const startChar = line.indexOf(mm[1]);
+                    const indent = line.length - line.trimStart().length;
+                    // Returns the position of the capture group within the entire match string.
+                    const startChar = indent + mm[0].indexOf(mm[1]);
                     refs.push({
                         uri: doc.uri,
                         range: {
@@ -512,94 +408,4 @@ function findModuleSymbolReferences(
         }
     }
     return refs;
-}
-
-function normalizeConstantName(name: string): string {
-    return name.replace(/\$$/, '').toLowerCase();
-}
-
-/**
- * Collect search documents: current + open + recursive includes
- */
-function collectSearchDocuments(
-    document: TextDocument,
-    allDocuments: Map<string, TextDocument>,
-    maxDepth = 3
-): Map<string, TextDocument> {
-    const workspaceRoot = getWorkspaceRootForUri(document.uri);
-    const result = new Map<string, TextDocument>();
-    const visited = new Set<string>();
-
-    const addDoc = (doc: TextDocument) => {
-        if (!result.has(doc.uri)) {
-            result.set(doc.uri, doc);
-        }
-    };
-
-    addDoc(document);
-    for (const [, doc] of allDocuments) addDoc(doc);
-
-    const queue: Array<{ uri: string; depth: number }> = [{ uri: document.uri, depth: 0 }];
-
-    while (queue.length) {
-        const { uri, depth } = queue.shift()!;
-        if (visited.has(uri) || depth > maxDepth) continue;
-        visited.add(uri);
-
-        const baseDoc = result.get(uri);
-        if (!baseDoc) continue;
-        const text = baseDoc.getText();
-        const lines = text.split('\n');
-
-        // Maintain current IncludePath search directory (latest first)
-        const includeDirs: string[] = [];
-
-        for (const line of lines) {
-            // IncludePath directive
-            const ip = line.match(/^\s*IncludePath\s+\"([^\"]+)\"/i);
-            if (ip) {
-                const dir = normalizeDirPath(uri, ip[1]);
-                if (!includeDirs.includes(dir)) includeDirs.unshift(dir);
-                continue;
-            }
-
-            const m = line.match(/^\s*(?:X?IncludeFile)\s+\"([^\"]+)\"/i);
-            if (!m) continue;
-            const inc = m[1];
-            const fsPath = resolveIncludePath(uri, inc, includeDirs, workspaceRoot);
-            if (!fsPath) continue;
-            const incUri = fsPathToUri(fsPath);
-            if (result.has(incUri)) {
-                if (!visited.has(incUri)) queue.push({ uri: incUri, depth: depth + 1 });
-                continue;
-            }
-            const opened = allDocuments.get(incUri);
-            if (opened) {
-                addDoc(opened);
-                queue.push({ uri: incUri, depth: depth + 1 });
-                continue;
-            }
-            const content = readFileIfExistsSync(fsPath);
-            if (content != null) {
-                const tempDoc = TextDocument.create(incUri, 'purebasic', 0, content);
-                addDoc(tempDoc);
-                queue.push({ uri: incUri, depth: depth + 1 });
-            }
-        }
-    }
-    // Include workspace files (limited), for more complete reference searching
-    try {
-        const files = getWorkspaceFiles();
-        for (const fsPath of files) {
-            const incUri = fsPathToUri(fsPath);
-            if (result.has(incUri)) continue;
-            const content = readFileIfExistsSync(fsPath);
-            if (content != null) {
-                const tempDoc = TextDocument.create(incUri, 'purebasic', 0, content);
-                result.set(incUri, tempDoc);
-            }
-        }
-    } catch {}
-
-    return result;
 }

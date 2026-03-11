@@ -4,7 +4,6 @@ import * as path from 'path';
 import {
     parsePbpProjectText,
     pickTarget,
-    getProjectIncludeDirectories,
     getProjectSourceFiles,
     getProjectIncludeFiles,
     writePbpProjectText,
@@ -19,6 +18,9 @@ const DEFAULT_EXCLUDE_GLOB = '**/{node_modules,.git}/**';
 
 const WSKEY_ACTIVE_PROJECT = 'pbProjectFiles.activeProjectFile';
 const WSKEY_ACTIVE_TARGET = 'pbProjectFiles.activeTargetName';
+
+/** Sentinel: aktiv wenn der User "No Project" explizit gewählt hat. */
+const NO_PROJECT_SENTINEL = '__NO_PROJECT__';
 
 function normalizeFsPath(fsPath: string): string {
     const p = path.normalize(fsPath);
@@ -41,7 +43,9 @@ function classifyScope(projectDir: string, filePath: string): ProjectScope {
 }
 
 function formatStatusBarText(ctx: PbProjectContextPayload): string {
-    const proj = ctx.projectFile ? path.basename(ctx.projectFile) : 'No Project';
+    const proj = ctx.noProject         ? '$(circle-slash) No Project'
+        : ctx.projectFile              ? path.basename(ctx.projectFile)
+        : '…';
     const tgt = ctx.targetName ? `  [${ctx.targetName}]` : '';
     return `PB: ${proj}${tgt}`;
 }
@@ -53,7 +57,7 @@ export class ProjectService implements vscode.Disposable {
     private readonly fileToProject = new Map<string, string>();
 
     /** Cached per project (keyed by normalized .pbp fsPath) */
-    private readonly projectMeta = new Map<string, { includeDirs: string[]; projectFiles: string[] }>();
+    private readonly projectMeta = new Map<string, { projectFiles: string[] }>();
 
     private activeProjectFile?: string;
     private activeTargetName?: string;
@@ -89,7 +93,7 @@ export class ProjectService implements vscode.Disposable {
 
     public getApi(): PbProjectFilesApi {
         return {
-            version: 2,
+            version: 3,
             getActiveContext: () => this.getActiveContext(),
             getActiveContextPayload: () => this.getActiveContextPayload(),
             getProjectForFile: (fileUri: vscode.Uri) => this.getProjectForFile(fileUri),
@@ -108,7 +112,9 @@ export class ProjectService implements vscode.Disposable {
         // Restore persisted state first.
         const persistedProject = this.context.workspaceState.get<string>(WSKEY_ACTIVE_PROJECT);
         const persistedTarget = this.context.workspaceState.get<string>(WSKEY_ACTIVE_TARGET);
-        this.activeProjectFile = persistedProject ? normalizeFsPath(persistedProject) : undefined;
+        this.activeProjectFile = persistedProject === NO_PROJECT_SENTINEL
+            ? NO_PROJECT_SENTINEL
+            : persistedProject ? normalizeFsPath(persistedProject) : undefined;
         this.activeTargetName = persistedTarget ?? undefined;
 
         await this.refresh();
@@ -131,6 +137,9 @@ export class ProjectService implements vscode.Disposable {
     }
 
     public getActiveContextPayload(): PbProjectContextPayload {
+        if (this.activeProjectFile === NO_PROJECT_SENTINEL) {
+            return { noProject: true };
+        }
         const proj = this.activeProjectFile ? this.projects.get(this.activeProjectFile) : undefined;
         const meta = this.activeProjectFile ? this.projectMeta.get(this.activeProjectFile) : undefined;
         const target = proj ? this.getActiveTarget(proj) : undefined;
@@ -139,7 +148,6 @@ export class ProjectService implements vscode.Disposable {
             projectDir: proj?.projectDir,
             projectName: proj?.config?.name,
             targetName: this.activeTargetName,
-            includeDirs: meta?.includeDirs ?? [],
             projectFiles: meta?.projectFiles ?? [],
             project: proj,
             target,
@@ -147,6 +155,9 @@ export class ProjectService implements vscode.Disposable {
     }
 
     public getProjectForFile(fileUri: vscode.Uri): PbpProject | undefined {
+        // In "No Project" mode, no file belongs to a project.
+        if (this.activeProjectFile === NO_PROJECT_SENTINEL) return undefined;
+
         const fsPath = normalizeFsPath(fileUri.fsPath);
 
         // If the file is a .pbp, it is its own project key.
@@ -185,20 +196,29 @@ export class ProjectService implements vscode.Disposable {
 
         this.rebuildFileToProjectMap();
 
-        // Keep the previously active project if it still exists; otherwise pick first.
-        if (this.activeProjectFile && !this.projects.has(this.activeProjectFile)) {
-            this.activeProjectFile = undefined;
-            this.activeTargetName = undefined;
-        }
-
-        if (!this.activeProjectFile) {
-            const first = this.projects.keys().next();
-            if (!first.done) {
-                this.activeProjectFile = first.value;
-                const proj = this.projects.get(first.value);
-                this.activeTargetName = proj ? this.getActiveTarget(proj)?.name : undefined;
+        /* Preserve the previously active project if it still exists.
+           If it was removed, fall back to the first available project.
+           If the user explicitly selected "No Project", keep that choice
+           across refreshes using the NO_PROJECT_SENTINEL.
+        */
+        const isNoProject = this.activeProjectFile === NO_PROJECT_SENTINEL;
+        if (!isNoProject) {
+            // Active project no longer exists → reset selection
+            if (this.activeProjectFile && !this.projects.has(this.activeProjectFile)) {
+                this.activeProjectFile = undefined;
+                this.activeTargetName  = undefined;
             }
-        }
+
+            // No active project → select the first available one
+            if (!this.activeProjectFile) {
+                const first = this.projects.keys().next();
+                if (!first.done) {
+                    this.activeProjectFile = first.value;
+                    const proj = this.projects.get(first.value);
+                    this.activeTargetName  = proj ? this.getActiveTarget(proj)?.name : undefined;
+                }
+            }
+        }        
 
         await this.persistActiveState();
 
@@ -207,16 +227,16 @@ export class ProjectService implements vscode.Disposable {
     }
 
     public async pickActiveProject(): Promise<void> {
-        const items = [...this.projects.values()].map(p => ({
+        const noProjectItem = {
+            label:       '$(circle-slash) No Project',
+            description: 'Deactivate project context – use local fallback',
+            projectFile: NO_PROJECT_SENTINEL,
+        };
+        const items = [noProjectItem, ...[...this.projects.values()].map(p => ({
             label: p.config?.name?.trim() ? p.config.name : path.basename(p.projectFile),
             description: p.projectFile,
             projectFile: normalizeFsPath(p.projectFile),
-        }));
-
-        if (items.length === 0) {
-            void vscode.window.showInformationMessage('No .pbp projects found in the workspace.');
-            return;
-        }
+        }))];
 
         const picked = await vscode.window.showQuickPick(items, {
             placeHolder: 'Select active PureBasic project',
@@ -224,7 +244,11 @@ export class ProjectService implements vscode.Disposable {
         });
         if (!picked) return;
 
-        await this.setActiveProject(picked.projectFile);
+        if (picked.projectFile === NO_PROJECT_SENTINEL) {
+            await this.setNoProject();
+        } else {
+            await this.setActiveProject(picked.projectFile);
+        }
     }
 
     public async pickActiveTarget(): Promise<void> {
@@ -273,6 +297,14 @@ export class ProjectService implements vscode.Disposable {
         this.emitActiveContextChanged();
     }
 
+    private async setNoProject(): Promise<void> {
+        this.activeProjectFile = NO_PROJECT_SENTINEL;
+        this.activeTargetName  = undefined;
+        await this.persistActiveState();
+        this.updateStatusBar();
+        this.emitActiveContextChanged();
+    }
+
     private async persistActiveState(): Promise<void> {
         await this.context.workspaceState.update(WSKEY_ACTIVE_PROJECT, this.activeProjectFile);
         await this.context.workspaceState.update(WSKEY_ACTIVE_TARGET, this.activeTargetName);
@@ -288,9 +320,7 @@ export class ProjectService implements vscode.Disposable {
         return t ?? project.targets?.[0];
     }
 
-    private computeProjectMeta(project: PbpProject): { includeDirs: string[]; projectFiles: string[] } {
-        const includeDirs = [...new Set((getProjectIncludeDirectories(project) ?? [])
-            .filter((p): p is string => typeof p === 'string' && p.trim().length > 0))];
+    private computeProjectMeta(project: PbpProject): { projectFiles: string[] } {
 
         const src = (getProjectSourceFiles(project) ?? [])
             .filter((p): p is string => typeof p === 'string' && p.trim().length > 0);
@@ -301,7 +331,7 @@ export class ProjectService implements vscode.Disposable {
             .filter(p => p.toLowerCase().endsWith('.pb') || p.toLowerCase().endsWith('.pbi'))
             .map(p => path.resolve(p));
 
-        return { includeDirs, projectFiles };
+        return { projectFiles };
     }
     private rebuildFileToProjectMap(): void {
         this.fileToProject.clear(); // Clear before rebuilding to remove stale entries.
@@ -345,6 +375,8 @@ export class ProjectService implements vscode.Disposable {
     }
 
     private async syncActiveContextFromEditor(): Promise<void> {
+        if (this.activeProjectFile === NO_PROJECT_SENTINEL) return;
+
         const editor = vscode.window.activeTextEditor;
         if (!editor) return;
 

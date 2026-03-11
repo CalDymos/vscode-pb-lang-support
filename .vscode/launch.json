@@ -34,12 +34,13 @@
       "cwd": "${workspaceFolder}/packages/pb-forms-editor"
     },
     {
-      "name": "Run both (workspace root)",
+      "name": "Run lang + forms",
       "type": "extensionHost",
       "request": "launch",
       "runtimeExecutable": "${execPath}",
       "args": [
-        "--extensionDevelopmentPath=${workspaceFolder}",
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/pb-lang-support",
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/pb-forms-editor",
         "--disable-extensions",
         "--user-data-dir=${workspaceFolder}/.vscode/.vscode-test"
       ],

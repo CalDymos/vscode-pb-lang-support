@@ -31,10 +31,11 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 
 // Import configuration
 import { serverCapabilities } from './config/capabilities';
-import { defaultSettings, globalSettings, PureBasicSettings } from './config/settings';
+import { defaultSettings, globalSettings, PureBasicSettings, SETTINGS_SECTION } from './config/settings';
 
 // Import validator
-import { initValidator, validateDocument } from './validation/validator';
+import { initValidator } from './validation/validator';
+import { runDiagnostics } from './validation/diagnostics-runner';
 
 // Import code completion provider
 import { initCompletionProvider, handleCompletion, handleCompletionResolve } from './providers/completion-provider';
@@ -57,8 +58,8 @@ import { handlePrepareRename, handleRename } from './providers/rename-provider';
 import { handleDocumentFormatting, handleDocumentRangeFormatting } from './providers/formatting-provider';
 
 // Import symbol management
-import { initSymbolManager, parseDocumentSymbols } from './symbols/symbol-manager';
-import { setWorkspaceRoots } from './indexer/workspace-index';
+import { optimizedSymbolParser } from './symbols/optimized-symbol-parser';
+import { setWorkspaceRoots, getWorkspaceRootForUri } from './indexer/workspace-index';
 import { symbolCache } from './symbols/symbol-cache';
 import { SymbolInformation, SymbolKind as LSPSymbolKind, WorkspaceSymbolParams } from 'vscode-languageserver/node';
 import { SymbolKind as PBSymbolKind, PureBasicSymbol } from './symbols/types';
@@ -127,7 +128,6 @@ const lspErrorLog = (msg: string, err?: unknown) =>
 
 initFileCache(lspErrorLog);
 initModuleResolver(lspErrorLog);
-initSymbolManager(lspErrorLog);
 initValidator(lspErrorLog);
 initCompletionProvider(lspErrorLog);
 
@@ -147,22 +147,6 @@ const documentCache: Map<string, TextDocument> = new Map();
 
 // API Function Listing (loaded lazily when the path is known from settings)
 const apiFunctionListing = new ApiFunctionListing();
-
-/**
- * Fetches the current global `apiFunctionListingPath` from the client and
- * (re)loads the listing.  Intended for non-hot paths: initialisation and
- * configuration-change events only.
- */
-async function reloadApiListing(): Promise<void> {
-    try {
-        const config = await connection.workspace.getConfiguration('purebasic');
-        const listingPath: string = config?.apiFunctionListingPath ?? '';
-        
-        apiFunctionListing.load(listingPath);
-    } catch (err) {
-        logLspError('Failed to reload API function listing', err);
-    }
-}
 
 // Project manager for handling .pbp project files
 let projectManager: ProjectManager;
@@ -245,7 +229,8 @@ connection.onInitialized(async () => {
     }
 
     // Initial load of the API function listing (non-hot path).
-    await reloadApiListing();
+    await loadGlobalSettings();
+    apiFunctionListing.load(globalSettings.apiFunctionListingPath ?? '');
 });
 
 // Custom Request: Clear Symbol Cache (to be used with the client command `purebasic.clearSymbolCache`)
@@ -265,20 +250,45 @@ connection.onDidChangeConfiguration(change => {
     if (hasConfigurationCapability) {
         // Clear cached document settings
         documentSettings.clear();
+        // Fetch fresh from client
+        loadGlobalSettings()
+            // Reload the API listing whenever configuration changes (non-hot path).
+            .then(() => apiFunctionListing.load(globalSettings.apiFunctionListingPath ?? ''))
+            .catch(err => logLspError('Failed to load global settings', err));
     } else {
-        globalSettings.maxNumberOfProblems = (change.settings.purebasic || defaultSettings).maxNumberOfProblems;
-        globalSettings.enableValidation = (change.settings.purebasic || defaultSettings).enableValidation;
-        globalSettings.enableCompletion = (change.settings.purebasic || defaultSettings).enableCompletion;
-        globalSettings.validationDelay = (change.settings.purebasic || defaultSettings).validationDelay;
-        globalSettings.apiFunctionListingPath = (change.settings.purebasic || defaultSettings).apiFunctionListingPath;
+        // Fallback: settings pushed via change.settings
+        const s = change.settings.purebasic ?? defaultSettings;
+        globalSettings.maxNumberOfProblems    = s.maxNumberOfProblems    ?? defaultSettings.maxNumberOfProblems;
+        globalSettings.enableValidation       = s.enableValidation       ?? defaultSettings.enableValidation;
+        globalSettings.enableCompletion       = s.enableCompletion       ?? defaultSettings.enableCompletion;
+        globalSettings.validationDelay        = s.validationDelay        ?? defaultSettings.validationDelay;
+        globalSettings.formatting             = s.formatting             ?? defaultSettings.formatting;
+        globalSettings.completion             = s.completion             ?? defaultSettings.completion;
+        globalSettings.linting                = s.linting                ?? defaultSettings.linting;
+        globalSettings.symbols                = s.symbols                ?? defaultSettings.symbols;
+        globalSettings.apiFunctionListingPath = s.apiFunctionListingPath ?? defaultSettings.apiFunctionListingPath;
+        apiFunctionListing.load(globalSettings.apiFunctionListingPath ?? '');
     }
-
-    // Reload the API listing whenever configuration changes (non-hot path).
-    reloadApiListing().catch(err => logLspError('reloadApiListing failed', err));
-
     // Re-validate all open documents
     documents.all().forEach(safeValidateTextDocument);
 });
+
+async function loadGlobalSettings(): Promise<void> {
+    try {
+        const config = await connection.workspace.getConfiguration('purebasic');
+        globalSettings.maxNumberOfProblems  = config?.maxNumberOfProblems  ?? defaultSettings.maxNumberOfProblems;
+        globalSettings.enableValidation     = config?.enableValidation     ?? defaultSettings.enableValidation;
+        globalSettings.enableCompletion     = config?.enableCompletion     ?? defaultSettings.enableCompletion;
+        globalSettings.validationDelay      = config?.validationDelay      ?? defaultSettings.validationDelay;
+        globalSettings.formatting           = config?.formatting           ?? defaultSettings.formatting;
+        globalSettings.completion           = config?.completion           ?? defaultSettings.completion;
+        globalSettings.linting              = config?.linting              ?? defaultSettings.linting;
+        globalSettings.symbols              = config?.symbols              ?? defaultSettings.symbols;
+        globalSettings.apiFunctionListingPath = config?.apiFunctionListingPath ?? defaultSettings.apiFunctionListingPath;
+    } catch (err) {
+        logLspError('Failed to load global settings', err);
+    }
+}
 
 function getDocumentSettings(resource: string): Thenable<PureBasicSettings> {
     if (!hasConfigurationCapability) {
@@ -289,7 +299,7 @@ function getDocumentSettings(resource: string): Thenable<PureBasicSettings> {
     if (!result) {
         result = connection.workspace.getConfiguration({
             scopeUri: resource,
-            section: 'purebasic'
+            section: SETTINGS_SECTION
         }).then(config => {
             // Ensure a complete settings object is returned, filling missing properties with defaults
             return {
@@ -314,6 +324,7 @@ documents.onDidClose(e => {
     documentSettings.delete(e.document.uri);
     documentHashes.delete(e.document.uri);
     documentCache.delete(e.document.uri);
+    optimizedSymbolParser.invalidate(e.document.uri);
     // Notify project manager
     projectManager.onDocumentClose(e.document);
 });
@@ -344,11 +355,6 @@ const safeValidateTextDocument = (textDocument: TextDocument): Promise<void> => 
         return;
     }
 
-    // Skip syntax validation for .pbp project files (they are XML, not PureBasic code)
-    if (textDocument.uri.endsWith('.pbp')) {
-        return;
-    }
-
     const text = textDocument.getText();
     const newHash = generateHash(text);
     const oldHash = documentHashes.get(textDocument.uri);
@@ -361,17 +367,11 @@ const safeValidateTextDocument = (textDocument: TextDocument): Promise<void> => 
     documentHashes.set(textDocument.uri, newHash);
 
     // Parse symbols
-    parseDocumentSymbols(textDocument.uri, text);
+    await optimizedSymbolParser.parseDocumentSymbols(textDocument.uri, text);
 
-    // Validate document
-    let diagnostics = validateDocument(text);
-
-    // Limit number of diagnostics
-    if (diagnostics.length > settings.maxNumberOfProblems) {
-        diagnostics = diagnostics.slice(0, settings.maxNumberOfProblems);
-    }
-
-    // Send diagnostics
+    // Run all validators and send results
+    const workspaceRoot = getWorkspaceRootForUri(textDocument.uri);
+    const diagnostics = runDiagnostics(textDocument, settings, workspaceRoot);
     connection.sendDiagnostics({ uri: textDocument.uri, diagnostics });
     });
 };
@@ -451,7 +451,7 @@ connection.onReferences((params: ReferenceParams): Location[] => {
     }
 
     try {
-        return handleReferences(params, document, documentCache);
+        return handleReferences(params, document, documentCache, projectManager);
     } catch (error) {
         logLspError('References error', error, { uri: params.textDocument.uri });
         return [];

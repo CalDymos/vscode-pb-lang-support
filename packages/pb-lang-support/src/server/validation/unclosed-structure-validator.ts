@@ -5,6 +5,7 @@
 
 import { DiagnosticSeverity, Diagnostic } from 'vscode-languageserver/node';
 import { ValidationContext } from './types';
+import { DIAGNOSTIC_SOURCE } from '../utils/constants';
 
 /**
  * Validate unclosed structures
@@ -25,7 +26,7 @@ export function validateUnclosedStructures(
                 end: { line: safeLine, character: text.length }
             },
             message,
-            source: 'purebasic'
+            source: DIAGNOSTIC_SOURCE
         });
     };
 

@@ -12,8 +12,9 @@ import {
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { getModuleFunctionCompletions as getModuleFunctions } from '../utils/module-resolver';
 import { getActiveUsedModules } from '../utils/scope-manager';
-import { escapeRegExp} from '../utils/string-utils';
+import { escapeRegExp} from '../utils/pb-lexer-utils';
 import { ApiFunctionListing } from '../utils/api-function-listing';
+import { findBuiltin } from '../utils/builtin-functions';
 
 /**
  * Handle signature help request
@@ -68,33 +69,86 @@ export function handleSignatureHelp(
 }
 
 /**
- * Find function call in current line
+ * Find function call in current line.
+ *
  */
 function findFunctionCall(linePrefix: string): {
     moduleName?: string;
     functionName: string;
     parametersText: string;
 } | null {
-    // 1) Module call: Module::Func(
-    const modCall = linePrefix.match(/(\w+)::(\w+)\s*\(([^)]*)$/);
-    if (modCall) {
+    const parenIdx = findLastUnmatchedParen(linePrefix);
+    if (parenIdx < 0) return null;
+
+    const parametersText = linePrefix.substring(parenIdx + 1);
+    const before = linePrefix.substring(0, parenIdx).trimEnd();
+
+    // Module call: Module::Function
+    const modMatch = before.match(/(\w+)::(\w+)$/);
+    if (modMatch) {
         return {
-            moduleName: modCall[1],
-            functionName: modCall[2],
-            parametersText: modCall[3] || ''
+            moduleName: modMatch[1],
+            functionName: modMatch[2],
+            parametersText
         };
     }
 
-    // 2) Regular call: Func(
-    const call = linePrefix.match(/(\w+)\s*\(([^)]*)$/);
-    if (call) {
+    // Regular function call
+    const fnMatch = before.match(/(\w+)$/);
+    if (fnMatch) {
         return {
-            functionName: call[1],
-            parametersText: call[2] || ''
+            functionName: fnMatch[1],
+            parametersText
         };
     }
 
     return null;
+}
+
+/**
+ * Find the index of the last '(' in s that has no matching ')' to its right
+ * (i.e., the innermost currently-open call site), ignoring characters inside
+ * PureBasic string literals and balanced inner paren pairs.
+ *
+ * Scans left-to-right with a stack so that escape strings (~"...\"...") are
+ * handled correctly: inside a ~"..." literal, \" does NOT close the string.
+ * A reverse scan with simple quote-toggling cannot make this distinction.
+ */
+function findLastUnmatchedParen(s: string): number {
+    let inString = false;
+    let isEscape = false;
+    const stack: number[] = [];
+
+    for (let i = 0; i < s.length; i++) {
+        const ch = s[i];
+
+        if (!inString) {
+            if (ch === '"') {
+                inString = true;
+                isEscape = i > 0 && s[i - 1] === '~';
+            } else if (ch === '(') {
+                stack.push(i);
+            } else if (ch === ')') {
+                stack.pop();
+            }
+        } else {
+            if (ch === '"') {
+                if (isEscape) {
+                    // Count consecutive backslashes before this '"'
+                    let bsCount = 0;
+                    let k = i - 1;
+                    while (k >= 0 && s[k] === '\\') { bsCount++; k--; }
+                    // Odd count → escaped quote, stay in string
+                    if (bsCount % 2 !== 0) continue;
+                }
+                inString = false;
+                isEscape = false;
+            }
+        }
+    }
+
+    // The last entry on the stack is the innermost unmatched '('
+    return stack.length > 0 ? stack[stack.length - 1] : -1;
 }
 
 /**
@@ -124,8 +178,7 @@ function findFunctionDefinition(
                 parameters
             };
         }
-        // If not found in module, try user procedure/built-in later
-        // 若模块内未找到，后续再尝试用户过程/内置
+        // If not found inside the module, fall through to user procedure / built-in search below.
     }
 
     // Find user procedure in current document
@@ -183,16 +236,19 @@ function searchFunctionInDocument(
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
 
-        // Match procedure definition
-        const procMatch = line.match(new RegExp(`^Procedure(?:\\.(\\w+))?\\s+(${safeFunction})\\s*\\(([^)]*)\\)`, 'i'));
+        // Match procedure definition (all calling conventions).
+        const procMatch = line.match(new RegExp(`^Procedure(?:C|DLL|CDLL)?(?:\\.(\\w+))?\\s+(${safeFunction})\\s*\\(([^)]*)\\)`, 'i'));
         if (procMatch) {
             const returnType = procMatch[1] || '';
             const name = procMatch[2];
             const paramsText = procMatch[3] || '';
 
+            // Reflect the actual calling convention in the signature label
+            const kwMatch = line.match(/^(Procedure(?:C|DLL|CDLL)?)/i);
+            const kw = kwMatch ? kwMatch[1] : 'Procedure';
             const signature = returnType
-                ? `Procedure.${returnType} ${name}(${paramsText})`
-                : `Procedure ${name}(${paramsText})`;
+                ? `${kw}.${returnType} ${name}(${paramsText})`
+                : `${kw} ${name}(${paramsText})`;
 
             const parameters = parseParameters(paramsText);
 
@@ -208,6 +264,38 @@ function searchFunctionInDocument(
 }
 
 /**
+ * Split a parameter string on top-level commas only.
+ *
+ * Commas inside nested parentheses (e.g. default-value expressions like
+ * `ArraySize(arr, 0)`) and inside string literals are ignored, so that
+ * `Foo(x.i = ArraySize(a, 0), y.s = "a,b")` is correctly split into two
+ * parameters instead of four.
+ */
+function splitTopLevelParams(paramsText: string): string[] {
+    const parts: string[] = [''];
+    let parenDepth = 0;
+    let inString = false;
+
+    for (const char of paramsText) {
+        if (char === '"') {
+            inString = !inString;
+        } else if (!inString) {
+            if (char === '(') {
+                parenDepth++;
+            } else if (char === ')') {
+                parenDepth--;
+            } else if (char === ',' && parenDepth === 0) {
+                parts.push('');
+                continue;
+            }
+        }
+        parts[parts.length - 1] += char;
+    }
+
+    return parts;
+}
+
+/**
  * Parse parameter list
  */
 function parseParameters(paramsText: string): ParameterInformation[] {
@@ -216,13 +304,12 @@ function parseParameters(paramsText: string): ParameterInformation[] {
     }
 
     const parameters: ParameterInformation[] = [];
-    const paramList = paramsText.split(',');
+    const paramList = splitTopLevelParams(paramsText);
 
     for (const param of paramList) {
         const trimmedParam = param.trim();
         if (trimmedParam) {
-            // Analyze parameter names and types
-            const match = trimmedParam.match(/^(Array|List|Map\s+)?(\*?)(\w+)(?:\.(\w+))?(?:\(\d*\))?/i);
+            const match = trimmedParam.match(/^((?:Array|List|Map)\s+)?(\*?)(\w+)(?:\.(\w+))?(?:\(\d*\))?/i);
             if (match) {
                 const keyword = match[1] ? match[1].trim() + ' ' : '';
                 const isPointer = match[2];
@@ -271,55 +358,24 @@ function getApiFunctionSignature(
     return { signature, documentation, parameters };
 }
 
-/**
- * Get built-in function signature
- */
 function getBuiltInFunctionSignature(functionName: string): {
     signature: string;
     documentation: string;
     parameters: ParameterInformation[];
 } | null {
-    // Common built-in function signature definitions
-    const builtInSignatures: { [key: string]: any } = {
-        'Debug': {
-            signature: 'Debug(Text$)',
-            documentation: 'Display debug information',
-            parameters: [
-                { label: 'Text$', documentation: 'String to display in debug output' }
-            ]
-        },
-        'OpenWindow': {
-            signature: 'OpenWindow(#Window, X, Y, Width, Height, Title$, Flags)',
-            documentation: 'Open a new window',
-            parameters: [
-                { label: '#Window', documentation: 'Window identifier' },
-                { label: 'X', documentation: 'X position' },
-                { label: 'Y', documentation: 'Y position' },
-                { label: 'Width', documentation: 'Window width' },
-                { label: 'Height', documentation: 'Window height' },
-                { label: 'Title$', documentation: 'Window title' },
-                { label: 'Flags', documentation: 'Window flags' }
-            ]
-        },
-        'MessageRequester': {
-            signature: 'MessageRequester(Title$, Text$, Flags)',
-            documentation: 'Display a message dialog',
-            parameters: [
-                { label: 'Title$', documentation: 'Dialog title' },
-                { label: 'Text$', documentation: 'Message text' },
-                { label: 'Flags', documentation: 'Dialog flags' }
-            ]
-        }
+    const entry = findBuiltin(functionName);
+    if (!entry) return null;
+
+    const parameters: ParameterInformation[] = entry.parameters.map(p => ({
+        label: p,
+        documentation: ''
+    }));
+
+    return {
+        signature: entry.signature,
+        documentation: entry.description,
+        parameters
     };
-
-    const lowerFunctionName = functionName.toLowerCase();
-    for (const [key, value] of Object.entries(builtInSignatures)) {
-        if (key.toLowerCase() === lowerFunctionName) {
-            return value;
-        }
-    }
-
-    return null;
 }
 
 /**
@@ -338,7 +394,11 @@ function calculateActiveParameter(parametersText: string): number {
     for (let i = 0; i < parametersText.length; i++) {
         const char = parametersText[i];
 
-        if (char === '"' && (i === 0 || parametersText[i-1] !== '\\')) {
+        // PureBasic does NOT use backslash as a string escape character.
+        // Regular "…" strings treat every '"' as a delimiter.
+        // (Escape strings use the ~"…" prefix, but '\' inside "…" has no
+        // special meaning.)
+        if (char === '"') {
             inString = !inString;
         } else if (!inString) {
             if (char === '(') {

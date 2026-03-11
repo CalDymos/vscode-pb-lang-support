@@ -212,7 +212,15 @@ export class PBDebugSession extends DebugSession {
       ));
 
       // Store the promise so configurationDoneRequest can wait for it
-      this.compilePromise = this.launcher.compile(args.program);
+      // unified compile inputs coming from host
+      const compileCwd = args.cwd ? path.resolve(args.cwd) : path.dirname(path.resolve(args.program));
+      const outputPath = args.output ? path.resolve(compileCwd, args.output) : undefined;
+
+      this.compilePromise = this.launcher.compile(args.program, {
+        cwd: compileCwd,
+        compilerArgs: args.compilerArgs,
+        outputPath,
+      });
       this.compileResult = await this.compilePromise;
       this.log(`Compiled → ${this.compileResult.executablePath}`);
       this.sendEvent(new OutputEvent('Compilation successful.\n', 'console'));
@@ -292,10 +300,13 @@ export class PBDebugSession extends DebugSession {
       this.log(`Communication string: ${commString}`);
       this.log(`Transport kind: ${this.transportKind}, isConnected: ${this.transport.isConnected}`);
       
+      const runCwd = this.launchArgs?.runCwd ? path.resolve(this.launchArgs.runCwd) : undefined;
+      const runArgs = this.launchArgs?.runArgs;
+
       // For FIFO transport, we need to launch first, then connect
       if (this.transportKind === 'fifo') {
         this.log('FIFO transport: launching program first, then connecting...');
-        this.debugProc = this.launcher.launch(this.compileResult.executablePath, commString, this.launchArgs?.stopOnEntry);
+        this.debugProc = this.launcher.launch(this.compileResult.executablePath, commString, this.launchArgs?.stopOnEntry, runCwd, runArgs);
         this.debugProc.on('exit', (code, signal) => this.log(`Debuggee exited (code=${code}, signal=${signal})`));
         
         // Log process events
@@ -317,7 +328,7 @@ export class PBDebugSession extends DebugSession {
         this.log('FIFOs connected');
       } else {
         // Network/Pipe transport: connect first, then launch
-        this.debugProc = this.launcher.launch(this.compileResult.executablePath, commString, this.launchArgs?.stopOnEntry);
+        this.debugProc = this.launcher.launch(this.compileResult.executablePath, commString, this.launchArgs?.stopOnEntry, runCwd, runArgs);
         this.debugProc.on('exit', (code, signal) => this.log(`Debuggee exited (code=${code}, signal=${signal})`));
         
         // Log process events

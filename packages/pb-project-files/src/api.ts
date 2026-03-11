@@ -9,6 +9,13 @@ export interface PbProjectContext {
 }
 
 export interface PbProjectContextPayload {
+    /**
+     * True if the user has explicitly selected "No Project".
+     * Consumer can then fall back to an internal fallback, for example.
+     * All other fields are undefined if this flag is set.
+     */
+    noProject?: boolean;
+
     /** Absolute path to the .pbp file */
     projectFile?: string;
     /** Absolute path to the project directory */
@@ -18,9 +25,6 @@ export interface PbProjectContextPayload {
 
     /** Target name as stored in the .pbp */
     targetName?: string;
-
-    /** Include search directories derived from the .pbp (absolute paths) */
-    includeDirs?: string[];
 
     /** Project-related code files (.pb/.pbi) derived from the .pbp (absolute paths) */
     projectFiles?: string[];
@@ -48,7 +52,7 @@ export interface PbFileProjectPayload {
 }
 
 export interface PbProjectFilesApi {
-    readonly version: 2;
+    readonly version: 3;
 
     getActiveContext(): PbProjectContext;
     getActiveContextPayload(): PbProjectContextPayload;

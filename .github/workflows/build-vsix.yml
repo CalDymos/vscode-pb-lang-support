@@ -38,24 +38,46 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Check if this pkg should build
+        id: should_build
+        run: |
+          TAG="${{ github.ref_name }}"
+          PKG="${{ matrix.pkg }}"
+          # workflow_dispatch has no tag → always build all
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          elif [[ "$TAG" == suite-v*  ]] || \
+               [[ "$TAG" == lang-v*   && "$PKG" == "pb-lang-support"  ]] || \
+               [[ "$TAG" == forms-v*  && "$PKG" == "pb-forms-editor"  ]] || \
+               [[ "$TAG" == pbp-v*    && "$PKG" == "pb-project-files" ]]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "run=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Install dependencies (workspaces)
+        if: steps.should_build.outputs.run == 'true'
         run: npm ci
 
       - name: Build pb-project-core
+        if: steps.should_build.outputs.run == 'true'
         run: npm -w packages/pb-project-core run build
 
       - name: Compile (${{ matrix.pkg }})
+        if: steps.should_build.outputs.run == 'true'
         run: npm -w packages/${{ matrix.pkg }} run compile
 
       - name: Build bundle (${{ matrix.pkg }})
-        if: matrix.pkg == 'pb-lang-support' || matrix.pkg == 'pb-project-files'
+        if: steps.should_build.outputs.run == 'true' && (matrix.pkg == 'pb-lang-support' || matrix.pkg == 'pb-project-files')
         run: npm -w packages/${{ matrix.pkg }} run webpack:prod
 
       - name: Package VSIX (${{ matrix.pkg }})
+        if: steps.should_build.outputs.run == 'true'
         run: npx @vscode/vsce package --no-dependencies --out ${{ matrix.pkg }}.vsix
         working-directory: packages/${{ matrix.pkg }}
 
       - name: Upload VSIX artifact
+        if: steps.should_build.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: vsix-${{ matrix.pkg }}

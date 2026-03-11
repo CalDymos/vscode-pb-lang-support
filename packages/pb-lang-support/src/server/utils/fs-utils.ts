@@ -82,7 +82,8 @@ export function resolveIncludePath(
   fromDocumentUri: string,
   includeRelPath: string,
   includeDirs: string[] = [],
-  workspaceRoot?: string
+  workspaceRoot?: string,
+  inputFileDir?: string
 ): string | null {
   const fromFs = uriToFsPath(fromDocumentUri);
   const fromDir = path.dirname(fromFs);
@@ -112,6 +113,15 @@ export function resolveIncludePath(
   for (const dir of includeDirs) {
     if (!dir) continue;
     const resolved = path.resolve(dir, includeRelPath);
+    if (isPathAllowed(resolved, allowedRoots)) {
+      candList.push(resolved);
+    }
+  }
+
+   // inputFileDir: directory of the target's main source file –
+   // mirrors PureBasic IDE INCLUDEPATH behaviour (CompilerInterface.pb L2462)
+   if (inputFileDir && !path.isAbsolute(includeRelPath)) {
+    const resolved = path.resolve(inputFileDir, includeRelPath);
     if (isPathAllowed(resolved, allowedRoots)) {
       candList.push(resolved);
     }

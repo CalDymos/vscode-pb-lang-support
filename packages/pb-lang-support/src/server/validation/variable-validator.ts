@@ -3,10 +3,10 @@
  * Validate the syntax correctness of PureBasic variable declarations
  */
 
-import { DiagnosticSeverity } from 'vscode-languageserver/node';
+import { DiagnosticSeverity, Diagnostic } from 'vscode-languageserver/node';
 import { ValidatorFunction } from './types';
-import { isValidType } from '../utils/constants';
-import { isInStringLiteral, isPositionInString } from '../utils/string-utils';
+import { isValidType, DIAGNOSTIC_SOURCE } from '../utils/constants';
+import { isPositionInString } from '../utils/pb-lexer-utils';
 
 /**
  * Validate variable declaration syntax
@@ -18,41 +18,42 @@ export const validateVariables: ValidatorFunction = (
     context,
     diagnostics
 ) => {
-    // Check variable declarations (with declaration keywords)
-    if (line.match(/^(Global|Protected|Static|Shared|Threaded)\s+/)) {
+    // Check variable declarations with scope keywords
+    if (/^(?:Global|Protected|Static|Shared|Threaded)\s+/.test(line)) {
         validateVariableDeclaration(line, lineNum, originalLine, diagnostics);
     }
 
-    // Check general variable declarations (like variable.type = value), but skip string contents
-    if (!isInStringLiteral(line)) {
-        const varRegex = /\b([a-zA-Z_][a-zA-Z0-9_]*)\\.([a-zA-Z_][a-zA-Z0-9_]*)\b/g;
-        let match;
-        while ((match = varRegex.exec(line)) !== null) {
-            const [fullMatch, varName, typePart] = match;
-            const matchIndex = match.index;
+    // Check general typed variable references (e.g. variable.type)
+    // isPositionInString guards each individual match — no need for a whole-line guard.
+    const varRegex = /\b([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*)\b/g;
+    let match;
+    while ((match = varRegex.exec(line)) !== null) {
+        const [, varName, typePart] = match;
+        const matchIndex = match.index;
 
-            // Check if this match is within a string
-            if (!isPositionInString(line, matchIndex)) {
-                if (!isValidType(typePart)) {
-                    const typeStart = matchIndex + varName.length + 1;
-                    diagnostics.push({
-                        severity: DiagnosticSeverity.Warning,
-                        range: {
-                            start: { line: lineNum, character: typeStart },
-                            end: { line: lineNum, character: typeStart + typePart.length }
-                        },
-                        message: `Unknown variable type: ${typePart}`,
-                        source: 'purebasic'
-                    });
-                }
+        if (!isPositionInString(line, matchIndex)) {
+            if (!isValidType(typePart)) {
+                const typeStart = matchIndex + varName.length + 1;
+                diagnostics.push({
+                    severity: DiagnosticSeverity.Warning,
+                    range: {
+                        start: { line: lineNum, character: typeStart },
+                        end: { line: lineNum, character: typeStart + typePart.length }
+                    },
+                    message: `Unknown variable type: ${typePart}`,
+                    source: DIAGNOSTIC_SOURCE
+                });
             }
         }
     }
 };
 
-// Use isPositionInString from utils/string-utils, remove local duplicate implementation
-
-function validateVariableDeclaration(line: string, lineNum: number, originalLine: string, diagnostics: any[]) {
+function validateVariableDeclaration(
+    line: string,
+    lineNum: number,
+    originalLine: string,
+    diagnostics: Diagnostic[]
+): void {
     const varMatch = line.match(/^(?:Global|Protected|Static|Shared|Threaded)\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?)/);
     if (varMatch) {
         const [, varDecl] = varMatch;
@@ -67,7 +68,7 @@ function validateVariableDeclaration(line: string, lineNum: number, originalLine
                     end: { line: lineNum, character: typeStart + typePart.length + 1 }
                 },
                 message: `Unknown variable type: ${typePart}`,
-                source: 'purebasic'
+                source: DIAGNOSTIC_SOURCE
             });
         }
     }

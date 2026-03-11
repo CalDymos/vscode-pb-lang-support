@@ -1,0 +1,6 @@
+{
+  "scopeName": "source.purebasic.form",
+  "patterns": [
+    { "include": "source.purebasic" }
+  ]
+}

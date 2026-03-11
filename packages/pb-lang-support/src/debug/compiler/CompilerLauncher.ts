@@ -5,6 +5,15 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import { CompileResult } from '../types/debugTypes';
 
+export interface CompileOptions {
+  /** Working directory for compiler spawn. */
+  cwd?: string;
+  /** Full argv for pbcompiler (should include the source file). */
+  compilerArgs?: string[];
+  /** Expected output path. If omitted, tries to infer from args or uses internal temp output. */
+  outputPath?: string;
+}
+
 export class CompilerLauncher {
   private readonly compiler: string;
   private readonly trace: boolean;
@@ -249,10 +258,37 @@ export class CompilerLauncher {
   }
 
   private getCompileArgs(sourcePath: string, executablePath: string): string[] {
-    if (this.isWindows) {
-      return [sourcePath, '/DEBUGGER', '/CONSOLE', '/LINENUMBERING', '/OUTPUT', executablePath];
+    // GNU-style flags (--) are valid on all platforms per pbcompiler docs.
+    return [sourcePath, '--debugger', '--linenumbering', '--output', executablePath];
+  }
+
+  private static tryExtractOutputFromArgs(argv: string[]): string | undefined {
+    const keys = new Set(['--output', '-o', '/OUTPUT']);
+    for (let i = 0; i < argv.length - 1; i++) {
+      if (keys.has(argv[i])) {
+        const v = String(argv[i + 1] ?? '').trim();
+        if (v) return v;
+      }
     }
-    return [sourcePath, '--debugger', '--console', '--linenumbering', '--output', executablePath];
+    return undefined;
+  }
+
+  /**
+   * Return a copy of argv with the --output value replaced by enforcedOutput.
+   * If no --output flag is present, appends ['--output', enforcedOutput].
+   */
+  private static injectOutputArg(argv: string[], enforcedOutput: string): string[] {
+    const keys = new Set(['--output', '-o', '/OUTPUT']);
+    const result = [...argv];
+    for (let i = 0; i < result.length - 1; i++) {
+      if (keys.has(result[i])) {
+        result[i + 1] = enforcedOutput;
+        return result;
+      }
+    }
+    // No --output flag found – append it.
+    result.push('--output', enforcedOutput);
+    return result;
   }
 
   /**
@@ -261,41 +297,54 @@ export class CompilerLauncher {
    * For Linux/others: /xxx/purebasic/compilers/pbcompiler
    */
   private static detectPureBasicHome(compilerPath: string): string | undefined {
+   // No directory component → PATH invocation; cannot infer home.
+   if (!path.isAbsolute(compilerPath) && !compilerPath.includes(path.sep)) {
+     return undefined;
+   }
     // Normalize path
     const normalized = path.normalize(compilerPath);
     
     // Check if it's inside an .app bundle (macOS)
-    const appMatch = normalized.match(/(.+\.app\/Contents\/Resources)/i);
+    const appMatch = normalized.match(/(.+\.app[\/]Contents[\/]Resources)/i);
     if (appMatch) {
       return appMatch[1];
     }
     
     // Check if it's in a compilers subdirectory
-    const compilersIdx = normalized.toLowerCase().indexOf('/compilers/');
-    if (compilersIdx > 0) {
-      return normalized.substring(0, compilersIdx);
-    }
-    
-    // Check if parent directory exists and might be the home
-    const parentDir = path.dirname(normalized);
-    if (parentDir && parentDir !== normalized) {
-      return parentDir;
-    }
-    
+    const idx = normalized.toLowerCase().indexOf(path.sep + 'compilers' + path.sep);
+    if (idx > 0) { return normalized.substring(0, idx); }
+        
     return undefined;
   }
 
   /**
-   * Compile `sourcePath` with the PureBasic compiler in debugger mode.
-   * Resolves with the path of the generated executable.
+   * Compile source using either provided argv/cwd/outputPath or internal defaults.
    */
-  compile(sourcePath: string): Promise<CompileResult> {
-    const dir = path.dirname(sourcePath);
-    const executablePath = this.getOutputPath(sourcePath);
+  compile(sourcePath: string, opt: CompileOptions = {}): Promise<CompileResult> {
+    const resolvedSource = path.resolve(sourcePath);
+
+    const cwd = opt.cwd ? path.resolve(opt.cwd) : path.dirname(resolvedSource);
+
+    const outputFromArgs = opt.compilerArgs ? CompilerLauncher.tryExtractOutputFromArgs(opt.compilerArgs) : undefined;
+    const executablePath = opt.outputPath
+      ? path.resolve(cwd, opt.outputPath)
+      : (outputFromArgs ? path.resolve(cwd, outputFromArgs) : this.getOutputPath(resolvedSource));
+
+    let argv: string[];
+    if (opt.compilerArgs && opt.compilerArgs.length > 0) {
+      // When outputPath is explicitly set, ensure --output in argv matches executablePath.
+      // This prevents a mismatch where pbcompiler writes elsewhere but we check executablePath.
+      argv = opt.outputPath
+        ? CompilerLauncher.injectOutputArg(opt.compilerArgs, executablePath)
+        : opt.compilerArgs;
+    } else {
+      argv = this.getCompileArgs(resolvedSource, executablePath);
+    }
 
     return new Promise((resolve, reject) => {
-      const args = this.getCompileArgs(sourcePath, executablePath);
-      this.log(`Compile: ${this.compiler} ${args.join(' ')}`);
+      this.log(`Compile: ${this.compiler} ${argv.join(' ')}`);
+      this.log(`Compile cwd: ${cwd}`);
+      this.log(`Compile output: ${executablePath}`);
 
       // Prepare environment with PUREBASIC_HOME if needed
       const env = { ...process.env };
@@ -307,13 +356,11 @@ export class CompilerLauncher {
         }
       }
 
-      const proc = cp.spawn(this.compiler, args, { cwd: dir, env });
+      const proc = cp.spawn(this.compiler, argv, { cwd, env });
 
       let stderr = '';
       let stdout = '';
-      proc.stderr?.on('data', (chunk: Buffer) => {
-        stderr += chunk.toString();
-      });
+      proc.stderr?.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
       proc.stdout?.on('data', (chunk: Buffer) => {
         const text = chunk.toString();
         stdout += text;
@@ -325,18 +372,14 @@ export class CompilerLauncher {
           const errText = stderr.trim();
           const outText = stdout.trim();
           const details = [errText, outText].filter(Boolean).join('\n');
-          reject(new Error(
-            details
-              ? `pbcompiler exited with code ${code}: ${details}`
-              : `pbcompiler exited with code ${code}`,
-          ));
-        } else if (!fs.existsSync(executablePath)) {
-          reject(new Error(
-            `Compilation appeared to succeed but no executable found at: ${executablePath}`,
-          ));
-        } else {
-          resolve({ executablePath });
+          reject(new Error(details ? `pbcompiler exited with code ${code}: ${details}` : `pbcompiler exited with code ${code}`));
+          return;
         }
+        if (!fs.existsSync(executablePath)) {
+          reject(new Error(`Compilation appeared to succeed but no executable found at: ${executablePath}`));
+          return;
+        }
+        resolve({ executablePath });
       });
 
       proc.on('error', (err: NodeJS.ErrnoException) => {
@@ -353,10 +396,15 @@ export class CompilerLauncher {
   }
 
   /**
-   * Launch the compiled PureBasic executable with the debug pipe information injected
-   * via environment variables.
+   * Launch the compiled executable with debugger env vars.
    */
-  launch(executablePath: string, communicationString: string, stopOnEntry = true): cp.ChildProcess {
+  launch(
+    executablePath: string,
+    communicationString: string,
+    stopOnEntry = true,
+    runCwd?: string,
+    runArgs?: string[],
+  ): cp.ChildProcess {
     this.log(`Launch: ${executablePath}  [comm=${this.sanitizeCommunicationString(communicationString)}]`);
 
     // Check if executable exists and log its stats
@@ -364,7 +412,7 @@ export class CompilerLauncher {
       const stats = fs.statSync(executablePath);
       this.log(`Executable stats: size=${stats.size}, mode=${stats.mode.toString(8)}`);
     } catch (err) {
-      this.log(`Warning: Could not stat executable: ${err}`);
+      this.log(`Warning: Could not stat executable: ${(err as NodeJS.ErrnoException).code ?? 'unknown'}`);
     }
 
     // Prepare environment with required variables
@@ -374,10 +422,9 @@ export class CompilerLauncher {
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       PB_DEBUGGER_Communication: communicationString,
-      PB_DEBUGGER_Options: `1;${callOnStart};0;0`,  // unicode=1, callOnStart=dynamic, callOnEnd=0, bigEndian=0
+      PB_DEBUGGER_Options: `1;${callOnStart};0;0`,
     };
-    
-    // Ensure PUREBASIC_HOME is set for the debuggee (needed on macOS/Linux)
+
     if (!env.PUREBASIC_HOME) {
       const pbHome = CompilerLauncher.detectPureBasicHome(this.compiler);
       if (pbHome) {
@@ -385,39 +432,35 @@ export class CompilerLauncher {
         this.log(`Setting PUREBASIC_HOME for debuggee: ${pbHome}`);
       }
     }
-    
-    this.log(`Environment PB_DEBUGGER_Options: ${env.PB_DEBUGGER_Options}`);
-    this.log(`Environment PUREBASIC_HOME: ${env.PUREBASIC_HOME ?? '(not set)'}`);
-    
-    // FIFO mode is detected from the communication string for logging only.
-    // Current verification shows the debuggee reads PB_DEBUGGER_Communication from env,
-    // and does not require a fixed /tmp/.pbdebugger.out path.
-    const useFifo = communicationString.startsWith('FifoFiles;');
-    
-    const proc = cp.spawn(executablePath, [], {
+
+    const proc = cp.spawn(executablePath, runArgs ?? [], {
       env,
+      cwd: runCwd,
       detached: false,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
-    
-    this.log(`Debuggee process spawned with pid=${proc.pid}, useFifo=${useFifo}`);
-    
-    // Capture stdout/stderr for debugging
+
+    this.log(`Debuggee process spawned with pid=${proc.pid}`);
+
+    // Register handlers immediately to avoid unhandled-error timing window.
+    // The caller may add further listeners; Node.js will invoke all of them.
+    proc.on('error', (err: NodeJS.ErrnoException) => {
+      const name = err.code ?? err.name ?? 'error';
+      this.log(`Debuggee spawn error: ${name}: ${path.basename(err.path ?? '')}`);
+    });
+
+    proc.on('exit', (code, signal) => {
+      this.log(`Debuggee exited (code=${code}, signal=${signal})`);
+    });
+
     proc.stdout?.on('data', (data: Buffer) => {
       this.log(`[Debuggee stdout] ${data.toString().trim()}`);
     });
+
     proc.stderr?.on('data', (data: Buffer) => {
       this.log(`[Debuggee stderr] ${data.toString().trim()}`);
     });
-    
-    proc.on('error', (err) => {
-      process.stderr.write(`[PBDebug] Launch error: ${err.message}\n`);
-    });
-    
-    proc.on('exit', (code, signal) => {
-      this.log(`Debuggee process exited with code=${code}, signal=${signal}`);
-    });
-    
+
     return proc;
   }
 
