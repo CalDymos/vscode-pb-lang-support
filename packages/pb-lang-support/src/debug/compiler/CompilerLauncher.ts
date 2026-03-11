@@ -274,6 +274,24 @@ export class CompilerLauncher {
   }
 
   /**
+   * Return a copy of argv with the --output value replaced by enforcedOutput.
+   * If no --output flag is present, appends ['--output', enforcedOutput].
+   */
+  private static injectOutputArg(argv: string[], enforcedOutput: string): string[] {
+    const keys = new Set(['--output', '-o', '/OUTPUT']);
+    const result = [...argv];
+    for (let i = 0; i < result.length - 1; i++) {
+      if (keys.has(result[i])) {
+        result[i + 1] = enforcedOutput;
+        return result;
+      }
+    }
+    // No --output flag found – append it.
+    result.push('--output', enforcedOutput);
+    return result;
+  }
+
+  /**
    * Detect PUREBASIC_HOME from compiler path.
    * For macOS .app bundle: /xxx/PureBasic.app/Contents/Resources/compilers/pbcompiler
    * For Linux/others: /xxx/purebasic/compilers/pbcompiler
@@ -312,9 +330,16 @@ export class CompilerLauncher {
       ? path.resolve(cwd, opt.outputPath)
       : (outputFromArgs ? path.resolve(cwd, outputFromArgs) : this.getOutputPath(resolvedSource));
 
-    const argv = (opt.compilerArgs && opt.compilerArgs.length > 0)
-      ? opt.compilerArgs
-      : this.getCompileArgs(resolvedSource, executablePath);
+    let argv: string[];
+    if (opt.compilerArgs && opt.compilerArgs.length > 0) {
+      // When outputPath is explicitly set, ensure --output in argv matches executablePath.
+      // This prevents a mismatch where pbcompiler writes elsewhere but we check executablePath.
+      argv = opt.outputPath
+        ? CompilerLauncher.injectOutputArg(opt.compilerArgs, executablePath)
+        : opt.compilerArgs;
+    } else {
+      argv = this.getCompileArgs(resolvedSource, executablePath);
+    }
 
     return new Promise((resolve, reject) => {
       this.log(`Compile: ${this.compiler} ${argv.join(' ')}`);

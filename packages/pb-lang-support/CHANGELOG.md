@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.17.1
+
+### Fixed
+
+- Debug builds no longer fail with "no executable found" when `compilerArgs` and `output` are both set in `launch.json`
+
 ## 0.17.0
 
 ### Added
