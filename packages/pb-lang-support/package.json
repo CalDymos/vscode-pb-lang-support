@@ -2,7 +2,7 @@
   "name": "pb-lang-support",
   "displayName": "PureBasic Language Services",
   "description": "%extension.description%",
-  "version": "0.16.3",
+  "version": "0.17.0",
   "publisher": "CalDymos",
   "author": {
     "name": "CalDymos"
@@ -205,15 +205,18 @@
           "description": "%config.purebasic.build.compiler.description%"
         },
         "purebasic.run.mode": {
-            "type": "string",
-            "enum": ["spawn", "terminal"],
-            "enumDescriptions": [
-                "%config.purebasic.run.mode.spawn.description%",
-                "%config.purebasic.run.mode.terminal.description%"
-            ],
-            "default": "spawn",
-            "description": "%config.purebasic.run.mode.description%",
-            "scope": "resource"
+          "type": "string",
+          "enum": [
+            "spawn",
+            "terminal"
+          ],
+          "enumDescriptions": [
+            "%config.purebasic.run.mode.spawn.description%",
+            "%config.purebasic.run.mode.terminal.description%"
+          ],
+          "default": "spawn",
+          "description": "%config.purebasic.run.mode.description%",
+          "scope": "resource"
         }
       }
     },

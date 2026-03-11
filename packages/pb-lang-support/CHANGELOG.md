@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.17.0
+
+### Added
+
+- Added the new setting `purebasic.run.mode` with `spawn` and `terminal` modes for running the active PureBasic target.
+- Added host-side settings reading for shared access to build and run configuration.
+- Added shared constants for the PureBasic language ID and diagnostic source.
+
+### Changed
+
+- Changed `runActiveTarget` to support two execution strategies:
+  - `spawn`: runs the executable as a child process and streams stdout/stderr to the Output channel.
+  - `terminal`: runs the executable in the integrated terminal with shell-aware argument quoting.
+- Changed host-side configuration access to use a centralized settings reader instead of repeated direct lookups.
+- Changed fallback project-context notifications so `projectFiles` are sent in scan-aware object form.
+- Changed temporary document creation and host/server registration code to use the shared language ID constant consistently.
+- Changed server-side configuration reload handling to refresh the full global settings object before reloading the API function listing.
+- Changed fallback launch configuration detection to use the shared settings section constant.
+- Changed validator diagnostics to use a shared diagnostic source constant instead of hardcoded string literals.
+
+### Fixed
+
+- Fixed execution of active targets so interactive programs can be started through the integrated terminal when needed.
+- Fixed argument handling for terminal-based execution by splitting command lines into argv tokens and re-quoting them for the active shell.
+- Fixed compiler setting resolution in build/debug host paths by routing it through the shared host settings reader.
+- Fixed several garbled comments and type utility definitions in `src/types/utils/*`.
+
+### Internal
+
+- Refactored host and server settings access into dedicated shared modules.
+- Refactored repeated `purebasic` string literals to shared constants.
+- Cleaned up cache and generic utility type files for readability and consistency.
+
 ## 0.16.3
 
 ### Fixed
