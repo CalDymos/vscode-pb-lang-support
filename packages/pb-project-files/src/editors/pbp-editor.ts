@@ -98,6 +98,10 @@ function renderHtml(webview: vscode.Webview, document: vscode.TextDocument, proj
     .xa { color:var(--pbp-xml-attr); }
     .xv { color:var(--pbp-xml-val); }
     .xb { color:var(--pbp-xml-brk); }
+
+    .check-list { display:flex; flex-direction:column; gap:6px; }
+    .check-list label { display:flex; align-items:center; gap:8px; cursor:pointer; }
+    .check-list input[type="checkbox"] { width:auto; flex-shrink:0; }
   </style>
 </head>
 <body>
