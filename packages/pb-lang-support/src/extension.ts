@@ -11,6 +11,7 @@ import { runActiveTarget } from './host/pbcompiler/run-active-target';
 import { buildPbCompilerArgs } from './host/pbcompiler/pbcompiler-args';
 import {splitPbFile, PbFileSplit} from './host/utils/pb-metadata';
 import { readHostSettings } from './host/config/settings';
+import { LANGUAGE_ID } from './shared/constants';
 
 
 let client: LanguageClient;
@@ -116,17 +117,17 @@ export function activate(context: vscode.ExtensionContext) {
 
         const clientOptions: LanguageClientOptions = {
             documentSelector: [
-                { scheme: 'file', language: 'purebasic' }
+                { scheme: 'file', language: LANGUAGE_ID }
             ],
             synchronize: {
-                configurationSection: 'purebasic',
+                configurationSection: LANGUAGE_ID,
                 // Only PureBasic source files are relevant for the language server.
                 fileEvents: fileWatcher
             }
         };
 
         client = new LanguageClient(
-            'purebasic',
+            LANGUAGE_ID,
             'PureBasic Language Server',
             serverOptions,
             clientOptions
@@ -366,7 +367,7 @@ async function activateFallbackMode(context: vscode.ExtensionContext): Promise<v
     // Update metadata when saving (only in fallback mode)
     context.subscriptions.push(
         vscode.workspace.onWillSaveTextDocument(e => {
-            if (e.document.languageId !== 'purebasic') return;
+            if (e.document.languageId !== LANGUAGE_ID) return;
 
             const editor = vscode.window.activeTextEditor;
             if (editor?.document !== e.document) return;
@@ -427,7 +428,7 @@ function findOrBuildCursorPositionEdit(
 function registerFoldingProvider(context: vscode.ExtensionContext) : void {
     context.subscriptions.push(
         vscode.languages.registerFoldingRangeProvider(
-            { language: 'purebasic' },
+            { language: LANGUAGE_ID },
             {
                 provideFoldingRanges(document) {
                     const text  = document.getText();
@@ -449,7 +450,7 @@ function registerFoldingProvider(context: vscode.ExtensionContext) : void {
 
 function registerDebugProvider(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
-    vscode.debug.registerDebugConfigurationProvider('purebasic', {
+    vscode.debug.registerDebugConfigurationProvider(LANGUAGE_ID, {
       async resolveDebugConfiguration(
         _folder: vscode.WorkspaceFolder | undefined,
         config: vscode.DebugConfiguration,
@@ -458,8 +459,8 @@ function registerDebugProvider(context: vscode.ExtensionContext): void {
         // F5 without launch.json: defaults
         if (!config.type && !config.request && !config.name) {
           const editor = vscode.window.activeTextEditor;
-          if (editor && editor.document.languageId === 'purebasic') {
-            config.type = 'purebasic';
+          if (editor && editor.document.languageId === LANGUAGE_ID) {
+            config.type = LANGUAGE_ID;
             config.name = 'Debug PureBasic';
             config.request = 'launch';
             config.program = editor.document.fileName;
@@ -468,7 +469,7 @@ function registerDebugProvider(context: vscode.ExtensionContext): void {
         }
 
         const editor = vscode.window.activeTextEditor;
-        const activeDoc = editor?.document?.languageId === 'purebasic' ? editor.document : undefined;
+        const activeDoc = editor?.document?.languageId === LANGUAGE_ID ? editor.document : undefined;
 
         // Determine a "seed" URI even when file isn't opened
         const seedUri =
@@ -549,7 +550,7 @@ function registerDebugProvider(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     vscode.debug.registerDebugAdapterDescriptorFactory(
-      'purebasic',
+      LANGUAGE_ID,
       new PureBasicDebugAdapterDescriptorFactory(context),
     ),
   );
@@ -595,7 +596,7 @@ function registerCommands(context: vscode.ExtensionContext) {
     // Format document command
     const formatDocument = vscode.commands.registerCommand('purebasic.formatDocument', async () => {
         const editor = vscode.window.activeTextEditor;
-        if (editor && editor.document.languageId === 'purebasic') {
+        if (editor && editor.document.languageId === LANGUAGE_ID) {
             try {
                 await vscode.commands.executeCommand('editor.action.formatDocument');
             } catch (error) {

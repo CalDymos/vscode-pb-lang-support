@@ -4,6 +4,7 @@
  */
 
 import { DiagnosticSeverity } from 'vscode-languageserver/node';
+import { DIAGNOSTIC_SOURCE } from '../utils/constants';
 import { ValidationContext, ValidatorFunction } from './types';
 
 /**
@@ -27,7 +28,7 @@ export const validateModules: ValidatorFunction = (
                     end: { line: lineNum, character: originalLine.length }
                 },
                 message: 'Invalid Module syntax. Expected: Module Name',
-                source: 'purebasic'
+                source: DIAGNOSTIC_SOURCE
             });
         } else if (!/\bEndModule\b/i.test(line)) {
             context.moduleStack.push({ name: moduleMatch[1], line: lineNum });
@@ -41,7 +42,7 @@ export const validateModules: ValidatorFunction = (
                     end: { line: lineNum, character: originalLine.length }
                 },
                 message: 'EndModule without matching Module',
-                source: 'purebasic'
+                source: DIAGNOSTIC_SOURCE
             });
         } else {
             context.moduleStack.pop();
@@ -59,7 +60,7 @@ export const validateModules: ValidatorFunction = (
                     end: { line: lineNum, character: originalLine.length }
                 },
                 message: 'Invalid DeclareModule syntax. Expected: DeclareModule Name',
-                source: 'purebasic'
+                source: DIAGNOSTIC_SOURCE
             });
         } else if (!/\bEndDeclareModule\b/i.test(line)) {
             context.declareModuleStack.push({ name: declModMatch[1], line: lineNum });
@@ -73,7 +74,7 @@ export const validateModules: ValidatorFunction = (
                     end: { line: lineNum, character: originalLine.length }
                 },
                 message: 'EndDeclareModule without matching DeclareModule',
-                source: 'purebasic'
+                source: DIAGNOSTIC_SOURCE
             });
         } else {
             context.declareModuleStack.pop();
@@ -91,7 +92,7 @@ export const validateModules: ValidatorFunction = (
                     end: { line: lineNum, character: originalLine.length }
                 },
                 message: 'Invalid UseModule syntax. Expected: UseModule Name',
-                source: 'purebasic'
+                source: DIAGNOSTIC_SOURCE
             });
         }
     }
@@ -107,7 +108,7 @@ export const validateModules: ValidatorFunction = (
                     end: { line: lineNum, character: originalLine.length }
                 },
                 message: 'Invalid UnuseModule syntax. Expected: UnuseModule Name',
-                source: 'purebasic'
+                source: DIAGNOSTIC_SOURCE
             });
         }
     }

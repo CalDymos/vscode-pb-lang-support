@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import * as path   from 'path';
 import { parse } from 'jsonc-parser';
 import { splitPbFile, parseCfgFile, parseProjectCfg, extractExecutable } from './utils/pb-metadata';
-import { readHostSettings } from './config/settings';
+import { readHostSettings, SETTINGS_SECTION } from './config/settings';
 
 export type FallbackSource =
     | 'sourceMetadata'   // PureBasic IDE comments at end of file
@@ -76,7 +76,7 @@ export class FallbackResolver {
             const cfgs  = json.configurations ?? [];
 
             // Only use a purebasic-typed configuration – never fall back to an unrelated entry
-            const cfg = cfgs.find((c: any) => c.type === 'purebasic') as any | undefined;
+            const cfg = cfgs.find((c: any) => c.type === SETTINGS_SECTION) as any | undefined;
             if (!cfg) return null;
 
             const base = wsFolder.uri.fsPath;

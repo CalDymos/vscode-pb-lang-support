@@ -2,7 +2,9 @@
  * Language Server settings configuration
  */
 
-export const SETTINGS_SECTION = 'purebasic';
+import { LANGUAGE_ID } from '../../shared/constants';
+
+export const SETTINGS_SECTION = LANGUAGE_ID;
 
 export interface PureBasicSettings {
     maxNumberOfProblems: number;

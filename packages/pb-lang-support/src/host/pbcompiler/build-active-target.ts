@@ -16,6 +16,7 @@ import { buildPbCompilerArgs } from './pbcompiler-args';
 import { runPbCompiler } from './pbcompiler-runner';
 import { CompilerLauncher } from '../../debug/compiler/CompilerLauncher';
 import { readHostSettings } from '../config/settings';
+import { LANGUAGE_ID } from '../../shared/constants';
 
 export interface BuildActiveTargetDeps {
     projectFilesApi?: PbProjectFilesApi;
@@ -45,7 +46,7 @@ export async function buildActiveTarget(deps: BuildActiveTargetDeps): Promise<bo
     // In fallback mode the active document is used directly as inputFile.
     // Reject non-PureBasic files so pbcompiler is never fed arbitrary input.
     // (In pbp mode the inputFile comes from the project, so this check is not needed.)
-    if (uctx.mode === 'fallback' && editor.document.languageId !== 'purebasic') {
+    if (uctx.mode === 'fallback' && editor.document.languageId !== LANGUAGE_ID) {
         void vscode.window.showWarningMessage(
             'Build Active Target requires an active PureBasic (.pb / .pbi) file.');
         return false;

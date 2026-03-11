@@ -4,6 +4,7 @@
  */
 
 import { DiagnosticSeverity } from 'vscode-languageserver/node';
+import { DIAGNOSTIC_SOURCE } from '../utils/constants';
 import { ValidationContext, ValidatorFunction } from './types';
 
 // Split a line into statements at ':' while respecting string literals.
@@ -77,7 +78,7 @@ export const validateControlStructures: ValidatorFunction = (
                         end: { line: lineNum, character: originalLine.length }
                     },
                     message: 'EndIf without matching If',
-                    source: 'purebasic'
+                    source: DIAGNOSTIC_SOURCE
                 });
             } else {
                 context.ifStack.pop();
@@ -98,7 +99,7 @@ export const validateControlStructures: ValidatorFunction = (
                         end: { line: lineNum, character: originalLine.length }
                     },
                     message: 'Next without matching For/ForEach',
-                    source: 'purebasic'
+                    source: DIAGNOSTIC_SOURCE
                 });
             } else {
                 context.forStack.pop();
@@ -119,7 +120,7 @@ export const validateControlStructures: ValidatorFunction = (
                         end: { line: lineNum, character: originalLine.length }
                     },
                     message: 'Wend without matching While',
-                    source: 'purebasic'
+                    source: DIAGNOSTIC_SOURCE
                 });
             } else {
                 context.whileStack.pop();
@@ -140,7 +141,7 @@ export const validateControlStructures: ValidatorFunction = (
                         end: { line: lineNum, character: originalLine.length }
                     },
                     message: 'ForEver without matching Repeat',
-                    source: 'purebasic'
+                    source: DIAGNOSTIC_SOURCE
                 });
             } else {
                 context.repeatStack.pop();
@@ -154,7 +155,7 @@ export const validateControlStructures: ValidatorFunction = (
                         end: { line: lineNum, character: originalLine.length }
                     },
                     message: 'Until without matching Repeat',
-                    source: 'purebasic'
+                    source: DIAGNOSTIC_SOURCE
                 });
             } else {
                 context.repeatStack.pop();
@@ -175,7 +176,7 @@ export const validateControlStructures: ValidatorFunction = (
                         end: { line: lineNum, character: originalLine.length }
                     },
                     message: 'EndSelect without matching Select',
-                    source: 'purebasic'
+                    source: DIAGNOSTIC_SOURCE
                 });
             } else {
                 context.selectStack.pop();
@@ -196,7 +197,7 @@ export const validateControlStructures: ValidatorFunction = (
                         end: { line: lineNum, character: originalLine.length }
                     },
                     message: 'EndWith without matching With',
-                    source: 'purebasic'
+                    source: DIAGNOSTIC_SOURCE
                 });
             } else {
                 context.withStack.pop();

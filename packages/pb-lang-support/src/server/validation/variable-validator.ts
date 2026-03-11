@@ -5,7 +5,7 @@
 
 import { DiagnosticSeverity, Diagnostic } from 'vscode-languageserver/node';
 import { ValidatorFunction } from './types';
-import { isValidType } from '../utils/constants';
+import { isValidType, DIAGNOSTIC_SOURCE } from '../utils/constants';
 import { isPositionInString } from '../utils/pb-lexer-utils';
 
 /**
@@ -41,7 +41,7 @@ export const validateVariables: ValidatorFunction = (
                         end: { line: lineNum, character: typeStart + typePart.length }
                     },
                     message: `Unknown variable type: ${typePart}`,
-                    source: 'purebasic'
+                    source: DIAGNOSTIC_SOURCE
                 });
             }
         }
@@ -68,7 +68,7 @@ function validateVariableDeclaration(
                     end: { line: lineNum, character: typeStart + typePart.length + 1 }
                 },
                 message: `Unknown variable type: ${typePart}`,
-                source: 'purebasic'
+                source: DIAGNOSTIC_SOURCE
             });
         }
     }

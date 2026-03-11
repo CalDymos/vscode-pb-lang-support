@@ -4,6 +4,7 @@
  */
 
 import { DiagnosticSeverity, Diagnostic } from 'vscode-languageserver/node';
+import { DIAGNOSTIC_SOURCE } from '../utils/constants';
 
 /**
  * Validate parameter syntax
@@ -98,7 +99,7 @@ export function validateParameters(
                     end: { line: lineNum, character: paramStart + param.length }
                 },
                 message: 'Invalid parameter syntax. Expected: [*|List|Array|Map ]name[.module::type][()][=default]',
-                source: 'purebasic'
+                source: DIAGNOSTIC_SOURCE
             });
         }
     }

@@ -4,8 +4,9 @@
 
 import * as vscode from 'vscode';
 import type { FallbackSource } from '../fallback-resolver';
+import { LANGUAGE_ID } from '../../shared/constants';
 
-const SETTINGS_SECTION = 'purebasic';
+export const SETTINGS_SECTION = LANGUAGE_ID;
 
 const VALID_FALLBACK_SOURCES: FallbackSource[] =
     ['sourceMetadata', 'launchJson', 'fileCfg', 'projectCfg'];

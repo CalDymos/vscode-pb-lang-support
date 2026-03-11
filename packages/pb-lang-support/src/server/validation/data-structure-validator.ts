@@ -5,6 +5,7 @@
 
 import { DiagnosticSeverity } from 'vscode-languageserver/node';
 import { ValidationContext, ValidatorFunction } from './types';
+import { DIAGNOSTIC_SOURCE } from '../utils/constants';
 
 /**
  * Validate data structure related syntax
@@ -27,7 +28,7 @@ export const validateDataStructures: ValidatorFunction = (
                     end: { line: lineNum, character: originalLine.length }
                 },
                 message: 'Invalid Structure syntax. Expected: Structure Name',
-                source: 'purebasic'
+                source: DIAGNOSTIC_SOURCE
             });
         } else if (!/\bEndStructure\b/i.test(line)) {
             context.structureStack.push({ name: structMatch[1], line: lineNum });
@@ -41,7 +42,7 @@ export const validateDataStructures: ValidatorFunction = (
                     end: { line: lineNum, character: originalLine.length }
                 },
                 message: 'EndStructure without matching Structure',
-                source: 'purebasic'
+                source: DIAGNOSTIC_SOURCE
             });
         } else {
             context.structureStack.pop();
@@ -60,7 +61,7 @@ export const validateDataStructures: ValidatorFunction = (
                     end: { line: lineNum, character: originalLine.length }
                 },
                 message: 'Invalid EnumerationBinary syntax. Expected: EnumerationBinary [Name] [#Start] [Step n]',
-                source: 'purebasic'
+                source: DIAGNOSTIC_SOURCE
             });
         }
         // EndEnumeration is shared; no stack tracking needed (Enumerations can be nested).
@@ -74,7 +75,7 @@ export const validateDataStructures: ValidatorFunction = (
                     end: { line: lineNum, character: originalLine.length }
                 },
                 message: 'Invalid Enumeration syntax. Expected: Enumeration [Name] [#Start] [Step n]',
-                source: 'purebasic'
+                source: DIAGNOSTIC_SOURCE
             });
         }
         // EndEnumeration is shared; no stack tracking needed (Enumerations can be nested).
@@ -91,7 +92,7 @@ export const validateDataStructures: ValidatorFunction = (
                     end: { line: lineNum, character: originalLine.length }
                 },
                 message: 'Invalid Interface syntax. Expected: Interface Name',
-                source: 'purebasic'
+                source: DIAGNOSTIC_SOURCE
             });
         } else if (!/\bEndInterface\b/i.test(line)) {
             context.interfaceStack.push(lineNum);
@@ -105,7 +106,7 @@ export const validateDataStructures: ValidatorFunction = (
                     end: { line: lineNum, character: originalLine.length }
                 },
                 message: 'EndInterface without matching Interface',
-                source: 'purebasic'
+                source: DIAGNOSTIC_SOURCE
             });
         } else {
             context.interfaceStack.pop();

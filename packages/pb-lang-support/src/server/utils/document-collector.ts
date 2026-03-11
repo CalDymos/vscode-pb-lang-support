@@ -16,6 +16,7 @@ import { ProjectManager } from '../managers/project-manager';
 import { resolveIncludePath, fsPathToUri, normalizeDirPath } from '../utils/fs-utils';
 import { readFileCached } from '../utils/file-cache';
 import { getWorkspaceRootForUri } from '../indexer/workspace-index';
+import { LANGUAGE_ID } from '../utils/constants';
 
 /**
  * Collect all documents relevant for a provider operation on `document`.
@@ -121,7 +122,7 @@ export function collectSearchDocuments(
 
             const content = readFileCached(fsPath);
             if (content != null) {
-                const tempDoc = TextDocument.create(incUri, 'purebasic', 0, content);
+                const tempDoc = TextDocument.create(incUri, LANGUAGE_ID, 0, content);
                 addDoc(tempDoc);
                 queue.push({ uri: incUri, depth: depth + 1 });
             }
@@ -147,7 +148,7 @@ export function collectSearchDocuments(
                     if (content != null) {
                         result.set(
                             incUri,
-                            TextDocument.create(incUri, 'purebasic', 0, content)
+                            TextDocument.create(incUri, LANGUAGE_ID, 0, content)
                         );
                     }
                 }

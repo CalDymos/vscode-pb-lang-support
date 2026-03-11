@@ -5,6 +5,7 @@
  */
 
 import { Diagnostic, DiagnosticSeverity } from 'vscode-languageserver/node';
+import { DIAGNOSTIC_SOURCE } from '../utils/constants';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { parseIncludeFiles } from '../parsers/include-parser';
 
@@ -71,7 +72,7 @@ export function validateIncludes(
                 severity,
                 range,
                 message: `${label} not found: "${include.filePath}"${hint}`,
-                source: 'purebasic'
+                source: DIAGNOSTIC_SOURCE
             });
         }
 
@@ -82,7 +83,7 @@ export function validateIncludes(
                 range,
                 message:
                     `'IncludeBinary' should be placed inside a DataSection…EndDataSection block.`,
-                source: 'purebasic'
+                source: DIAGNOSTIC_SOURCE
             });
         }
     }

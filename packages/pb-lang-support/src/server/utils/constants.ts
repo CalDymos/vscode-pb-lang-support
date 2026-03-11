@@ -3,6 +3,8 @@
  * Contains keywords, built-in types, built-in functions, etc.
  */
 
+export { LANGUAGE_ID, DIAGNOSTIC_SOURCE } from '../../shared/constants';
+
 /**
  * PureBasic keyword list (structural / flow-control keywords that are not
  * in pb-builtin-functions.json because they are language constructs, not

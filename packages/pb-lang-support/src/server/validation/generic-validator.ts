@@ -5,7 +5,7 @@
 
 import { DiagnosticSeverity } from 'vscode-languageserver/node';
 import { ValidatorFunction } from './types';
-import { keywords, parsePureBasicConstantDefinition } from '../utils/constants';
+import { keywords, parsePureBasicConstantDefinition, DIAGNOSTIC_SOURCE } from '../utils/constants';
 import { builtinFunctionMap } from '../utils/builtin-functions';
 
 /**
@@ -29,7 +29,7 @@ export const validateGeneric: ValidatorFunction = (
                     end: { line: lineNum, character: originalLine.length }
                 },
                 message: 'Invalid constant definition syntax. Expected: #NAME = value',
-                source: 'purebasic'
+                source: DIAGNOSTIC_SOURCE
             });
         }
     }
@@ -66,7 +66,7 @@ export const validateGeneric: ValidatorFunction = (
                     end: { line: lineNum, character: originalLine.length }
                 },
                 message: 'Potentially invalid statement syntax',
-                source: 'purebasic'
+                source: DIAGNOSTIC_SOURCE
             });
         }
     }

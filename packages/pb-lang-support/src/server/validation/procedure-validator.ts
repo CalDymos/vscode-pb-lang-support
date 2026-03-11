@@ -5,7 +5,7 @@
 
 import { DiagnosticSeverity } from 'vscode-languageserver/node';
 import { ValidationContext, ValidatorFunction } from './types';
-import { isValidType } from '../utils/constants';
+import { isValidType, DIAGNOSTIC_SOURCE } from '../utils/constants';
 import { validateParameters } from './parameter-validator';
 
 /**
@@ -34,7 +34,7 @@ export const validateProcedure: ValidatorFunction = (
                     end: { line: lineNum, character: originalLine.length }
                 },
                 message: 'Invalid Procedure syntax. Expected: Procedure[.Type] Name([parameters])',
-                source: 'purebasic'
+                source: DIAGNOSTIC_SOURCE
             });
         } else {
             const [, returnType, procName] = headerMatch;
@@ -50,7 +50,7 @@ export const validateProcedure: ValidatorFunction = (
                         end: { line: lineNum, character: typeStart + returnType.length + 1 }
                     },
                     message: `Unknown return type: ${returnType}`,
-                    source: 'purebasic'
+                    source: DIAGNOSTIC_SOURCE
                 });
             }
 
@@ -75,7 +75,7 @@ export const validateProcedure: ValidatorFunction = (
                     end: { line: lineNum, character: originalLine.length }
                 },
                 message: 'EndProcedure without matching Procedure',
-                source: 'purebasic'
+                source: DIAGNOSTIC_SOURCE
             });
         } else {
             context.procedureStack.pop();
@@ -90,7 +90,7 @@ export const validateProcedure: ValidatorFunction = (
                     end: { line: lineNum, character: 12 }
                 },
                 message: 'ProcedureReturn used outside of procedure',
-                source: 'purebasic'
+                source: DIAGNOSTIC_SOURCE
             });
         }
     }
