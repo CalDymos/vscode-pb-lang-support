@@ -134,8 +134,12 @@ interface TerminalOpts {
 function runInTerminal(opts: TerminalOpts): boolean {
     const { executablePath, args, runCwd, uctx } = opts;
 
-    const quotedArgs = args.map(a => shellQuoteArg(a));
-    const quotedExe  = shellQuoteArg(executablePath);
+    // Use the user's configured default shell so quoting strategy matches.
+    const shellExe = vscode.env.shell || '';
+    const shellKind = detectShellKind(shellExe);
+
+    const quotedArgs = args.map(a => shellQuoteArg(a, shellKind));
+    const quotedExe  = shellQuoteArg(executablePath, shellKind);
     const cmd        = quotedArgs.length
         ? `${quotedExe} ${quotedArgs.join(' ')}`
         : quotedExe;
@@ -144,7 +148,7 @@ function runInTerminal(opts: TerminalOpts): boolean {
         ? `PureBasic Run (${uctx.targetName ?? 'active'})`
         : `PureBasic Run (${uctx.fallbackSource ?? 'fallback'})`;
 
-    const terminal = vscode.window.createTerminal({ name: termName, cwd: runCwd });
+    const terminal = vscode.window.createTerminal({ name: termName, cwd: runCwd, shellPath: shellExe || undefined });
     terminal.show(true);
     terminal.sendText(cmd, true);
 
@@ -181,18 +185,44 @@ function parseArgv(commandLine: string): string[] {
     return args;
 }
 
+type ShellKind = 'powershell' | 'cmd' | 'posix';
+
 /**
- * Quote a single argument for the active platform shell.
+ * Derive the shell kind from the shell executable path.
+ * Used to select the correct argument quoting strategy.
+ */
+function detectShellKind(shellExe: string): ShellKind {
+    const name = path.basename(shellExe).toLowerCase();
+    if (name === 'pwsh.exe' || name === 'powershell.exe' || name === 'pwsh') {
+        return 'powershell';
+    }
+    if (name === 'cmd.exe') {
+        return 'cmd';
+    }
+    return 'posix';
+}
+
+/**
+ * Quote a single argument for the given shell.
  * Used only in the terminal strategy to safely re-quote
  * argv tokens before handing them to sendText().
  */
-function shellQuoteArg(arg: string): string {
-    if (process.platform === 'win32') {
-        // PowerShell: wrap in double-quotes, escape inner " by doubling.
-        const escaped = arg.replace(/"/g, '""');
-        return `"${escaped}"`;
+function shellQuoteArg(arg: string, shell: ShellKind): string {
+    switch (shell) {
+        case 'powershell': {
+            // Escape embedded double-quotes by doubling, then wrap.
+            const escaped = arg.replace(/"/g, '""');
+            return `"${escaped}"`;
+        }
+        case 'cmd': {
+            // cmd.exe: escape double-quotes with backslash, wrap in double-quotes.
+            const escaped = arg.replace(/"/g, '\\"');
+            return `"${escaped}"`;
+        }
+        default: {
+            // POSIX (bash/zsh): wrap in single-quotes, escape inner ' as '\''
+            const escaped = arg.replace(/'/g, "'\\''");
+            return `'${escaped}'`;
+        }
     }
-    // POSIX: wrap in single-quotes, escape inner ' as '\''
-    const escaped = arg.replace(/'/g, "'\\''");
-    return `'${escaped}'`;
 }
