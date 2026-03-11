@@ -351,7 +351,7 @@ async function activateFallbackMode(context: vscode.ExtensionContext): Promise<v
         client.sendNotification('purebasic/projectContext', {
             version:      3,
             noProject:    true,
-            projectFiles: fallback?.projectFiles ?? [],
+            projectFiles: (fallback?.projectFiles ?? []).map(fsPath => ({ fsPath, scan: true })),
         });
     };
 
