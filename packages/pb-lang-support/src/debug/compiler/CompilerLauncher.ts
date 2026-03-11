@@ -412,7 +412,7 @@ export class CompilerLauncher {
       const stats = fs.statSync(executablePath);
       this.log(`Executable stats: size=${stats.size}, mode=${stats.mode.toString(8)}`);
     } catch (err) {
-      this.log(`Warning: Could not stat executable: ${err}`);
+      this.log(`Warning: Could not stat executable: ${(err as NodeJS.ErrnoException).code ?? 'unknown'}`);
     }
 
     // Prepare environment with required variables
@@ -440,8 +440,27 @@ export class CompilerLauncher {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
-    // ... keep existing stdout/stderr logging and handlers (unchanged)
-    // return proc;
+    this.log(`Debuggee process spawned with pid=${proc.pid}`);
+
+    // Register handlers immediately to avoid unhandled-error timing window.
+    // The caller may add further listeners; Node.js will invoke all of them.
+    proc.on('error', (err: NodeJS.ErrnoException) => {
+      const name = err.code ?? err.name ?? 'error';
+      this.log(`Debuggee spawn error: ${name}: ${path.basename(err.path ?? '')}`);
+    });
+
+    proc.on('exit', (code, signal) => {
+      this.log(`Debuggee exited (code=${code}, signal=${signal})`);
+    });
+
+    proc.stdout?.on('data', (data: Buffer) => {
+      this.log(`[Debuggee stdout] ${data.toString().trim()}`);
+    });
+
+    proc.stderr?.on('data', (data: Buffer) => {
+      this.log(`[Debuggee stderr] ${data.toString().trim()}`);
+    });
+
     return proc;
   }
 

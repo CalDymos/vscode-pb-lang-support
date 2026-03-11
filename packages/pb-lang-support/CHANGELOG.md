@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.17.2
+
+### Fixed
+
+-Fixed: Error handlers are now registered directly in launch() before proc is returned, closing a potential timing window where spawn errors could be missed.
+-Fixed: Debuggee spawn error logging is now sanitized. Absolute paths are no longer logged; only the basename of the path is included.
+
 ## 0.17.1
 
 ### Fixed
