@@ -2,7 +2,7 @@
 
 [![pb-lang-support](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=lang-v*&label=lang)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)
 
-`pb-lang-support` is a Visual Studio Code extension that provides comprehensive PureBasic language support via a TextMate grammar and a Language Server.
+`pb-lang-support` is a Visual Studio Code extension that provides comprehensive PureBasic language support via a TextMate grammar, a Language Server, host-side build/run integration, and a Debug Adapter.
 
 ## Features
 
@@ -11,6 +11,7 @@
 ### Editor 🧩
 
 - Syntax Highlighting
+- Syntax highlighting for PureBasic Forms text mode (`.pbf`)
 - Code Folding (procedures/loops/conditionals)
 - Bracket & Quote Matching
 - Format Document: `Shift+Alt+F`
@@ -21,6 +22,7 @@
 - Signature Help (type `(` / hover)
 - Hover Documentation & Type Info
 - Outline: `Ctrl+Shift+O`
+- Built-in PureBasic function dataset shared by completion, hover, and signature help
 
 ### Navigation & Refactoring 🧭
 
@@ -32,6 +34,8 @@
 
 - Live Diagnostics
 - Code Actions (quick fixes/refactorings)
+- Missing include file diagnostics
+- `IncludeBinary` / `DataSection` validation
 
 ### PureBasic 🟦
 
@@ -39,11 +43,23 @@
 - Structures: member access via `\`
 - Constants: `#CONSTANT`
 - Arrays / Lists / Maps IntelliSense
-- Windows API + common PB subsystems (Graphics/Game, etc.)
+- Structure member completion, including chained access and `With` blocks
+- Type completion after `.` for suffixes, built-in types, structures, and interfaces
+- Native OS API IntelliSense via `Compilers/APIFunctionListing.txt`
+- Windows-only minimal API fallback suggestions when no listing is configured
 
 ### Compiler / Build / Run Integration (Toolchain) 🐞
 
-upcoming feature is **VS Code debugger integration** for PureBasic:
+- Build Active Target command
+- Run Active Target command
+- Build & Run Active Target command
+- Standalone fallback resolution when no `.pbp` context is available
+- Configurable run mode (`spawn` or `terminal`)
+- VS Code debugger integration for PureBasic
+  - Breakpoints
+  - Step Over / Step Into / Step Out
+  - Variable inspection
+  - Call stack navigation
 
 ## Related Extensions
 
@@ -57,7 +73,7 @@ upcoming feature is **VS Code debugger integration** for PureBasic:
 
 - **PureBasic Forms Editor**  
   [![pb-forms-editor](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=forms-v*&label=forms)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)  
-  Visual designer and tooling for PureBasic Forms (`.pbf`).  
+  Visual designer and tooling for PureBasic Forms (`.pbf`). `pb-lang-support` contributes the text-mode language registration and grammar for `.pbf`.  
   [**View in Marketplace**](https://marketplace.visualstudio.com/items?itemName=CalDymos.pb-forms-editor)  
   [**View Repo**](https://github.com/CalDymos/vscode-pb-lang-suite/tree/main/packages/pb-forms-editor)
 
@@ -94,7 +110,19 @@ The extension provides some configuration options. Access these via:
   "purebasic.formatting.indentSize": 4,
   "purebasic.formatting.tabSize": 4,
   "purebasic.formatting.insertSpaces": true,
-  "purebasic.formatting.trimTrailingWhitespace": true
+  "purebasic.formatting.trimTrailingWhitespace": true,
+  "purebasic.formatting.trimFinalNewlines": true
+}
+```
+
+### Toolchain Configuration
+
+```json
+{
+  "purebasic.apiFunctionListingPath": "C:/PureBasic/Compilers/APIFunctionListing.txt",
+  "purebasic.build.compiler": "pbcompiler",
+  "purebasic.build.fallbackSource": "launchJson",
+  "purebasic.run.mode": "spawn"
 }
 ```
 
@@ -145,6 +173,18 @@ The extension provides several commands accessible via:
 - **PureBasic: Clear Symbol Cache** - Clear the symbol cache
 - **PureBasic: Format Document** - Format the current document
 - **PureBasic: Find Symbols in Workspace** - Search for symbols across the workspace
+- **PureBasic: Build Active Target** - Compile the active `.pbp` target or the resolved fallback input
+- **PureBasic: Run Active Target** - Run the resolved executable from project or fallback context
+- **PureBasic: Build & Run Active Target** - Compile and then run the resolved executable
+
+### Fallback Build Context
+
+When `pb-project-files` is not installed or no `.pbp` project is active, host-side toolchain commands resolve their context from one of four sources, configured via `purebasic.build.fallbackSource`:
+
+- `sourceMetadata` - PureBasic IDE metadata block at the end of the current file
+- `launchJson` - `.vscode/launch.json`
+- `fileCfg` - `<filename>.pb.cfg` next to the current source file
+- `projectCfg` - `project.cfg`, searched upward from the current source directory
 
 ### Testing Features
 
@@ -210,30 +250,39 @@ EndIf
 
 ``` text
 pb-lang-support/
-├── package.json                 # Extension configuration file
-├── syntaxes/purebasic.tmLanguage.json  # TextMate syntax definition
-├── language-configuration.json  # Language configuration
+├── package.json                       # Extension configuration file
+├── syntaxes/
+│   ├── purebasic.tmLanguage.json      # Main PureBasic TextMate grammar
+│   └── purebasic-form.tmLanguage.json # Text-mode grammar for .pbf files
+├── language-configuration.json        # Language configuration
 ├── src/
-│   ├── extension.ts             # Extension entry point
-│   ├── server/                  # Language server implementation
-│   │   ├── server.ts            # Main language server
-│   │   ├── config/              # Configuration management
-│   │   ├── providers/           # Language feature providers
-│   │   ├── symbols/             # Symbol management
-│   │   ├── validation/          # Code validation
-│   │   └── utils/               # Utility functions
-│   ├──── debug/                 # Debug Adapter Protocol (DAP) implementation
-│   │     ├── transport/         # Transport layer (Pipe, FIFO, Network)
-│   │     ├── compiler/          # Compiler integration
-│   │     └── session/           # Debug session management
-│   └── types/                   # TypeScript type definitions
-│       ├── core/               # Core types
-│       ├── providers/          # Provider types
-│       ├── utils/              # Utility types
-│       └── server/             # Server types
-├── test/                       # Test files
-├── snippets/                   # Code snippets
-├── icons/                      # Extension icons
+│   ├── extension.ts                   # Extension entry point
+│   ├── host/                          # Host-side project/build/run integration
+│   │   ├── config/                    # Shared host settings access
+│   │   ├── pbcompiler/                # Build/run helpers for pbcompiler and executables
+│   │   └── utils/                     # Host-side metadata and utility helpers
+│   ├── server/                        # Language server implementation
+│   │   ├── config/                    # Server-side configuration management
+│   │   ├── indexer/                   # Cross-file indexing helpers
+│   │   ├── managers/                  # Document/project managers
+│   │   ├── parsers/                   # Parser helpers
+│   │   ├── providers/                 # Language feature providers
+│   │   ├── symbols/                   # Symbol extraction/indexing
+│   │   ├── utils/                     # Shared server utilities
+│   │   └── validation/                # Diagnostics and validators
+│   ├── debug/                         # Debug Adapter Protocol (DAP) implementation
+│   │   ├── compiler/                  # Compiler/debug launch helpers
+│   │   ├── protocol/                  # Debug protocol handling
+│   │   ├── session/                   # Debug session management
+│   │   ├── transport/                 # Pipe/FIFO/network/native transports
+│   │   └── types/                     # DAP-related types
+│   ├── shared/                        # Shared constants used by host/server
+│   ├── data/                          # Generated/static datasets
+│   └── types/                         # TypeScript type definitions
+├── test/                              # Jest tests and debug protocol probes
+├── snippets/                          # Code snippets
+├── icons/                             # Extension icons
+├── docs/                              # Additional design and debugger notes
 ├── README.md
 └── .vscodeignore
 ```
@@ -246,23 +295,22 @@ The extension follows a modular architecture with clear separation of concerns:
 
 - **Main Server**: Handles LSP protocol communication
 - **Configuration**: Manages settings and configuration updates
-- **Providers**: Implement individual language features (completion, hover, etc.)
-- **Symbols**: Manages symbol indexing and caching
+- **Providers**: Implement individual language features (completion, hover, signature help, rename, references, formatting, symbols)
+- **Indexer / Symbols**: Manages cross-file symbol indexing and caching
 - **Validation**: Provides syntax and semantic validation
 
-#### Type System
+#### Host / Unified Context
 
-- **Core Types**: Document, symbol, diagnostic, and error types
-- **Provider Types**: Specialized types for each language feature
-- **Utility Types**: Generic helpers and caching types
-- **Server Types**: Language server specific types
+- **Project Integration**: Uses `pb-project-files` API v3 when available
+- **Fallback Resolver**: Resolves build/run context without `.pbp` project support
+- **Toolchain Commands**: Coordinates build, run, and build-and-run commands
+- **Shared Settings**: Centralized host-side access to PureBasic settings
 
-#### Debug Adaptor
+#### Debug Adapter
 
-- **Transport Layer**: Abstracted communication (Named Pipes, FIFO, TCP)
-- **Session Manager**:
-- **Compiler**:
-
+- **Transport Layer**: Abstracted communication (pipe, FIFO, network, native)
+- **Session Manager**: Maps PureBasic debugger protocol state to DAP
+- **Compiler / Launch**: Builds the debuggee and starts the adapter transport
 
 ### Build and Test
 
@@ -288,40 +336,42 @@ The extension follows a modular architecture with clear separation of concerns:
 
 ### Testing
 
-The extension includes a comprehensive test suite:
+The extension includes a Jest-based test suite and several debug protocol probes.
 
-#### Unit Tests
+#### Running Tests
 
-- Language feature providers
-- Symbol management
-- Configuration handling
+```bash
+# Run all tests
+npm run test
 
-#### Integration Tests
+# Run tests in watch mode
+npm run test:watch
 
-- Language server communication
-- Extension lifecycle
+# Run tests with coverage
+npm run test:coverage
+```
 
-## Contributing
+### Contributing
 
 ### Development Setup
 
 1. **Prerequisites**
    - Node.js 20+
    - VSCode with TypeScript extension
-   - PureBasic compiler (for testing)
+   - PureBasic compiler (for build/debug testing)
 
 2. **Setup Development Environment**
 
    ```bash
    # Clone repository (Monorepo)
    git clone https://github.com/CalDymos/vscode-pb-lang-suite.git
-   cd vscode-purebasic
+   cd vscode-pb-lang-suite/packages/pb-lang-support
 
    # Install dependencies
    npm ci
 
    # Compile TypeScript
-   npm run c:lang
+   npm run compile
 
    # Run tests
    npm run test
@@ -345,248 +395,6 @@ The extension includes a comprehensive test suite:
 
 - **TypeScript**: Strict mode enabled, comprehensive type definitions
 - **Naming**: Use PascalCase for types/classes, camelCase for variables/functions
-- **Comments**: JSDoc comments for all public APIs
-- **Error Handling**: Comprehensive error handling with typed errors
-- **Testing**: Write unit tests for all new features
-
-### Architecture Overview
-
-The extension follows a modular architecture:
-
-#### Core Components
-
-1. **Extension Entry Point** (`src/extension.ts`)
-   - VSCode extension activation
-   - Language server setup
-   - Command registration
-
-2. **Language Server** (`src/server/server.ts`)
-   - LSP protocol implementation
-   - Feature coordination
-
-3. **Providers** (`src/server/providers/`)
-   - **Completion Provider**: Code completion and IntelliSense
-   - **Hover Provider**: Documentation and type information
-   - **Definition Provider**: Go to definition functionality
-   - **Reference Provider**: Find all references
-   - **Signature Provider**: Function parameter hints
-   - **Document Symbol Provider**: Outline view
-   - **Formatting Provider**: Code formatting
-   - **Rename Provider**: Symbol renaming
-
-4. **Type System** (`src/types/`)
-   - Comprehensive type definitions
-   - Type-safe interfaces
-   - Generic utilities
-
-### Testing Code
-
-#### Running Tests
-
-```bash
-# Run all tests
-npm run test
-
-# Run tests in watch mode
-npm run test:watch
-
-# Run tests with coverage
-npm run test:coverage
-```
-
-#### Test Structure
-
-```text
-test/
-├── unit/              # Unit tests
-│   ├── providers/     # Provider tests
-│   ├── symbols/       # Symbol management tests
-│   ├── validation/    # Validation tests
-│   └── utils/         # Utility tests
-├── integration/       # Integration tests
-│   ├── server/        # Language server tests
-│   ├── extension/     # Extension lifecycle tests
-│   └── performance/   # Performance tests
-└── fixtures/          # Test fixtures and samples
-```
-
-### Adding New Features
-
-1. **Feature Implementation**
-   - Add provider in `src/server/providers/`
-   - Define types in `src/types/`
-   - Register handler in `src/server/server.ts`
-   - Add configuration options to `package.json`
-
-2. **Testing Requirements**
-   - Write unit tests for new functionality
-   - Add integration tests if applicable
-   - Update documentation
-
-3. **Documentation**
-   - Update README.md if feature is user-facing
-   - Add JSDoc comments
-   - Update type definitions
-
-## API Reference
-
-### Extension API
-
-#### Configuration Interface
-
-```typescript
-interface PureBasicSettings {
-    maxNumberOfProblems: number;
-    enableValidation: boolean;
-    enableCompletion: boolean;
-    validationDelay: number;
-    formatting?: FormattingSettings;
-    completion?: CompletionSettings;
-    linting?: LintingSettings;
-    symbols?: SymbolsSettings;
-    performance?: PerformanceSettings;
-}
-```
-
-### Language Server API
-
-#### Symbol Management
-
-```typescript
-interface PureBasicSymbol {
-    name: string;
-    kind: SymbolKind;
-    range: SymbolRange;
-    detail?: string;
-    documentation?: string;
-    module?: string;
-    isPublic?: boolean;
-    parameters?: string[];
-    returnType?: string;
-    id?: string;
-    parentId?: string;
-    children?: string[];
-    tags?: SymbolTag[];
-    modifiers?: SymbolModifier[];
-    value?: string | number;
-    defaultValue?: string;
-    deprecated?: boolean;
-}
-```
-
-#### Diagnostic System
-
-```typescript
-interface ExtendedDiagnostic extends Diagnostic {
-    id?: string;
-    sourceFile?: string;
-    ruleId?: string;
-    ruleName?: string;
-    fixes?: DiagnosticFix[];
-    related?: RelatedDiagnostic[];
-    data?: unknown;
-    tags?: DiagnosticTag[];
-    priority?: DiagnosticPriority;
-    confidence?: number;
-}
-```
-
-### Provider APIs
-
-#### Completion Provider
-
-```typescript
-interface ExtendedCompletionItem extends CompletionItem {
-    metadata?: CompletionItemMetadata;
-    symbol?: PureBasicSymbol;
-    matchScore?: number;
-    sortText?: string;
-    filterText?: string;
-    insertText?: string;
-    insertTextFormat?: InsertTextFormat;
-    insertPosition?: 'Replace' | 'After' | 'Before';
-    additionalTextEdits?: CompletionTextEdit[];
-    command?: CompletionCommand;
-    documentation?: CompletionDocumentation;
-    preconditions?: CompletionCondition[];
-    postconditions?: CompletionCondition[];
-}
-```
-
-#### Symbol Cache
-
-```typescript
-class SymbolCache {
-    constructor(config: CacheConfig);
-
-    // Cache operations
-    set(uri: string, symbols: PureBasicSymbol[]): void;
-    get(uri: string): PureBasicSymbol[] | null;
-    findSymbol(query: string): SymbolMatch[];
-    findSymbolDetailed(query: string): SymbolMatchDetail[];
-
-    // Cache management
-    clear(): void;
-    invalidate(uri: string): void;
-    getStats(): CacheStats;
-}
-```
-
-### Utility APIs
-
-#### Error Handling
-
-```typescript
-interface ErrorContext {
-    operation: string;
-    documentUri?: string;
-    position?: Position;
-    additional?: Record<string, unknown>;
-    component?: string;
-    userId?: string;
-}
-
-class ErrorHandler {
-    handleAsync<T>(operation: string, fn: () => Promise<T>, options?: ErrorHandlerOptions): Promise<T>;
-    handleSync<T>(operation: string, fn: () => T, options?: ErrorHandlerOptions): T;
-}
-```
-
-#### Performance Utilities
-
-```typescript
-class PerformanceMonitor {
-    measure<T>(operation: string, fn: () => T): T;
-    measureAsync<T>(operation: string, fn: () => Promise<T>): Promise<T>;
-    getMetrics(): PerformanceMetrics;
-    reset(): void;
-}
-```
-
-### Event System
-
-#### Symbol Events
-
-```typescript
-type SymbolEventType =
-    | 'symbolAdded'
-    | 'symbolRemoved'
-    | 'symbolUpdated'
-    | 'cacheCleared'
-    | 'cacheInvalidated';
-
-interface SymbolEvent {
-    type: SymbolEventType;
-    uri: string;
-    symbol?: PureBasicSymbol;
-    timestamp: number;
-}
-```
-
-## License
-
-MIT License
-
----
-
-**PureBasic** is a registered trademark of Fantaisie Software. This extension is not affiliated with or endorsed by Fantaisie Software.
+- **Comments**: JSDoc comments for public APIs where helpful
+- **Error Handling**: Prefer centralized handling and typed fallbacks in host/server layers
+- **Testing**: Add or update tests for user-visible changes
