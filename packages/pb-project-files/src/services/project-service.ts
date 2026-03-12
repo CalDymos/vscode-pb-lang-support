@@ -375,6 +375,9 @@ export class ProjectService implements vscode.Disposable {
                 const xml   = Buffer.from(bytes).toString('utf8');
                 // Deep-clone via JSON round-trip so we never mutate the cache
                 const parsed = parsePbpProjectText(xml, templateUri.fsPath);
+                if (!parsed) {
+                    throw new Error('Invalid template');
+                }
                 return JSON.parse(JSON.stringify(parsed)) as PbpProject;
             } catch {
                 const openSettings = 'Open Settings';
