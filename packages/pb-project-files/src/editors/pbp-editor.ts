@@ -9,8 +9,19 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { readProjectEditorSettings, SETTINGS_SECTION, ProjectEditorSettings } from '../config/settings'
 import { parsePbpProjectText, writePbpProjectText, type PbpProject } from '@caldymos/pb-project-core';
+import {
+        PBP_EDITOR_VIEW_TYPE, 
+        PB_ALL_FILE_EXTENSIONS,
+        PB_CODE_EXTENSION,
+        PB_FORM_EXTENSION,
+        PB_INCLUDE_EXTENSION,
+        PB_PROJECT_EXTENSION,
+        HTML_FILE_EXTENSIONS,
+        IMAGE_FILE_EXTENSIONS,
+        TEXT_FILE_EXTENSIONS
+} from '../utils/constants'
 
-export const PBP_EDITOR_VIEW_TYPE = 'pbProjectFiles.pbpEditor';
+import { toDialogExtensions } from '../utils/file-utils'
 
 function getNonce(): string {
     const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -48,7 +59,15 @@ function renderHtml(webview: vscode.Webview, document: vscode.TextDocument, proj
   <title>PureBasic Project</title>
   <style>
     body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--vscode-foreground); background: var(--vscode-editor-background); padding: 0; margin: 0; }
-    :root { --pbp-inactive-tab-fg: ${settings.inactiveTabForeground || 'var(--vscode-foreground)'}; }
+    :root {
+    --pbp-inactive-tab-fg: ${settings.inactiveTabForeground || 'var(--vscode-foreground)'};
+    --pbp-xml-tag:    ${settings.xmlTagColor       || 'var(--vscode-terminal-ansiBlue)'};
+    --pbp-xml-attr:   ${settings.xmlAttributeColor || 'var(--vscode-terminal-ansiCyan)'};
+    --pbp-xml-val:    ${settings.xmlValueColor      || 'var(--vscode-terminal-ansiYellow)'};
+    --pbp-xml-brk:    ${settings.xmlBracketColor    || 'var(--vscode-editorLineNumber-foreground)'};
+    --pbp-xml-cmt:    ${settings.xmlCommentColor    || 'var(--vscode-terminal-ansiGreen)'};
+    --pbp-xml-pi:     ${settings.xmlProcInstColor   || 'var(--vscode-terminal-ansiMagenta)'};
+    }
     .toolbar { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--vscode-editorWidget-border); position: sticky; top: 0; background: var(--vscode-editor-background); z-index: 2; }
     .toolbar button { padding: 4px 10px; }
     .status { opacity: 0.8; }
@@ -79,6 +98,21 @@ function renderHtml(webview: vscode.Webview, document: vscode.TextDocument, proj
 
     .btnrow { display:flex; gap:8px; flex-wrap:wrap; }
     .btn { padding: 4px 10px; }
+
+    pre.xml-hl { margin:0; padding:8px; overflow:auto; min-height:400px;
+    background:var(--vscode-input-background); border:1px solid var(--vscode-input-border);
+    border-radius:3px; font-family:var(--vscode-editor-font-family,monospace);
+    font-size:var(--vscode-editor-font-size); color:var(--vscode-foreground); white-space:pre; }
+    .xc { color:var(--pbp-xml-cmt); font-style:italic; }
+    .xp { color:var(--pbp-xml-pi); }
+    .xt { color:var(--pbp-xml-tag); }
+    .xa { color:var(--pbp-xml-attr); }
+    .xv { color:var(--pbp-xml-val); }
+    .xb { color:var(--pbp-xml-brk); }
+
+    .check-list { display:flex; flex-direction:column; gap:6px; }
+    .check-list label { display:flex; align-items:center; gap:8px; cursor:pointer; }
+    .check-list input[type="checkbox"] { width:auto; flex-shrink:0; }
   </style>
 </head>
 <body>
@@ -217,7 +251,15 @@ export class PbpEditorProvider implements vscode.CustomTextEditorProvider {
                     const uris = await vscode.window.showOpenDialog({
                         canSelectMany: false,
                         defaultUri: vscode.Uri.file(projectDir),
-                        filters: { 'PureBasic Files': ['pb', 'pbi', 'pbf', 'pbh'] },
+                        filters: { 'PureBasic Files': toDialogExtensions(PB_ALL_FILE_EXTENSIONS),
+                                   'PureBasic Sourcecodes': toDialogExtensions([PB_CODE_EXTENSION]),
+                                   'PureBasic Includefiles': toDialogExtensions([PB_INCLUDE_EXTENSION]),
+                                   'PureBasic Projects': toDialogExtensions([PB_PROJECT_EXTENSION]),
+                                   'PureBasic Forms': toDialogExtensions([PB_FORM_EXTENSION]),
+                                   'Image Files': toDialogExtensions(IMAGE_FILE_EXTENSIONS),
+                                   'HTML Documents': toDialogExtensions(HTML_FILE_EXTENSIONS),
+                                   'Text Documents': toDialogExtensions(TEXT_FILE_EXTENSIONS)                            
+                         },
                     });
                     if (!uris || uris.length === 0) return;
                     const picked = uris[0];

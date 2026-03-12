@@ -1,48 +1,129 @@
 # PureBasic VS Code Language Suite (Monorepo)
 
-[![suite](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=suite-v*&label=suite)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)  
+[![suite](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=suite-v*&label=suite)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)
 [![pb-lang-support](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=lang-v*&label=lang)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)
 [![pb-project-files](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=pbp-v*&label=pbp)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)
 [![pb-forms-editor](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=forms-v*&label=forms)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)
 
 This repository contains multiple VS Code extensions related to PureBasic.
 
+The suite provides language support, project integration, and visual editing tools for the PureBasic ecosystem inside Visual Studio Code.
+
 ## Packages
 
-- [packages/pb-lang-support](packages/pb-lang-support)  
-  PureBasic language support (TextMate grammar + Language Server for `.pb` & `.pbi`).
+### [pb-lang-support](packages/pb-lang-support)
 
-- [packages/pb-forms-editor](packages/pb-forms-editor)  
-  PureBasic Forms editor (custom editor for `.pbf` files).
+PureBasic language support (TextMate grammar + Language Server for `.pb` and `.pbi`).
 
-- [packages/pb-project-files](packages/pb-project-files)  
-  Optional companion extension for `.pbp` project discovery, active target selection, and workspace project context.
+Features include:
 
-- [packages/pb-project-core](packages/pb-project-core)  
-  Shared library used by the suite for parsing and resolving `.pbp` projects.
+- syntax highlighting
+- language server diagnostics
+- hover and signature help
+- PureBasic API function dataset
+- build and run integration
+- debugger integration
+- optional `.pbp` project integration via **pb-project-files**
+- text editing support for **PureBasic Forms (`.pbf`)**
 
-> **(Work in progress)**
+### [pb-project-files](packages/pb-project-files)
+
+Optional companion extension for `.pbp` project discovery and active target management.
+
+Features include:
+
+- `.pbp` project file editor
+- project and target discovery
+- active target selection
+- project template support for creating new PureBasic projects
+- customizable Raw XML view for project files
+
+### [pb-project-core](packages/pb-project-core)
+
+Shared library used by the suite for parsing and resolving `.pbp` projects.
+
+The library provides:
+
+- `.pbp` project parser
+- project validation
+- target selection utilities
+- build path resolution
+- deterministic `.pbp` writer
+
+### [pb-forms-editor](packages/pb-forms-editor)
+
+PureBasic Forms editor (custom editor for `.pbf` files).
+
+Provides a visual designer for PureBasic forms and supports switching between:
+
+- graphical form designer
+- raw `.pbf` text editing
+
+When **pb-lang-support** is installed, the text editor mode supports syntax highlighting for the `purebasic-form` language.
+
+## Feature Matrix
+
+| Feature | pb-lang-support | pb-project-files | pb-project-core | pb-forms-editor |
+|--------|-----------------|------------------|-----------------|-----------------|
+| PureBasic syntax highlighting [`.pb`, `.pbi`, `.pbf`] | ✅ | – | – | – |
+| Language Server (hover, signatures, diagnostics) [`.pb`, `.pbi`] | ✅ | – | – | – |
+| PureBasic API function dataset | ✅ | – | – | – |
+| Build / Run integration | ✅ | – | – | – |
+| Debugger integration | ✅ | – | – | – |
+| `.pbp` project discovery | – | ✅ | – | – |
+| Active target selection | – | ✅ | – | – |
+| `.pbp` project editor | – | ✅ | – | – |
+| Create new project from template | – | ✅ | – | – |
+| `.pbp` parser | – | – | ✅ | – |
+| `.pbp` writer | – | – | ✅ | – |
+| Target / build path resolution | – | – | ✅ | – |
+| Project validation utilities | – | – | ✅ | – |
+| `.pbf` visual form designer | – | – | – | ✅ |
+| `.pbf` text editor mode | – | – | – | ✅ |
+| `.pbf` syntax highlighting (via pb-lang-support) | ✅ | – | – | ✅ |
+| Integration with PureBasic projects | ✅ | ✅ | ✅ | – |
+
+## Architecture Overview
+
+The extensions are designed to work both independently and together.
+
+```mermaid
+flowchart TD
+
+A["pb-lang-support<br/>Language Server<br/>Build / Debug Integration"]
+B["pb-project-files<br/>Project Context<br/>Target Selection"]
+C["pb-project-core<br/>.pbp Parser<br/>Resolver Library"]
+D["pb-forms-editor<br/>.pbf Visual Designer"]
+
+A -->|optional project context| B
+B -->|uses parser / resolver| C
+D -->|syntax highlighting integration| A
+```
+
+- **pb-lang-support** provides the core language features.
+- **pb-project-files** supplies project context and target resolution.
+- **pb-project-core** is the shared `.pbp` parser and resolver library.
+- **pb-forms-editor** integrates with `pb-lang-support` for `.pbf` syntax highlighting.
 
 ## Branch Development Strategy
 
 This repository uses a two-branch model:
 
-- `main` is the **default** and **stable/release** branch  
-  (tested changes only, version tags are created from here)
-- `devel` is the **integration/development** branch  
-  (day-to-day development and PR target)
+- `main` is the **stable release branch**
+- `devel` is the **development and integration branch**
 
 Typical flow:
 
-- feature branch -> PR -> `devel`
-- release PR: `devel` -> `main`
-- (optional) hotfix: `main` -> `devel` back-merge after the fix
+feature branch → PR → `devel`  
+release PR → `devel` → `main`
+
+Hotfixes may be applied directly to `main` and later merged back to `devel`.
 
 ## Development
 
 ### Prerequisites
 
-- Node.js (Node 20 recommended)
+- Node.js
 - npm
 
 ### Install
@@ -51,94 +132,64 @@ Typical flow:
 npm ci
 ```
 
-### Build (all packages)
+### Workspace shortcuts
 
 ```bash
-npm run c
+npm run w:core
+npm run w:lang
+npm run w:forms
+npm run w:pbp
 ```
 
-### Build (single package)
+### Compile packages
 
 ```bash
-npm run c:core
-npm run c:lang
-npm run c:forms
-npm run c:pbp
+npm run comp:core
+npm run comp:lang
+npm run comp:forms
+npm run comp:pbp
+npm run comp
 ```
 
-### Build VSIX locally
-
-This creates `pb-lang-support.vsix`, `pb-forms-editor.vsix` and `pb-project-files.vsix` in the repository root.
+### Create VSIX packages
 
 ```bash
+npm run vsix:lang
+npm run vsix:forms
+npm run vsix:pbp
 npm run vsix
 ```
 
-### Run (Debug)
-
-Open this repo in VS Code and use the provided launch configurations.
-
-If you want to test "Project Mode" (workspace `.pbp` context + active target selection), use the launch config **"Run lang + project-files"**.
-
-## Project Mode (optional)
-
-`pb-lang-support` works standalone.
-
-If you also install **pb-project-files**, it adds a workspace-level PureBasic project context:
-
-- Discovers `.pbp` files in the workspace and keeps a cache.
-- Watches `.pbp` changes and updates the cache.
-- Tracks an "active project" and "active target" (syncs from the active editor and via QuickPick commands).
-- Shows a status bar entry like `PB: MyProject.pbp  [Default]`.
-
-When **both** extensions are installed, `pb-lang-support` can consume this context to scope workspace operations to the active project.
-
-## Versioning & Tags
-
-This repo uses annotated version tags:
-
-- suite: `suite-vX.Y.Z`
-- pb-lang-support: `lang-vX.Y.Z`
-- pb-forms-editor: `forms-vX.Y.Z`
-- pb-project-files: `pbp-vX.Y.Z`
-
-> Note: `scripts/tag-and-push.mjs` only tags suite/forms/lang/pbp.
-
-Create and push tags from `main`:
+### Test
 
 ```bash
-npm run t:all
-# or: npm run t:suite / npm run t:lang / npm run t:forms / npm run t:pbp
+npm run test:core
+npm run test:lang
 ```
 
-## CI / Workflows
+### Versioning
 
-See [.github/WORKFLOWS.md](.github/WORKFLOWS.md).
+```bash
+npm run ver:patch
+npm run ver:patch:lang
+npm run ver:patch:forms
+npm run ver:patch:pbp
+npm run ver:patch:core
 
-## Repository Structure
-
-```text
-├── .github
-│   ├── workflows
-│   │   ├── build-vsix.yml
-│   │   └── pr-check.yml
-│   └── WORKFLOWS.md
-├── .vscode
-│   ├── launch.json
-│   └── tasks.json
-├── package.json
-├── packages/
-│   ├── pb-forms-editor/  (VS Code Extension: purebasic Forms Editor)
-│   ├── pb-lang-support/  (VS Code Extension: PureBasic language support for .pb/.pbi)
-│   ├── pb-project-core/  (npm lib: shared lib for pbp handling)
-│   └── pb-project-files/ (VS Code Extension: workspace project/target management for .pbp)
-├── test/
-├── README.md
-├── LICENSE
-├── .gitignore
-└── .vscodeignore
+npm run ver:minor
+npm run ver:minor:lang
+npm run ver:minor:forms
+npm run ver:minor:pbp
+npm run ver:minor:core
 ```
 
-## License
+### Release helpers
 
-See `LICENSE`.
+```bash
+npm run tag:all
+npm run tag:suite
+npm run tag:lang
+npm run tag:forms
+npm run tag:pbp
+npm run backmerge
+```

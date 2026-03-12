@@ -1,4 +1,12 @@
 {
   "purebasicProjectEditor.configuration.title": "PureBasic Project Editor",
-  "purebasicProjectEditor.inactiveTabForeground.description": "Foreground color for inactive tabs in the PureBasic Project Editor (e.g. '#cccccc'). Leave empty to use the VS Code default foreground color."
+  "purebasicProjectEditor.xmlTagColor.description": "Color for XML tag names in the Raw XML view.",
+  "purebasicProjectEditor.xmlAttributeColor.description": "Color for XML attribute names in the Raw XML view.",
+  "purebasicProjectEditor.xmlValueColor.description": "Color for XML attribute values in the Raw XML view.",
+  "purebasicProjectEditor.xmlBracketColor.description": "Color for XML brackets and punctuation in the Raw XML view.",
+  "purebasicProjectEditor.xmlCommentColor.description": "Color for XML comments in the Raw XML view.",
+  "purebasicProjectEditor.xmlProcInstColor.description": "Color for XML processing instructions in the Raw XML view.",
+  "purebasicProjectEditor.inactiveTabForeground.description": "Foreground color for inactive tabs in the PureBasic Project Editor (e.g. '#cccccc'). Leave empty to use the VS Code default foreground color.",
+  "pbProjectFiles.newProject.title": "New PureBasic Project…",
+  "purebasicProjectEditor.newProject.templateFile.description": "Absolute path to a .pbp file used as template when creating a new project. The template's targets, libraries, and compiler options are copied; name and data section are reset. Leave empty to start with a minimal default project."
 }

@@ -19,6 +19,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<PbProj
         }),
         vscode.commands.registerCommand('pbProjectFiles.pickTarget', async () => {
             await projectService?.pickActiveTarget();
+        }),
+        vscode.commands.registerCommand('pbProjectFiles.newProject', async () => {
+            await projectService?.createNewProject();
         })
     );
 

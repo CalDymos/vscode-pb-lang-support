@@ -12,15 +12,21 @@ import {
 } from '@caldymos/pb-project-core';
 
 import type { PbFileProjectPayload, PbProjectContext, PbProjectContextPayload, PbProjectFilesApi, PbProjectSettingsPayload, ProjectScope } from '../api';
+import { readProjectEditorSettings, SETTINGS_SECTION } from '../config/settings';
+import {
+        PBP_EDITOR_VIEW_TYPE, 
+        DEFAULT_PBP_GLOB,
+        DEFAULT_EXCLUDE_GLOB,
+        WSKEY_ACTIVE_PROJECT,
+        WSKEY_ACTIVE_TARGET,
+        NO_PROJECT_SENTINEL,
+        NEW_PROJECT_SENTINEL,
+        PB_SOURCE_EXTENSIONS,
+        PB_PROJECT_EXTENSION,
+} from '../utils/constants'
 
-const DEFAULT_PBP_GLOB = '**/*.pbp';
-const DEFAULT_EXCLUDE_GLOB = '**/{node_modules,.git}/**';
+import { hasAnyExtension, toDialogExtensions } from '../utils/file-utils';
 
-const WSKEY_ACTIVE_PROJECT = 'pbProjectFiles.activeProjectFile';
-const WSKEY_ACTIVE_TARGET = 'pbProjectFiles.activeTargetName';
-
-/** Sentinel: aktiv wenn der User "No Project" explizit gewählt hat. */
-const NO_PROJECT_SENTINEL = '__NO_PROJECT__';
 
 function normalizeFsPath(fsPath: string): string {
     const p = path.normalize(fsPath);
@@ -161,7 +167,7 @@ export class ProjectService implements vscode.Disposable {
         const fsPath = normalizeFsPath(fileUri.fsPath);
 
         // If the file is a .pbp, it is its own project key.
-        if (fsPath.toLowerCase().endsWith('.pbp')) {
+        if (fsPath.toLowerCase().endsWith(PB_PROJECT_EXTENSION)) {
             return this.projects.get(fsPath);
         }
 
@@ -227,12 +233,18 @@ export class ProjectService implements vscode.Disposable {
     }
 
     public async pickActiveProject(): Promise<void> {
+
+        const newProjectItem = {
+            label:       '$(plus) New Project\u2026',
+            description: 'Create a new PureBasic project file',
+            projectFile: NEW_PROJECT_SENTINEL,
+        };
         const noProjectItem = {
             label:       '$(circle-slash) No Project',
-            description: 'Deactivate project context – use local fallback',
+            description: 'Deactivate project context \u2013 use local fallback',
             projectFile: NO_PROJECT_SENTINEL,
         };
-        const items = [noProjectItem, ...[...this.projects.values()].map(p => ({
+        const items = [newProjectItem, noProjectItem, ...[...this.projects.values()].map(p => ({
             label: p.config?.name?.trim() ? p.config.name : path.basename(p.projectFile),
             description: p.projectFile,
             projectFile: normalizeFsPath(p.projectFile),
@@ -244,7 +256,9 @@ export class ProjectService implements vscode.Disposable {
         });
         if (!picked) return;
 
-        if (picked.projectFile === NO_PROJECT_SENTINEL) {
+        if (picked.projectFile === NEW_PROJECT_SENTINEL) {
+            await this.createNewProject();
+        } else if (picked.projectFile === NO_PROJECT_SENTINEL) {
             await this.setNoProject();
         } else {
             await this.setActiveProject(picked.projectFile);
@@ -280,6 +294,137 @@ export class ProjectService implements vscode.Disposable {
         await this.persistActiveState();
         this.updateStatusBar();
         this.emitActiveContextChanged();
+    }
+
+    public async createNewProject(): Promise<void> {
+        // 1 – Pick save location
+        const defaultUri = vscode.workspace.workspaceFolders?.[0]?.uri;
+        let saveUri = await vscode.window.showSaveDialog({
+            defaultUri,
+            filters: { 'PureBasic Project': toDialogExtensions([PB_PROJECT_EXTENSION]) },
+            saveLabel: 'Create Project',
+            title: 'Create new PureBasic project',
+        });
+        if (!saveUri) return;
+
+        // Ensure the chosen path always ends with .pbp so the glob watcher
+        // (DEFAULT_PBP_GLOB = '**/*.pbp') picks it up reliably.
+        if (!saveUri.fsPath.toLowerCase().endsWith(PB_PROJECT_EXTENSION)) {
+            saveUri = vscode.Uri.file(saveUri.fsPath + PB_PROJECT_EXTENSION);
+        }
+
+        // 2 – Project name (default: filename without extension)
+        const defaultName = path.parse(saveUri.fsPath).name;
+        const projectName = await vscode.window.showInputBox({
+            prompt: 'Project name',
+            value: defaultName,
+            validateInput: v => v.trim() ? undefined : 'Name must not be empty',
+        });
+        if (projectName === undefined) return;
+
+        // 3 – Build project model (from template or minimal fallback)
+        const projectDir = path.dirname(saveUri.fsPath);
+        const baseModel = await this.loadProjectTemplate(saveUri.fsPath, projectDir);
+
+        // Override identity fields regardless of template or fallback origin
+        baseModel.config.name = projectName.trim();
+        baseModel.projectFile = saveUri.fsPath;
+        baseModel.projectDir  = projectDir;
+        // Clear fields that must not carry over from a template:
+        // - data: session-specific (last-open, explorer state, ...)
+        // - files: rawPaths are relative to the template dir and would be
+        //          broken/wrong in the new project's directory
+        baseModel.data  = {};
+        baseModel.files = [];
+
+        // 4 – Serialize and write to disk
+        const xml = writePbpProjectText(baseModel);
+        await vscode.workspace.fs.writeFile(saveUri, Buffer.from(xml, 'utf8'));
+
+        // 5 – The FileSystemWatcher will pick up the new file automatically.
+        //     Parse and register it immediately so setActiveProject works in the
+        //     same tick (watcher event may arrive slightly later on some systems).
+        const parsed = await this.tryParseProject(saveUri);
+        if (parsed) {
+            const key = normalizeFsPath(parsed.projectFile);
+            this.projects.set(key, parsed);
+            this.projectMeta.set(key, this.computeProjectMeta(parsed));
+            this.rebuildFileToProjectMap();
+        }
+
+        // 6 – Activate and open in editor
+        await this.setActiveProject(saveUri.fsPath);
+        await vscode.commands.executeCommand('vscode.openWith', saveUri, PBP_EDITOR_VIEW_TYPE);
+    }
+
+    /**
+     * Tries to load and clone the user-configured template .pbp.
+     * On any failure (not configured, file missing, parse error) emits a
+     * warning and returns a minimal in-memory project model as fallback.
+     */
+    private async loadProjectTemplate(
+        targetFsPath: string,
+        targetDir: string,
+    ): Promise<PbpProject> {
+        const templatePath = readProjectEditorSettings().newProjectTemplateFile.trim();
+
+        if (templatePath) {
+            try {
+                const templateUri = vscode.Uri.file(templatePath);
+                const bytes = await vscode.workspace.fs.readFile(templateUri);
+                const xml   = Buffer.from(bytes).toString('utf8');
+                // Deep-clone via JSON round-trip so we never mutate the cache
+                const parsed = parsePbpProjectText(xml, templateUri.fsPath);
+                if (!parsed) {
+                    throw new Error('Invalid template');
+                }
+                return JSON.parse(JSON.stringify(parsed)) as PbpProject;
+            } catch {
+                const openSettings = 'Open Settings';
+                void vscode.window.showWarningMessage(
+                    `New project template not found or invalid: "${templatePath}". Falling back to empty project.`,
+                    openSettings,
+                ).then(choice => {
+                    if (choice === openSettings) {
+                        void vscode.commands.executeCommand(
+                            'workbench.action.openSettings',
+                            `${SETTINGS_SECTION}.newProject.templateFile`,
+                        );
+                    }
+                });
+            }
+        }
+
+        // Minimal fallback model
+        const defaultTarget: PbpTarget = {
+            name: 'Default',
+            enabled: true,
+            isDefault: true,
+            inputFile:  { rawPath: '', fsPath: '' },
+            outputFile: { rawPath: '', fsPath: '' },
+            executable: { rawPath: '', fsPath: '' },
+            directory: '',
+            options: {},
+            constants: [],
+        };
+        return {
+            projectFile: targetFsPath,
+            projectDir:  targetDir,
+            config: {
+                name:       '',
+                comment:    '',
+                closefiles: false,
+                openmode:   1,
+            },
+            data:      {},
+            files:     [],
+            libraries: [],
+            targets:   [defaultTarget],
+            meta: {
+                presentSections: { config: true, targets: true },
+                sectionOrder:    ['config', 'targets'],
+            },
+        };
     }
 
     private async setActiveProject(projectFile: string): Promise<void> {
@@ -328,8 +473,8 @@ export class ProjectService implements vscode.Disposable {
             .filter((p): p is string => typeof p === 'string' && p.trim().length > 0);
 
         const projectFiles = [...new Set([...src, ...inc])]
-            .filter(p => p.toLowerCase().endsWith('.pb') || p.toLowerCase().endsWith('.pbi'))
-            .map(p => path.resolve(p));
+            .filter((p) => hasAnyExtension(p, PB_SOURCE_EXTENSIONS))
+            .map((p) => path.resolve(p));
 
         return { projectFiles };
     }
@@ -384,7 +529,7 @@ export class ProjectService implements vscode.Disposable {
         if (uri.scheme !== 'file') return;
 
         // If the file is the project file itself.
-        if (uri.fsPath.toLowerCase().endsWith('.pbp')) {
+        if (uri.fsPath.toLowerCase().endsWith(PB_PROJECT_EXTENSION)) {
             await this.setActiveProject(uri.fsPath);
             return;
         }

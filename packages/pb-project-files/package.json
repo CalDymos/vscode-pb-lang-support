@@ -2,7 +2,7 @@
   "name": "pb-project-files",
   "displayName": "PureBasic Project Files",
   "description": "Workspace project/target management for PureBasic (.pbp) projects",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "publisher": "CalDymos",
   "author": {
     "name": "CalDymos"
@@ -43,13 +43,71 @@
     "configuration": {
       "title": "%purebasicProjectEditor.configuration.title%",
       "properties": {
+        "purebasicProjectEditor.newProject.templateFile": {
+          "type": "string",
+          "default": "",
+          "description": "%purebasicProjectEditor.newProject.templateFile.description%"
+        },
         "purebasicProjectEditor.inactiveTabForeground": {
           "type": "string",
           "default": "",
+          "format": "color-hex",
           "description": "%purebasicProjectEditor.inactiveTabForeground.description%"
+        },
+        "purebasicProjectEditor.xmlTagColor": {
+          "type": "string",
+          "default": "",
+          "format": "color-hex",
+          "description": "%purebasicProjectEditor.xmlTagColor.description%"
+        },
+        "purebasicProjectEditor.xmlAttributeColor": {
+          "type": "string",
+          "default": "",
+          "format": "color-hex",
+          "description": "%purebasicProjectEditor.xmlAttributeColor.description%"
+        },
+        "purebasicProjectEditor.xmlValueColor": {
+          "type": "string",
+          "default": "",
+          "format": "color-hex",
+          "description": "%purebasicProjectEditor.xmlValueColor.description%"
+        },
+        "purebasicProjectEditor.xmlBracketColor": {
+          "type": "string",
+          "default": "",
+          "format": "color-hex",
+          "description": "%purebasicProjectEditor.xmlBracketColor.description%"
+        },
+        "purebasicProjectEditor.xmlCommentColor": {
+          "type": "string",
+          "default": "",
+          "format": "color-hex",
+          "description": "%purebasicProjectEditor.xmlCommentColor.description%"
+        },
+        "purebasicProjectEditor.xmlProcInstColor": {
+          "type": "string",
+          "default": "",
+          "format": "color-hex",
+          "description": "%purebasicProjectEditor.xmlProcInstColor.description%"
         }
       }
     },
+    "languages": [
+      {
+        "id": "purebasic-project",
+        "aliases": [
+          "PureBasic Project File",
+          "purebasic project"
+        ],
+        "extensions": [
+          ".pbp"
+        ],
+        "icon": {
+          "light": "./icons/purebasic.png",
+          "dark": "./icons/purebasic.png"
+        }
+      }
+    ],
     "commands": [
       {
         "command": "pbProjectFiles.pickProject",
@@ -64,6 +122,11 @@
       {
         "command": "pbProjectFiles.refresh",
         "title": "PureBasic: Refresh Projects",
+        "category": "PureBasic"
+      },
+      {
+        "command": "pbProjectFiles.newProject",
+        "title": "%pbProjectFiles.newProject.title%",
         "category": "PureBasic"
       }
     ],

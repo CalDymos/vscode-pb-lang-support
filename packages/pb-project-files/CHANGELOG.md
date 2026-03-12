@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.8.0
+
+### Added
+
+- Command **“PureBasic: New Project”** to create new PureBasic projects.
+- Setting **`purebasicProjectEditor.newProject.templateFile`** to define a `.pbp` template used when creating new projects.
+- Dedicated **icon for `.pbp` PureBasic project files**.
+
+### Changed
+
+- `.pbp` files are now registered as language **`purebasic-project`**.
+- Improved Raw XML editor customization options for project files.
+
+### Fixed
+
+- Minor configuration handling issues in the project editor.
+
+### Internal
+
+- Internal refactoring of project editor constants and file-type handling.
+- General code cleanup and maintenance.
+
 ## 0.7.0
 
 ### Changed

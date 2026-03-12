@@ -598,18 +598,18 @@ function renderTargetCompiler(container: HTMLElement, t: PbpTarget): void {
 
       <div style="margin-top:14px;" class="panel">
         <div class="muted" style="margin-bottom:6px;">Compiler option flags (from &lt;options .../&gt;)</div>
-        <div class="grid2" style="grid-template-columns: 360px 1fr;">
-          <label>Optimize generated code</label><input id="opt_optimizer" type="checkbox" />
-          <label>Enable inline ASM syntax coloring</label><input id="opt_asm" type="checkbox" />
-          <label>Create threadsafe executable</label><input id="opt_thread" type="checkbox" />
-          <label>Enable OnError lines support</label><input id="opt_onerror" type="checkbox" />
-          <label>Enable DPI aware executable</label><input id="opt_dpiaware" type="checkbox" />
-          <label>Enable modern theme support (XP skin)</label><input id="opt_xpskin" type="checkbox" />
-          <label>Request Administrator mode</label><input id="opt_admin" type="checkbox" />
-          <label>Request User mode (no virtualization)</label><input id="opt_user" type="checkbox" />
-          <label>Enable DLL preloading protection</label><input id="opt_dllprotection" type="checkbox" />
-          <label>Use shared UCRT</label><input id="opt_shareducrt" type="checkbox" />
-          <label>Enable Wayland support</label><input id="opt_wayland" type="checkbox" />
+        <div class="check-list">
+        <label><input id="opt_optimizer"     type="checkbox" /> Optimize generated code</label>
+        <label><input id="opt_asm"           type="checkbox" /> Enable inline ASM syntax coloring</label>
+        <label><input id="opt_thread"        type="checkbox" /> Create threadsafe executable</label>
+        <label><input id="opt_onerror"       type="checkbox" /> Enable OnError lines support</label>
+        <label><input id="opt_dpiaware"      type="checkbox" /> Enable DPI aware executable</label>
+        <label><input id="opt_xpskin"        type="checkbox" /> Enable modern theme support (XP skin)</label>
+        <label><input id="opt_admin"         type="checkbox" /> Request Administrator mode</label>
+        <label><input id="opt_user"          type="checkbox" /> Request User mode (no virtualization)</label>
+        <label><input id="opt_dllprotection" type="checkbox" /> Enable DLL preloading protection</label>
+        <label><input id="opt_shareducrt"    type="checkbox" /> Use shared UCRT</label>
+        <label><input id="opt_wayland"       type="checkbox" /> Enable Wayland support</label>
         </div>
       </div>
     `;
@@ -1189,9 +1189,8 @@ function renderTargetVersionInfo(container: HTMLElement, t: PbpTarget): void {
     const dis      = enabled ? '' : 'disabled';
 
     let html = '';
-    html += '<div class="grid2" style="margin-bottom:10px;">';
-    html += '<label>Enable Version Info</label>';
-    html += '<input id="viEnable" type="checkbox" ' + chk + ' />';
+    html += '<div class="check-list" style="margin-bottom:10px;">';
+    html += `<label><input id="viEnable" type="checkbox" ${chk} /> Enable Version Info</label>`;
     html += '</div>';
 
     if (!enabled) {
@@ -1408,6 +1407,57 @@ function renderTargetWatchlist(container: HTMLElement, t: PbpTarget): void {
 }
 
 // ---------------------------------------------------------------------------
+// XML Syntax Highlight (minimal tokenizer, no deps)
+// ---------------------------------------------------------------------------
+
+function highlightXmlTag(raw: string): string {
+    const out: string[] = [];
+    let s = raw;
+    const tok = (cls: string, r: string) =>
+        out.push(cls ? `<span class="${cls}">${esc(r)}</span>` : esc(r));
+
+    const openM = s.match(/^<\/?/);
+    if (openM) { tok('xb', openM[0]); s = s.slice(openM[0].length); }
+
+    const nameM = s.match(/^[\w:.-]+/);
+    if (nameM) { tok('xt', nameM[0]); s = s.slice(nameM[0].length); }
+
+    while (s.length > 0 && !/^\/?>/.test(s)) {
+        let m: RegExpMatchArray | null;
+        if ((m = s.match(/^(\s+)([\w:.-]+)(\s*=\s*)("[^"]*"|'[^']*')/))) {
+            tok('', m[1]); tok('xa', m[2]); tok('xb', m[3]); tok('xv', m[4]);
+            s = s.slice(m[0].length); continue;
+        }
+        if ((m = s.match(/^(\s+)([\w:.-]+)/))) {
+            tok('', m[1]); tok('xa', m[2]);
+            s = s.slice(m[0].length); continue;
+        }
+        if ((m = s.match(/^\s+/))) { tok('', m[0]); s = s.slice(m[0].length); continue; }
+        tok('xb', s[0]); s = s.slice(1);
+    }
+    const closeM = s.match(/^\/?>?/);
+    if (closeM?.[0]) tok('xb', closeM[0]);
+    return out.join('');
+}
+
+function highlightXml(xml: string): string {
+    const out: string[] = [];
+    let s = xml;
+    const push = (cls: string, r: string) =>
+        out.push(cls ? `<span class="${cls}">${esc(r)}</span>` : esc(r));
+
+    while (s.length > 0) {
+        let m: RegExpMatchArray | null;
+        if ((m = s.match(/^<!--[\s\S]*?-->/)))         { push('xc', m[0]); s = s.slice(m[0].length); continue; }
+        if ((m = s.match(/^<\?[\s\S]*?\?>/)))          { push('xp', m[0]); s = s.slice(m[0].length); continue; }
+        if ((m = s.match(/^<\/?[^>]*(?:>|$)/)))        { out.push(highlightXmlTag(m[0])); s = s.slice(m[0].length); continue; }
+        if ((m = s.match(/^[^<]+/)))                   { push('', m[0]); s = s.slice(m[0].length); continue; }
+        push('', s[0]); s = s.slice(1);
+    }
+    return out.join('');
+}
+
+// ---------------------------------------------------------------------------
 // Render: Targets — outer layout
 // ---------------------------------------------------------------------------
 
@@ -1516,13 +1566,13 @@ function renderXml(): void {
 
     const panel = document.createElement('div');
     panel.className = 'panel';
-    panel.innerHTML = `
-      <div class="muted" style="margin-bottom:8px;">Raw XML view is read-only. Use the structured tabs to make changes.</div>
-      <textarea id="xmlText" style="min-height: 480px;" readonly></textarea>
-    `;
-    el.appendChild(panel);
+    panel.innerHTML = `<div class="muted" style="margin-bottom:8px;">Raw XML view is read-only. Use the structured tabs to make changes.</div>`;
 
-    ($('xmlText') as HTMLTextAreaElement).value = state.xml ?? '';
+    const pre = document.createElement('pre');
+    pre.className = 'xml-hl';
+    pre.innerHTML = highlightXml(state.xml ?? '');
+    panel.appendChild(pre);
+    el.appendChild(panel);
 }
 
 // ---------------------------------------------------------------------------
