@@ -2,7 +2,7 @@
   "name": "pb-lang-support",
   "displayName": "PureBasic Language Services",
   "description": "%extension.description%",
-  "version": "0.18.0",
+  "version": "0.18.1",
   "publisher": "CalDymos",
   "author": {
     "name": "CalDymos"
@@ -116,7 +116,11 @@
         },
         "purebasic.completion.triggerCharacters": {
           "type": "array",
-          "default": [".", "(", "["],
+          "default": [
+            ".",
+            "(",
+            "["
+          ],
           "description": "%config.purebasic.completion.triggerCharacters.description%"
         },
         "purebasic.completion.autoClosingPairs": {
@@ -202,7 +206,10 @@
         },
         "purebasic.run.mode": {
           "type": "string",
-          "enum": ["spawn", "terminal"],
+          "enum": [
+            "spawn",
+            "terminal"
+          ],
           "enumDescriptions": [
             "%config.purebasic.run.mode.spawn.description%",
             "%config.purebasic.run.mode.terminal.description%"
