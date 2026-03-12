@@ -9,8 +9,19 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { readProjectEditorSettings, SETTINGS_SECTION, ProjectEditorSettings } from '../config/settings'
 import { parsePbpProjectText, writePbpProjectText, type PbpProject } from '@caldymos/pb-project-core';
+import {
+        PBP_EDITOR_VIEW_TYPE, 
+        PB_ALL_FILE_EXTENSIONS,
+        PB_CODE_EXTENSION,
+        PB_FORM_EXTENSION,
+        PB_INCLUDE_EXTENSION,
+        PB_PROJECT_EXTENSION,
+        HTML_FILE_EXTENSIONS,
+        IMAGE_FILE_EXTENSIONS,
+        TEXT_FILE_EXTENSIONS
+} from '../utils/constants'
 
-export const PBP_EDITOR_VIEW_TYPE = 'pbProjectFiles.pbpEditor';
+import { toDialogExtensions } from '../utils/file-utils'
 
 function getNonce(): string {
     const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -240,7 +251,15 @@ export class PbpEditorProvider implements vscode.CustomTextEditorProvider {
                     const uris = await vscode.window.showOpenDialog({
                         canSelectMany: false,
                         defaultUri: vscode.Uri.file(projectDir),
-                        filters: { 'PureBasic Files': ['pb', 'pbi', 'pbf', 'pbh'] },
+                        filters: { 'PureBasic Files': toDialogExtensions(PB_ALL_FILE_EXTENSIONS),
+                                   'PureBasic Sourcecodes': toDialogExtensions([PB_CODE_EXTENSION]),
+                                   'PureBasic Includefiles': toDialogExtensions([PB_INCLUDE_EXTENSION]),
+                                   'PureBasic Projects': toDialogExtensions([PB_PROJECT_EXTENSION]),
+                                   'PureBasic Forms': toDialogExtensions([PB_FORM_EXTENSION]),
+                                   'Image Files': toDialogExtensions(IMAGE_FILE_EXTENSIONS),
+                                   'HTML Documents': toDialogExtensions(HTML_FILE_EXTENSIONS),
+                                   'Text Documents': toDialogExtensions(TEXT_FILE_EXTENSIONS)                            
+                         },
                     });
                     if (!uris || uris.length === 0) return;
                     const picked = uris[0];

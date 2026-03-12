@@ -13,15 +13,20 @@ import {
 
 import type { PbFileProjectPayload, PbProjectContext, PbProjectContextPayload, PbProjectFilesApi, PbProjectSettingsPayload, ProjectScope } from '../api';
 import { readProjectEditorSettings, SETTINGS_SECTION } from '../config/settings';
+import {
+        PBP_EDITOR_VIEW_TYPE, 
+        DEFAULT_PBP_GLOB,
+        DEFAULT_EXCLUDE_GLOB,
+        WSKEY_ACTIVE_PROJECT,
+        WSKEY_ACTIVE_TARGET,
+        NO_PROJECT_SENTINEL,
+        NEW_PROJECT_SENTINEL,
+        PB_SOURCE_EXTENSIONS,
+        PB_PROJECT_EXTENSION,
+} from '../utils/constants'
 
-const DEFAULT_PBP_GLOB = '**/*.pbp';
-const DEFAULT_EXCLUDE_GLOB = '**/{node_modules,.git}/**';
+import { hasAnyExtension } from '../utils/file-utils';
 
-const WSKEY_ACTIVE_PROJECT = 'pbProjectFiles.activeProjectFile';
-const WSKEY_ACTIVE_TARGET = 'pbProjectFiles.activeTargetName';
-
-/** Sentinel: aktiv wenn der User "No Project" explizit gewählt hat. */
-const NO_PROJECT_SENTINEL = '__NO_PROJECT__';
 
 function normalizeFsPath(fsPath: string): string {
     const p = path.normalize(fsPath);
@@ -162,7 +167,7 @@ export class ProjectService implements vscode.Disposable {
         const fsPath = normalizeFsPath(fileUri.fsPath);
 
         // If the file is a .pbp, it is its own project key.
-        if (fsPath.toLowerCase().endsWith('.pbp')) {
+        if (fsPath.toLowerCase().endsWith(PB_PROJECT_EXTENSION)) {
             return this.projects.get(fsPath);
         }
 
@@ -228,7 +233,6 @@ export class ProjectService implements vscode.Disposable {
     }
 
     public async pickActiveProject(): Promise<void> {
-        const NEW_PROJECT_SENTINEL = '__NEW_PROJECT__';
 
         const newProjectItem = {
             label:       '$(plus) New Project\u2026',
@@ -297,14 +301,14 @@ export class ProjectService implements vscode.Disposable {
         const defaultUri = vscode.workspace.workspaceFolders?.[0]?.uri;
         const saveUri = await vscode.window.showSaveDialog({
             defaultUri,
-            filters: { 'PureBasic Project': ['pbp'] },
+            filters: { 'PureBasic Project': [PB_PROJECT_EXTENSION] },
             saveLabel: 'Create Project',
             title: 'Create new PureBasic project',
         });
         if (!saveUri) return;
 
         // 2 – Project name (default: filename without extension)
-        const defaultName = path.basename(saveUri.fsPath, '.pbp');
+        const defaultName = path.basename(saveUri.fsPath, PB_PROJECT_EXTENSION);
         const projectName = await vscode.window.showInputBox({
             prompt: 'Project name',
             value: defaultName,
@@ -340,7 +344,7 @@ export class ProjectService implements vscode.Disposable {
 
         // 6 – Activate and open in editor
         await this.setActiveProject(saveUri.fsPath);
-        await vscode.commands.executeCommand('vscode.openWith', saveUri, 'pbProjectFiles.pbpEditor');
+        await vscode.commands.executeCommand('vscode.openWith', saveUri, PBP_EDITOR_VIEW_TYPE);
     }
 
     /**
@@ -456,8 +460,8 @@ export class ProjectService implements vscode.Disposable {
             .filter((p): p is string => typeof p === 'string' && p.trim().length > 0);
 
         const projectFiles = [...new Set([...src, ...inc])]
-            .filter(p => p.toLowerCase().endsWith('.pb') || p.toLowerCase().endsWith('.pbi'))
-            .map(p => path.resolve(p));
+            .filter((p) => hasAnyExtension(p, PB_SOURCE_EXTENSIONS))
+            .map((p) => path.resolve(p));
 
         return { projectFiles };
     }
@@ -512,7 +516,7 @@ export class ProjectService implements vscode.Disposable {
         if (uri.scheme !== 'file') return;
 
         // If the file is the project file itself.
-        if (uri.fsPath.toLowerCase().endsWith('.pbp')) {
+        if (uri.fsPath.toLowerCase().endsWith(PB_PROJECT_EXTENSION)) {
             await this.setActiveProject(uri.fsPath);
             return;
         }
