@@ -324,8 +324,12 @@ export class ProjectService implements vscode.Disposable {
         baseModel.config.name = projectName.trim();
         baseModel.projectFile = saveUri.fsPath;
         baseModel.projectDir  = projectDir;
-        // Clear session-specific data that must not carry over from a template
-        baseModel.data = {};
+        // Clear fields that must not carry over from a template:
+        // - data: session-specific (last-open, explorer state, ...)
+        // - files: rawPaths are relative to the template dir and would be
+        //          broken/wrong in the new project's directory
+        baseModel.data  = {};
+        baseModel.files = [];
 
         // 4 – Serialize and write to disk
         const xml = writePbpProjectText(baseModel);
