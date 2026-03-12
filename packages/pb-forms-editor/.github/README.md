@@ -2,9 +2,18 @@
 
 [![pb-forms-editor](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=forms-v*&label=forms)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)
 
-A Visual Studio Code extension that provides a lightweight editor workflow for PureBasic **Form Designer** blocks, including safe patching of gadget/window coordinates after drag operations.
+A Visual Studio Code extension that provides a lightweight editor workflow for PureBasic **Form Designer** blocks, including a custom webview designer, text/designer switching, and safe patching of form definitions.
 
 ## Features
+
+### Form Designer Workflow 🧩
+
+- Opens `.pbf` files in a dedicated **PureBasic Form Designer** custom editor
+- Includes commands to switch between **designer mode** and **text mode**:
+  - `Open Form as Text`
+  - `Open in Form Designer`
+- Prevents duplicate editor tabs when switching modes by closing the opposite tab type automatically
+- Uses the `purebasic-form` language for `.pbf` text mode when available through **pb-lang-support**
 
 ### Form Designer Parsing 🧩
 
@@ -13,14 +22,31 @@ A Visual Studio Code extension that provides a lightweight editor workflow for P
 - Supports Form Designer style assignments, e.g.  
   `Button_0 = ButtonGadget(#PB_Any, ...)`  
   `Window_0 = OpenWindow(#PB_Any, ...)`
+- Detects Form Designer metadata such as header version, strict-syntax warning markers, and scan range
 
-### Stable Patching Model 🧷
+### Visual Editing & Patching 🧷
+
+- Drag and resize gadgets directly in the designer canvas
+- Patches gadget and window coordinates back into the `.pbf` source
+- Supports safe patching for:
+  - form window geometry
+  - gadget geometry
+  - gadget items (`AddGadgetItem`)
+  - gadget columns (`AddGadgetColumn`)
+  - menu entries
+  - toolbar entries
+  - status bar fields
+- Preserves left-side assignments (if present)
+- Supports multi-line call patching
+
+### Stable Patching Model
 
 - Stable gadget key selection for reliable patching:
   - If the first parameter is `#PB_Any`, the assigned variable name (left side) is used as key
   - Otherwise the first parameter is used (e.g. `#Button_0`)
-- Multi-line call patching
-- Preserves left-side assignments (if present)
+- Stable window handling for both `#PB_Any` and enumeration-based `OpenWindow(...)` forms
+- Supports `Enumeration FormWindow` / `Enumeration FormGadget` parsing and window enum updates
+- Resolves `OpenWindow(...)` procedure default parameters for `x`, `y`, `width`, and `height` when present
 
 > ⚠️ Still in development
 
@@ -45,7 +71,9 @@ A Visual Studio Code extension that provides a lightweight editor workflow for P
 
 ### Release Version
 
-Install **pb-forms-editor** from the VSCode Extension Marketplace (once published).
+Install **pb-forms-editor** from the VSCode Extension Marketplace.
+
+For `.pbf` text-mode syntax highlighting, install **pb-lang-support** as well. The package already declares it as an `extensionDependency`.
 
 ## Configuration
 
@@ -69,18 +97,19 @@ You can configure the Forms Editor via:
 
 **Settings**
 
-- `purebasicFormsDesigner.showGrid` *(boolean)*: Show/hide the canvas grid.
-- `purebasicFormsDesigner.gridMode` *(string: "dots" | "lines")*: Grid rendering style.
+- `purebasicFormsDesigner.showGrid` *(boolean)*: Show or hide the canvas grid.
+- `purebasicFormsDesigner.gridMode` *(string: `"dots"` | `"lines"`)*: Grid rendering style.
 - `purebasicFormsDesigner.gridSize` *(number, 2..100)*: Grid spacing.
 - `purebasicFormsDesigner.gridOpacity` *(number, 0.02..0.5)*: Grid opacity.
-- `purebasicFormsDesigner.snapToGrid` *(boolean)*: Snap controls/windows to the grid.
-- `purebasicFormsDesigner.snapMode` *(string: "live" | "drop")*: Apply snapping while dragging (`live`) or only after releasing the mouse (`drop`).
+- `purebasicFormsDesigner.snapToGrid` *(boolean)*: Snap controls and windows to the grid.
+- `purebasicFormsDesigner.snapMode` *(string: `"live"` | `"drop"`)*: Apply snapping while dragging (`live`) or only after releasing the mouse (`drop`).
 
 ### Canvas Appearance
 
 ```json
 {
   "purebasicFormsDesigner.canvasBackground": "",
+  "purebasicFormsDesigner.canvasReadonlyBackground": "",
   "purebasicFormsDesigner.windowFillOpacity": 0.05,
   "purebasicFormsDesigner.outsideDimOpacity": 0.12,
   "purebasicFormsDesigner.titleBarHeight": 26
@@ -89,7 +118,8 @@ You can configure the Forms Editor via:
 
 **Settings**
 
-- `purebasicFormsDesigner.canvasBackground` *(string)*: Canvas background (e.g. CSS color like `"#202020"` or `"rgb(30,30,30)"`). Empty string uses the default.
+- `purebasicFormsDesigner.canvasBackground` *(string)*: Optional CSS color for the designer background. Empty uses the theme editor background.
+- `purebasicFormsDesigner.canvasReadonlyBackground` *(string)*: Optional CSS color for the designer background when the form is read-only. Empty uses the theme editor background.
 - `purebasicFormsDesigner.windowFillOpacity` *(number, 0..0.25)*: Fill opacity for window areas.
 - `purebasicFormsDesigner.outsideDimOpacity` *(number, 0..0.35)*: Dimming opacity outside the window bounds.
 - `purebasicFormsDesigner.titleBarHeight` *(number, 0..60)*: Title bar height used by the renderer.
@@ -102,18 +132,23 @@ You can configure the Forms Editor via:
 }
 ```
 
-- `purebasicFormsDesigner.expectedPbVersion` *(string)*: If set, the extension can warn when the `.pbf` header version differs from the expected PureBasic version.
+- `purebasicFormsDesigner.expectedPbVersion` *(string)*: If set, the extension warns when the `.pbf` header PureBasic version differs from the expected value.
 
 ## Usage
 
 1. Open a `.pbf` file that contains a PureBasic Form Designer block
-2. Use the Forms Editor workflow to adjust controls/windows
-3. Drag gadgets/windows; the extension patches the corresponding x/y in the Form Designer code
+2. The file opens in the custom designer by default
+3. Use the property and structure panes to inspect supported form elements
+4. Drag or resize gadgets and windows in the canvas
+5. Use **Open Form as Text** to reopen the same file in text mode
+6. Use **Open in Form Designer** to switch back to the visual editor
 
 ## Notes
 
-- Parsing/patching is limited to the Form Designer block (header → `; IDE Options`, if present).
-- Patching preserves the original assignment expression on the left side (if any).
+- Parsing and patching are limited to the Form Designer block (header → `; IDE Options`, if present).
+- The extension expects a registered `purebasic-form` language for text-mode highlighting.
+- Patching preserves the original assignment expression on the left side when possible.
+- Unsupported or ambiguous constructs are surfaced as structured diagnostics inside the designer model.
 
 ## Development
 
