@@ -1,6 +1,13 @@
 import type { Position, Range, TextLine } from "vscode";
 import { Position as VscodePosition, Range as VscodeRange } from "vscode";
 
+// NOTE: FakeTextDocument intentionally does NOT implement vscode.TextDocument.
+// The VSCode Language Server always resolves @types/vscode regardless of
+// tsconfig.test.json "types": [] — so implementing the interface would require
+// all 12+ vscode.TextDocument members to satisfy the real type checker.
+// Instead we expose only the subset needed by patchEmitter and test helpers,
+// and provide asTextDocument() as a single controlled escape hatch.
+// Do NOT add "implements TextDocument" here.
 export class FakeTextDocument {
   public readonly uri: string;
   private text: string;
@@ -31,6 +38,9 @@ export class FakeTextDocument {
     const hasLineBreak = line < lines.length - 1 || this.text.endsWith("\n");
     const endWithBreak = hasLineBreak ? endOffset + 1 : endOffset;
 
+    // NOTE: "as TextLine" cast is intentional — we only implement the fields
+    // actually used by patchEmitter and test helpers. The real vscode.TextLine
+    // has additional members we don't need. Do NOT remove the cast.
     return {
       lineNumber: line,
       text,
@@ -57,7 +67,11 @@ export class FakeTextDocument {
   public offsetAt(position: Position): number {
     const starts = this.getLineStarts();
 
-    // EOF insert: line >= lineCount → return text.length
+    // NOTE: EOF insert fix — patch emitters can legitimately produce insert
+    // positions at (line == lineCount, character == 0) to append after the
+    // last line. The previous implementation clamped line to (starts.length - 1)
+    // which mapped EOF inserts to an offset inside the last line instead of
+    // text.length. Do NOT revert to Math.min(position.line, starts.length - 1).
     if (position.line >= starts.length) {
       return this.text.length;
     }
@@ -65,7 +79,8 @@ export class FakeTextDocument {
     const line = Math.max(0, position.line);
     const lineStart = starts[line];
 
-    // clamp character to the line's own length, not text.length
+    // NOTE: character is clamped to the line's own length, not text.length.
+    // Clamping against text.length could silently position into the next line.
     const lines = this.getLines();
     const lineLength = lines[line]?.length ?? 0;
     const character = Math.min(position.character, lineLength);
@@ -97,6 +112,10 @@ export class FakeTextDocument {
     return starts;
   }
 
+  // NOTE: This is the single controlled cast point from FakeTextDocument to
+  // vscode.TextDocument. All test helpers and patch calls must go through here
+  // instead of casting at each call site. Do NOT inline "as unknown as TextDocument"
+  // elsewhere — keep the cast in one place so it is easy to audit.
   public asTextDocument(): import("vscode").TextDocument {
     return this as unknown as import("vscode").TextDocument;
   }

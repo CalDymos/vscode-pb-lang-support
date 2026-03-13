@@ -15,10 +15,16 @@ export function applyWorkspaceEditToText(originalText: string, edit: WorkspaceEd
 
   const normalized = operations.map(op => {
     if (op.kind === "insert") {
+      // NOTE: op.position from the vscode shim is a plain object { line, character }.
+      // FakeTextDocument.offsetAt() requires a real VscodePosition instance — plain
+      // objects are not accepted by the type checker. Do NOT pass op.position directly.
       const pos = document.offsetAt(new VscodePosition(op.position!.line, op.position!.character));
       return { kind: op.kind, start: pos, end: pos, text: op.newText ?? "" };
     }
 
+    // NOTE: Same issue for ranges — both start and end must be real VscodePosition
+    // instances, not the plain objects produced by the shim. Wrapping here keeps
+    // rangeOffsets() type-safe without changing its signature.
     const shimRange = op.range!;
     const vsRange = new VscodeRange(
       new VscodePosition(shimRange.start.line, shimRange.start.character),
