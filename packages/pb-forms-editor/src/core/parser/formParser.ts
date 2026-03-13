@@ -345,6 +345,39 @@ export function parseFormDocument(text: string): FormDocument {
         continue;
       }
 
+      case "HideWindow": {
+        const p = splitParams(c.args);
+        if (p.length >= 2 && windowMatchesReference(doc.window, p[0])) {
+          const hidden = asNumber((p[1] ?? "").trim());
+          if (typeof hidden === "number") {
+            doc.window.hidden = hidden !== 0;
+          }
+        }
+        continue;
+      }
+
+      case "DisableWindow": {
+        const p = splitParams(c.args);
+        if (p.length >= 2 && windowMatchesReference(doc.window, p[0])) {
+          const disabled = asNumber((p[1] ?? "").trim());
+          if (typeof disabled === "number") {
+            doc.window.disabled = disabled !== 0;
+          }
+        }
+        continue;
+      }
+
+      case "SetWindowColor": {
+        const p = splitParams(c.args);
+        if (p.length >= 2 && windowMatchesReference(doc.window, p[0])) {
+          const color = parsePbColor(p[1]);
+          if (typeof color === "number") {
+            doc.window.color = color;
+          }
+        }
+        continue;
+      }
+
       case "OpenWindow": {
         const procDefaults = findProcDefaultsAbove(lines, c.range.line);
         const win = parseOpenWindow(c.assignedVar, c.args, procDefaults, c.range);
@@ -564,6 +597,45 @@ function normalizeWindowParent(raw: string | undefined): string | undefined {
   }
 
   return "=" + parentRaw;
+}
+
+function normalizeWindowReference(raw: string | undefined): string | undefined {
+  const refRaw = raw?.trim();
+  if (!refRaw) return undefined;
+  return refRaw.startsWith("#") ? refRaw.slice(1) : refRaw;
+}
+
+function windowMatchesReference(win: FormWindow | undefined, rawRef: string | undefined): win is FormWindow {
+  if (!win) return false;
+  const ref = normalizeWindowReference(rawRef);
+  if (!ref) return false;
+
+  if (win.variable && win.variable === ref) return true;
+  if (win.id.replace(/^#/, "") === ref) return true;
+  return false;
+}
+
+function parsePbColor(raw: string | undefined): number | undefined {
+  const colorRaw = raw?.trim();
+  if (!colorRaw) return undefined;
+
+  if (/^\$[0-9a-f]+$/i.test(colorRaw)) {
+    const n = Number.parseInt(colorRaw.slice(1), 16);
+    return Number.isFinite(n) ? n : undefined;
+  }
+
+  const rgbMatch = /^RGB\((.+)\)$/i.exec(colorRaw);
+  if (!rgbMatch) return undefined;
+
+  const parts = splitParams(rgbMatch[1] ?? "");
+  if (parts.length !== 3) return undefined;
+
+  const r = asNumber(parts[0] ?? "");
+  const g = asNumber(parts[1] ?? "");
+  const b = asNumber(parts[2] ?? "");
+  if ([r, g, b].some((v) => typeof v !== "number")) return undefined;
+
+  return ((b as number) << 16) | ((g as number) << 8) | (r as number);
 }
 
 function parseOpenWindow(assignedVar: string | undefined, args: string, procDefaults?: Record<string, string>, source?: FormWindow["source"]): FormDocument["window"] {
