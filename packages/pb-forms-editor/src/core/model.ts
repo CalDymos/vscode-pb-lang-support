@@ -93,14 +93,19 @@ export interface FormWindow {
   y: number;
   w: number;
   h: number;
+  captionRaw?: string;       // raw caption expression from OpenWindow(...)
   caption?: string;          // canonical field matching original FormWindow\caption
   captionVariable?: boolean; // matches original FormWindow\captionvariable
   title?: string;            // temporary compatibility alias for current extension code
   flagsExpr?: string;
+  colorRaw?: string;         // raw color expression from SetWindowColor(...)
   color?: number;
   generateEventLoop?: boolean;
+  disabledRaw?: string;      // raw disabled expression from DisableWindow(...)
   disabled?: boolean;
+  hiddenRaw?: string;        // raw hidden expression from HideWindow(...)
   hidden?: boolean;
+  parentRaw?: string;        // raw parent expression from OpenWindow(..., parent)
   parent?: string;
   eventFile?: string;
   eventProc?: string;

@@ -365,7 +365,10 @@ export function parseFormDocument(text: string): FormDocument {
       case "HideWindow": {
         const p = splitParams(c.args);
         if (p.length >= 2 && windowMatchesReference(doc.window, p[0])) {
-          const hidden = asNumber((p[1] ?? "").trim());
+          const hiddenRaw = (p[1] ?? "").trim();
+          doc.window.hiddenRaw = hiddenRaw || undefined;
+
+          const hidden = asNumber(hiddenRaw);
           if (typeof hidden === "number") {
             doc.window.hidden = hidden !== 0;
           }
@@ -376,7 +379,10 @@ export function parseFormDocument(text: string): FormDocument {
       case "DisableWindow": {
         const p = splitParams(c.args);
         if (p.length >= 2 && windowMatchesReference(doc.window, p[0])) {
-          const disabled = asNumber((p[1] ?? "").trim());
+          const disabledRaw = (p[1] ?? "").trim();
+          doc.window.disabledRaw = disabledRaw || undefined;
+
+          const disabled = asNumber(disabledRaw);
           if (typeof disabled === "number") {
             doc.window.disabled = disabled !== 0;
           }
@@ -387,7 +393,10 @@ export function parseFormDocument(text: string): FormDocument {
       case "SetWindowColor": {
         const p = splitParams(c.args);
         if (p.length >= 2 && windowMatchesReference(doc.window, p[0])) {
-          const color = parsePbColor(p[1]);
+          const colorRaw = (p[1] ?? "").trim();
+          doc.window.colorRaw = colorRaw || undefined;
+
+          const color = parsePbColor(colorRaw);
           if (typeof color === "number") {
             doc.window.color = color;
           }
@@ -775,7 +784,8 @@ function parseOpenWindow(assignedVar: string | undefined, args: string, procDefa
   const caption = literalCaption ?? (captionRaw.length ? captionRaw : undefined);
   const captionVariable = literalCaption === undefined && captionRaw.length > 0;
   const flagsExpr = p[6]?.trim();
-  const parent = normalizeWindowParent(p[7]);
+  const parentRaw = p[7]?.trim();
+  const parent = normalizeWindowParent(parentRaw);
   const customFlags = extractWindowCustomFlags(flagsExpr);
 
   return {
@@ -788,10 +798,12 @@ function parseOpenWindow(assignedVar: string | undefined, args: string, procDefa
     y,
     w,
     h,
+    captionRaw: captionRaw || undefined,
     caption,
     captionVariable,
     title: caption,
     flagsExpr,
+    parentRaw,
     parent,
     eventFile,
     customFlags,
