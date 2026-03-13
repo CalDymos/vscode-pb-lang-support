@@ -81,6 +81,7 @@ export interface Gadget {
   frontColor?: number;
   backColorRaw?: string;
   backColor?: number;
+  gadgetFontRaw?: string;   // raw FontID(...) expression from SetGadgetFont(...)
   gadgetFont?: string;
   gadgetFontSize?: number;
   gadgetFontFlagsRaw?: string;

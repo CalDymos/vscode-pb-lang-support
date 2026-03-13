@@ -454,6 +454,7 @@ test("parses fixtures/smoke/12-visibility-colors-fonts.pbf", () => {
   assert.equal(txtName?.backColorRaw, "RGB(10, 20, 30)");
   assert.equal(txtName?.frontColor, 0x112233);
   assert.equal(txtName?.frontColorRaw, "$112233");
+  assert.equal(txtName?.gadgetFontRaw, "FontID(0)");
   assert.equal(txtName?.gadgetFont, "Arial");
   assert.equal(txtName?.gadgetFontSize, 12);
   assert.equal(txtName?.gadgetFontFlagsRaw, "#PB_Font_Bold | #PB_Font_Italic");
@@ -486,6 +487,7 @@ Procedure OpenFrmMain()
   HideGadget(#TxtName, HiddenExpr)
   DisableGadget(#TxtName, DisabledExpr)
   SetGadgetColor(#TxtName, #PB_Gadget_BackColor, ColorExpr)
+  SetGadgetFont(#TxtName, FontID(FontExpr))
   SetGadgetState(#TxtName, StateExpr)
 EndProcedure
 `;
@@ -506,6 +508,7 @@ EndProcedure
   assert.equal(txtName?.disabled, undefined);
   assert.equal(txtName?.backColorRaw, "ColorExpr");
   assert.equal(txtName?.backColor, undefined);
+  assert.equal(txtName?.gadgetFontRaw, "FontID(FontExpr)");
   assert.equal(txtName?.stateRaw, "StateExpr");
   assert.equal(txtName?.state, undefined);
 });

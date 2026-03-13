@@ -205,6 +205,7 @@ export interface GadgetPropertyArgs {
   stateRaw?: string;
   frontColorRaw?: string;
   backColorRaw?: string;
+  gadgetFontRaw?: string;
 }
 
 function isCreateBoundary(nameLower: string): boolean {
@@ -1215,7 +1216,7 @@ const TOOLBAR_ENTRY_NAMES = new Set([
 ]);
 const STATUSBAR_FIELD_NAMES = new Set(["addstatusbarfield", "statusbartext", "statusbarprogress", "statusbarimage"]);
 const IMAGE_ENTRY_NAMES = new Set(["loadimage", "catchimage"]);
-const GADGET_PROPERTY_NAMES = new Set(["hidegadget", "disablegadget", "gadgettooltip", "setgadgetstate", "setgadgetcolor"]);
+const GADGET_PROPERTY_NAMES = new Set(["hidegadget", "disablegadget", "gadgettooltip", "setgadgetstate", "setgadgetcolor", "setgadgetfont"]);
 
 function cloneGadgetForProperties(gadget: Gadget): Gadget {
   return {
@@ -1256,6 +1257,11 @@ function buildGadgetPropertyLines(gadgetKey: string, gadget: Gadget, indent: str
   const frontColorRaw = normalizeOptionalRaw(gadget.frontColorRaw);
   if (frontColorRaw) {
     lines.push(`${indent}SetGadgetColor(${gadgetKey}, #PB_Gadget_FrontColor, ${frontColorRaw})`);
+  }
+
+  const gadgetFontRaw = normalizeOptionalRaw(gadget.gadgetFontRaw);
+  if (gadgetFontRaw) {
+    lines.push(`${indent}SetGadgetFont(${gadgetKey}, ${gadgetFontRaw})`);
   }
 
   const stateRaw = normalizeOptionalRaw(gadget.stateRaw);
@@ -1326,6 +1332,7 @@ export function applyGadgetPropertyUpdate(
       gadget.stateRaw = normalizeOptionalRaw(args.stateRaw);
       gadget.frontColorRaw = normalizeOptionalRaw(args.frontColorRaw);
       gadget.backColorRaw = normalizeOptionalRaw(args.backColorRaw);
+      gadget.gadgetFontRaw = normalizeOptionalRaw(args.gadgetFontRaw);
       return true;
     },
     scanRange

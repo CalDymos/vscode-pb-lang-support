@@ -364,6 +364,7 @@ test("roundtrips gadget property update for visibility tooltip colors", () => {
     tooltipRaw: '"Name field"',
     backColorRaw: "$445566",
     frontColorRaw: "RGB(1, 2, 3)",
+    gadgetFontRaw: "FontID(#FontBody)",
   };
 
   const { parsed, patchedText } = patchAndReparse(text, (document) =>
@@ -377,11 +378,13 @@ test("roundtrips gadget property update for visibility tooltip colors", () => {
   assert.equal(txtName?.tooltip, "Name field");
   assert.equal(txtName?.backColorRaw, "$445566");
   assert.equal(txtName?.frontColorRaw, "RGB(1, 2, 3)");
+  assert.equal(txtName?.gadgetFontRaw, "FontID(#FontBody)");
   assert.match(patchedText, /HideGadget\(#TxtName, 0\)/);
   assert.match(patchedText, /DisableGadget\(#TxtName, 1\)/);
   assert.match(patchedText, /GadgetToolTip\(#TxtName, "Name field"\)/);
   assert.match(patchedText, /SetGadgetColor\(#TxtName, #PB_Gadget_BackColor, \$445566\)/);
   assert.match(patchedText, /SetGadgetColor\(#TxtName, #PB_Gadget_FrontColor, RGB\(1, 2, 3\)\)/);
+  assert.match(patchedText, /SetGadgetFont\(#TxtName, FontID\(#FontBody\)\)/);
 });
 
 test("roundtrips gadget property update for state and removes cleared lines", () => {
@@ -422,5 +425,5 @@ test("roundtrips gadget property update removing managed property lines", () => 
   assert.doesNotMatch(patchedText, /GadgetToolTip\(#TxtName,/);
   assert.doesNotMatch(patchedText, /SetGadgetColor\(#TxtName, #PB_Gadget_BackColor,/);
   assert.doesNotMatch(patchedText, /SetGadgetColor\(#TxtName, #PB_Gadget_FrontColor,/);
-  assert.match(patchedText, /SetGadgetFont\(#TxtName, FontID\(0\)\)/);
+  assert.doesNotMatch(patchedText, /SetGadgetFont\(#TxtName,/);
 });

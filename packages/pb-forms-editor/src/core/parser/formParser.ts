@@ -562,6 +562,7 @@ export function parseFormDocument(text: string): FormDocument {
         const g = findGadgetByReference(gadgetById, p[0]);
         if (p.length >= 2 && g) {
           const fontExpr = (p[1] ?? "").trim();
+          g.gadgetFontRaw = fontExpr || undefined;
           const m = /^FontID\((.+)\)$/i.exec(fontExpr);
           const fontId = m?.[1]?.trim();
           const font = fontId ? fontById.get(fontId) : undefined;
