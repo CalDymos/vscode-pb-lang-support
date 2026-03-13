@@ -1,5 +1,6 @@
 import {
   FormDocument,
+  FormImage,
   FormEnumerations,
   FormIssue,
   FormMenu,
@@ -81,7 +82,7 @@ export function parseFormDocument(text: string): FormDocument {
     enums
   };
 
-  const doc: FormDocument = { window: undefined, gadgets: [], menus: [], toolbars: [], statusbars: [], meta };
+  const doc: FormDocument = { window: undefined, images: [], gadgets: [], menus: [], toolbars: [], statusbars: [], meta };
 
   const gadgetById = new Map<string, Gadget>();
   const panelCurrentItem = new Map<string, number>();
@@ -155,6 +156,10 @@ export function parseFormDocument(text: string): FormDocument {
     if (curStatusBar) curStatusBar.fields.push(field);
   };
 
+  const addImage = (image: FormImage) => {
+    doc.images.push(image);
+  };
+
   const findStatusBarByReference = (rawId: string | undefined): FormStatusBar | undefined => {
     const ref = rawId?.trim();
     if (ref && ref.length) {
@@ -190,6 +195,18 @@ export function parseFormDocument(text: string): FormDocument {
     // Menu / ToolBar / StatusBar parsing (independent from gadget list nesting)
     // -----------------------------------------------------------------------------
     switch (c.name) {
+      case "LoadImage": {
+        const image = parseFormImage(false, c.assignedVar, c.args, c.range);
+        if (image) addImage(image);
+        break;
+      }
+
+      case "CatchImage": {
+        const image = parseFormImage(true, c.assignedVar, c.args, c.range);
+        if (image) addImage(image);
+        break;
+      }
+
       case "CreateMenu": {
         const p = splitParams(c.args);
         const id = (p[0] ?? "").trim();
@@ -1044,6 +1061,40 @@ function parseImageReference(raw: string | undefined): { imageRaw?: string; imag
   return {
     imageRaw,
     imageId: imageId.length ? imageId : undefined
+  };
+}
+
+function normalizeImageValue(raw: string | undefined, inline: boolean): string | undefined {
+  const valueRaw = raw?.trim();
+  if (!valueRaw) return undefined;
+
+  if (inline) {
+    const label = valueRaw.replace(/^\?+/, "").trim();
+    return label.length ? label : undefined;
+  }
+
+  return unquoteString(valueRaw) ?? (valueRaw.length ? valueRaw : undefined);
+}
+
+function parseFormImage(inline: boolean, assignedVar: string | undefined, args: string, source?: FormImage["source"]): FormImage | undefined {
+  const p = splitParams(args);
+  if (p.length < 2) return undefined;
+
+  const firstParam = (p[0] ?? "").trim();
+  const pbAny = firstParam === "#PB_Any";
+  const id = pbAny ? (assignedVar ?? "#PB_Any") : firstParam;
+  const imageRaw = (p[1] ?? "").trim();
+  if (!imageRaw.length) return undefined;
+
+  return {
+    id,
+    pbAny,
+    variable: pbAny ? (assignedVar ?? undefined) : firstParam.replace(/^#/, ""),
+    firstParam,
+    imageRaw,
+    image: normalizeImageValue(imageRaw, inline),
+    inline,
+    source
   };
 }
 

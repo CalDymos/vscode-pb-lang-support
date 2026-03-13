@@ -253,8 +253,20 @@ export interface FormStatusBar {
   source?: SourceRange;
 }
 
+export interface FormImage {
+  id: string;            // stable key for patching/references (assigned var for #PB_Any, else first param)
+  pbAny: boolean;
+  variable?: string;     // e.g. "imgSave" when #PB_Any is used with an assigned variable
+  firstParam: string;    // raw first param token
+  imageRaw: string;      // raw file or data-label expression from LoadImage/CatchImage
+  image?: string;        // normalized file path or data label (without leading '?')
+  inline: boolean;       // CatchImage(...) stores inline image data labels
+  source?: SourceRange;
+}
+
 export interface FormDocument {
   window?: FormWindow;
+  images: FormImage[];
   gadgets: Gadget[];
   menus: FormMenu[];
   toolbars: FormToolBar[];
