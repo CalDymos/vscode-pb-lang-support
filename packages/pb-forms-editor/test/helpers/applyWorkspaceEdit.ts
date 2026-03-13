@@ -1,4 +1,5 @@
 import type { WorkspaceEdit } from "vscode";
+import { Position as VscodePosition, Range as VscodeRange } from "vscode";
 import { FakeTextDocument, rangeOffsets } from "./fakeTextDocument";
 
 interface ShimEditOperation {
@@ -14,11 +15,16 @@ export function applyWorkspaceEditToText(originalText: string, edit: WorkspaceEd
 
   const normalized = operations.map(op => {
     if (op.kind === "insert") {
-      const pos = document.offsetAt(op.position!);
+      const pos = document.offsetAt(new VscodePosition(op.position!.line, op.position!.character));
       return { kind: op.kind, start: pos, end: pos, text: op.newText ?? "" };
     }
 
-    const { start, end } = rangeOffsets(document, op.range! as never);
+    const shimRange = op.range!;
+    const vsRange = new VscodeRange(
+      new VscodePosition(shimRange.start.line, shimRange.start.character),
+      new VscodePosition(shimRange.end.line, shimRange.end.character)
+    );
+    const { start, end } = rangeOffsets(document, vsRange);
     return {
       kind: op.kind,
       start,

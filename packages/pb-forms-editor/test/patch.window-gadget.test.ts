@@ -7,9 +7,11 @@ import { loadFixture } from "./helpers/loadFixture";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
 
-function patchAndReparse(text: string, editFactory: (document: FakeTextDocument) => ReturnType<typeof applyRectPatch>) {
+import type { TextDocument } from "vscode";
+
+function patchAndReparse(text: string, editFactory: (document: TextDocument) => ReturnType<typeof applyRectPatch>) {
   const document = new FakeTextDocument(text);
-  const edit = editFactory(document);
+  const edit = editFactory(document.asTextDocument());
   assert.ok(edit, "Expected a WorkspaceEdit result.");
   const patchedText = applyWorkspaceEditToText(text, edit!);
   return {

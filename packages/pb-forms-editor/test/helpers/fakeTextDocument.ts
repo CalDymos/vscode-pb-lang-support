@@ -1,7 +1,7 @@
-import type { Position, Range, TextDocument, TextLine } from "vscode";
+import type { Position, Range, TextLine } from "vscode";
 import { Position as VscodePosition, Range as VscodeRange } from "vscode";
 
-export class FakeTextDocument implements TextDocument {
+export class FakeTextDocument {
   public readonly uri: string;
   private text: string;
 
@@ -32,10 +32,13 @@ export class FakeTextDocument implements TextDocument {
     const endWithBreak = hasLineBreak ? endOffset + 1 : endOffset;
 
     return {
+      lineNumber: line,
       text,
+      firstNonWhitespaceCharacterIndex: text.search(/\S/),
+      isEmptyOrWhitespace: text.trim().length === 0,
       range: new VscodeRange(this.positionAt(startOffset), this.positionAt(endOffset)),
       rangeIncludingLineBreak: new VscodeRange(this.positionAt(startOffset), this.positionAt(endWithBreak)),
-    };
+    } as TextLine;
   }
 
   public positionAt(offset: number): Position {
@@ -79,6 +82,10 @@ export class FakeTextDocument implements TextDocument {
     }
 
     return starts;
+  }
+
+  public asTextDocument(): import("vscode").TextDocument {
+    return this as unknown as import("vscode").TextDocument;
   }
 }
 
