@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { scanCalls } from "../parser/callScanner";
 import { parseFormDocument } from "../parser/formParser";
 import { splitParams } from "../parser/tokenizer";
-import { FormImage, FormStatusBarField, Gadget, ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, ToolBarEntryKind } from "../model";
+import { FormImage, FormStatusBarField, FormWindow, Gadget, ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, ToolBarEntryKind } from "../model";
 
 type PbCall = ReturnType<typeof scanCalls>[number];
 
@@ -163,6 +163,12 @@ export interface GadgetColumnArgs {
   colRaw: string;
   titleRaw: string;
   widthRaw: string;
+}
+
+export interface WindowPropertyArgs {
+  hiddenRaw?: string;
+  disabledRaw?: string;
+  colorRaw?: string;
 }
 
 export interface MenuEntryArgs {
@@ -1216,6 +1222,7 @@ const TOOLBAR_ENTRY_NAMES = new Set([
 ]);
 const STATUSBAR_FIELD_NAMES = new Set(["addstatusbarfield", "statusbartext", "statusbarprogress", "statusbarimage"]);
 const IMAGE_ENTRY_NAMES = new Set(["loadimage", "catchimage"]);
+const WINDOW_PROPERTY_NAMES = new Set(["hidewindow", "disablewindow", "setwindowcolor"]);
 const GADGET_PROPERTY_NAMES = new Set(["hidegadget", "disablegadget", "gadgettooltip", "setgadgetstate", "setgadgetcolor", "setgadgetfont"]);
 
 function cloneGadgetForProperties(gadget: Gadget): Gadget {
@@ -1229,6 +1236,94 @@ function cloneGadgetForProperties(gadget: Gadget): Gadget {
 function normalizeOptionalRaw(raw: string | undefined): string | undefined {
   const trimmed = raw?.trim();
   return trimmed && trimmed.length ? trimmed : undefined;
+}
+
+function cloneWindowForProperties(window: FormWindow): FormWindow {
+  return { ...window };
+}
+
+function buildWindowPropertyLines(windowKey: string, window: FormWindow, indent: string): string {
+  const lines: string[] = [];
+
+  const hiddenRaw = normalizeOptionalRaw(window.hiddenRaw);
+  if (hiddenRaw) {
+    lines.push(`${indent}HideWindow(${windowKey}, ${hiddenRaw})`);
+  }
+
+  const disabledRaw = normalizeOptionalRaw(window.disabledRaw);
+  if (disabledRaw) {
+    lines.push(`${indent}DisableWindow(${windowKey}, ${disabledRaw})`);
+  }
+
+  const colorRaw = normalizeOptionalRaw(window.colorRaw);
+  if (colorRaw) {
+    lines.push(`${indent}SetWindowColor(${windowKey}, ${colorRaw})`);
+  }
+
+  return lines.length ? `${lines.join("\n")}\n` : "";
+}
+
+function applyWindowPropertyMutation(
+  document: vscode.TextDocument,
+  windowKey: string,
+  mutate: (window: FormWindow) => boolean,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const window = parsed.window;
+  if (!window || window.id !== windowKey) return undefined;
+
+  const nextWindow = cloneWindowForProperties(window);
+  if (!mutate(nextWindow)) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const openCall = findCallByStableKey(calls, windowKey, name => name === "OpenWindow");
+  if (!openCall) return undefined;
+
+  const proc = findProcedureBlock(document, openCall.range.line);
+  const propertyCalls = calls.filter(call => {
+    const nameLower = call.name.toLowerCase();
+    if (!WINDOW_PROPERTY_NAMES.has(nameLower)) return false;
+    if (firstParamOfCall(call.args) !== windowKey) return false;
+    if (!proc) return true;
+    return call.range.line >= proc.startLine && call.range.line <= proc.endLine;
+  }).sort((a, b) => a.range.line - b.range.line);
+
+  const anchorLine = propertyCalls.length ? propertyCalls[0].range.line : openCall.range.line + 1;
+  const indentSourceLine = propertyCalls.length ? propertyCalls[0].range.line : openCall.range.line;
+  const indent = getLineIndent(document, indentSourceLine);
+  const rebuilt = buildWindowPropertyLines(windowKey, nextWindow, indent);
+
+  const edit = new vscode.WorkspaceEdit();
+
+  for (const call of propertyCalls) {
+    edit.delete(document.uri, document.lineAt(call.range.line).rangeIncludingLineBreak);
+  }
+
+  if (rebuilt) {
+    edit.insert(document.uri, new vscode.Position(Math.min(document.lineCount, anchorLine), 0), rebuilt);
+  }
+
+  return propertyCalls.length || rebuilt ? edit : undefined;
+}
+
+export function applyWindowPropertyUpdate(
+  document: vscode.TextDocument,
+  windowKey: string,
+  args: WindowPropertyArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  return applyWindowPropertyMutation(
+    document,
+    windowKey,
+    window => {
+      window.hiddenRaw = normalizeOptionalRaw(args.hiddenRaw);
+      window.disabledRaw = normalizeOptionalRaw(args.disabledRaw);
+      window.colorRaw = normalizeOptionalRaw(args.colorRaw);
+      return true;
+    },
+    scanRange
+  );
 }
 
 function buildGadgetPropertyLines(gadgetKey: string, gadget: Gadget, indent: string): string {
