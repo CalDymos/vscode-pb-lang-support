@@ -66,6 +66,11 @@ export interface Gadget {
   min?: number;
   maxRaw?: string;       // raw maximum/range end expression from the gadget constructor
   max?: number;
+  gadget1Raw?: string;   // raw first child gadget reference for SplitterGadget(...)
+  gadget1Id?: string;    // normalized first child gadget id/reference
+  gadget2Raw?: string;   // raw second child gadget reference for SplitterGadget(...)
+  gadget2Id?: string;    // normalized second child gadget id/reference
+  splitterId?: string;   // normalized owning splitter gadget id for gadgets inside a splitter
   flagsExpr?: string;
   tooltipRaw?: string;   // raw tooltip expression from GadgetToolTip(...)
   tooltip?: string;

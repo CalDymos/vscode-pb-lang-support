@@ -46,6 +46,30 @@ test("parses fixtures/smoke/03-gadgets-basic.pbf", () => {
   assert.equal(pbAnyGadgets[0]?.variable, "gInput");
 });
 
+test("parses fixtures/smoke/07-container-splitter.pbf", () => {
+  const text = loadFixture("fixtures/smoke/07-container-splitter.pbf");
+  const doc = parseFormDocument(text);
+
+  const left = doc.gadgets.find((g) => g.id === "#TxtLeft");
+  const right = doc.gadgets.find((g) => g.id === "#TxtRight");
+  const split = doc.gadgets.find((g) => g.id === "#SplitMain");
+
+  assert.ok(left, "Expected #TxtLeft gadget.");
+  assert.ok(right, "Expected #TxtRight gadget.");
+  assert.ok(split, "Expected #SplitMain gadget.");
+
+  assert.equal(split?.kind, GADGET_KIND.SplitterGadget);
+  assert.equal(split?.gadget1Raw, "#TxtLeft");
+  assert.equal(split?.gadget1Id, "#TxtLeft");
+  assert.equal(split?.gadget2Raw, "#TxtRight");
+  assert.equal(split?.gadget2Id, "#TxtRight");
+  assert.equal(split?.flagsExpr, "#PB_Splitter_Vertical");
+
+  assert.equal(left?.splitterId, "#SplitMain");
+  assert.equal(right?.splitterId, "#SplitMain");
+  assert.equal(right?.textVariable, true);
+});
+
 test("parses samples/sample.pbf as a real-world smoke case", () => {
   const text = loadFixture("samples/sample.pbf");
   const doc = parseFormDocument(text);

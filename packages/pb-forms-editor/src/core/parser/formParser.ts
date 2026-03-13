@@ -569,6 +569,20 @@ export function parseFormDocument(text: string): FormDocument {
         });
       }
 
+      if (gadget.kind === GADGET_KIND.SplitterGadget) {
+        const gadget1 = findGadgetByReference(gadgetById, gadget.gadget1Raw ?? gadget.gadget1Id);
+        if (gadget1) {
+          gadget.gadget1Id = gadget1.id;
+          gadget1.splitterId = gadget.id;
+        }
+
+        const gadget2 = findGadgetByReference(gadgetById, gadget.gadget2Raw ?? gadget.gadget2Id);
+        if (gadget2) {
+          gadget.gadget2Id = gadget2.id;
+          gadget2.splitterId = gadget.id;
+        }
+      }
+
       doc.gadgets.push(gadget);
       gadgetById.set(gadget.id, gadget);
       pushImplicitParent(gadget);
@@ -936,6 +950,10 @@ function parseGadgetConstructorDetails(kind: GadgetKind, params: string[]): {
   min?: number;
   maxRaw?: string;
   max?: number;
+  gadget1Raw?: string;
+  gadget1Id?: string;
+  gadget2Raw?: string;
+  gadget2Id?: string;
   flagsExpr?: string;
 } {
   let textRaw: string | undefined;
@@ -946,6 +964,10 @@ function parseGadgetConstructorDetails(kind: GadgetKind, params: string[]): {
   let min: number | undefined;
   let maxRaw: string | undefined;
   let max: number | undefined;
+  let gadget1Raw: string | undefined;
+  let gadget1Id: string | undefined;
+  let gadget2Raw: string | undefined;
+  let gadget2Id: string | undefined;
 
   const assignRange = (minIndex: number, maxIndex: number) => {
     const parsedMin = parseNumericRaw(params[minIndex]);
@@ -1027,6 +1049,10 @@ function parseGadgetConstructorDetails(kind: GadgetKind, params: string[]): {
       break;
 
     case GADGET_KIND.SplitterGadget:
+      gadget1Raw = params[5]?.trim() || undefined;
+      gadget1Id = normalizeGadgetReference(gadget1Raw);
+      gadget2Raw = params[6]?.trim() || undefined;
+      gadget2Id = normalizeGadgetReference(gadget2Raw);
       flagsExpr = params[7]?.trim() || undefined;
       break;
 
@@ -1053,6 +1079,10 @@ function parseGadgetConstructorDetails(kind: GadgetKind, params: string[]): {
     min,
     maxRaw,
     max,
+    gadget1Raw,
+    gadget1Id,
+    gadget2Raw,
+    gadget2Id,
     flagsExpr
   };
 }
@@ -1147,6 +1177,10 @@ function parseGadgetCall(kind: GadgetKind, assignedVar: string | undefined, args
     min: ctor.min,
     maxRaw: ctor.maxRaw,
     max: ctor.max,
+    gadget1Raw: ctor.gadget1Raw,
+    gadget1Id: ctor.gadget1Id,
+    gadget2Raw: ctor.gadget2Raw,
+    gadget2Id: ctor.gadget2Id,
     flagsExpr: ctor.flagsExpr,
     source: range
   };
