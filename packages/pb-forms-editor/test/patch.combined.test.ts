@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 
 import { parseFormDocument } from "../src/core/parser/formParser";
 import {
+  applyImageDelete,
+  applyImageInsert,
+  applyImageUpdate,
   applyMenuEntryDelete,
   applyMenuEntryInsert,
   applyMenuEntryUpdate,
@@ -12,6 +15,7 @@ import {
   applyToolBarEntryDelete,
   applyToolBarEntryInsert,
   applyToolBarEntryUpdate,
+  type ImageArgs,
   type MenuEntryArgs,
   type StatusBarFieldArgs,
   type ToolBarEntryArgs,
@@ -34,6 +38,9 @@ import type { TextDocument } from "vscode";
 function patchAndReparse(
   text: string,
   editFactory: (document: TextDocument) =>
+    | ReturnType<typeof applyImageInsert>
+    | ReturnType<typeof applyImageUpdate>
+    | ReturnType<typeof applyImageDelete>
     | ReturnType<typeof applyMenuEntryInsert>
     | ReturnType<typeof applyMenuEntryUpdate>
     | ReturnType<typeof applyMenuEntryDelete>
@@ -76,6 +83,15 @@ function parseStatusFixture() {
   assert.ok(statusBar, "Expected #SbMain statusbar in statusbar fixture.");
   return { text, parsed, statusBar: statusBar! };
 }
+
+
+function parseImageFixture() {
+  const text = loadFixture("fixtures/smoke/11-images-crossrefs.pbf");
+  const parsed = parseFormDocument(text);
+
+  return { text, parsed };
+}
+
 
 test("roundtrips menu entry insert with shortcut and icon", () => {
   const { text } = parseFixture();
@@ -271,4 +287,61 @@ test("roundtrips statusbar field delete reindexes later decoration lines", () =>
   assert.doesNotMatch(patchedText, /StatusBarText\(#SbMain, 0, "Ready", #PB_StatusBar_Center\)/);
   assert.match(patchedText, /StatusBarProgress\(#SbMain, 0, 35, #PB_StatusBar_Raised\)/);
   assert.match(patchedText, /StatusBarImage\(#SbMain, 1, ImageID\(#ImgState\), #PB_StatusBar_BorderLess\)/);
+});
+
+
+test("roundtrips image insert after existing image block", () => {
+  const { text } = parseImageFixture();
+  const args: ImageArgs = {
+    inline: false,
+    idRaw: "#ImgClose",
+    imageRaw: '"close.png"',
+  };
+
+  const { parsed, patchedText } = patchAndReparse(text, (document) =>
+    applyImageInsert(document, args)
+  );
+
+  const insertedImage = parsed.images.find((image) => image.id === "#ImgClose");
+  assert.ok(insertedImage, "Expected inserted image entry.");
+  assert.equal(insertedImage?.inline, false);
+  assert.equal(insertedImage?.image, "close.png");
+  assert.match(patchedText, /LoadImage\(#ImgClose, "close\.png"\)/);
+});
+
+test("roundtrips image update for pbAny catch image", () => {
+  const { text, parsed } = parseImageFixture();
+  const sourceLine = parsed.images.find((image) => image.id === "imgSave")?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected source line for pbAny image.");
+
+  const args: ImageArgs = {
+    inline: true,
+    idRaw: "#PB_Any",
+    assignedVar: "imgSave",
+    imageRaw: "?ImgSaveData",
+  };
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
+    applyImageUpdate(document, sourceLine!, args)
+  );
+
+  const updatedImage = updated.images.find((image) => image.id === "imgSave");
+  assert.ok(updatedImage, "Expected updated pbAny image entry.");
+  assert.equal(updatedImage?.inline, true);
+  assert.equal(updatedImage?.imageRaw, "?ImgSaveData");
+  assert.equal(updatedImage?.image, "ImgSaveData");
+  assert.match(patchedText, /imgSave = CatchImage\(#PB_Any, \?ImgSaveData\)/);
+});
+
+test("roundtrips image delete", () => {
+  const { text, parsed } = parseImageFixture();
+  const sourceLine = parsed.images.find((image) => image.id === "#ImgState")?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected source line for inline image.");
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
+    applyImageDelete(document, sourceLine!)
+  );
+
+  assert.equal(updated.images.some((image) => image.id === "#ImgState"), false);
+  assert.doesNotMatch(patchedText, /CatchImage\(#ImgState, \?ImgState\)/);
 });

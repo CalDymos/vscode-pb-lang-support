@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { scanCalls } from "../parser/callScanner";
 import { parseFormDocument } from "../parser/formParser";
 import { splitParams } from "../parser/tokenizer";
-import { FormStatusBarField, ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, ToolBarEntryKind } from "../model";
+import { FormImage, FormStatusBarField, ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, ToolBarEntryKind } from "../model";
 
 type PbCall = ReturnType<typeof scanCalls>[number];
 
@@ -189,6 +189,13 @@ export interface StatusBarFieldArgs {
   flagsRaw?: string;
   progressBar?: boolean;
   progressRaw?: string;
+}
+
+export interface ImageArgs {
+  inline: boolean;
+  idRaw: string;
+  imageRaw: string;
+  assignedVar?: string;
 }
 
 function isCreateBoundary(nameLower: string): boolean {
@@ -1198,6 +1205,123 @@ const TOOLBAR_ENTRY_NAMES = new Set([
   "toolbartooltip"
 ]);
 const STATUSBAR_FIELD_NAMES = new Set(["addstatusbarfield", "statusbartext", "statusbarprogress", "statusbarimage"]);
+const IMAGE_ENTRY_NAMES = new Set(["loadimage", "catchimage"]);
+
+function buildImageLine(args: ImageArgs): string {
+  const procName = args.inline ? "CatchImage" : "LoadImage";
+  const idRaw = args.idRaw.trim();
+  const imageRaw = args.imageRaw.trim();
+
+  if (idRaw === "#PB_Any") {
+    const assignedVar = args.assignedVar?.trim();
+    if (assignedVar) {
+      return `${assignedVar} = ${procName}(#PB_Any, ${imageRaw})`;
+    }
+  }
+
+  return `${procName}(${idRaw}, ${imageRaw})`;
+}
+
+function cloneFormImage(image: FormImage): FormImage {
+  return {
+    id: image.id,
+    pbAny: image.pbAny,
+    variable: image.variable,
+    firstParam: image.firstParam,
+    imageRaw: image.imageRaw,
+    image: image.image,
+    inline: image.inline,
+    source: image.source,
+  };
+}
+
+function mapImageArgsToImage(args: ImageArgs): FormImage {
+  const firstParam = args.idRaw.trim();
+  const pbAny = firstParam === "#PB_Any";
+  const assignedVar = args.assignedVar?.trim();
+  const imageRaw = args.imageRaw.trim();
+  const normalized = args.inline
+    ? imageRaw.replace(/^\?+/, "").trim() || undefined
+    : (imageRaw.match(/^~?"([\s\S]*)"$/)?.[1]?.replace(/""/g, '"') ?? (imageRaw || undefined));
+
+  return {
+    id: pbAny ? (assignedVar || "#PB_Any") : firstParam,
+    pbAny,
+    variable: pbAny ? (assignedVar || undefined) : firstParam.replace(/^#/, ""),
+    firstParam,
+    imageRaw,
+    image: normalized,
+    inline: args.inline,
+  };
+}
+
+function findImageInsertLine(document: vscode.TextDocument, calls: PbCall[]): number {
+  let insertAfterLine = -1;
+
+  for (const call of calls) {
+    const nameLower = call.name.toLowerCase();
+    if (IMAGE_ENTRY_NAMES.has(nameLower)) {
+      insertAfterLine = call.range.line;
+    }
+  }
+
+  if (insertAfterLine >= 0) return insertAfterLine;
+
+  const windowCall = calls.find(c => c.name.toLowerCase() === "openwindow");
+  if (windowCall) return windowCall.range.line;
+
+  for (let i = 0; i < document.lineCount; i++) {
+    const text = document.lineAt(i).text;
+    if (/^\s*;\s*IDE Options/i.test(text)) {
+      return i - 1;
+    }
+  }
+
+  return document.lineCount - 1;
+}
+
+function applyImageMutation(
+  document: vscode.TextDocument,
+  mutate: (images: FormImage[]) => boolean,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const nextImages = parsed.images.map(cloneFormImage);
+  if (!mutate(nextImages)) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const imageCalls = calls.filter(c => IMAGE_ENTRY_NAMES.has(c.name.toLowerCase()));
+  const anchorLine = findImageInsertLine(document, calls);
+  const indentLine = imageCalls.length ? imageCalls[0].range.line : Math.max(anchorLine, 0);
+  const indent = getLineIndent(document, indentLine);
+  const rebuilt = nextImages.length
+    ? `${nextImages.map(image => `${indent}${buildImageLine({
+        inline: image.inline,
+        idRaw: image.firstParam,
+        imageRaw: image.imageRaw,
+        assignedVar: image.pbAny ? image.id : undefined,
+      })}`).join("\n")}\n`
+    : "";
+
+  const edit = new vscode.WorkspaceEdit();
+
+  if (imageCalls.length) {
+    const firstLine = imageCalls[0].range.line;
+    const lastLine = imageCalls[imageCalls.length - 1].range.line;
+    edit.replace(
+      document.uri,
+      new vscode.Range(new vscode.Position(firstLine, 0), document.lineAt(lastLine).rangeIncludingLineBreak.end),
+      rebuilt
+    );
+    return edit;
+  }
+
+  if (!rebuilt) return undefined;
+
+  const insertPos = new vscode.Position(Math.min(document.lineCount, anchorLine + 1), 0);
+  edit.insert(document.uri, insertPos, rebuilt);
+  return edit;
+}
 
 function findCreateCallById(calls: PbCall[], createNameLower: string, id: string): PbCall | undefined {
   return calls.find(c => c.name.toLowerCase() === createNameLower && firstParamOfCall(c.args) === id);
@@ -1568,6 +1692,61 @@ export function applyStatusBarFieldDelete(
       const index = fields.findIndex(field => field.source?.line === sourceLine);
       if (index < 0) return false;
       fields.splice(index, 1);
+      return true;
+    },
+    scanRange
+  );
+}
+
+
+export function applyImageInsert(
+  document: vscode.TextDocument,
+  args: ImageArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  return applyImageMutation(
+    document,
+    images => {
+      images.push(mapImageArgsToImage(args));
+      return true;
+    },
+    scanRange
+  );
+}
+
+export function applyImageUpdate(
+  document: vscode.TextDocument,
+  sourceLine: number,
+  args: ImageArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  return applyImageMutation(
+    document,
+    images => {
+      const index = images.findIndex(image => image.source?.line === sourceLine);
+      if (index < 0) return false;
+      images[index] = {
+        ...images[index],
+        ...mapImageArgsToImage(args),
+        source: images[index].source,
+      };
+      return true;
+    },
+    scanRange
+  );
+}
+
+export function applyImageDelete(
+  document: vscode.TextDocument,
+  sourceLine: number,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  return applyImageMutation(
+    document,
+    images => {
+      const index = images.findIndex(image => image.source?.line === sourceLine);
+      if (index < 0) return false;
+      images.splice(index, 1);
       return true;
     },
     scanRange
