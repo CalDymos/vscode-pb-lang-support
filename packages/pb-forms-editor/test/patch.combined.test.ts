@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { parseFormDocument } from "../src/core/parser/formParser";
 import {
+  applyGadgetPropertyUpdate,
   applyImageDelete,
   applyImageInsert,
   applyImageUpdate,
@@ -15,6 +16,7 @@ import {
   applyToolBarEntryDelete,
   applyToolBarEntryInsert,
   applyToolBarEntryUpdate,
+  type GadgetPropertyArgs,
   type ImageArgs,
   type MenuEntryArgs,
   type StatusBarFieldArgs,
@@ -38,6 +40,7 @@ import type { TextDocument } from "vscode";
 function patchAndReparse(
   text: string,
   editFactory: (document: TextDocument) =>
+    | ReturnType<typeof applyGadgetPropertyUpdate>
     | ReturnType<typeof applyImageInsert>
     | ReturnType<typeof applyImageUpdate>
     | ReturnType<typeof applyImageDelete>
@@ -87,6 +90,13 @@ function parseStatusFixture() {
 
 function parseImageFixture() {
   const text = loadFixture("fixtures/smoke/11-images-crossrefs.pbf");
+  const parsed = parseFormDocument(text);
+
+  return { text, parsed };
+}
+
+function parseGadgetFixture() {
+  const text = loadFixture("fixtures/smoke/12-visibility-colors-fonts.pbf");
   const parsed = parseFormDocument(text);
 
   return { text, parsed };
@@ -344,4 +354,73 @@ test("roundtrips image delete", () => {
 
   assert.equal(updated.images.some((image) => image.id === "#ImgState"), false);
   assert.doesNotMatch(patchedText, /CatchImage\(#ImgState, \?ImgState\)/);
+});
+
+test("roundtrips gadget property update for visibility tooltip colors", () => {
+  const { text } = parseGadgetFixture();
+  const args: GadgetPropertyArgs = {
+    hiddenRaw: "0",
+    disabledRaw: "1",
+    tooltipRaw: '"Name field"',
+    backColorRaw: "$445566",
+    frontColorRaw: "RGB(1, 2, 3)",
+  };
+
+  const { parsed, patchedText } = patchAndReparse(text, (document) =>
+    applyGadgetPropertyUpdate(document, "#TxtName", args)
+  );
+
+  const txtName = parsed.gadgets.find((g) => g.id === "#TxtName");
+  assert.ok(txtName, "Expected #TxtName gadget after property update.");
+  assert.equal(txtName?.hiddenRaw, "0");
+  assert.equal(txtName?.disabledRaw, "1");
+  assert.equal(txtName?.tooltip, "Name field");
+  assert.equal(txtName?.backColorRaw, "$445566");
+  assert.equal(txtName?.frontColorRaw, "RGB(1, 2, 3)");
+  assert.match(patchedText, /HideGadget\(#TxtName, 0\)/);
+  assert.match(patchedText, /DisableGadget\(#TxtName, 1\)/);
+  assert.match(patchedText, /GadgetToolTip\(#TxtName, "Name field"\)/);
+  assert.match(patchedText, /SetGadgetColor\(#TxtName, #PB_Gadget_BackColor, \$445566\)/);
+  assert.match(patchedText, /SetGadgetColor\(#TxtName, #PB_Gadget_FrontColor, RGB\(1, 2, 3\)\)/);
+});
+
+test("roundtrips gadget property update for state and removes cleared lines", () => {
+  const { text } = parseGadgetFixture();
+  const args: GadgetPropertyArgs = {
+    stateRaw: "0",
+  };
+
+  const { parsed, patchedText } = patchAndReparse(text, (document) =>
+    applyGadgetPropertyUpdate(document, "#ChkActive", args)
+  );
+
+  const chkActive = parsed.gadgets.find((g) => g.id === "#ChkActive");
+  assert.ok(chkActive, "Expected #ChkActive gadget after property update.");
+  assert.equal(chkActive?.stateRaw, "0");
+  assert.equal(chkActive?.state, 0);
+  assert.match(patchedText, /SetGadgetState\(#ChkActive, 0\)/);
+  assert.doesNotMatch(patchedText, /SetGadgetState\(#ChkActive, #PB_CheckBox_Checked\)/);
+});
+
+test("roundtrips gadget property update removing managed property lines", () => {
+  const { text } = parseGadgetFixture();
+  const args: GadgetPropertyArgs = {};
+
+  const { parsed, patchedText } = patchAndReparse(text, (document) =>
+    applyGadgetPropertyUpdate(document, "#TxtName", args)
+  );
+
+  const txtName = parsed.gadgets.find((g) => g.id === "#TxtName");
+  assert.ok(txtName, "Expected #TxtName gadget after property removal.");
+  assert.equal(txtName?.hiddenRaw, undefined);
+  assert.equal(txtName?.disabledRaw, undefined);
+  assert.equal(txtName?.tooltipRaw, undefined);
+  assert.equal(txtName?.backColorRaw, undefined);
+  assert.equal(txtName?.frontColorRaw, undefined);
+  assert.doesNotMatch(patchedText, /HideGadget\(#TxtName,/);
+  assert.doesNotMatch(patchedText, /DisableGadget\(#TxtName,/);
+  assert.doesNotMatch(patchedText, /GadgetToolTip\(#TxtName,/);
+  assert.doesNotMatch(patchedText, /SetGadgetColor\(#TxtName, #PB_Gadget_BackColor,/);
+  assert.doesNotMatch(patchedText, /SetGadgetColor\(#TxtName, #PB_Gadget_FrontColor,/);
+  assert.match(patchedText, /SetGadgetFont\(#TxtName, FontID\(0\)\)/);
 });

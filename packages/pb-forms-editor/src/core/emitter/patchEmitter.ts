@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { scanCalls } from "../parser/callScanner";
 import { parseFormDocument } from "../parser/formParser";
 import { splitParams } from "../parser/tokenizer";
-import { FormImage, FormStatusBarField, ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, ToolBarEntryKind } from "../model";
+import { FormImage, FormStatusBarField, Gadget, ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, ToolBarEntryKind } from "../model";
 
 type PbCall = ReturnType<typeof scanCalls>[number];
 
@@ -196,6 +196,15 @@ export interface ImageArgs {
   idRaw: string;
   imageRaw: string;
   assignedVar?: string;
+}
+
+export interface GadgetPropertyArgs {
+  hiddenRaw?: string;
+  disabledRaw?: string;
+  tooltipRaw?: string;
+  stateRaw?: string;
+  frontColorRaw?: string;
+  backColorRaw?: string;
 }
 
 function isCreateBoundary(nameLower: string): boolean {
@@ -1206,6 +1215,122 @@ const TOOLBAR_ENTRY_NAMES = new Set([
 ]);
 const STATUSBAR_FIELD_NAMES = new Set(["addstatusbarfield", "statusbartext", "statusbarprogress", "statusbarimage"]);
 const IMAGE_ENTRY_NAMES = new Set(["loadimage", "catchimage"]);
+const GADGET_PROPERTY_NAMES = new Set(["hidegadget", "disablegadget", "gadgettooltip", "setgadgetstate", "setgadgetcolor"]);
+
+function cloneGadgetForProperties(gadget: Gadget): Gadget {
+  return {
+    ...gadget,
+    items: gadget.items ? [...gadget.items] : undefined,
+    columns: gadget.columns ? [...gadget.columns] : undefined,
+  };
+}
+
+function normalizeOptionalRaw(raw: string | undefined): string | undefined {
+  const trimmed = raw?.trim();
+  return trimmed && trimmed.length ? trimmed : undefined;
+}
+
+function buildGadgetPropertyLines(gadgetKey: string, gadget: Gadget, indent: string): string {
+  const lines: string[] = [];
+
+  const hiddenRaw = normalizeOptionalRaw(gadget.hiddenRaw);
+  if (hiddenRaw) {
+    lines.push(`${indent}HideGadget(${gadgetKey}, ${hiddenRaw})`);
+  }
+
+  const disabledRaw = normalizeOptionalRaw(gadget.disabledRaw);
+  if (disabledRaw) {
+    lines.push(`${indent}DisableGadget(${gadgetKey}, ${disabledRaw})`);
+  }
+
+  const tooltipRaw = normalizeOptionalRaw(gadget.tooltipRaw);
+  if (tooltipRaw) {
+    lines.push(`${indent}GadgetToolTip(${gadgetKey}, ${tooltipRaw})`);
+  }
+
+  const backColorRaw = normalizeOptionalRaw(gadget.backColorRaw);
+  if (backColorRaw) {
+    lines.push(`${indent}SetGadgetColor(${gadgetKey}, #PB_Gadget_BackColor, ${backColorRaw})`);
+  }
+
+  const frontColorRaw = normalizeOptionalRaw(gadget.frontColorRaw);
+  if (frontColorRaw) {
+    lines.push(`${indent}SetGadgetColor(${gadgetKey}, #PB_Gadget_FrontColor, ${frontColorRaw})`);
+  }
+
+  const stateRaw = normalizeOptionalRaw(gadget.stateRaw);
+  if (stateRaw) {
+    lines.push(`${indent}SetGadgetState(${gadgetKey}, ${stateRaw})`);
+  }
+
+  return lines.length ? `${lines.join("\n")}\n` : "";
+}
+
+function applyGadgetPropertyMutation(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  mutate: (gadget: Gadget) => boolean,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const gadget = parsed.gadgets.find(entry => entry.id === gadgetKey);
+  if (!gadget) return undefined;
+
+  const nextGadget = cloneGadgetForProperties(gadget);
+  if (!mutate(nextGadget)) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const createCall = findCallByStableKey(calls, gadgetKey, name => /gadget$/i.test(name));
+  if (!createCall) return undefined;
+
+  const proc = findProcedureBlock(document, createCall.range.line);
+  const propertyCalls = calls.filter(call => {
+    const nameLower = call.name.toLowerCase();
+    if (!GADGET_PROPERTY_NAMES.has(nameLower)) return false;
+    if (firstParamOfCall(call.args) !== gadgetKey) return false;
+    if (!proc) return true;
+    return call.range.line >= proc.startLine && call.range.line <= proc.endLine;
+  }).sort((a, b) => a.range.line - b.range.line);
+
+  const anchorLine = propertyCalls.length ? propertyCalls[0].range.line : createCall.range.line + 1;
+  const indentSourceLine = propertyCalls.length ? propertyCalls[0].range.line : createCall.range.line;
+  const indent = getLineIndent(document, indentSourceLine);
+  const rebuilt = buildGadgetPropertyLines(gadgetKey, nextGadget, indent);
+
+  const edit = new vscode.WorkspaceEdit();
+
+  for (const call of propertyCalls) {
+    edit.delete(document.uri, document.lineAt(call.range.line).rangeIncludingLineBreak);
+  }
+
+  if (rebuilt) {
+    edit.insert(document.uri, new vscode.Position(Math.min(document.lineCount, anchorLine), 0), rebuilt);
+  }
+
+  return propertyCalls.length || rebuilt ? edit : undefined;
+}
+
+export function applyGadgetPropertyUpdate(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  args: GadgetPropertyArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  return applyGadgetPropertyMutation(
+    document,
+    gadgetKey,
+    gadget => {
+      gadget.hiddenRaw = normalizeOptionalRaw(args.hiddenRaw);
+      gadget.disabledRaw = normalizeOptionalRaw(args.disabledRaw);
+      gadget.tooltipRaw = normalizeOptionalRaw(args.tooltipRaw);
+      gadget.stateRaw = normalizeOptionalRaw(args.stateRaw);
+      gadget.frontColorRaw = normalizeOptionalRaw(args.frontColorRaw);
+      gadget.backColorRaw = normalizeOptionalRaw(args.backColorRaw);
+      return true;
+    },
+    scanRange
+  );
+}
 
 function buildImageLine(args: ImageArgs): string {
   const procName = args.inline ? "CatchImage" : "LoadImage";
