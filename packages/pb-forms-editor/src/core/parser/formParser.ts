@@ -25,6 +25,23 @@ import {
 import { splitParams, unquoteString, asNumber } from "./tokenizer";
 import { PbCall, scanCalls } from "./callScanner";
 
+const KNOWN_WINDOW_FLAGS = new Set([
+  "#PB_Window_SystemMenu",
+  "#PB_Window_MinimizeGadget",
+  "#PB_Window_MaximizeGadget",
+  "#PB_Window_SizeGadget",
+  "#PB_Window_Invisible",
+  "#PB_Window_TitleBar",
+  "#PB_Window_Tool",
+  "#PB_Window_BorderLess",
+  "#PB_Window_ScreenCentered",
+  "#PB_Window_WindowCentered",
+  "#PB_Window_Maximize",
+  "#PB_Window_Minimize",
+  "#PB_Window_NoGadgets",
+  "#PB_Window_NoActivate",
+]);
+
 function asGadgetKind(s: string): GadgetKind | undefined {
   return GADGET_KIND_SET.has(s as GadgetKind) ? (s as GadgetKind) : undefined;
 }
@@ -380,7 +397,8 @@ export function parseFormDocument(text: string): FormDocument {
 
       case "OpenWindow": {
         const procDefaults = findProcDefaultsAbove(lines, c.range.line);
-        const win = parseOpenWindow(c.assignedVar, c.args, procDefaults, c.range);
+        const eventFile = findEventFileAbove(lines, c.range.line);
+        const win = parseOpenWindow(c.assignedVar, c.args, procDefaults, c.range, eventFile);
         if (win) {
           if (!win.pbAny && win.firstParam.startsWith("#")) {
             win.enumValueRaw = winEnumValues[win.firstParam] ?? undefined;
@@ -426,6 +444,10 @@ export function parseFormDocument(text: string): FormDocument {
       gadgetById.set(gadget.id, gadget);
       pushImplicitParent(gadget);
     }
+  }
+
+  if (doc.window) {
+    applyWindowEventMetadata(lines, doc.window);
   }
 
   return doc;
@@ -587,6 +609,76 @@ function resolveProcDefault(raw: string | undefined, name: string, defs?: Record
   return t;
 }
 
+function findEventFileAbove(lines: string[], fromLine: number): string | undefined {
+  for (let i = Math.min(fromLine, lines.length - 1); i >= 0; i--) {
+    const line = lines[i] ?? "";
+    const includeMatch = /^\s*XIncludeFile\s+(~?"(?:""|[^"])*")/i.exec(line);
+    if (!includeMatch) continue;
+
+    return unquoteString(includeMatch[1]);
+  }
+
+  return undefined;
+}
+
+function applyWindowEventMetadata(lines: string[], win: FormWindow): void {
+  let inEventGadgetSelect = false;
+  let eventSelectDepth = 0;
+  let pendingWindowDefaultProc = false;
+
+  for (const rawLine of lines) {
+    const line = rawLine.split(";")[0]?.trim() ?? "";
+    if (!line.length) continue;
+
+    if (/^Select\s+EventMenu\s*\(\s*\)\s*$/i.test(line)) {
+      win.generateEventLoop = true;
+      continue;
+    }
+
+    if (/^Select\s+EventGadget\s*\(\s*\)\s*$/i.test(line)) {
+      win.generateEventLoop = true;
+      inEventGadgetSelect = true;
+      eventSelectDepth = 1;
+      pendingWindowDefaultProc = false;
+      continue;
+    }
+
+    if (!inEventGadgetSelect) continue;
+
+    if (/^Select\b/i.test(line)) {
+      eventSelectDepth++;
+      continue;
+    }
+
+    if (/^EndSelect\b/i.test(line)) {
+      eventSelectDepth--;
+      if (eventSelectDepth <= 0) {
+        inEventGadgetSelect = false;
+        pendingWindowDefaultProc = false;
+      }
+      continue;
+    }
+
+    if (/^Default\b/i.test(line)) {
+      pendingWindowDefaultProc = true;
+      continue;
+    }
+
+    if (!pendingWindowDefaultProc) continue;
+
+    if (/^Case\b/i.test(line)) {
+      pendingWindowDefaultProc = false;
+      continue;
+    }
+
+    const procMatch = /^([A-Za-z_][A-Za-z0-9_]*)\s*\(/.exec(line);
+    if (procMatch) {
+      win.eventProc = procMatch[1];
+      pendingWindowDefaultProc = false;
+    }
+  }
+}
+
 function normalizeWindowParent(raw: string | undefined): string | undefined {
   const parentRaw = raw?.trim();
   if (!parentRaw) return undefined;
@@ -638,7 +730,28 @@ function parsePbColor(raw: string | undefined): number | undefined {
   return ((b as number) << 16) | ((g as number) << 8) | (r as number);
 }
 
-function parseOpenWindow(assignedVar: string | undefined, args: string, procDefaults?: Record<string, string>, source?: FormWindow["source"]): FormDocument["window"] {
+function splitFlagExpr(flagsExpr: string | undefined): string[] {
+  const raw = flagsExpr?.trim();
+  if (!raw || raw === "0") return [];
+
+  return raw
+    .split("|")
+    .map((flag) => flag.trim())
+    .filter((flag) => flag.length > 0 && flag !== "0");
+}
+
+function extractWindowCustomFlags(flagsExpr: string | undefined): string[] | undefined {
+  const out: string[] = [];
+
+  for (const flag of splitFlagExpr(flagsExpr)) {
+    if (KNOWN_WINDOW_FLAGS.has(flag)) continue;
+    if (!out.includes(flag)) out.push(flag);
+  }
+
+  return out.length ? out : undefined;
+}
+
+function parseOpenWindow(assignedVar: string | undefined, args: string, procDefaults?: Record<string, string>, source?: FormWindow["source"], eventFile?: string): FormDocument["window"] {
   const p = splitParams(args);
   // OpenWindow(id, x, y, w, h, caption, flags, parent)
   if (p.length < 6) return undefined;
@@ -663,6 +776,7 @@ function parseOpenWindow(assignedVar: string | undefined, args: string, procDefa
   const captionVariable = literalCaption === undefined && captionRaw.length > 0;
   const flagsExpr = p[6]?.trim();
   const parent = normalizeWindowParent(p[7]);
+  const customFlags = extractWindowCustomFlags(flagsExpr);
 
   return {
     id,
@@ -679,6 +793,8 @@ function parseOpenWindow(assignedVar: string | undefined, args: string, procDefa
     title: caption,
     flagsExpr,
     parent,
+    eventFile,
+    customFlags,
     source
   };
 }
