@@ -2,7 +2,7 @@
   "name": "pb-forms-editor",
   "displayName": "PureBasic Forms Editor",
   "description": "Custom Editor for PureBasic .pbf forms with a webview designer.",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "publisher": "CalDymos",
   "author": {
     "name": "CalDymos"
@@ -202,8 +202,5 @@
     "@types/vscode": "^1.85.0",
     "@types/node": "^20.11.0",
     "typescript": "^5.4.0"
-  },
-  "extensionDependencies": [
-    "CalDymos.pb-lang-support"
-  ]
+  }
 }

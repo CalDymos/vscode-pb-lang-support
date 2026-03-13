@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.8.2
+
+### Fixed
+
+- Fixed: remove extensionDependencies to prevent activation failure
+
+## 0.8.1
+
+### Changed
+
+- updated README.md
+
 ## 0.8.0
 
 ### Added
