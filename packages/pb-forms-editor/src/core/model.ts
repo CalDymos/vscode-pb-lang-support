@@ -60,6 +60,12 @@ export interface Gadget {
   textRaw?: string;      // raw caption/text expression from the gadget constructor
   text?: string;
   textVariable?: boolean;
+  imageRaw?: string;     // raw image expression from the gadget constructor
+  imageId?: string;      // normalized image identifier extracted from ImageID(...)
+  minRaw?: string;       // raw minimum/range start expression from the gadget constructor
+  min?: number;
+  maxRaw?: string;       // raw maximum/range end expression from the gadget constructor
+  max?: number;
   flagsExpr?: string;
   tooltipRaw?: string;   // raw tooltip expression from GadgetToolTip(...)
   tooltip?: string;

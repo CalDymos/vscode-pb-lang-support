@@ -904,6 +904,159 @@ function extractWindowCustomFlags(flagsExpr: string | undefined): string[] | und
   return out.length ? out : undefined;
 }
 
+function parseImageReference(raw: string | undefined): { imageRaw?: string; imageId?: string } {
+  const imageRaw = raw?.trim();
+  if (!imageRaw) return {};
+
+  const imageIdMatch = /^ImageID\((.+)\)$/i.exec(imageRaw);
+  const imageId = imageIdMatch?.[1]?.trim() || imageRaw;
+
+  return {
+    imageRaw,
+    imageId: imageId.length ? imageId : undefined
+  };
+}
+
+function parseNumericRaw(raw: string | undefined): { raw?: string; value?: number } {
+  const valueRaw = raw?.trim();
+  if (!valueRaw) return {};
+
+  const value = asNumber(valueRaw);
+  return {
+    raw: valueRaw,
+    value: typeof value === "number" ? value : undefined
+  };
+}
+
+function parseGadgetConstructorDetails(kind: GadgetKind, params: string[]): {
+  textRaw?: string;
+  imageRaw?: string;
+  imageId?: string;
+  minRaw?: string;
+  min?: number;
+  maxRaw?: string;
+  max?: number;
+  flagsExpr?: string;
+} {
+  let textRaw: string | undefined;
+  let flagsExpr: string | undefined;
+  let imageRaw: string | undefined;
+  let imageId: string | undefined;
+  let minRaw: string | undefined;
+  let min: number | undefined;
+  let maxRaw: string | undefined;
+  let max: number | undefined;
+
+  const assignRange = (minIndex: number, maxIndex: number) => {
+    const parsedMin = parseNumericRaw(params[minIndex]);
+    const parsedMax = parseNumericRaw(params[maxIndex]);
+    minRaw = parsedMin.raw;
+    min = parsedMin.value;
+    maxRaw = parsedMax.raw;
+    max = parsedMax.value;
+  };
+
+  switch (kind) {
+    case GADGET_KIND.ButtonGadget:
+    case GADGET_KIND.CheckBoxGadget:
+    case GADGET_KIND.ExplorerComboGadget:
+    case GADGET_KIND.ExplorerListGadget:
+    case GADGET_KIND.ExplorerTreeGadget:
+    case GADGET_KIND.FrameGadget:
+    case GADGET_KIND.StringGadget:
+    case GADGET_KIND.TextGadget:
+    case GADGET_KIND.WebGadget:
+      textRaw = params[5]?.trim() || undefined;
+      flagsExpr = params[6]?.trim() || undefined;
+      break;
+
+    case GADGET_KIND.ButtonImageGadget:
+    case GADGET_KIND.ImageGadget: {
+      const parsedImage = parseImageReference(params[5]);
+      imageRaw = parsedImage.imageRaw;
+      imageId = parsedImage.imageId;
+      flagsExpr = params[6]?.trim() || undefined;
+      break;
+    }
+
+    case GADGET_KIND.CalendarGadget:
+      flagsExpr = params[6]?.trim() || undefined;
+      break;
+
+    case GADGET_KIND.CanvasGadget:
+    case GADGET_KIND.ComboBoxGadget:
+    case GADGET_KIND.ContainerGadget:
+    case GADGET_KIND.EditorGadget:
+    case GADGET_KIND.ListViewGadget:
+    case GADGET_KIND.OpenGLGadget:
+    case GADGET_KIND.TreeGadget:
+    case GADGET_KIND.WebViewGadget:
+      flagsExpr = params[5]?.trim() || undefined;
+      break;
+
+    case GADGET_KIND.DateGadget:
+      textRaw = params[5]?.trim() || undefined;
+      flagsExpr = params[7]?.trim() || undefined;
+      break;
+
+    case GADGET_KIND.HyperLinkGadget:
+      textRaw = params[5]?.trim() || undefined;
+      flagsExpr = params[7]?.trim() || undefined;
+      break;
+
+    case GADGET_KIND.ListIconGadget:
+      textRaw = params[5]?.trim() || undefined;
+      flagsExpr = params[7]?.trim() || undefined;
+      break;
+
+    case GADGET_KIND.ProgressBarGadget:
+    case GADGET_KIND.SpinGadget:
+    case GADGET_KIND.TrackBarGadget:
+      assignRange(5, 6);
+      flagsExpr = params[7]?.trim() || undefined;
+      break;
+
+    case GADGET_KIND.ScrollBarGadget:
+    case GADGET_KIND.ScrollAreaGadget:
+      assignRange(5, 6);
+      flagsExpr = params[8]?.trim() || undefined;
+      break;
+
+    case GADGET_KIND.ScintillaGadget:
+      textRaw = params[5]?.trim() || undefined;
+      break;
+
+    case GADGET_KIND.SplitterGadget:
+      flagsExpr = params[7]?.trim() || undefined;
+      break;
+
+    case GADGET_KIND.OptionGadget:
+      textRaw = params[5]?.trim() || undefined;
+      break;
+
+    case GADGET_KIND.IPAddressGadget:
+    case GADGET_KIND.PanelGadget:
+    case GADGET_KIND.Unknown:
+      break;
+
+    default:
+      textRaw = params[5]?.trim() || undefined;
+      flagsExpr = params[6]?.trim() || undefined;
+      break;
+  }
+
+  return {
+    textRaw,
+    imageRaw,
+    imageId,
+    minRaw,
+    min,
+    maxRaw,
+    max,
+    flagsExpr
+  };
+}
+
 function parseOpenWindow(assignedVar: string | undefined, args: string, procDefaults?: Record<string, string>, source?: FormWindow["source"], eventFile?: string): FormDocument["window"] {
   const p = splitParams(args);
   // OpenWindow(id, x, y, w, h, caption, flags, parent)
@@ -970,11 +1123,10 @@ function parseGadgetCall(kind: GadgetKind, assignedVar: string | undefined, args
   const w = asNumber(p[3] ?? "") ?? 0;
   const h = asNumber(p[4] ?? "") ?? 0;
 
-  const textRaw = p[5]?.trim();
-  const literalText = unquoteString(textRaw ?? "");
-  const text = literalText ?? (textRaw?.length ? textRaw : undefined);
-  const textVariable = literalText === undefined && !!textRaw?.length;
-  const flagsExpr = p[6]?.trim();
+  const ctor = parseGadgetConstructorDetails(kind, p);
+  const literalText = unquoteString(ctor.textRaw ?? "");
+  const text = literalText ?? (ctor.textRaw?.length ? ctor.textRaw : undefined);
+  const textVariable = literalText === undefined && !!ctor.textRaw?.length;
 
   return {
     id,
@@ -986,10 +1138,17 @@ function parseGadgetCall(kind: GadgetKind, assignedVar: string | undefined, args
     y,
     w,
     h,
-    textRaw,
+    textRaw: ctor.textRaw,
     text,
     textVariable,
-    flagsExpr,
+    imageRaw: ctor.imageRaw,
+    imageId: ctor.imageId,
+    minRaw: ctor.minRaw,
+    min: ctor.min,
+    maxRaw: ctor.maxRaw,
+    max: ctor.max,
+    flagsExpr: ctor.flagsExpr,
     source: range
   };
 }
+
