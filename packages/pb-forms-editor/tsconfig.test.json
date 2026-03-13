@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "out-test",
+    "lib": [
+      "ES2022"
+    ],
+    "types": []
+  },
+  "include": [
+    "src/core/model.ts",
+    "src/core/parser/**/*.ts",
+    "test/**/*.ts",
+    "test/types/**/*.d.ts",
+    "src/core/emitter/patchEmitter.ts"
+  ]
+}
