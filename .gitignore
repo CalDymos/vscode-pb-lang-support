@@ -7,6 +7,7 @@ pnpm-debug.log*
 
 # Build outputs
 out/
+out-test/
 dist/
 build/
 *.vsix

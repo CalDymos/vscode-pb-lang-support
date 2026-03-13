@@ -18,3 +18,5 @@ packages/**
 scripts/**
 samples/**
 .tmp/**
+out-test/**
+fixtures/**
