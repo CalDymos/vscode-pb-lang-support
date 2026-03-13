@@ -220,6 +220,14 @@ export interface GadgetPropertyArgs {
   gadgetFontRaw?: string;
 }
 
+export interface GadgetOpenArgs {
+  textRaw?: string;
+  imageRaw?: string;
+  minRaw?: string;
+  maxRaw?: string;
+  flagsExpr?: string;
+}
+
 function isCreateBoundary(nameLower: string): boolean {
   return (
     nameLower === "createmenu" ||
@@ -759,6 +767,111 @@ export function applyWindowOpenArgsUpdate(
   params[7] = parentRaw ?? "";
 
   while (params.length > 6 && !(params[params.length - 1]?.trim().length)) {
+    params.pop();
+  }
+
+  return replaceCallArgsEdit(document, call, params);
+}
+
+type GadgetCtorLayout = {
+  minParamCount: number;
+  textIndex?: number;
+  imageIndex?: number;
+  minIndex?: number;
+  maxIndex?: number;
+  flagsIndex?: number;
+};
+
+function getGadgetCtorLayout(name: string): GadgetCtorLayout | undefined {
+  switch (name) {
+    case "ButtonGadget":
+    case "CheckBoxGadget":
+    case "ExplorerComboGadget":
+    case "ExplorerListGadget":
+    case "ExplorerTreeGadget":
+    case "FrameGadget":
+    case "StringGadget":
+    case "TextGadget":
+    case "WebGadget":
+      return { minParamCount: 6, textIndex: 5, flagsIndex: 6 };
+
+    case "ButtonImageGadget":
+    case "ImageGadget":
+      return { minParamCount: 6, imageIndex: 5, flagsIndex: 6 };
+
+    case "CalendarGadget":
+      return { minParamCount: 6, flagsIndex: 6 };
+
+    case "CanvasGadget":
+    case "ComboBoxGadget":
+    case "ContainerGadget":
+    case "EditorGadget":
+    case "ListViewGadget":
+    case "OpenGLGadget":
+    case "TreeGadget":
+    case "WebViewGadget":
+      return { minParamCount: 5, flagsIndex: 5 };
+
+    case "DateGadget":
+    case "HyperLinkGadget":
+    case "ListIconGadget":
+      return { minParamCount: 7, textIndex: 5, flagsIndex: 7 };
+
+    case "ProgressBarGadget":
+    case "SpinGadget":
+    case "TrackBarGadget":
+      return { minParamCount: 7, minIndex: 5, maxIndex: 6, flagsIndex: 7 };
+
+    case "ScrollBarGadget":
+    case "ScrollAreaGadget":
+      return { minParamCount: 8, minIndex: 5, maxIndex: 6, flagsIndex: 8 };
+
+    case "OptionGadget":
+      return { minParamCount: 6, textIndex: 5 };
+
+    default:
+      return undefined;
+  }
+}
+
+function setRequiredCtorParam(params: string[], index: number | undefined, raw: string | undefined): void {
+  if (index === undefined || raw === undefined) return;
+  const normalized = normalizeOptionalRaw(raw);
+  if (!normalized) return;
+  while (params.length <= index) params.push("");
+  params[index] = normalized;
+}
+
+function setOptionalCtorParam(params: string[], index: number | undefined, raw: string | undefined): void {
+  if (index === undefined) return;
+  while (params.length <= index) params.push("");
+  params[index] = normalizeOptionalRaw(raw) ?? "";
+}
+
+export function applyGadgetOpenArgsUpdate(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  args: GadgetOpenArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const calls = scanDocumentCalls(document, scanRange);
+  const call = findCallByStableKey(calls, gadgetKey, name => /gadget$/i.test(name));
+
+  if (!call) return undefined;
+
+  const layout = getGadgetCtorLayout(call.name);
+  if (!layout) return undefined;
+
+  const params = splitParams(call.args);
+  if (params.length < 5) return undefined;
+
+  setRequiredCtorParam(params, layout.textIndex, args.textRaw);
+  setRequiredCtorParam(params, layout.imageIndex, args.imageRaw);
+  setRequiredCtorParam(params, layout.minIndex, args.minRaw);
+  setRequiredCtorParam(params, layout.maxIndex, args.maxRaw);
+  setOptionalCtorParam(params, layout.flagsIndex, args.flagsExpr);
+
+  while (params.length > layout.minParamCount && !(params[params.length - 1]?.trim().length)) {
     params.pop();
   }
 
