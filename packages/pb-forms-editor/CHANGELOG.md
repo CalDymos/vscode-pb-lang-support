@@ -10,7 +10,7 @@
 
 ### Changed
 
-- Documentation updated
+- updated README.md
 
 ## 0.8.0
 
