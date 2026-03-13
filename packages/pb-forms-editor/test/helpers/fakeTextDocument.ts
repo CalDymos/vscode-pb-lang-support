@@ -56,8 +56,21 @@ export class FakeTextDocument {
 
   public offsetAt(position: Position): number {
     const starts = this.getLineStarts();
-    const line = Math.max(0, Math.min(position.line, starts.length - 1));
-    return Math.min(starts[line] + position.character, this.text.length);
+
+    // EOF insert: line >= lineCount → return text.length
+    if (position.line >= starts.length) {
+      return this.text.length;
+    }
+
+    const line = Math.max(0, position.line);
+    const lineStart = starts[line];
+
+    // clamp character to the line's own length, not text.length
+    const lines = this.getLines();
+    const lineLength = lines[line]?.length ?? 0;
+    const character = Math.min(position.character, lineLength);
+
+    return lineStart + character;
   }
 
   private getLines(): string[] {
