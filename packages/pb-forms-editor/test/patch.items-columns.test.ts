@@ -16,8 +16,16 @@ import { loadFixture } from "./helpers/loadFixture";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
 
+// NOTE: TextDocument is imported as a type only — it is used as the parameter
+// type of editFactory so that patch emitter functions (which expect vscode.TextDocument)
+// are accepted without additional casts at each call site.
 import type { TextDocument } from "vscode";
 
+// NOTE: editFactory receives a vscode.TextDocument, not a FakeTextDocument directly.
+// The VSCode Language Server resolves @types/vscode regardless of tsconfig.test.json,
+// so passing FakeTextDocument where TextDocument is expected causes TS2345.
+// The cast is done once via document.asTextDocument() — do NOT change the parameter
+// type back to FakeTextDocument, and do NOT inline the cast at each test call site.
 function patchAndReparse(
   text: string,
   editFactory: (document: TextDocument) =>
