@@ -199,7 +199,7 @@
     "watch": "tsc -watch -p .",
     "compile:test": "tsc -p ./tsconfig.test.json && node ./test/scripts/copy-vscode-shim.js",
     "test": "npm run compile:test && node --test out-test/test/*.test.js",
-    "test:watch": "npm run compile:test && node --test --watch out-test/test/parser.smoke.test.js out-test/test/patch.window-gadget.test.js"
+    "test:watch": "npm run compile:test && node --test --watch out-test/test/parser.smoke.test.js out-test/test/patch.window-gadget.test.js out-test/test/patch.items-columns.test.js"
   },
   "devDependencies": {
     "@types/vscode": "^1.85.0",
