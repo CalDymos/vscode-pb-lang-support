@@ -46,6 +46,7 @@
     "ver:minor:core": "npm version minor -w packages/pb-project-core --no-git-tag-version && npm run ver:minor",
     "test:core": "npm -w packages/pb-project-core run test",
     "test:lang": "npm -w packages/pb-lang-support run test",
+    "test:forms": "npm -w packages/pb-forms-editor run test",
     "tag:all": "node scripts/tag-and-push.mjs all",
     "tag:suite": "node scripts/tag-and-push.mjs suite",
     "tag:forms": "node scripts/tag-and-push.mjs forms",
