@@ -294,3 +294,32 @@ EndProcedure
   assert.equal(image?.imageId, '#ImgAlt');
   assert.equal(image?.flagsExpr, undefined);
 });
+
+test("roundtrips gadget constructor arg updates for splitter references and flags", () => {
+  const text = loadFixture("fixtures/smoke/07-container-splitter.pbf");
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyGadgetOpenArgsUpdate(document, "#SplitMain", {
+      gadget1Raw: "#TxtRight",
+      gadget2Raw: "#TxtLeft",
+      flagsExpr: "#PB_Splitter_Separator",
+    })
+  );
+
+  assert.match(
+    patchedText,
+    /SplitterGadget\(#SplitMain, 10, 40, 250, 120, #TxtRight, #TxtLeft, #PB_Splitter_Separator\)/
+  );
+
+  const splitter = parsed.gadgets.find((g) => g.id === "#SplitMain");
+  assert.ok(splitter, "Expected patched splitter gadget.");
+  assert.equal(splitter?.gadget1Id, "#TxtRight");
+  assert.equal(splitter?.gadget2Id, "#TxtLeft");
+  assert.equal(splitter?.flagsExpr, "#PB_Splitter_Separator");
+
+  const left = parsed.gadgets.find((g) => g.id === "#TxtLeft");
+  const right = parsed.gadgets.find((g) => g.id === "#TxtRight");
+  assert.equal(left?.splitterId, "#SplitMain");
+  assert.equal(right?.splitterId, "#SplitMain");
+});
+
