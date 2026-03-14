@@ -701,9 +701,7 @@ export function parseFormDocument(text: string): FormDocument {
     }
   }
 
-  if (doc.window) {
-    applyWindowEventMetadata(lines, doc.window);
-  }
+  applyEventMetadata(lines, doc);
 
   return doc;
 }
@@ -876,60 +874,149 @@ function findEventFileAbove(lines: string[], fromLine: number): string | undefin
   return undefined;
 }
 
-function applyWindowEventMetadata(lines: string[], win: FormWindow): void {
+function applyEventMetadata(lines: string[], doc: FormDocument): void {
   let inEventGadgetSelect = false;
-  let eventSelectDepth = 0;
+  let eventGadgetDepth = 0;
   let pendingWindowDefaultProc = false;
+  let pendingGadgetCaseRaw: string | undefined;
+
+  let inEventMenuSelect = false;
+  let eventMenuDepth = 0;
+  let pendingMenuCaseRaw: string | undefined;
 
   for (const rawLine of lines) {
     const line = rawLine.split(";")[0]?.trim() ?? "";
     if (!line.length) continue;
 
     if (/^Select\s+EventMenu\s*\(\s*\)\s*$/i.test(line)) {
-      win.generateEventLoop = true;
+      if (doc.window) doc.window.generateEventLoop = true;
+      inEventMenuSelect = true;
+      eventMenuDepth = 1;
+      pendingMenuCaseRaw = undefined;
       continue;
     }
 
     if (/^Select\s+EventGadget\s*\(\s*\)\s*$/i.test(line)) {
-      win.generateEventLoop = true;
+      if (doc.window) doc.window.generateEventLoop = true;
       inEventGadgetSelect = true;
-      eventSelectDepth = 1;
+      eventGadgetDepth = 1;
       pendingWindowDefaultProc = false;
+      pendingGadgetCaseRaw = undefined;
+      continue;
+    }
+
+    if (inEventMenuSelect) {
+      if (/^Select\b/i.test(line)) {
+        eventMenuDepth++;
+        continue;
+      }
+
+      if (/^EndSelect\b/i.test(line)) {
+        eventMenuDepth--;
+        if (eventMenuDepth <= 0) {
+          inEventMenuSelect = false;
+          pendingMenuCaseRaw = undefined;
+        }
+        continue;
+      }
+
+      if (eventMenuDepth !== 1) continue;
+
+      const caseMatch = /^Case\b(.+)$/.exec(line);
+      if (caseMatch) {
+        pendingMenuCaseRaw = caseMatch[1]?.trim() || undefined;
+        continue;
+      }
+
+      if (pendingMenuCaseRaw) {
+        const procMatch = /^([A-Za-z_][A-Za-z0-9_]*)\s*\(/.exec(line);
+        if (procMatch) {
+          assignMenuOrToolBarEvent(doc, pendingMenuCaseRaw, procMatch[1]);
+          pendingMenuCaseRaw = undefined;
+        }
+      }
+
       continue;
     }
 
     if (!inEventGadgetSelect) continue;
 
     if (/^Select\b/i.test(line)) {
-      eventSelectDepth++;
+      eventGadgetDepth++;
       continue;
     }
 
     if (/^EndSelect\b/i.test(line)) {
-      eventSelectDepth--;
-      if (eventSelectDepth <= 0) {
+      eventGadgetDepth--;
+      if (eventGadgetDepth <= 0) {
         inEventGadgetSelect = false;
         pendingWindowDefaultProc = false;
+        pendingGadgetCaseRaw = undefined;
       }
+      continue;
+    }
+
+    if (eventGadgetDepth !== 1) continue;
+
+    const caseMatch = /^Case\b(.+)$/.exec(line);
+    if (caseMatch) {
+      pendingWindowDefaultProc = false;
+      pendingGadgetCaseRaw = caseMatch[1]?.trim() || undefined;
       continue;
     }
 
     if (/^Default\b/i.test(line)) {
       pendingWindowDefaultProc = true;
-      continue;
-    }
-
-    if (!pendingWindowDefaultProc) continue;
-
-    if (/^Case\b/i.test(line)) {
-      pendingWindowDefaultProc = false;
+      pendingGadgetCaseRaw = undefined;
       continue;
     }
 
     const procMatch = /^([A-Za-z_][A-Za-z0-9_]*)\s*\(/.exec(line);
-    if (procMatch) {
-      win.eventProc = procMatch[1];
+    if (!procMatch) continue;
+
+    if (pendingWindowDefaultProc) {
+      if (doc.window) doc.window.eventProc = procMatch[1];
       pendingWindowDefaultProc = false;
+      continue;
+    }
+
+    if (pendingGadgetCaseRaw) {
+      assignGadgetEvent(doc, pendingGadgetCaseRaw, procMatch[1]);
+      pendingGadgetCaseRaw = undefined;
+    }
+  }
+}
+
+function assignGadgetEvent(doc: FormDocument, rawCase: string, proc: string): void {
+  const caseRaw = rawCase.trim();
+  const caseNoHash = caseRaw.replace(/^#/, "");
+
+  for (const gadget of doc.gadgets) {
+    if (gadget.id === caseRaw || gadget.variable === caseRaw || gadget.variable === caseNoHash || gadget.id === "#" + caseNoHash) {
+      gadget.eventProc = proc;
+      break;
+    }
+  }
+}
+
+function assignMenuOrToolBarEvent(doc: FormDocument, rawCase: string, proc: string): void {
+  const caseRaw = rawCase.trim();
+
+  for (const menu of doc.menus) {
+    for (const entry of menu.entries) {
+      if (entry.idRaw === caseRaw) {
+        entry.event = proc;
+        return;
+      }
+    }
+  }
+
+  for (const toolBar of doc.toolbars) {
+    for (const entry of toolBar.entries) {
+      if (entry.idRaw === caseRaw) {
+        entry.event = proc;
+        return;
+      }
     }
   }
 }

@@ -89,6 +89,7 @@ export interface Gadget {
   hidden?: boolean;
   disabledRaw?: string;
   disabled?: boolean;
+  eventProc?: string;
   items?: GadgetItem[];
   columns?: GadgetColumn[];
   source?: SourceRange;
@@ -198,6 +199,7 @@ export interface FormMenuEntry {
   iconRaw?: string;      // raw ImageID(...) expression for menu icons
   iconId?: string;       // normalized image identifier for menu icons
   widthRaw?: string;     // for StatusBar fields (optional)
+  event?: string;
   source?: SourceRange;
 }
 
@@ -228,6 +230,7 @@ export interface FormToolBarEntry {
   text?: string;
   tooltip?: string;
   toggle?: boolean;
+  event?: string;
   source?: SourceRange;
 }
 

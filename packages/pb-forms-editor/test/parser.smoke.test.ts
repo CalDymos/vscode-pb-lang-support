@@ -365,6 +365,27 @@ test("parses fixtures/smoke/13-events-and-parent-window.pbf", () => {
   assert.deepEqual(doc.window?.customFlags, ["#PB_Window_CustomTag"]);
 });
 
+test("parses fixtures/smoke/15-object-event-bindings.pbf", () => {
+  const text = loadFixture("fixtures/smoke/15-object-event-bindings.pbf");
+  const doc = parseFormDocument(text);
+
+  assert.ok(doc.window, "Expected a parsed window.");
+  assert.equal(doc.window?.id, "#FrmObjectEvents");
+  assert.equal(doc.window?.generateEventLoop, true);
+
+  const btn = doc.gadgets.find((g) => g.id === "#BtnApply");
+  assert.ok(btn, "Expected #BtnApply gadget.");
+  assert.equal(btn?.eventProc, "HandleApply");
+
+  const menuItem = doc.menus[0]?.entries.find((entry) => entry.idRaw === "#MenuOpen");
+  assert.ok(menuItem, "Expected #MenuOpen menu item.");
+  assert.equal(menuItem?.event, "HandleMenuOpen");
+
+  const toolBarButton = doc.toolbars[0]?.entries.find((entry) => entry.idRaw === "#TbRefresh");
+  assert.ok(toolBarButton, "Expected #TbRefresh toolbar entry.");
+  assert.equal(toolBarButton?.event, "HandleToolbarRefresh");
+});
+
 test("deduplicates known and custom window flags separately", () => {
   const text = `; Form Designer for PureBasic - 6.20
 ;
