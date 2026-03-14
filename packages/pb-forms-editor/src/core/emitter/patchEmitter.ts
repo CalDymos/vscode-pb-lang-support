@@ -189,6 +189,14 @@ export interface WindowEventProcBlock {
   hasCaseBranches: boolean;
 }
 
+export interface EventCaseBranch {
+  caseLine: number;
+  caseRaw: string;
+  procLine?: number;
+  boundaryLine: number;
+}
+
+
 export interface MenuEntryArgs {
   kind: MenuEntryKind;
   idRaw?: string;
@@ -1493,6 +1501,128 @@ function findWindowEventGadgetBlock(document: vscode.TextDocument, proc: LineBlo
   return undefined;
 }
 
+function findEventCaseBranch(
+  document: vscode.TextDocument,
+  block: LineBlock,
+  matchesCase: (caseRaw: string) => boolean
+): EventCaseBranch | undefined {
+  let depth = 0;
+  let current: EventCaseBranch | undefined;
+
+  const finalizeCurrent = (boundaryLine: number): EventCaseBranch | undefined => {
+    if (!current) return undefined;
+    current.boundaryLine = boundaryLine;
+    const result = matchesCase(current.caseRaw) ? current : undefined;
+    current = undefined;
+    return result;
+  };
+
+  for (let i = block.startLine; i <= block.endLine; i++) {
+    const line = document.lineAt(i).text.split(";")[0]?.trim() ?? "";
+    if (!line.length) continue;
+
+    if (/^Select\b/i.test(line)) {
+      depth++;
+      continue;
+    }
+
+    if (/^EndSelect\b/i.test(line)) {
+      if (depth === 1) {
+        const branch = finalizeCurrent(i);
+        if (branch) return branch;
+      }
+
+      depth--;
+      if (depth <= 0) break;
+      continue;
+    }
+
+    if (depth !== 1) continue;
+
+    if (/^Default\b/i.test(line)) {
+      const branch = finalizeCurrent(i);
+      if (branch) return branch;
+      continue;
+    }
+
+    const caseMatch = /^Case\b(.+)$/.exec(line);
+    if (caseMatch) {
+      const branch = finalizeCurrent(i);
+      if (branch) return branch;
+
+      current = {
+        caseLine: i,
+        caseRaw: caseMatch[1]?.trim() ?? "",
+        boundaryLine: block.endLine,
+      };
+      continue;
+    }
+
+    if (!current || current.procLine !== undefined) continue;
+
+    if (/^[A-Za-z_][A-Za-z0-9_]*\s*\(/.test(line)) {
+      current.procLine = i;
+    }
+  }
+
+  return undefined;
+}
+
+function insertEventCaseBranch(
+  document: vscode.TextDocument,
+  insertLine: number,
+  selectLine: number,
+  caseRaw: string,
+  procName: string
+): vscode.WorkspaceEdit {
+  const selectIndent = getLineIndent(document, selectLine);
+  const caseIndent = `${selectIndent}  `;
+  const procIndent = `${caseIndent}  `;
+  const edit = new vscode.WorkspaceEdit();
+  edit.insert(document.uri, new vscode.Position(insertLine, 0), `${caseIndent}Case ${caseRaw}
+${procIndent}${procName}()
+`);
+  return edit;
+}
+
+function replaceEventProcLine(
+  document: vscode.TextDocument,
+  procLine: number,
+  procName: string
+): vscode.WorkspaceEdit {
+  const indent = getLineIndent(document, procLine);
+  const edit = new vscode.WorkspaceEdit();
+  edit.replace(document.uri, document.lineAt(procLine).range, `${indent}${procName}()`);
+  return edit;
+}
+
+function insertEventProcLineAfterCase(
+  document: vscode.TextDocument,
+  caseLine: number,
+  procName: string
+): vscode.WorkspaceEdit {
+  const procIndent = `${getLineIndent(document, caseLine)}  `;
+  const edit = new vscode.WorkspaceEdit();
+  edit.insert(document.uri, new vscode.Position(caseLine + 1, 0), `${procIndent}${procName}()
+`);
+  return edit;
+}
+
+function deleteEventCaseBranch(
+  document: vscode.TextDocument,
+  branch: EventCaseBranch
+): vscode.WorkspaceEdit {
+  const edit = new vscode.WorkspaceEdit();
+  edit.delete(
+    document.uri,
+    new vscode.Range(
+      new vscode.Position(branch.caseLine, 0),
+      new vscode.Position(branch.boundaryLine, 0)
+    )
+  );
+  return edit;
+}
+
 function findWindowEventMenuBlock(document: vscode.TextDocument, proc: LineBlock): LineBlock | undefined {
   let selectLine: number | undefined;
 
@@ -1666,6 +1796,134 @@ export function applyWindowEventProcUpdate(
     `${defaultIndent}Default\n${procIndent}${normalizedEventProc}()\n`
   );
   return edit;
+}
+
+export function applyGadgetEventProcUpdate(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  eventProc: string | undefined,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const gadget = parsed.gadgets.find((entry) => entry.id === gadgetKey);
+  if (!gadget) return undefined;
+  const window = parsed.window;
+  if (!window) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const openCall = findCallByStableKey(calls, window.id, (name) => name === "OpenWindow");
+  if (!openCall) return undefined;
+
+  const proc = findProcedureBlock(document, openCall.range.line);
+  if (!proc) return undefined;
+
+  const block = findWindowEventGadgetBlock(document, proc);
+  if (!block) return undefined;
+
+  const caseRaw = gadget.id;
+  const branch = findEventCaseBranch(document, { startLine: block.selectLine, endLine: block.endLine }, (raw) => raw === caseRaw);
+  const normalizedEventProc = normalizeOptionalRaw(eventProc);
+
+  if (branch) {
+    if (!normalizedEventProc) {
+      return deleteEventCaseBranch(document, branch);
+    }
+
+    if (branch.procLine !== undefined) {
+      return replaceEventProcLine(document, branch.procLine, normalizedEventProc);
+    }
+
+    return insertEventProcLineAfterCase(document, branch.caseLine, normalizedEventProc);
+  }
+
+  if (!normalizedEventProc) return undefined;
+
+  const insertLine = block.defaultLine ?? block.endLine;
+  return insertEventCaseBranch(document, insertLine, block.selectLine, caseRaw, normalizedEventProc);
+}
+
+export function applyMenuEntryEventUpdate(
+  document: vscode.TextDocument,
+  entryIdRaw: string,
+  eventProc: string | undefined,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const menuEntry = parsed.menus.flatMap((menu) => menu.entries).find((entry) => entry.idRaw === entryIdRaw);
+  if (!menuEntry) return undefined;
+  const window = parsed.window;
+  if (!window) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const openCall = findCallByStableKey(calls, window.id, (name) => name === "OpenWindow");
+  if (!openCall) return undefined;
+
+  const proc = findProcedureBlock(document, openCall.range.line);
+  if (!proc) return undefined;
+
+  const block = findWindowEventMenuBlock(document, proc);
+  if (!block) return undefined;
+
+  const branch = findEventCaseBranch(document, block, (raw) => raw === entryIdRaw);
+  const normalizedEventProc = normalizeOptionalRaw(eventProc);
+
+  if (branch) {
+    if (!normalizedEventProc) {
+      return deleteEventCaseBranch(document, branch);
+    }
+
+    if (branch.procLine !== undefined) {
+      return replaceEventProcLine(document, branch.procLine, normalizedEventProc);
+    }
+
+    return insertEventProcLineAfterCase(document, branch.caseLine, normalizedEventProc);
+  }
+
+  if (!normalizedEventProc) return undefined;
+
+  return insertEventCaseBranch(document, block.endLine, block.startLine, entryIdRaw, normalizedEventProc);
+}
+
+export function applyToolBarEntryEventUpdate(
+  document: vscode.TextDocument,
+  entryIdRaw: string,
+  eventProc: string | undefined,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const toolBarEntry = parsed.toolbars.flatMap((toolBar) => toolBar.entries).find((entry) => entry.idRaw === entryIdRaw);
+  if (!toolBarEntry) return undefined;
+  const window = parsed.window;
+  if (!window) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const openCall = findCallByStableKey(calls, window.id, (name) => name === "OpenWindow");
+  if (!openCall) return undefined;
+
+  const proc = findProcedureBlock(document, openCall.range.line);
+  if (!proc) return undefined;
+
+  const block = findWindowEventMenuBlock(document, proc);
+  if (!block) return undefined;
+
+  const branch = findEventCaseBranch(document, block, (raw) => raw === entryIdRaw);
+  const normalizedEventProc = normalizeOptionalRaw(eventProc);
+
+  if (branch) {
+    if (!normalizedEventProc) {
+      return deleteEventCaseBranch(document, branch);
+    }
+
+    if (branch.procLine !== undefined) {
+      return replaceEventProcLine(document, branch.procLine, normalizedEventProc);
+    }
+
+    return insertEventProcLineAfterCase(document, branch.caseLine, normalizedEventProc);
+  }
+
+  if (!normalizedEventProc) return undefined;
+
+  return insertEventCaseBranch(document, block.endLine, block.startLine, entryIdRaw, normalizedEventProc);
 }
 
 function buildWindowPropertyLines(windowKey: string, window: FormWindow, indent: string): string {
@@ -1925,7 +2183,7 @@ function findImageInsertLine(document: vscode.TextDocument, calls: PbCall[]): nu
 
   for (let i = 0; i < document.lineCount; i++) {
     const text = document.lineAt(i).text;
-    if (/^\s*;\s*IDE Options/i.test(text)) {
+    if (/^\s*;\s*IDE Options\b/i.test(text)) {
       return i - 1;
     }
   }
