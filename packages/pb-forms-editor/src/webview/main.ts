@@ -150,6 +150,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   insertToolBarEntry: "insertToolBarEntry",
   updateToolBarEntry: "updateToolBarEntry",
   deleteToolBarEntry: "deleteToolBarEntry",
+  setToolBarEntryEvent: "setToolBarEntryEvent",
 
   insertStatusBarField: "insertStatusBarField",
   updateStatusBarField: "updateStatusBarField",
@@ -188,6 +189,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertToolBarEntry; toolBarId: string; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateToolBarEntry; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBarEntry; toolBarId: string; sourceLine: number; kind: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setToolBarEntryEvent; entryIdRaw: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertStatusBarField; statusBarId: string; widthRaw: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateStatusBarField; statusBarId: string; sourceLine: number; widthRaw: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBarField; statusBarId: string; sourceLine: number };
@@ -1790,7 +1792,23 @@ function renderProps() {
           }
         : undefined;
 
-      box.appendChild(miniRow(line, editFn, delFn));
+      const eventFn = e.idRaw
+        ? () => {
+            const cur = e.event ?? "";
+            const value = prompt("Event proc (blank clears)", cur);
+            if (value === null) return;
+            const trimmed = value.trim();
+            e.event = trimmed || undefined;
+            post({
+              type: "setToolBarEntryEvent",
+              entryIdRaw: e.idRaw!,
+              eventProc: trimmed.length ? trimmed : undefined
+            });
+            renderProps();
+          }
+        : undefined;
+
+      box.appendChild(miniRow(line, editFn, delFn, { label: "Event", onClick: eventFn }));
     }
     propsEl.appendChild(section("Structure"));
     propsEl.appendChild(box);

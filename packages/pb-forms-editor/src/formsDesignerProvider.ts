@@ -18,6 +18,7 @@ import {
   applyStatusBarFieldInsert,
   applyStatusBarFieldUpdate,
   applyToolBarEntryDelete,
+  applyToolBarEntryEventUpdate,
   applyToolBarEntryInsert,
   applyToolBarEntryUpdate,
   applyWindowEnumValuePatch,
@@ -74,6 +75,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   insertToolBarEntry: "insertToolBarEntry",
   updateToolBarEntry: "updateToolBarEntry",
   deleteToolBarEntry: "deleteToolBarEntry",
+  setToolBarEntryEvent: "setToolBarEntryEvent",
 
   insertStatusBarField: "insertStatusBarField",
   updateStatusBarField: "updateStatusBarField",
@@ -105,6 +107,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertToolBarEntry; toolBarId: string; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateToolBarEntry; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBarEntry; toolBarId: string; sourceLine: number; kind: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setToolBarEntryEvent; entryIdRaw: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertStatusBarField; statusBarId: string; widthRaw: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateStatusBarField; statusBarId: string; sourceLine: number; widthRaw: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBarField; statusBarId: string; sourceLine: number };
@@ -315,6 +318,11 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         case WEBVIEW_TO_EXT_MSG_TYPE.setMenuEntryEvent: {
           const edit = applyMenuEntryEventUpdate(document, msg.entryIdRaw, msg.eventProc, sr);
           await applyEditOrError(edit, `Could not patch event proc for menu entry '${msg.entryIdRaw}'. No matching EventMenu block found${rangeInfo}.`);
+          return;
+        }
+        case WEBVIEW_TO_EXT_MSG_TYPE.setToolBarEntryEvent: {
+          const edit = applyToolBarEntryEventUpdate(document, msg.entryIdRaw, msg.eventProc, sr);
+          await applyEditOrError(edit, `Could not patch event proc for toolbar entry '${msg.entryIdRaw}'. No matching EventMenu block found${rangeInfo}.`);
           return;
         }
 
