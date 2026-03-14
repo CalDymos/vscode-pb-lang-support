@@ -177,6 +177,10 @@ export interface WindowOpenArgs {
   parentRaw?: string;
 }
 
+export interface WindowEventArgs {
+  eventFileRaw?: string;
+}
+
 export interface MenuEntryArgs {
   kind: MenuEntryKind;
   idRaw?: string;
@@ -1402,6 +1406,60 @@ function normalizeOptionalRaw(raw: string | undefined): string | undefined {
 
 function cloneWindowForProperties(window: FormWindow): FormWindow {
   return { ...window };
+}
+
+function findWindowEventIncludeLine(document: vscode.TextDocument, procedureStartLine: number): number | undefined {
+  for (let i = Math.min(procedureStartLine - 1, document.lineCount - 1); i >= 0; i--) {
+    const line = document.lineAt(i).text;
+
+    if (/^\s*Procedure\b/i.test(line) || /^\s*EndProcedure\b/i.test(line)) {
+      break;
+    }
+
+    if (/^\s*XIncludeFile\s+(~?"(?:""|[^"])*")/i.test(line)) {
+      return i;
+    }
+  }
+
+  return undefined;
+}
+
+export function applyWindowEventUpdate(
+  document: vscode.TextDocument,
+  windowKey: string,
+  args: WindowEventArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const window = parsed.window;
+  if (!window || window.id !== windowKey) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const openCall = findCallByStableKey(calls, windowKey, name => name === "OpenWindow");
+  if (!openCall) return undefined;
+
+  const proc = findProcedureBlock(document, openCall.range.line);
+  if (!proc) return undefined;
+
+  const includeLine = findWindowEventIncludeLine(document, proc.startLine);
+  const eventFileRaw = normalizeOptionalRaw(args.eventFileRaw);
+  const edit = new vscode.WorkspaceEdit();
+
+  if (includeLine !== undefined) {
+    if (!eventFileRaw) {
+      edit.delete(document.uri, document.lineAt(includeLine).rangeIncludingLineBreak);
+      return edit;
+    }
+
+    const indent = getLineIndent(document, includeLine);
+    edit.replace(document.uri, document.lineAt(includeLine).range, `${indent}XIncludeFile ${eventFileRaw}`);
+    return edit;
+  }
+
+  if (!eventFileRaw) return undefined;
+
+  edit.insert(document.uri, new vscode.Position(proc.startLine, 0), `XIncludeFile ${eventFileRaw}\n`);
+  return edit;
 }
 
 function buildWindowPropertyLines(windowKey: string, window: FormWindow, indent: string): string {
