@@ -605,3 +605,32 @@ EndProcedure
   assert.equal(toolBarButton?.event, "HandleToolbarRefresh");
   assert.equal(parsed.window?.generateEventLoop, true);
 });
+
+
+test("roundtrips toolbar entry event update inside existing EventMenu block", () => {
+  const text = loadFixture("fixtures/smoke/15-object-event-bindings.pbf");
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyToolBarEntryEventUpdate(document, "#TbRefresh", "HandleToolbarRefreshUpdated")
+  );
+
+  assert.match(patchedText, /Case #TbRefresh\s+HandleToolbarRefreshUpdated\(\)/s);
+  const toolBarButton = parsed.toolbars[0]?.entries.find((entry) => entry.idRaw === "#TbRefresh");
+  assert.equal(toolBarButton?.event, "HandleToolbarRefreshUpdated");
+});
+
+test("roundtrips toolbar entry event removal without touching menu events", () => {
+  const text = loadFixture("fixtures/smoke/15-object-event-bindings.pbf");
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyToolBarEntryEventUpdate(document, "#TbRefresh", undefined)
+  );
+
+  assert.doesNotMatch(patchedText, /Case #TbRefresh/);
+  assert.match(patchedText, /Case #MenuOpen\s+HandleMenuOpen\(\)/s);
+  const toolBarButton = parsed.toolbars[0]?.entries.find((entry) => entry.idRaw === "#TbRefresh");
+  assert.equal(toolBarButton?.event, undefined);
+  const menuItem = parsed.menus[0]?.entries.find((entry) => entry.idRaw === "#MenuOpen");
+  assert.equal(menuItem?.event, "HandleMenuOpen");
+  assert.equal(parsed.window?.generateEventLoop, true);
+});
