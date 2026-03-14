@@ -29,6 +29,8 @@ type Gadget = {
   w: number;
   h: number;
   text?: string;
+  imageRaw?: string;
+  imageId?: string;
   eventProc?: string;
   items?: GadgetItem[];
   columns?: GadgetColumn[];
@@ -60,6 +62,7 @@ type MenuEntry = {
   textRaw?: string;
   text?: string;
   iconRaw?: string;
+  iconId?: string;
   widthRaw?: string;
   event?: string;
   source?: SourceRange;
@@ -77,6 +80,13 @@ type ToolbarModel = {
 
 type StatusbarField = {
   widthRaw: string;
+  textRaw?: string;
+  text?: string;
+  imageRaw?: string;
+  imageId?: string;
+  flagsRaw?: string;
+  progressBar?: boolean;
+  progressRaw?: string;
   source?: SourceRange;
 };
 
@@ -241,6 +251,7 @@ type DesignerSelection =
   | { kind: "toolbar"; id: string }
   | { kind: "statusbar"; id: string }
   | { kind: "images" }
+  | { kind: "image"; id: string }
   | null;
 let selection: DesignerSelection = null;
 
@@ -309,6 +320,65 @@ function menuEntryKindHint(): string {
 
 function toolBarEntryKindHint(): string {
   return `Entry kind (${PBFD_SYMBOLS.toolBarEntryKinds.join("/")})`;
+}
+
+type ImageUsage = {
+  label: string;
+  select: DesignerSelection;
+};
+
+function collectImageUsages(imageId: string): ImageUsage[] {
+  const usages: ImageUsage[] = [];
+
+  for (const g of model.gadgets ?? []) {
+    if (g.imageId === imageId) {
+      usages.push({
+        label: `Gadget ${g.id} (${g.kind})`,
+        select: { kind: "gadget", id: g.id }
+      });
+    }
+  }
+
+  for (const m of model.menus ?? []) {
+    (m.entries ?? []).forEach((e, idx) => {
+      if (e.iconId === imageId) {
+        const entryName = e.idRaw ?? e.text ?? e.textRaw ?? `entry ${idx}`;
+        usages.push({
+          label: `Menu ${m.id} :: ${e.kind} ${entryName}`,
+          select: { kind: "menu", id: m.id }
+        });
+      }
+    });
+  }
+
+  for (const t of model.toolbars ?? []) {
+    (t.entries ?? []).forEach((e, idx) => {
+      if (e.iconId === imageId) {
+        const entryName = e.idRaw ?? e.text ?? e.textRaw ?? `entry ${idx}`;
+        usages.push({
+          label: `ToolBar ${t.id} :: ${e.kind} ${entryName}`,
+          select: { kind: "toolbar", id: t.id }
+        });
+      }
+    });
+  }
+
+  for (const sb of model.statusbars ?? []) {
+    (sb.fields ?? []).forEach((f, idx) => {
+      if (f.imageId === imageId) {
+        usages.push({
+          label: `StatusBar ${sb.id} :: Field ${idx}`,
+          select: { kind: "statusbar", id: sb.id }
+        });
+      }
+    });
+  }
+
+  return usages;
+}
+
+function countImageUsages(imageId: string): number {
+  return collectImageUsages(imageId).length;
 }
 
 function toPbString(v: string): string {
@@ -1209,7 +1279,7 @@ function renderList() {
   listEl.innerHTML = "";
 
   type Node = {
-    kind: "window" | "gadget" | "menu" | "toolbar" | "statusbar" | "images" | "menuEntry";
+    kind: "window" | "gadget" | "menu" | "toolbar" | "statusbar" | "images" | "image" | "menuEntry";
     id: string;
     label: string;
     selectable: boolean;
@@ -1227,6 +1297,7 @@ function renderList() {
     if (n.kind === "toolbar") return sel.kind === "toolbar" && sel.id === n.id;
     if (n.kind === "statusbar") return sel.kind === "statusbar" && sel.id === n.id;
     if (n.kind === "images") return sel.kind === "images";
+    if (n.kind === "image") return sel.kind === "image" && sel.id === n.id;
     return false;
   };
 
@@ -1328,8 +1399,8 @@ function renderList() {
     children: (model.images ?? []).map((img, idx) => ({
       kind: "menuEntry" as const,
       id: `image:${idx}`,
-      label: `${img.pbAny && img.variable ? `${img.variable} = ` : ""}${img.inline ? "CatchImage" : "LoadImage"}  ${img.firstParam}  ${img.imageRaw}`,
-      selectable: false,
+      label: `${img.pbAny && img.variable ? `${img.variable} = ` : ""}${img.inline ? "CatchImage" : "LoadImage"}  ${img.firstParam}  ${img.imageRaw}  refs:${countImageUsages(img.id)}`,
+      selectable: true,
       children: []
     }))
   }];
@@ -1393,6 +1464,7 @@ function renderList() {
       else if (n.kind === "toolbar") selection = { kind: "toolbar", id: n.id };
       else if (n.kind === "statusbar") selection = { kind: "statusbar", id: n.id };
       else if (n.kind === "images") selection = { kind: "images" };
+      else if (n.kind === "image") selection = { kind: "image", id: n.id };
       render();
       renderListAndParentSelector();
       renderProps();
@@ -1546,6 +1618,36 @@ function renderProps() {
     r.appendChild(b2);
     r.appendChild(b3);
     return r;
+  };
+
+  const promptImageArgs = (current?: ImageEntry): { inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string } | undefined => {
+    const procName = prompt("Image kind (LoadImage/CatchImage)", current?.inline ? "CatchImage" : "LoadImage");
+    if (procName === null) return undefined;
+    const normalizedProc = procName.trim().toLowerCase();
+    const inline = normalizedProc === "catchimage";
+    if (normalizedProc !== "loadimage" && normalizedProc !== "catchimage") return undefined;
+
+    const firstParamDefault = current?.firstParam ?? (current?.pbAny ? "#PB_Any" : current?.id ?? "#ImgNew");
+    const firstParam = prompt("First param (#ImgName or #PB_Any)", firstParamDefault);
+    if (firstParam === null) return undefined;
+    const idRaw = firstParam.trim();
+    if (!idRaw.length) return undefined;
+
+    let assignedVar: string | undefined;
+    if (idRaw.toLowerCase() === "#pb_any") {
+      const assigned = prompt("Assigned variable", current?.variable ?? current?.id ?? "imgNew");
+      if (assigned === null) return undefined;
+      const trimmedAssigned = assigned.trim();
+      if (!trimmedAssigned.length) return undefined;
+      assignedVar = trimmedAssigned;
+    }
+
+    const imageRawPrompt = prompt("Image raw", current?.imageRaw ?? '"image.png"');
+    if (imageRawPrompt === null) return undefined;
+    const imageRaw = imageRawPrompt.trim();
+    if (!imageRaw.length) return undefined;
+
+    return { inline, idRaw, imageRaw, assignedVar };
   };
 
   if (sel.kind === "window") {
@@ -2047,38 +2149,78 @@ function renderProps() {
     return;
   }
 
+  if (sel.kind === "image") {
+    const img = (model.images ?? []).find(entry => entry.id === sel.id);
+    if (!img) {
+      propsEl.innerHTML = "<div class='muted'>Image not found</div>";
+      return;
+    }
+
+    const usages = collectImageUsages(img.id);
+    const canPatch = typeof img.source?.line === "number";
+
+    propsEl.appendChild(row("Id", readonlyInput(img.id)));
+    propsEl.appendChild(row("Kind", readonlyInput(img.inline ? "CatchImage" : "LoadImage")));
+    propsEl.appendChild(row("First Param", readonlyInput(img.firstParam)));
+    propsEl.appendChild(row("Image Raw", readonlyInput(img.imageRaw)));
+    propsEl.appendChild(row("References", readonlyInput(String(usages.length))));
+
+    propsEl.appendChild(section("References"));
+    if (!usages.length) {
+      propsEl.appendChild(mutedNote("This image is currently not referenced by any parsed gadget, menu, toolbar or statusbar field."));
+    } else {
+      const refsBox = miniList();
+      for (const usage of usages) {
+        refsBox.appendChild(miniRow(usage.label, undefined, undefined, {
+          label: "Go",
+          onClick: () => {
+            selection = usage.select;
+            render();
+            renderListAndParentSelector();
+            renderProps();
+          }
+        }));
+      }
+      propsEl.appendChild(refsBox);
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "miniActions";
+
+    const editBtn = document.createElement("button");
+    editBtn.textContent = "Edit Image";
+    editBtn.disabled = !canPatch;
+    editBtn.onclick = () => {
+      if (!canPatch) return;
+      const next = promptImageArgs(img);
+      if (!next) return;
+      post({
+        type: "updateImage",
+        sourceLine: img.source!.line,
+        inline: next.inline,
+        idRaw: next.idRaw,
+        imageRaw: next.imageRaw,
+        assignedVar: next.assignedVar
+      });
+    };
+
+    const delBtn = document.createElement("button");
+    delBtn.textContent = "Delete Image";
+    delBtn.disabled = !canPatch;
+    delBtn.onclick = () => {
+      if (!canPatch) return;
+      if (!confirm("Delete this image entry?")) return;
+      post({ type: "deleteImage", sourceLine: img.source!.line });
+    };
+
+    actions.appendChild(editBtn);
+    actions.appendChild(delBtn);
+    propsEl.appendChild(actions);
+    return;
+  }
+
   if (sel.kind === "images") {
     propsEl.appendChild(row("Entries", readonlyInput(String(model.images?.length ?? 0))));
-
-    const promptImageArgs = (current?: ImageEntry): { inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string } | undefined => {
-      const procName = prompt("Image kind (LoadImage/CatchImage)", current?.inline ? "CatchImage" : "LoadImage");
-      if (procName === null) return undefined;
-      const normalizedProc = procName.trim().toLowerCase();
-      const inline = normalizedProc === "catchimage";
-      if (normalizedProc !== "loadimage" && normalizedProc !== "catchimage") return undefined;
-
-      const firstParamDefault = current?.firstParam ?? (current?.pbAny ? "#PB_Any" : current?.id ?? "#ImgNew");
-      const firstParam = prompt("First param (#ImgName or #PB_Any)", firstParamDefault);
-      if (firstParam === null) return undefined;
-      const idRaw = firstParam.trim();
-      if (!idRaw.length) return undefined;
-
-      let assignedVar: string | undefined;
-      if (idRaw.toLowerCase() === "#pb_any") {
-        const assigned = prompt("Assigned variable", current?.variable ?? current?.id ?? "imgNew");
-        if (assigned === null) return undefined;
-        const trimmedAssigned = assigned.trim();
-        if (!trimmedAssigned.length) return undefined;
-        assignedVar = trimmedAssigned;
-      }
-
-      const imageRawPrompt = prompt("Image raw", current?.imageRaw ?? '"image.png"');
-      if (imageRawPrompt === null) return undefined;
-      const imageRaw = imageRawPrompt.trim();
-      if (!imageRaw.length) return undefined;
-
-      return { inline, idRaw, imageRaw, assignedVar };
-    };
 
     const box = miniList();
     for (const img of model.images ?? []) {
