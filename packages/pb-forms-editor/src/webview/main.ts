@@ -145,6 +145,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   insertMenuEntry: "insertMenuEntry",
   updateMenuEntry: "updateMenuEntry",
   deleteMenuEntry: "deleteMenuEntry",
+  setMenuEntryEvent: "setMenuEntryEvent",
 
   insertToolBarEntry: "insertToolBarEntry",
   updateToolBarEntry: "updateToolBarEntry",
@@ -183,6 +184,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertMenuEntry; menuId: string; kind: string; idRaw?: string; textRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateMenuEntry; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteMenuEntry; menuId: string; sourceLine: number; kind: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setMenuEntryEvent; entryIdRaw: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertToolBarEntry; toolBarId: string; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateToolBarEntry; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBarEntry; toolBarId: string; sourceLine: number; kind: string }
@@ -1441,7 +1443,12 @@ function renderProps() {
     return d;
   };
 
-  const miniRow = (label: string, onEdit?: () => void, onDelete?: () => void) => {
+  const miniRow = (
+    label: string,
+    onEdit?: () => void,
+    onDelete?: () => void,
+    extra?: { label: string; onClick?: () => void }
+  ) => {
     const r = document.createElement("div");
     r.className = "miniRow";
 
@@ -1458,9 +1465,16 @@ function renderProps() {
     b2.disabled = !onDelete;
     b2.onclick = () => onDelete?.();
 
+    const b3 = document.createElement("button");
+    b3.textContent = extra?.label ?? "";
+    b3.disabled = !extra?.onClick;
+    b3.hidden = !extra;
+    b3.onclick = () => extra?.onClick?.();
+
     r.appendChild(l);
     r.appendChild(b1);
     r.appendChild(b2);
+    r.appendChild(b3);
     return r;
   };
 
@@ -1628,7 +1642,23 @@ function renderProps() {
           }
         : undefined;
 
-      box.appendChild(miniRow(line, editFn, delFn));
+      const eventFn = e.idRaw
+        ? () => {
+            const cur = e.event ?? "";
+            const value = prompt("Event proc (blank clears)", cur);
+            if (value === null) return;
+            const trimmed = value.trim();
+            e.event = trimmed || undefined;
+            post({
+              type: "setMenuEntryEvent",
+              entryIdRaw: e.idRaw!,
+              eventProc: trimmed.length ? trimmed : undefined
+            });
+            renderProps();
+          }
+        : undefined;
+
+      box.appendChild(miniRow(line, editFn, delFn, { label: "Event", onClick: eventFn }));
     }
     propsEl.appendChild(section("Structure"));
     propsEl.appendChild(box);

@@ -9,6 +9,7 @@ import {
   applyGadgetItemInsert,
   applyGadgetItemUpdate,
   applyMenuEntryDelete,
+  applyMenuEntryEventUpdate,
   applyMenuEntryInsert,
   applyMenuEntryUpdate,
   applyMovePatch,
@@ -68,6 +69,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   insertMenuEntry: "insertMenuEntry",
   updateMenuEntry: "updateMenuEntry",
   deleteMenuEntry: "deleteMenuEntry",
+  setMenuEntryEvent: "setMenuEntryEvent",
 
   insertToolBarEntry: "insertToolBarEntry",
   updateToolBarEntry: "updateToolBarEntry",
@@ -99,6 +101,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertMenuEntry; menuId: string; kind: string; idRaw?: string; textRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateMenuEntry; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteMenuEntry; menuId: string; sourceLine: number; kind: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setMenuEntryEvent; entryIdRaw: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertToolBarEntry; toolBarId: string; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateToolBarEntry; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBarEntry; toolBarId: string; sourceLine: number; kind: string }
@@ -307,6 +310,11 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         case WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc: {
           const edit = applyGadgetEventProcUpdate(document, msg.id, msg.eventProc, sr);
           await applyEditOrError(edit, `Could not patch event proc for gadget '${msg.id}'. No matching EventGadget block found${rangeInfo}.`);
+          return;
+        }
+        case WEBVIEW_TO_EXT_MSG_TYPE.setMenuEntryEvent: {
+          const edit = applyMenuEntryEventUpdate(document, msg.entryIdRaw, msg.eventProc, sr);
+          await applyEditOrError(edit, `Could not patch event proc for menu entry '${msg.entryIdRaw}'. No matching EventMenu block found${rangeInfo}.`);
           return;
         }
 
