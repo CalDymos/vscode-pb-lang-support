@@ -32,6 +32,11 @@ export type DesignerOsSkin = typeof DESIGNER_OS_SKIN_KEY[keyof typeof DESIGNER_O
 export type WarningPresenceMode = typeof WARNING_PRESENCE_MODE_KEY[keyof typeof WARNING_PRESENCE_MODE_KEY];
 export type WarningVersionUpgradeMode = typeof WARNING_VERSION_UPGRADE_MODE_KEY[keyof typeof WARNING_VERSION_UPGRADE_MODE_KEY];
 
+/**
+ * Designer settings shared between the extension host and the webview.
+ * Read via readDesignerSettings() on the extension side;
+ * received as part of the init/settings messages on the webview side.
+ */
 export interface DesignerSettings {
   showGrid: boolean;
   gridMode: GridMode;

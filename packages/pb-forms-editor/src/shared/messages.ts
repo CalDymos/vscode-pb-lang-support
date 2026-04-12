@@ -1,3 +1,11 @@
+/**
+ * Shared message contract between the VS Code extension host and the webview.
+ * Both sides import from this module — never define message types locally.
+ *
+ * Naming convention:
+ *   EXT_TO_WEBVIEW_MSG_TYPE  — messages sent by the extension → webview
+ *   WEBVIEW_TO_EXT_MSG_TYPE  — messages sent by the webview → extension
+ */
 import type { MenuEntryMovePlacement } from "./menu";
 import type { DesignerSettings } from "./designer-settings";
 
@@ -83,6 +91,9 @@ export const WEBVIEW_TO_EXT_MSG_TYPE = {
   rebindStatusBarFieldImage: "rebindStatusBarFieldImage"
 } as const;
 
+/** Colors read from HKCU\Control Panel\Colors (win32 only).
+ *  Sent once on startup via windowsSystemColors; fields not covered
+ *  by CSS system-color keywords. All values are "R G B" space-separated. */
 export type WindowsRegistryColors = {
   menu: string;
   menuBar: string;
@@ -96,6 +107,8 @@ export type WindowsRegistryColors = {
   scrollbar: string;
 };
 
+/** Messages from the extension host to the webview.
+ *  ModelT is FormDocument on the extension side, Model on the webview side. */
 export type ExtensionToWebviewMessage<ModelT = unknown> =
   | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.init; model: ModelT; settings?: DesignerSettings }
   | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.settings; settings: DesignerSettings }
@@ -103,6 +116,7 @@ export type ExtensionToWebviewMessage<ModelT = unknown> =
   | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.windowsSystemColors; colors: WindowsRegistryColors }
   | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.procedureNames; names: string[] };
 
+  /** Messages from the webview to the extension host. */
 export type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.ready }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveGadget; id: string; x: number; y: number }
