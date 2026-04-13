@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.19.1
+
+### Fixed
+
+- Fixed `getWordAtPosition` to include the trailing `$` sigil so string
+  variables (`myVar$`) are resolved correctly in hover, definition and
+  rename providers.
+- Fixed scope-manager variable patterns to capture the `$` sigil
+  (`\w+\$?`) so `Global`, `Protected`, `Static`, `Define`, `Shared`,
+  `Threaded` and implicit local assignments are parsed correctly for
+  string variables.
+- Fixed type inference in scope-manager and hover-provider: variables
+  and parameters whose name ends with `$` now default to type `s`
+  (string) instead of `i` / `unknown` when no explicit type suffix is
+  present.
+- Fixed parameter regex in `parseParameters` to capture the `$` sigil,
+  preventing string parameters from being treated as unknown-typed.
+- Fixed `deprecated-api-validator` to detect all occurrences of
+  `#PB_String_InPlace` on a line (not just the first) by switching to a
+  `/g`-flag loop; corrected diagnostic character ranges by accounting for
+  leading whitespace in the original line.
+- Fixed `space-buffer-validator` API-call detection by replacing the
+  flat `[^)]*`-regex with a character-level paren-depth scanner
+  (`findApiCallWithAddr`) that handles nested calls such as
+  `SomeApi_(Len(buf$), @buf$)` and correctly ignores `@` operands inside
+  string literals.
+- Fixed syntax-highlighting capture group for `$`-suffix string
+  variables: the `$` is now part of capture group 1 so the full token
+  (including sigil) receives the `variable.name.purebasic` scope.
+  
 ## 0.19.0
 
 ### Added
