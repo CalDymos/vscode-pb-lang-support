@@ -53,7 +53,10 @@
     "tag:lang": "node scripts/tag-and-push.mjs lang",
     "tag:pbp": "node scripts/tag-and-push.mjs pbp",
     "backmerge": "node scripts/backmerge-main-into-devel.mjs",
-    "strip:forms": "node scripts/strip-preview-assets-meta.mjs"
+    "strip:forms": "node scripts/strip-preview-assets-meta.mjs",
+    "scrape:builtins": "node -w packages/pb-lang-support run scrape:builtins",
+    "scrape:constants": "node -w packages/pb-lang-support run scrape:constants",
+    "scrape": "npm run scrape:builtins && npm run scrape:constants"
   },
   "devDependencies": {
     "rimraf": "^6.1.3"
