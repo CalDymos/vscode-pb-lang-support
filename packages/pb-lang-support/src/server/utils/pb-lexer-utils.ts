@@ -165,6 +165,11 @@ export function getWordAtPosition(line: string, character: number): string | nul
         end++;
     }
 
+    // Include trailing '$' for PureBasic string variables (e.g. myVar$)
+    if (end < line.length && line[end] === '$') {
+        end++;
+    }
+
     if (start === end) return null;
 
     return line.substring(start, end);

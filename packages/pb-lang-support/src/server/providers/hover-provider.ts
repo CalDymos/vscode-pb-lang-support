@@ -277,7 +277,7 @@ function findSymbolInfo(
             if (varMatch) {
                 const scope = varMatch[1];
                 const varName = varMatch[2];
-                const varType = varMatch[3] || 'unknown';
+                const varType = varMatch[3] || (word.endsWith('$') ? 's' : 'unknown');
 
                 return {
                     type: 'variable',

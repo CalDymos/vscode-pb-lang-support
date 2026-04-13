@@ -153,7 +153,7 @@
         {
           "comment": "FIX: Added '$' suffix support for legacy string variables (name$).",
           "name": "variable.other.purebasic",
-          "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\$",
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*\\$)",
           "captures": {
             "1": { "name": "variable.name.purebasic" }
           }
