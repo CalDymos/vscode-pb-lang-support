@@ -101,6 +101,17 @@ export function hasFunctionMapping(functionName: string): boolean {
 }
 
 /**
+ * Precomputed map: wildcard prefix → constants that start with that prefix.
+ * Built once at module load; avoids repeated scans during completion requests.
+ */
+const wildcardExpansionMap = new Map<string, readonly string[]>(
+    wildcardPrefixes.map(p => [
+        p,
+        Object.freeze(allBuiltinConstants.filter(c => c.startsWith(p)))
+    ])
+);
+
+/**
  * Expands wildcard prefixes against allBuiltinConstants.
  * Returns all constants that start with at least one of the wildcard prefixes.
  *
@@ -119,10 +130,14 @@ export function expandWildcards(
 
 /**
  * Returns constants for a parameter, with wildcards fully resolved.
+ * Wildcard entries are expanded via the precomputed {@link wildcardExpansionMap};
+ * a `Set` is used as the accumulator so overlapping wildcards never produce
+ * duplicate constants in the result.
  *
  * @param functionName  Function name (case-insensitive).
  * @param paramIndex    1-based parameter index.
- * @returns             Resolved constant array, or `undefined` if no mapping.
+ * @returns             Resolved, deduplicated constant array, or `undefined`
+ *                      if no mapping exists for this function/parameter.
  */
 export function getParamConstantsResolved(
     functionName: string,
@@ -131,19 +146,16 @@ export function getParamConstantsResolved(
     const raw = getParamConstants(functionName, paramIndex);
     if (!raw) { return undefined; }
 
-    const result: string[] = [];
+    const seen = new Set<string>();
     for (const entry of raw) {
-        // Check whether this entry is a known wildcard (stored as plain prefix
-        // in wildcardPrefixes after stripping the trailing '*')
-        const matchedPrefix = wildcardPrefixes.find(p => entry === p || entry === p + '*');
-        if (matchedPrefix) {
-            // Expand: all constants starting with this prefix
-            allBuiltinConstants.forEach(c => {
-                if (c.startsWith(matchedPrefix)) { result.push(c); }
-            });
+        // Normalise: accept both bare prefix and explicit "prefix*" notation.
+        const prefix = entry.endsWith('*') ? entry.slice(0, -1) : entry;
+        const expanded = wildcardExpansionMap.get(prefix);
+        if (expanded) {
+            for (const c of expanded) { seen.add(c); }
         } else {
-            result.push(entry);
+            seen.add(entry);
         }
     }
-    return result;
+    return Array.from(seen);
 }
