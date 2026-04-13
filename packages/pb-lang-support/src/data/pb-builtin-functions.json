@@ -11913,14 +11913,14 @@
   },
   "ReplaceString": {
     "signature": "String$ = ReplaceString(String$, StringToFind$, ReplacementString$ [, Mode [, StartPosition [, NbOccurrences]]])",
-    "description": "Try to find any occurrences of 'StringToFind$' in the given 'String$' and replace them  with 'ReplacementString$'.",
+    "description": "Finds all occurrences of 'StringToFind$' in the given 'String$' and replaces them with 'ReplacementString$'.\n\nNote: The #PB_String_InPlace flag was removed in PureBasic 6.40. Use a$ = ReplaceString(a$, ...) instead.",
     "parameters": [
-      "String$ - The string to use.",
+      "String$ - The string to search in.",
       "StringToFind$ - The string to find.",
       "ReplacementString$ - The string to use as replacement.",
-      "Mode (optional) - It can be a combination of the following values: \n #PB_String_CaseSensitive : Case sensitive search (a=a) (default)\n #PB_String_NoCase : Case insensitive search (A=a)\n #PB_String_InPlace: In-place replacing. This means that the string is replaced directly in the memory.\n The 'StringToFind$' and 'ReplacementString$' parameter must have the same length. This is\n a dangerous option, for advanced users only. The advantage is the very high speed of the\n replacement. When using this option, the result of ReplaceString() has to be ignored.\n Only the string passed in parameter 'String$' is changed and it's the result.\n Fixed strings are not supported using this mode.",
-      "StartPosition (optional) - Specifies the character position to start the replacement. The first character position is 1. \nIf omitted the whole string is used.",
-      "NbOccurrences (optional) - Specifies how many strings should be replaced before stopping the operation. If omitted, all strings \nare replaced."
+      "Mode (optional) - Can be one of:\n #PB_String_CaseSensitive : Case sensitive search (a=a) (default)\n #PB_String_NoCase : Case insensitive search (A=a)",
+      "StartPosition (optional) - Character position to start replacement (first position is 1). If omitted, the whole string is searched.",
+      "NbOccurrences (optional) - How many occurrences to replace before stopping. If omitted, all occurrences are replaced."
     ],
     "docUrl": "https://www.purebasic.com/documentation/string/replacestring.html"
   },
