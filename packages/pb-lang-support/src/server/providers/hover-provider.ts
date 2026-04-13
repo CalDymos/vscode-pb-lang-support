@@ -16,6 +16,7 @@ import { parsePureBasicConstantDefinition} from '../utils/constants';
 import { stripInlineComment, escapeRegExp, getWordAtPosition, normalizeConstantName, getModuleSymbolAtPosition, getBaseType, getStructAccessFromLine, normalizeVarName } from '../utils/pb-lexer-utils';
 import type { ApiFunctionListing } from '../utils/api-function-listing';
 import { findBuiltin } from '../utils/builtin-functions';
+import { findResidentSymbol } from '../indexer/residents-index';
 
 /** Single entry in the built-in function data file. */
 
@@ -98,6 +99,10 @@ export function handleHover(
     if (builtinInfo) {
         return builtinInfo;
     }
+
+    // Residents: structures, constants etc. from PB install directory
+    const residentHover = getResidentHover(word);
+    if (residentHover) return residentHover;
 
     return null;
 }
@@ -444,6 +449,35 @@ function getBuiltinFunctionInfo(functionName: string): Hover | null {
         contents: {
             kind: MarkupKind.Markdown,
             value: content
+        }
+    };
+}
+/**
+ * Formats a hover card for a symbol that originates from the Residents directory.
+ */
+function getResidentHover(word: string): Hover | null {
+    const sym = findResidentSymbol(word);
+    if (!sym) return null;
+
+    let code: string;
+    switch (sym.kind) {
+        case 'structure':
+            code = `Structure ${sym.name}`;
+            break;
+        case 'constant':
+            code = sym.documentation ?? `#${sym.name}`;
+            break;
+        case 'interface':
+            code = `Interface ${sym.name}`;
+            break;
+        default:
+            code = sym.detail ?? sym.name;
+    }
+
+    return {
+        contents: {
+            kind: MarkupKind.Markdown,
+            value: `\`\`\`purebasic\n${code}\n\`\`\`\n\n*PureBasic Resident*`
         }
     };
 }

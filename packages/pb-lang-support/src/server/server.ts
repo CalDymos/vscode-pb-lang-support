@@ -80,6 +80,7 @@ import { ProjectManager } from './managers/project-manager';
 // Import for Wire up LSP logging
 import { initFileCache }        from './utils/file-cache';
 import { initModuleResolver }   from './utils/module-resolver';
+import { loadResidents }        from './indexer/residents-index';
 
 // Create connection
 const connection = createConnection(ProposedFeatures.all);
@@ -231,6 +232,7 @@ connection.onInitialized(async () => {
     // Initial load of the API function listing (non-hot path).
     await loadGlobalSettings();
     apiFunctionListing.load(globalSettings.apiFunctionListingPath ?? '');
+    await loadResidents(globalSettings.residentsPath ?? '', lspErrorLog);
 });
 
 // Custom Request: Clear Symbol Cache (to be used with the client command `purebasic.clearSymbolCache`)
@@ -253,8 +255,11 @@ connection.onDidChangeConfiguration(change => {
         // Fetch fresh from client
         loadGlobalSettings()
             // Reload the API listing whenever configuration changes (non-hot path).
-            .then(() => apiFunctionListing.load(globalSettings.apiFunctionListingPath ?? ''))
-            .catch(err => logLspError('Failed to load global settings', err));
+            .then(async () => {
+                apiFunctionListing.load(globalSettings.apiFunctionListingPath ?? '');
+                await loadResidents(globalSettings.residentsPath ?? '', lspErrorLog);
+            })
+            .catch(err => logLspError('Failed to reload settings', err));
     } else {
         // Fallback: settings pushed via change.settings
         const s = change.settings.purebasic ?? defaultSettings;
@@ -267,7 +272,9 @@ connection.onDidChangeConfiguration(change => {
         globalSettings.linting                = s.linting                ?? defaultSettings.linting;
         globalSettings.symbols                = s.symbols                ?? defaultSettings.symbols;
         globalSettings.apiFunctionListingPath = s.apiFunctionListingPath ?? defaultSettings.apiFunctionListingPath;
+        globalSettings.residentsPath            = s.residentsPath            ?? defaultSettings.residentsPath;
         apiFunctionListing.load(globalSettings.apiFunctionListingPath ?? '');
+        loadResidents(globalSettings.residentsPath ?? '', lspErrorLog).catch(() => {/*silent*/});
     }
     // Re-validate all open documents
     documents.all().forEach(safeValidateTextDocument);
@@ -285,6 +292,7 @@ async function loadGlobalSettings(): Promise<void> {
         globalSettings.linting              = config?.linting              ?? defaultSettings.linting;
         globalSettings.symbols              = config?.symbols              ?? defaultSettings.symbols;
         globalSettings.apiFunctionListingPath = config?.apiFunctionListingPath ?? defaultSettings.apiFunctionListingPath;
+        globalSettings.residentsPath            = config?.residentsPath            ?? defaultSettings.residentsPath;
     } catch (err) {
         logLspError('Failed to load global settings', err);
     }
@@ -311,7 +319,8 @@ function getDocumentSettings(resource: string): Thenable<PureBasicSettings> {
                 completion: config?.completion ?? defaultSettings.completion,
                 linting: config?.linting ?? defaultSettings.linting,
                 symbols: config?.symbols ?? defaultSettings.symbols,
-                apiFunctionListingPath: config?.apiFunctionListingPath ?? defaultSettings.apiFunctionListingPath
+                apiFunctionListingPath: config?.apiFunctionListingPath ?? defaultSettings.apiFunctionListingPath,
+                residentsPath:            config?.residentsPath            ?? defaultSettings.residentsPath
             };
         });
         documentSettings.set(resource, result);

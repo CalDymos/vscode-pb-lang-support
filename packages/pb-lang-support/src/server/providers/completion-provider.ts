@@ -14,6 +14,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { keywords, types, typeSuffixDefinitions, windowsApiFunctions, parsePureBasicConstantDefinition } from '../utils/constants';
 import { allBuiltinNames, findBuiltin } from '../utils/builtin-functions';
 import { allBuiltinConstants, getParamConstantsResolved } from '../utils/builtin-constants';
+import { allResidentConstantNames, allResidentStructureNames } from '../indexer/residents-index';
 import { stripInlineComment, isPositionInString } from '../utils/pb-lexer-utils';
 import { ApiFunctionListing } from '../utils/api-function-listing';
 import { getAvailableModules, getModuleExports } from '../utils/module-resolver';
@@ -227,6 +228,22 @@ function handleCompletionInternal(
                 });
             });
 
+        // 5) Resident structure names (e.g. in6_addr, PROPVARIANT from PB Residents/)
+        allResidentStructureNames()
+            .filter(n => !p || n.toLowerCase().startsWith(p))
+            .forEach((n, idx) => {
+                items.push({
+                    label: n,
+                    kind: CompletionItemKind.Struct,
+                    data: 'res_tstruct_' + idx,
+                    detail: `Resident Structure ${n}`,
+                    documentation: `PureBasic Resident Structure: ${n}`,
+                    insertText: n,
+                    insertTextFormat: InsertTextFormat.PlainText,
+                    sortText: '4_' + n,
+                });
+            });
+
         return { isIncomplete: false, items };
     }
 
@@ -297,6 +314,22 @@ function handleCompletionInternal(
                     insertTextFormat: InsertTextFormat.PlainText,
                     sortText: '1_' + c.name
                 });
+            });
+        });
+
+        // ── 4. Resident constants (#AF_INET6 etc.) ────────────────────────────
+        allResidentConstantNames().forEach((name, idx) => {
+            const label = `#${name}`;
+            if (!label.toLowerCase().startsWith(pfx)) { return; }
+            items.push({
+                label,
+                kind: CompletionItemKind.Constant,
+                data: `resident_const_${idx}`,
+                detail: 'Resident Constant',
+                documentation: `PureBasic Resident constant: ${label}`,
+                insertText: label,
+                insertTextFormat: InsertTextFormat.PlainText,
+                sortText: '2_' + name
             });
         });
 
@@ -480,6 +513,21 @@ function handleCompletionInternal(
             });
         }
     });
+
+    // Resident structure names (e.g. in6_addr, PROPVARIANT from PB Residents/)
+    allResidentStructureNames().forEach((name, idx) => {
+        if (!name.toLowerCase().startsWith(context.prefix.toLowerCase())) return;
+        completionItems.push({
+            label: name,
+            kind: CompletionItemKind.Class,
+            data: 'res_gstruct_' + idx,
+            detail: 'Resident Structure',
+            documentation: `PureBasic Resident Structure: ${name}`,
+            insertText: name,
+            insertTextFormat: InsertTextFormat.PlainText
+        });
+    });
+
     documentSymbols.interfaces.forEach((it, index) => {
         if (it.name.toLowerCase().startsWith(context.prefix.toLowerCase())) {
             completionItems.push({
