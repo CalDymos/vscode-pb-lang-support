@@ -32,6 +32,7 @@ const OUTPUT_PATH = (() => {
 
 // All library categories listed on the PureBasic documentation index page
 const CATEGORIES = [
+    // General Libraries
     '2ddrawing', 'array', 'audiocd', 'cgi', 'cipher', 'clipboard',
     'console', 'database', 'date', 'debugger', 'desktop', 'dialog',
     'dragdrop', 'file', 'filesystem', 'ftp', 'font', 'gadget', 'help',

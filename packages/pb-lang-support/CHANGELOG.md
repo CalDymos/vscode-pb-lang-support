@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.19.0
+
+### Added
+
+- Added full support for the new PureBasic 6.40 **StringBuilder** library: `CreateStringBuilder`, `AppendStringBuilderString`, `AppendStringBuilderStringN`, `GetStringBuilderString`, `ResetStringBuilder`, `IsStringBuilder` and `FreeStringBuilder` are now available in hover, signature help and completion.
+- Added new **error diagnostic** for `#PB_String_InPlace` usage in `ReplaceString()` calls. This flag was removed in PureBasic 6.40; the diagnostic includes a migration hint and a link to the official migration guide.
+- Added new **warning diagnostic** for `Space()`-as-Win32-API-buffer patterns without a subsequent `PeekS()` length fixup. Since PureBasic 6.40 the internal string manager caches string lengths, so the buffer contents written by an API call are not reflected in the string length unless `PeekS()` is called explicitly.
+- Added PureBasic 6.40 constants to hover, signature help and completion:
+  - `#PB_InputRequester_HandleCancel` — `InputRequester()`
+  - `#PB_FTP_Active`, `#PB_FTP_Debug` — `OpenFTP()`
+  - `#PB_Menu_NativeImageSize` — `CreateImageMenu()`, `CreatePopupImageMenu()`
+  - `#PB_2DDrawing_FastText` — `DrawingMode()`
+  - `#PB_OS_MacOSX_13`, `#PB_OS_MacOSX_14`, `#PB_OS_MacOSX_15` — `OSVersion()`
+  - `#PB_OS_Windows_Server_2016`, `#PB_OS_Windows_Server_2019`, `#PB_OS_Windows_Server_2022`, `#PB_OS_Windows_Server_2025` — `OSVersion()`
+- Added `PackEntryDate()` to the function-parameter constant index so `#PB_Date_Created`, `#PB_Date_Accessed` and `#PB_Date_Modified` are suggested at the call site.
+
+### Changed
+
+- Updated `OpenFTP()` signature: the former `Passive` boolean parameter was replaced by a `Flags` parameter in PureBasic 6.40. The new flags `#PB_FTP_Active` and `#PB_FTP_Debug` are documented and available in completion.
+- Updated `ReplaceString()` parameter documentation: `#PB_String_InPlace` is no longer listed as a valid `Mode` flag; a migration note pointing to the PureBasic 6.40 guide is included instead.
+- Updated `OSVersion()` description with the complete list of return-value constants including new macOS and Windows Server entries added in PureBasic 6.40.
+
+### Removed
+
+- Removed `#PB_String_InPlace` from `ReplaceString()` parameter suggestions (flag removed in PureBasic 6.40).
+
+---
+
 ## 0.18.2
 
 - Fixed an issue where the extension failed to activate in some cases.
