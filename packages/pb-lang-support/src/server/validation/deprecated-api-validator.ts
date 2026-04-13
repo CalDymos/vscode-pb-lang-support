@@ -11,6 +11,7 @@
 import { DiagnosticSeverity } from 'vscode-languageserver/node';
 import { ValidatorFunction } from './types';
 import { DIAGNOSTIC_SOURCE } from '../utils/constants';
+import { isPositionInString } from '../utils/pb-lexer-utils';
 
 // ---------------------------------------------------------------------------
 // Rule definitions
@@ -56,6 +57,12 @@ export const validateDeprecatedApi: ValidatorFunction = (
     for (const rule of DEPRECATED_RULES) {
         const match = rule.pattern.exec(line);
         if (!match) {
+            continue;
+        }
+
+        // Skip matches inside string literals to avoid false positives such as:
+        //   Debug "#PB_String_InPlace is no longer valid"
+        if (isPositionInString(line, match.index)) {
             continue;
         }
 
