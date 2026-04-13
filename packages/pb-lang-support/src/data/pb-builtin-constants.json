@@ -4381,6 +4381,16 @@
         ]
       }
     },
+    "packentrydate": {
+      "name": "PackEntryDate",
+      "params": {
+        "2": [
+          "#PB_Date_Created",
+          "#PB_Date_Accessed",
+          "#PB_Date_Modified"
+        ]
+      }
+    },
     "packentrysize": {
       "name": "PackEntrySize",
       "params": {
