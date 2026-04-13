@@ -14,6 +14,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { PureBasicSettings } from '../config/settings';
 import { validateDocument } from './validator';
 import { validateIncludes } from './include-validator';
+import { validateSpaceApiBuffers } from './space-buffer-validator';
 
 /**
  * Run all diagnostics for the given document and return the result.
@@ -33,6 +34,9 @@ export function runDiagnostics(
     // These receive only the raw text string and a ValidationContext.
     // They are fast (no I/O) and run on every keystroke (after debounce).
     diagnostics.push(...validateDocument(document.getText()));
+
+    // PB 6.40: Space()-as-API-buffer without PeekS() length fixup
+    diagnostics.push(...validateSpaceApiBuffers(document.getText()));
 
     // --- 2. Document validators -----------------------------------------
     // These require the TextDocument (URI) and may perform disk I/O.
