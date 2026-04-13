@@ -25,7 +25,8 @@ including `IntelliSense`, `Debugging`, and `Code Navigation`. It supports PureBa
 - Signature Help (type `(` / hover)
 - Hover Documentation & Type Info
 - Outline: `Ctrl+Shift+O`
-- Built-in PureBasic functions in completion, hover, and signature help
+- Built-in PureBasic functions in completion, hover, and signature help - updated for PureBasic 6.40.
+- Built-In PureBasic constants in completion - updated for PureBasic 6.40.
 
 ### Navigation & Refactoring 🧭
 
@@ -39,7 +40,10 @@ including `IntelliSense`, `Debugging`, and `Code Navigation`. It supports PureBa
 - Code Actions (quick fixes/refactorings)
 - Missing include file diagnostics
 - `IncludeBinary` diagnostics for invalid usage outside a `DataSection`
-
+- **PureBasic 6.40 migration diagnostics:**
+  - Error when `#PB_String_InPlace` is used with `ReplaceString()` (flag removed in PureBasic 6.40), with migration hint
+  - Warning when `Space()` is used as a Win32 API write buffer without a subsequent `PeekS()` length fixup (required since PureBasic 6.40 due to the reworked string manager)
+  
 ### PureBasic 🟦
 
 - Modules: `Module::Function`
