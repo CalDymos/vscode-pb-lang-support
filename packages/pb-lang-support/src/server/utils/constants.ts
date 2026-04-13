@@ -135,25 +135,6 @@ export const pbKeywordDefinitions: ReadonlyArray<{ name: string; documentation: 
 /** Flat name-only list derived from PB_KEYWORDS – for consumers that only need names. */
 export const keywords: readonly string[] = pbKeywordDefinitions.map(keyword => keyword.name);
 
-export const builtInFunctions = [
-    'OpenWindow', 'CreateGadgetList', 'EventWindow', 'EventGadget', 'EventMenu',
-    'WaitWindowEvent', 'WindowEvent', 'SetActiveWindow', 'CloseWindow', 'WindowID',
-    'WindowOutput', 'WindowX', 'WindowY', 'WindowWidth', 'WindowHeight',
-    'DesktopWidth', 'DesktopHeight', 'DesktopDepth', 'DesktopFrequency', 'Delay',
-    'CountProgramParameters', 'ProgramParameter', 'RunProgram', 'OpenFile',
-    'ReadFile', 'WriteFile', 'CloseFile', 'FileSeek', 'FileSize', 'Eof',
-    'ReadString', 'WriteString', 'ReadCharacter', 'WriteCharacter', 'ReadByte',
-    'WriteByte', 'ReadWord', 'WriteWord', 'ReadLong', 'WriteLong', 'ReadQuad',
-    'WriteQuad', 'ReadFloat', 'WriteFloat', 'ReadDouble', 'WriteDouble',
-    'CreateDirectory', 'DeleteFile', 'CopyFile', 'RenameFile', 'DirectoryEntry',
-    'DirectoryEntryType', 'DirectoryEntryName', 'DirectoryEntrySize',
-    'DirectoryEntryDate', 'DirectoryEntryAttributes', 'NextDirectoryEntry',
-    'FinishDirectory', 'ExamineDirectory', 'SetCurrentDirectory',
-    'GetCurrentDirectory', 'CreateFile', 'FileBuffers', 'FileID', 'FileError',
-    'MessageRequester', 'InputRequester', 'OpenFileRequester', 'SaveFileRequester',
-    'PathRequester', 'ColorRequester', 'FontRequester'
-];
-
 // Minimal fallback list of common Windows API functions.
 // Used for completions when APIFunctionListing.txt is not configured or unavailable.
 export const windowsApiFunctions = [

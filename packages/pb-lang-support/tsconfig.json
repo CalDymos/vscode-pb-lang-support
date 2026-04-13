@@ -31,11 +31,11 @@
     "declaration": true,
     "declarationMap": true,
     "removeComments": false,
-    "baseUrl": ".",
     "paths": {
-      "@types/*": ["src/types/*"],
-      "@utils/*": ["src/server/utils/*"],
-      "@providers/*": ["src/server/providers/*"]
+      "*": ["./*"],
+      "@types/*": ["./src/types/*"],
+      "@utils/*": ["./src/server/utils/*"],
+      "@providers/*": ["./src/server/providers/*"]
     }
   },
   "exclude": [
