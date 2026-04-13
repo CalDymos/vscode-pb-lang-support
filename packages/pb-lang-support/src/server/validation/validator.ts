@@ -12,6 +12,7 @@ import { validateDataStructures } from './data-structure-validator';
 import { validateModules } from './module-validator';
 import { validateGeneric } from './generic-validator';
 import { validateUnclosedStructures } from './unclosed-structure-validator';
+import { validateDeprecatedApi } from './deprecated-api-validator';
 import { stripInlineComment } from '../utils/pb-lexer-utils';
 
 type LogFn = (message: string, err?: unknown) => void;
@@ -81,6 +82,7 @@ function validateDocumentInternal(text: string): Diagnostic[] {
         validateDataStructures(line, i, originalLine, context, diagnostics);
         validateModules(line, i, originalLine, context, diagnostics);
         validateGeneric(line, i, originalLine, context, diagnostics);
+        validateDeprecatedApi(line, i, originalLine, context, diagnostics);
     }
 
     // Check unclosed structures
