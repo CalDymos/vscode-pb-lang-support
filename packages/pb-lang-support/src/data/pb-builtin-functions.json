@@ -613,7 +613,7 @@
       "#StringBuilder",
       "String$"
     ],
-    "docUrl": "https://www.purebasic.com/documentation/stringbuilder/appendstringgbuilderstringn.html"
+    "docUrl": "https://www.purebasic.com/documentation/stringbuilder/appendstringbuilderstringn.html"
   },
   "ApplyEntityForce": {
     "signature": "ApplyEntityForce(#Entity, x, y, z [, PositionX, PositionY, PositionZ [, Mode [, PositionMode]]])",
