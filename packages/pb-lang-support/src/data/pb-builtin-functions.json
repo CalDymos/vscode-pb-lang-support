@@ -597,6 +597,24 @@
     ],
     "docUrl": "https://www.purebasic.com/documentation/engine3d/antialiasingmode.html"
   },
+  "AppendStringBuilderString": {
+    "signature": "Result = AppendStringBuilderString(#StringBuilder, String$)",
+    "description": "Appends a string to the end of the current string builder content. The internal buffer grows automatically as needed. Returns nonzero on success, zero on error.",
+    "parameters": [
+      "#StringBuilder",
+      "String$"
+    ],
+    "docUrl": "https://www.purebasic.com/documentation/stringbuilder/appendstringbuilderstring.html"
+  },
+  "AppendStringBuilderStringN": {
+    "signature": "Result = AppendStringBuilderStringN(#StringBuilder, String$)",
+    "description": "Appends a string followed by a newline character to the end of the current string builder content. The internal buffer grows automatically as needed. Returns nonzero on success, zero on error.",
+    "parameters": [
+      "#StringBuilder",
+      "String$"
+    ],
+    "docUrl": "https://www.purebasic.com/documentation/stringbuilder/appendstringgbuilderstringn.html"
+  },
   "ApplyEntityForce": {
     "signature": "ApplyEntityForce(#Entity, x, y, z [, PositionX, PositionY, PositionZ [, Mode [, PositionMode]]])",
     "description": "Apply the specified force to the entity. The new force value replace any previous force previously  applied to the entity.",
@@ -3234,6 +3252,15 @@
       "WindowID - The window on which the status bar needs to be created. WindowID() can be used to get this value."
     ],
     "docUrl": "https://www.purebasic.com/documentation/statusbar/createstatusbar.html"
+  },
+  "CreateStringBuilder": {
+    "signature": "Result = CreateStringBuilder(#StringBuilder [, IncrementLength])",
+    "description": "Creates a new string builder object. A string builder maintains an internal buffer that grows as needed, and is much more efficient than repeated string concatenation operators when building large strings. A new string builder starts with an empty string.",
+    "parameters": [
+      "#StringBuilder",
+      "[IncrementLength]"
+    ],
+    "docUrl": "https://www.purebasic.com/documentation/stringbuilder/createstringbuilder.html"
   },
   "CreateTerrain": {
     "signature": "Result = CreateTerrain(#Terrain, Size, WorldSize, Scale, NbLayers, Filename$, Extension$)",
@@ -5988,6 +6015,14 @@
     ],
     "docUrl": "https://www.purebasic.com/documentation/statusbar/freestatusbar.html"
   },
+  "FreeStringBuilder": {
+    "signature": "FreeStringBuilder(#StringBuilder)",
+    "description": "Frees the specified string builder and releases its associated memory. If #PB_All is specified, all remaining string builders are freed. Once freed, the string builder may not be used anymore. All remaining string builders are automatically freed when the program ends.",
+    "parameters": [
+      "#StringBuilder"
+    ],
+    "docUrl": "https://www.purebasic.com/documentation/stringbuilder/freestringbuilder.html"
+  },  
   "FreeStructure": {
     "signature": "FreeStructure(*Item)",
     "description": "Free the dynamic structure item previously allocated with AllocateStructure(). There is no  need to call ClearStructure() before freeing the  structure.",
@@ -7060,6 +7095,14 @@
       "Channel (optional) - The channel to get the position. It's the value returned by PlaySound() when using the \n#PB_Sound_MultiChannel flag."
     ],
     "docUrl": "https://www.purebasic.com/documentation/sound/getsoundposition.html"
+  },
+  "GetStringBuilderString": {
+    "signature": "Result$ = GetStringBuilderString(#StringBuilder)",
+    "description": "Returns the complete string that has been built through all previous AppendStringBuilderString() or AppendStringBuilderStringN() calls. After calling this function it is still possible to continue appending to the string builder. Returns an empty string if the string builder is empty or invalid.",
+    "parameters": [
+      "#StringBuilder"
+    ],
+    "docUrl": "https://www.purebasic.com/documentation/stringbuilder/getstringbuilderstring.html"
   },
   "GetTemporaryDirectory": {
     "signature": "Result$ = GetTemporaryDirectory()",
@@ -8214,6 +8257,14 @@
       "#StatusBar - The status bar to use."
     ],
     "docUrl": "https://www.purebasic.com/documentation/statusbar/isstatusbar.html"
+  },
+  "IsStringBuilder": {
+    "signature": "Result = IsStringBuilder(#StringBuilder)",
+    "description": "Tests if the given #StringBuilder number is a valid and correctly initialized string builder object. This function is bulletproof and may be used with any value. Returns nonzero if #StringBuilder is valid, zero otherwise.",
+    "parameters": [
+      "#StringBuilder"
+    ],
+    "docUrl": "https://www.purebasic.com/documentation/stringbuilder/isstringbuilder.html"
   },
   "IsSysTrayIcon": {
     "signature": "Result = IsSysTrayIcon(#SysTrayIcon)",
@@ -11930,6 +11981,14 @@
     "description": "Reset the line counters for the profiler.",
     "parameters": [],
     "docUrl": "https://www.purebasic.com/documentation/debugger/resetprofiler.html"
+  },
+  "ResetStringBuilder": {
+    "signature": "Result = ResetStringBuilder(#StringBuilder)",
+    "description": "Resets the string builder to an empty string, clearing all previously appended content. The internal buffer is retained but the built string is discarded. Useful for reusing a string builder to build a new string. Returns nonzero on success, zero on error.",
+    "parameters": [
+      "#StringBuilder"
+    ],
+    "docUrl": "https://www.purebasic.com/documentation/stringbuilder/resetstringbuilder.html"
   },
   "ResetStructure": {
     "signature": "ResetStructure()",
