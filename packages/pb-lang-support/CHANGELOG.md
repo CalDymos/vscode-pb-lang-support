@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.19.3
+
+### Added
+
+- Added `purebasic.linting.enableSemanticValidation` opt-out flag: when set
+  to `false` the `Space()`-as-API-buffer validator is skipped, allowing users
+  to trade diagnostic coverage for responsiveness on very large documents.
+
+### Fixed
+
+- Fixed completion flooding: built-in `#PB_*` constants are now gated behind a
+  2-character prefix in general (non-parameter) context and capped at 200 items;
+  `isIncomplete` is returned so the client re-requests as the user types more.
+- Fixed `@` address-operator rule in the TextMate grammar: the operand
+  (including optional `$` sigil) is now captured as `variable.name.purebasic`
+  so string-variable addresses (`@buf$`) are highlighted consistently.
+
+### Performance
+
+- `validateSpaceApiBuffers` now short-circuits with a three-token prefilter
+  (`Space(`, `@`, `_(`) before splitting the document into lines, reducing
+  overhead for the common case where none of the patterns are present.
+- Added per-line early-exit in `validateSpaceApiBuffers`: lines are skipped
+  entirely when no variable is being tracked and the line cannot be a
+  `Space()` assignment, avoiding `stripInlineComment` overhead on clean files.
+
 ## 0.19.2
 
 ### Fixed
