@@ -15,7 +15,7 @@ import { keywords, types, typeSuffixDefinitions, windowsApiFunctions, parsePureB
 import { allBuiltinNames, findBuiltin } from '../utils/builtin-functions';
 import { allBuiltinConstants, getParamConstantsResolved } from '../utils/builtin-constants';
 import { allResidentConstantNames, allResidentStructureNames } from '../indexer/residents-index';
-import { stripInlineComment, isPositionInString } from '../utils/pb-lexer-utils';
+import { stripInlineComment, isPositionInString, createStringState, advanceStringState } from '../utils/pb-lexer-utils';
 import { ApiFunctionListing } from '../utils/api-function-listing';
 import { getAvailableModules, getModuleExports } from '../utils/module-resolver';
 import { analyzeScopesAndVariables, getActiveUsedModules, VariableInfo } from '../utils/scope-manager';
@@ -1122,10 +1122,12 @@ function findLastUnmatchedParenLocal(s: string): number {
 
 /** Counts commas at depth 0, skipping nested parens and strings → 0-based param index. */
 function calcParamIndex(text: string): number {
-    let count = 0, depth = 0, inStr = false;
-    for (const ch of text) {
-        if (ch === '"') { inStr = !inStr; }
-        else if (!inStr) {
+    let count = 0, depth = 0;
+    const state = createStringState();
+    for (let i = 0; i < text.length; i++) {
+        advanceStringState(state, text, i);
+        if (!state.inString) {
+            const ch = text[i];
             if (ch === '(') { depth++; }
             else if (ch === ')') { depth--; }
             else if (ch === ',' && depth === 0) { count++; }

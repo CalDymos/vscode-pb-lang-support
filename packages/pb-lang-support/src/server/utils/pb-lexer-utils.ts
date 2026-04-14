@@ -43,6 +43,66 @@ export function isPositionInString(line: string, position: number): boolean {
     return scanStringState(line, position).inString;
 }
 
+/* ========================================================================== */
+/* Incremental string-state stepper (exported for callers that scan          */
+/* character-by-character, e.g. calcParamIndex in completion-provider)       */
+/* ========================================================================== */
+
+/**
+ * Mutable state object that tracks whether the scanner is currently inside a
+ * PureBasic string literal and, if so, which kind.
+ */
+export interface PBStringState {
+    /** True while the scanner is inside an open string literal. */
+    inString: boolean;
+    /**
+     * True while the scanner is inside a `~"..."` escape string.
+     * Always false when `inString` is false.
+     */
+    isEscape: boolean;
+}
+
+/** Returns a freshly initialised {@link PBStringState} (outside any string). */
+export function createStringState(): PBStringState {
+    return { inString: false, isEscape: false };
+}
+
+/**
+ * Advances `state` by one character at index `i` inside `line`.
+ *
+ * Callers must iterate `i` from 0 upward and call this function for every
+ * character *before* using `state.inString` to decide how to handle that
+ * character.  Because `"` is never a comma, paren, or semicolon in PureBasic,
+ * updating the state first and then acting on it is correct for all callers.
+ *
+ * Algorithm mirrors {@link scanStringState}:
+ *  - Outside a string, an unescaped `"` opens a regular string; a `"` preceded
+ *    by `~` opens an escape string.
+ *  - Inside a regular string every `"` closes it.
+ *  - Inside an escape string, an odd number of consecutive backslashes before
+ *    `"` means the quote is escaped (stay in string); an even number means it
+ *    closes the string.
+ */
+export function advanceStringState(state: PBStringState, line: string, i: number): void {
+    const ch = line[i];
+    if (!state.inString) {
+        if (ch === '"') {
+            state.inString = true;
+            state.isEscape = i > 0 && line[i - 1] === '~';
+        }
+    } else {
+        if (ch === '"') {
+            if (state.isEscape) {
+                let bs = 0, k = i - 1;
+                while (k >= 0 && line[k] === '\\') { bs++; k--; }
+                if (bs % 2 !== 0) { return; } // escaped quote – stay in string
+            }
+            state.inString = false;
+            state.isEscape = false;
+        }
+    }
+}
+
 /**
  * Shared scanner used by isInStringLiteral and isPositionInString.
  *
@@ -59,36 +119,11 @@ export function isPositionInString(line: string, position: number): boolean {
  *    an odd count means the last '\' escapes '"' → '"' does NOT terminate.
  */
 function scanStringState(line: string, limit: number): { inString: boolean } {
-    let inString = false;
-    let isEscape = false;   // true when we are inside a ~"..." escape string
-
+    const state = createStringState();
     for (let i = 0; i < line.length && i < limit; i++) {
-        const char = line[i];
-
-        if (!inString) {
-            if (char === '"') {
-                inString = true;
-                // Escape string starts when '~' immediately precedes '"'
-                isEscape = i > 0 && line[i - 1] === '~';
-            }
-        } else {
-            if (char === '"') {
-                if (isEscape) {
-                    // Count consecutive backslashes immediately before this '"'
-                    let bsCount = 0;
-                    let k = i - 1;
-                    while (k >= 0 && line[k] === '\\') { bsCount++; k--; }
-                    // Odd count → this '"' is escaped → stay in string
-                    if (bsCount % 2 !== 0) continue;
-                }
-                // Regular string: every '"' terminates. Escape string: unescaped '"' terminates.
-                inString = false;
-                isEscape = false;
-            }
-        }
+        advanceStringState(state, line, i);
     }
-
-    return { inString };
+    return { inString: state.inString };
 }
 
 /**
