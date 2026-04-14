@@ -511,6 +511,41 @@ test("roundtrips menu entry update", () => {
 });
 
 
+test("preserves raw menu expressions when adding a shortcut to non-literal captions", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormMenu
+  #MenuMain
+  #MnuOpen
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  If CreateMenu(#MenuMain, WindowID(#FrmMain))
+    MenuItem(#MnuOpen, "Open" + suffix$ + "X")
+  EndIf
+EndProcedure
+`;
+
+  const parsed = parseFormDocument(text);
+  const menu = parsed.menus[0];
+  assert.ok(menu?.entries[0]?.source?.line !== undefined, "Expected source line for existing menu item.");
+
+  const { patchedText } = patchAndReparse(text, (document) =>
+    applyMenuEntryUpdate(document, menu!.id, menu!.entries[0]!.source!.line, {
+      kind: MENU_ENTRY_KIND.MenuItem,
+      idRaw: "#MnuOpen",
+      textRaw: '"Open" + suffix$ + "X"',
+      shortcut: "Ctrl+O",
+    })
+  );
+
+  assert.match(patchedText, /MenuItem\(#MnuOpen, "Open" \+ suffix\$ \+ "X" \+ Chr\(9\) \+ "Ctrl\+O"\)/);
+});
+
 test("preserves surrounding whitespace for menu shortcut updates", () => {
   const { text, menu, menuId } = parseFixture();
   const openItem = menu.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem);

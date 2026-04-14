@@ -7,6 +7,10 @@ test("parsePbStringLiteral supports doubled quotes", () => {
   assert.equal(parsePbStringLiteral('"icons/""open"".png"'), 'icons/"open".png');
 });
 
+test("parsePbStringLiteral rejects concatenations that only start and end with quotes", () => {
+  assert.equal(parsePbStringLiteral('"Open" + suffix$ + "X"'), undefined);
+});
+
 test("isPbStringLiteral rejects non-string expressions", () => {
   assert.equal(isPbStringLiteral('ImageID(#ImgOpen)'), false);
   assert.equal(isPbStringLiteral('?ImgData'), false);

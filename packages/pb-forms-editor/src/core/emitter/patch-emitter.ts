@@ -4,13 +4,14 @@ import { scanCalls } from "../parser/call-scanner";
 import { parseFormDocument } from "../parser/form-parser";
 import { parseGlobalVarNames } from "../parser/global-scanner";
 import { normalizePbImageValue } from "../parser/pb-image-value";
+import { parsePbStringLiteral } from "../parser/pb-string";
 import {
   findFirstProcedureLine,
   findProcedureBlock as findProcedureBlockInLines,
   findProcedureBlockByName as findProcedureBlockByNameInLines,
   type ProcedureLineBlock,
 } from "../parser/procedure-scanner";
-import { asNumber, normalizeProcParamName, quotePbString, splitParams, unquoteString } from "../parser/tokenizer";
+import { asNumber, normalizeProcParamName, quotePbString, splitParams } from "../parser/tokenizer";
 import { buildInsertedGadgetIdentity, canHostInsertedGadgets, isInsertableGadgetKind, shouldInsertGadgetAsPbAny, type InsertableGadgetKind } from "../gadget/insert";
 import { buildOriginalGadgetDeletePlan, collectRequestedGadgetDeleteIds } from "../gadget/delete";
 import { ENUM_NAMES, FormFont, FormImage, FormMenu, FormMenuEntry, FormStatusBarField, FormToolBar, FormToolBarEntry, FormWindow, Gadget, ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, PB_ANY, ToolBarEntryKind, GADGET_KIND } from "../model";
@@ -427,13 +428,13 @@ function normalizeMenuTextForShortcut(textRaw: string): string {
   const raw = textRaw.trim();
   const tabConcat = /^(.*)\+\s*Chr\(\s*9\s*\)\s*\+\s*(.*)$/i.exec(raw);
   if (tabConcat) {
-    const literal = unquoteString(tabConcat[1].trim());
+    const literal = parsePbStringLiteral(tabConcat[1]);
     if (literal !== undefined) {
       return quotePbString(literal);
     }
   }
 
-  const literal = unquoteString(raw);
+  const literal = parsePbStringLiteral(raw);
   if (literal !== undefined) {
     // A plain string literal has no embedded shortcut in PBF format;
     // shortcuts are always expressed as "..." + Chr(9) + "..." (handled above).
@@ -2400,7 +2401,7 @@ export function applyGadgetOpenArgsUpdate(
     const nextGadget: Gadget = { ...customGadget };
     if (args.textRaw !== undefined) {
       const nextTextRaw = normalizeOptionalRaw(args.textRaw) ?? '""';
-      const literalText = unquoteString(nextTextRaw);
+      const literalText = parsePbStringLiteral(nextTextRaw);
       nextGadget.textRaw = nextTextRaw;
       nextGadget.text = literalText ?? nextTextRaw;
       nextGadget.textVariable = literalText === undefined && nextTextRaw.length > 0;
@@ -4469,7 +4470,7 @@ function mapFontArgsToFont(args: FontArgs): FormFont {
   const assignedVar = args.assignedVar?.trim();
   const nameRaw = args.nameRaw.trim();
   const sizeRaw = args.sizeRaw.trim();
-  const name = unquoteString(nameRaw) ?? undefined;
+  const name = parsePbStringLiteral(nameRaw) ?? undefined;
   const size = asNumber(sizeRaw);
 
   return {
