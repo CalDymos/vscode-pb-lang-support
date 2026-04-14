@@ -380,6 +380,79 @@ EndProcedure
   assert.equal(doc.window?.y, 24);
 });
 
+test("parses original-style plain string literals through canonical form-parser paths", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+XIncludeFile "events/main.pbi"
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #TxtMain
+  #LstMain
+  #LstIcon
+EndEnumeration
+
+Enumeration FormMenu
+  #Item1
+  #Toolbar_0
+EndEnumeration
+
+Enumeration FormFont
+  #FontMain
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, Window)
+  LoadFont(#FontMain, "Arial", 12)
+  CreateToolBar(0, WindowID(#FrmMain))
+  ToolBarImageButton(#Toolbar_0,ImageID(), #PB_ToolBar_Toggle)
+  ToolBarToolTip(0, #Toolbar_0, "Tip")
+  CreateStatusBar(0, WindowID(#FrmMain))
+  AddStatusBarField(120)
+  StatusBarText(0, 0, "Ready")
+  CreateMenu(0, WindowID(#FrmMain))
+  MenuTitle("File")
+  MenuItem(#Item1, "Sub")
+  StringGadget(#TxtMain, 10, ToolBarHeight(0) + 10, 120, 20, "Value")
+  GadgetToolTip(#TxtMain, "Hint")
+  ListViewGadget(#LstMain, 10, ToolBarHeight(0) + 40, 120, 80)
+  AddGadgetItem(#LstMain, -1, "Item")
+  ListIconGadget(#LstIcon, 10, ToolBarHeight(0) + 130, 140, 80, "Column", 120)
+  AddGadgetColumn(#LstIcon, 1, "Header", 90)
+EndProcedure
+`;
+
+  const doc = parseFormDocument(text);
+  const txtMain = doc.gadgets.find((g) => g.id === "#TxtMain");
+  const lstMain = doc.gadgets.find((g) => g.id === "#LstMain");
+  const lstIcon = doc.gadgets.find((g) => g.id === "#LstIcon");
+  const menuTitle = doc.menus[0]?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuTitle);
+  const openSubMenu = doc.menus[0]?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.OpenSubMenu);
+  const toolBarButton = doc.toolbars[0]?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarButton);
+  const toolBarToolTip = doc.toolbars[0]?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarToolTip);
+
+  assert.equal(doc.window?.eventFile, "events/main.pbi");
+  assert.equal(doc.window?.caption, "Window");
+  assert.equal(doc.window?.captionVariable, false);
+  assert.equal(doc.fonts[0]?.name, "Arial");
+  assert.equal(txtMain?.text, "Value");
+  assert.equal(txtMain?.textVariable, false);
+  assert.equal(txtMain?.tooltip, "Hint");
+  assert.equal(txtMain?.tooltipVariable, false);
+  assert.equal(lstMain?.items?.[0]?.text, "Item");
+  assert.equal(lstIcon?.text, "Column");
+  assert.equal(lstIcon?.columns?.[0]?.title, "Header");
+  assert.equal(menuTitle?.text, "File");
+  assert.equal(openSubMenu?.text, "Sub");
+  assert.equal(toolBarButton?.text, "Button");
+  assert.equal(toolBarButton?.tooltip, "Tip");
+  assert.equal(toolBarToolTip?.text, "Tip");
+  assert.equal(doc.statusbars[0]?.fields[0]?.text, "Ready");
+});
+
+
 test("normalizes non-WindowID OpenWindow parent references with leading equals", () => {
   const text = `; Form Designer for PureBasic - 6.20
 ;
