@@ -2,7 +2,12 @@ import type { MenuEntryMovePlacement } from "../../shared/menu";
 import * as vscode from "vscode";
 import { scanCalls } from "../parser/call-scanner";
 import { parseFormDocument } from "../parser/form-parser";
-import { parseProcedureHeaderLine } from "../parser/procedure-scanner";
+import {
+  findFirstProcedureLine,
+  findProcedureBlock as findProcedureBlockInLines,
+  findProcedureBlockByName as findProcedureBlockByNameInLines,
+  type ProcedureLineBlock,
+} from "../parser/procedure-scanner";
 import { asNumber, normalizeProcParamName, quotePbString, splitParams, unquoteString } from "../parser/tokenizer";
 import { buildInsertedGadgetIdentity, canHostInsertedGadgets, isInsertableGadgetKind, shouldInsertGadgetAsPbAny, type InsertableGadgetKind } from "../gadget/insert";
 import { buildOriginalGadgetDeletePlan, collectRequestedGadgetDeleteIds } from "../gadget/delete";
@@ -684,7 +689,7 @@ function findToolBarToolTipCall(
 // Helpers for window id / pbAny patching
 // -----------------------------------------------------------------------------
 
-type LineBlock = { startLine: number; endLine: number };
+type LineBlock = ProcedureLineBlock;
 
 function findNamedEnumerationBlock(document: vscode.TextDocument, enumName: string): LineBlock | undefined {
   const startRe = new RegExp(`^\\s*Enumeration\\s+${enumName}\\b`, "i");
@@ -796,34 +801,22 @@ function ensureWindowEnumeration(edit: vscode.WorkspaceEdit, document: vscode.Te
   edit.insert(document.uri, new vscode.Position(anchor, 0), blockText);
 }
 
-function findProcedureBlock(document: vscode.TextDocument, line: number): LineBlock | undefined {
-  let startLine: number | undefined;
-  for (let i = line; i >= 0; i--) {
-    const t = document.lineAt(i).text;
-    if (/^\s*EndProcedure\b/i.test(t)) break;
-    if (/^\s*Procedure\b/i.test(t)) {
-      startLine = i;
-      break;
-    }
+function getDocumentLines(document: vscode.TextDocument): string[] {
+  const lines: string[] = [];
+
+  for (let i = 0; i < document.lineCount; i++) {
+    lines.push(document.lineAt(i).text);
   }
-  if (startLine === undefined) return undefined;
-  for (let i = line; i < document.lineCount; i++) {
-    const t = document.lineAt(i).text;
-    if (/^\s*EndProcedure\b/i.test(t)) {
-      return { startLine, endLine: i };
-    }
-  }
-  return undefined;
+
+  return lines;
 }
 
-function findProcedureBlockByName(document: vscode.TextDocument, procName: string): LineBlock | undefined {
-  for (let i = 0; i < document.lineCount; i++) {
-    const parsed = parseProcedureHeaderLine(document.lineAt(i).text);
-    if (!parsed || parsed.name !== procName) continue;
-    return findProcedureBlock(document, i);
-  }
+function findProcedureBlock(document: vscode.TextDocument, line: number) {
+  return findProcedureBlockInLines(getDocumentLines(document), line);
+}
 
-  return undefined;
+function findProcedureBlockByName(document: vscode.TextDocument, procName: string) {
+  return findProcedureBlockByNameInLines(getDocumentLines(document), procName);
 }
 
 function resolveWindowEventProcedureBlock(
@@ -4587,15 +4580,8 @@ function isTopLevelGlobalAnchorLine(text: string): boolean {
     || isTopLevelHeadBoundaryLine(text);
 }
 
-function getFirstProcedureLine(document: vscode.TextDocument): number {
-  for (let i = 0; i < document.lineCount; i++) {
-    if (/^\s*ProcedureDLL\b/i.test(document.lineAt(i).text) || /^\s*Procedure(?:\.\w+)?\b/i.test(document.lineAt(i).text)) return i;
-  }
-  return document.lineCount;
-}
-
 function findFontLoadCalls(calls: PbCall[], document: vscode.TextDocument): PbCall[] {
-  const firstProcedureLine = getFirstProcedureLine(document);
+  const firstProcedureLine = findFirstProcedureLine(getDocumentLines(document));
   return calls.filter(call => call.name === "LoadFont" && call.range.line < firstProcedureLine);
 }
 

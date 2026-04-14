@@ -1,7 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as path from 'node:path';
-import { extractProcedureNamesFromText, parseProcedureHeaderLine } from "../src/core/parser/procedure-scanner";
+import {
+  extractProcedureNamesFromText,
+  findFirstProcedureLine,
+  findProcedureBlock,
+  findProcedureBlockByName,
+  parseProcedureHeaderLine
+} from "../src/core/parser/procedure-scanner";
 import {
   resolveFixedProcedureSourcePaths,
   resolveProcedureEventFilePath,
@@ -64,4 +70,21 @@ test('resolveFixedProcedureSourcePaths returns the PB document itself plus the o
   ].sort();
 
   assert.deepEqual(paths, expected);
+});
+
+
+test('findProcedureBlock and related helpers resolve supported procedure ranges from plain lines', () => {
+  const lines = [
+    'Global foo',
+    'ProcedureDLL.s HandleDll(arg)',
+    '  Debug arg',
+    'EndProcedure',
+    '',
+    'Procedure HandlePlain()',
+    'EndProcedure'
+  ];
+
+  assert.equal(findFirstProcedureLine(lines), 1);
+  assert.deepEqual(findProcedureBlock(lines, 2), { startLine: 1, endLine: 3 });
+  assert.deepEqual(findProcedureBlockByName(lines, 'HandlePlain'), { startLine: 5, endLine: 6 });
 });
