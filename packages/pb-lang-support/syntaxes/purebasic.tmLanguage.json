@@ -236,7 +236,12 @@
         },
         {
           "name": "keyword.operator.address.purebasic",
-          "match": "@[A-Za-z_][A-Za-z0-9_]*"
+          "match": "@([A-Za-z_][A-Za-z0-9_]*\\$?)",
+          "captures": {
+            "1": {
+              "name": "variable.name.purebasic"
+            }
+          }
         }
       ]
     },
