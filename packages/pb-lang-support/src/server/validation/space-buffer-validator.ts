@@ -62,20 +62,116 @@ const SPACE_ASSIGN_RE =
     /\b([A-Za-z_][A-Za-z0-9_]*)\$\s*=\s*Space\s*\(/i;
 
 /**
- * Matches an API call that contains @<varname>$ as an argument.
+ * Describes a detected Win32 API call site within a line.
  *
- * The pattern looks for:
- *   <Word>_(   ...   @<varname>$   ...   )
- *
- * A trailing \$ on the address operand is mandatory to avoid matching
- * integer-variable addresses such as @count.
+ * Returned by `findApiCallWithAddr` and stored in `VarState` so that
+ * `buildDiagnostic` can produce an accurate character range.
  */
-function makeApiCallRe(varName: string): RegExp {
-    const v = escapeRegExp(varName);
-    return new RegExp(
-        `\\b[A-Za-z_]\\w*_\\s*\\([^)]*@${v}\\$[^)]*\\)`,
-        'i'
-    );
+interface ApiCallMatch {
+    /** Index of the first character of the function name in the line. */
+    index: number;
+    /** Index one past the closing ')' of the call. */
+    end: number;
+}
+
+/**
+ * Searches `line` for a Win32 API call (identifier ending with `_`) whose
+ * argument list contains `@varNameLower$` at any nesting depth, outside a
+ * string literal.
+ *
+ * Unlike the previous `[^)]*`-based regex this handles nested calls such as
+ *   SomeApi_(Len(buf$), @buf$)
+ * by maintaining paren-depth state while honouring PureBasic string rules.
+ *
+ * @param line          The stripped source line (no trailing comment).
+ * @param varNameLower  The lowercase variable name (without `$` sigil).
+ * @returns             The outermost matching call's span, or `null`.
+ */
+function findApiCallWithAddr(line: string, varNameLower: string): ApiCallMatch | null {
+    const target = ('@' + varNameLower + '$').toLowerCase();
+    const lline  = line.toLowerCase();
+    const n      = line.length;
+
+    // ── Forward scanner state ────────────────────────────────────────────────
+    let inString = false;
+    let isEscape = false;
+    let depth    = 0;
+
+    // Stack of open API calls.  Each entry records where the call name starts
+    // and the paren depth at which the '(' was found (= depth after increment).
+    const stack: Array<{ nameStart: number; openDepth: number }> = [];
+
+    for (let i = 0; i < n; i++) {
+        const ch = line[i];
+
+        if (inString) {
+            if (ch === '"') {
+                if (isEscape) {
+                    // Count consecutive backslashes before this '"'.
+                    let bs = 0;
+                    let k  = i - 1;
+                    while (k >= 0 && line[k] === '\\') { bs++; k--; }
+                    if (bs % 2 !== 0) { continue; } // escaped '"' stays in string
+                }
+                inString = false;
+                isEscape = false;
+            }
+            continue; // parens inside strings do not affect depth
+        }
+
+        if (ch === '"') {
+            inString = true;
+            isEscape = i > 0 && line[i - 1] === '~';
+            continue;
+        }
+
+        if (ch === '(') {
+            depth++;
+
+            // Check whether this '(' belongs to a Win32 API call:
+            //   identifier ending with '_', optionally preceded by whitespace.
+            let j = i - 1;
+            while (j >= 0 && (line[j] === ' ' || line[j] === '\t')) { j--; }
+
+            if (j >= 0 && line[j] === '_') {
+                // Walk back over the full identifier.
+                let k = j - 1;
+                while (k >= 0 && /\w/.test(line[k])) { k--; }
+                const nameStart = k + 1;
+                // Identifier must start with a letter or underscore.
+                if (/[A-Za-z_]/.test(line[nameStart])) {
+                    stack.push({ nameStart, openDepth: depth });
+                }
+            }
+            continue;
+        }
+
+        if (ch === ')') {
+            // Check whether the top of the stack opened at the current depth.
+            if (stack.length > 0 && stack[stack.length - 1].openDepth === depth) {
+                const call      = stack.pop()!;
+                const spanStart = call.nameStart;
+                const spanEnd   = i + 1;          // inclusive of ')'
+                const span      = lline.slice(spanStart, spanEnd);
+                let   searchPos = 0;
+
+                // Walk every occurrence of @varNameLower$ in this span.
+                // The first one not inside a string literal is a real match.
+                while (true) {
+                    const tPos = span.indexOf(target, searchPos);
+                    if (tPos === -1) { break; }
+                    const absPos = spanStart + tPos;
+                    if (!isPositionInString(line, absPos)) {
+                        return { index: spanStart, end: spanEnd };
+                    }
+                    searchPos = tPos + 1;
+                }
+            }
+            depth--;
+        }
+    }
+
+    return null;
 }
 
 /**
@@ -101,6 +197,8 @@ function escapeRegExp(s: string): string {
 interface VarState {
     /** Original casing for diagnostic messages. */
     varNameOriginal: string;
+    /** Lowercase variable name — passed to findApiCallWithAddr(). */
+    varNameLower: string;
     /** Line on which the most recent Space() assignment was seen. */
     assignLine: number;
     /**
@@ -108,10 +206,8 @@ interface VarState {
      * PeekS() fix.  `null` means no open API call is pending.
      */
     pendingApiLine: number | null;
-    /** Regex match at pendingApiLine — used to compute the diagnostic range. */
-    pendingApiMatch: RegExpExecArray | null;
-    /** Compiled per-variable regex for API call detection. */
-    apiRe: RegExp;
+    /** Span of the call at pendingApiLine — used to compute the diagnostic range. */
+    pendingApiMatch: ApiCallMatch | null;
     /** Compiled per-variable regex for PeekS() fix detection. */
     peekSRe: RegExp;
 }
@@ -124,10 +220,10 @@ function buildDiagnostic(
     sv: VarState,
     apiLine: number,
     rawLine: string,
-    apiMatch: RegExpExecArray | null,
+    apiMatch: ApiCallMatch | null,
 ): Diagnostic {
     const charStart = apiMatch ? apiMatch.index : 0;
-    const charEnd   = apiMatch ? apiMatch.index + apiMatch[0].length : rawLine.length;
+    const charEnd   = apiMatch ? apiMatch.end   : rawLine.length;
     return {
         severity: DiagnosticSeverity.Warning,
         range: {
@@ -160,6 +256,14 @@ function buildDiagnostic(
  * proportional to O(n · k) rather than O(n²).
  */
 export function validateSpaceApiBuffers(text: string): Diagnostic[] {
+    // ── Cheap prefilter ────────────────────────────────────────────────────
+    // All three tokens must be present for any match to be possible.
+    // Each test short-circuits on the first occurrence, so this is O(n) with
+    // very small constants and avoids the split + full scan for most files.
+    if (!/space\s*\(/i.test(text) || !text.includes('@') || !text.includes('_(')) {
+        return [];
+    }
+
     const diagnostics: Diagnostic[] = [];
     const lines = text.split(/\r?\n/);
 
@@ -172,6 +276,13 @@ export function validateSpaceApiBuffers(text: string): Diagnostic[] {
 
     for (let i = 0; i < lines.length; i++) {
         const raw      = lines[i];
+
+        // ── Early exit when there is nothing to track yet ─────────────────
+        // If no variable has been seen via Space() and this line cannot be a
+        // Space() assignment, skip the (relatively expensive) stripInlineComment
+        // + per-variable loop entirely.
+        if (tracked.size === 0 && !SPACE_ASSIGN_RE.test(raw)) { continue; }
+
         const stripped = stripInlineComment(raw).trimEnd();
 
         // ── Space() assignment? ────────────────────────────────────────────
@@ -200,10 +311,10 @@ export function validateSpaceApiBuffers(text: string): Diagnostic[] {
             // (i <= sv.assignLine → true), avoiding self-interference.
             tracked.set(key, {
                 varNameOriginal: spaceM[1],
+                varNameLower:    key,
                 assignLine:      i,
                 pendingApiLine:  null,
                 pendingApiMatch: null,
-                apiRe:           makeApiCallRe(key),
                 peekSRe:         makePeekSRe(key),
             });
 
@@ -224,8 +335,8 @@ export function validateSpaceApiBuffers(text: string): Diagnostic[] {
             }
 
             // Priority 2 — API call site.
-            const apiM = sv.apiRe.exec(stripped);
-            if (apiM && !isPositionInString(stripped, apiM.index)) {
+            const apiM = findApiCallWithAddr(stripped, sv.varNameLower);
+            if (apiM) {
                 if (sv.pendingApiLine != null) {
                     // A previous API call was not fixed before this one → warn.
                     diagnostics.push(buildDiagnostic(

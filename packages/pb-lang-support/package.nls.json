@@ -6,6 +6,7 @@
   "config.purebasic.enableCompletion.description": "Enable IntelliSense completion.",
   "config.purebasic.validationDelay.description": "Debounce delay (ms) before validating documents.",
   "config.purebasic.apiFunctionListingPath.description": "Path to PureBasic Compilers/APIFunctionListing.txt to enable OS API IntelliSense (native API calls with \"_\" suffix).",
+  "config.purebasic.residentsPath.description": "Direct path to the folder containing PureBasic Residents .pb source files (structures and constants) for IntelliSense.",
   "config.purebasic.formatting.enabled.description": "Enable code formatting.",
   "config.purebasic.formatting.indentSize.description": "Number of spaces for indentation.",
   "config.purebasic.formatting.tabSize.description": "Number of spaces per tab.",

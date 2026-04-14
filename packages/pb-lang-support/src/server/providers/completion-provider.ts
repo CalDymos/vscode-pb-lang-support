@@ -14,7 +14,8 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { keywords, types, typeSuffixDefinitions, windowsApiFunctions, parsePureBasicConstantDefinition } from '../utils/constants';
 import { allBuiltinNames, findBuiltin } from '../utils/builtin-functions';
 import { allBuiltinConstants, getParamConstantsResolved } from '../utils/builtin-constants';
-import { stripInlineComment, isPositionInString } from '../utils/pb-lexer-utils';
+import { allResidentConstantNames, allResidentStructureNames } from '../indexer/residents-index';
+import { stripInlineComment, isPositionInString, createStringState, advanceStringState } from '../utils/pb-lexer-utils';
 import { ApiFunctionListing } from '../utils/api-function-listing';
 import { getAvailableModules, getModuleExports } from '../utils/module-resolver';
 import { analyzeScopesAndVariables, getActiveUsedModules, VariableInfo } from '../utils/scope-manager';
@@ -227,6 +228,22 @@ function handleCompletionInternal(
                 });
             });
 
+        // 5) Resident structure names (e.g. in6_addr, PROPVARIANT from PB Residents/)
+        allResidentStructureNames()
+            .filter(n => !p || n.toLowerCase().startsWith(p))
+            .forEach((n, idx) => {
+                items.push({
+                    label: n,
+                    kind: CompletionItemKind.Struct,
+                    data: 'res_tstruct_' + idx,
+                    detail: `Resident Structure ${n}`,
+                    documentation: `PureBasic Resident Structure: ${n}`,
+                    insertText: n,
+                    insertTextFormat: InsertTextFormat.PlainText,
+                    sortText: '4_' + n,
+                });
+            });
+
         return { isIncomplete: false, items };
     }
 
@@ -250,20 +267,38 @@ function handleCompletionInternal(
             ? getParamConstantsResolved(fnCtx.functionName, fnCtx.paramIndex)
             : undefined;
 
-        const builtinsToShow = ctxConstants ?? allBuiltinConstants;
-        builtinsToShow.forEach((c, idx) => {
-            if (!c.toLowerCase().startsWith(pfx)) { return; }
-            items.push({
-                label: c,
-                kind: CompletionItemKind.Constant,
-                data: ctxConstants ? `pb_ctx_const_${idx}` : `pb_builtin_const_${idx}`,
-                detail: ctxConstants ? 'PureBasic Constant (parameter)' : 'PureBasic Constant',
-                documentation: `Built-in constant ${c}`,
-                insertText: c,
-                insertTextFormat: InsertTextFormat.PlainText,
-                sortText: '0_' + c
-            });
-        });
+        // In general mode (no function-call context) gate builtin constants to avoid
+        // flooding the client with the entire #PB_* list when only "#" was typed.
+        //   – Skip builtins entirely when constPrefix < 2 chars (no context-sensitive mapping).
+        //   – Cap at GENERAL_BUILTIN_CAP items and signal isIncomplete so the client
+        //     re-requests as the user types more characters.
+        const GENERAL_BUILTIN_CAP = 200;
+        let builtinsTruncated = false;
+
+        const isGeneralMode = !ctxConstants;
+        if (!isGeneralMode || context.constPrefix.length >= 2) {
+            const builtinsToShow = ctxConstants ?? allBuiltinConstants;
+            let builtinCount = 0;
+            for (let idx = 0; idx < builtinsToShow.length; idx++) {
+                const c = builtinsToShow[idx];
+                if (!c.toLowerCase().startsWith(pfx)) { continue; }
+                if (isGeneralMode && builtinCount >= GENERAL_BUILTIN_CAP) {
+                    builtinsTruncated = true;
+                    break;
+                }
+                items.push({
+                    label: c,
+                    kind: CompletionItemKind.Constant,
+                    data: ctxConstants ? `pb_ctx_const_${idx}` : `pb_builtin_const_${idx}`,
+                    detail: ctxConstants ? 'PureBasic Constant (parameter)' : 'PureBasic Constant',
+                    documentation: `Built-in constant ${c}`,
+                    insertText: c,
+                    insertTextFormat: InsertTextFormat.PlainText,
+                    sortText: '0_' + c
+                });
+                builtinCount++;
+            }
+        }
 
         // ── 2. User-defined constants ─────────────────────────────────────────
         const docSymbols = extractDocumentSymbols(document, documentCache);
@@ -300,7 +335,23 @@ function handleCompletionInternal(
             });
         });
 
-        return { isIncomplete: false, items };
+        // ── 4. Resident constants (#AF_INET6 etc.) ────────────────────────────
+        allResidentConstantNames().forEach((name, idx) => {
+            const label = `#${name}`;
+            if (!label.toLowerCase().startsWith(pfx)) { return; }
+            items.push({
+                label,
+                kind: CompletionItemKind.Constant,
+                data: `resident_const_${idx}`,
+                detail: 'Resident Constant',
+                documentation: `PureBasic Resident constant: ${label}`,
+                insertText: label,
+                insertTextFormat: InsertTextFormat.PlainText,
+                sortText: '2_' + name
+            });
+        });
+
+        return { isIncomplete: builtinsTruncated, items };
     }
 
     // Check if it's a module call Module::
@@ -480,6 +531,21 @@ function handleCompletionInternal(
             });
         }
     });
+
+    // Resident structure names (e.g. in6_addr, PROPVARIANT from PB Residents/)
+    allResidentStructureNames().forEach((name, idx) => {
+        if (!name.toLowerCase().startsWith(context.prefix.toLowerCase())) return;
+        completionItems.push({
+            label: name,
+            kind: CompletionItemKind.Class,
+            data: 'res_gstruct_' + idx,
+            detail: 'Resident Structure',
+            documentation: `PureBasic Resident Structure: ${name}`,
+            insertText: name,
+            insertTextFormat: InsertTextFormat.PlainText
+        });
+    });
+
     documentSymbols.interfaces.forEach((it, index) => {
         if (it.name.toLowerCase().startsWith(context.prefix.toLowerCase())) {
             completionItems.push({
@@ -1074,10 +1140,12 @@ function findLastUnmatchedParenLocal(s: string): number {
 
 /** Counts commas at depth 0, skipping nested parens and strings → 0-based param index. */
 function calcParamIndex(text: string): number {
-    let count = 0, depth = 0, inStr = false;
-    for (const ch of text) {
-        if (ch === '"') { inStr = !inStr; }
-        else if (!inStr) {
+    let count = 0, depth = 0;
+    const state = createStringState();
+    for (let i = 0; i < text.length; i++) {
+        advanceStringState(state, text, i);
+        if (!state.inString) {
+            const ch = text[i];
             if (ch === '(') { depth++; }
             else if (ch === ')') { depth--; }
             else if (ch === ',' && depth === 0) { count++; }

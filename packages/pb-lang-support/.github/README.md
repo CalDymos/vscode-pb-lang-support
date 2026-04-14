@@ -2,7 +2,8 @@
 
 [![pb-lang-support](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=lang-v*&label=lang)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)
 
-`pb-lang-support` is a Visual Studio Code extension that provides comprehensive PureBasic language support via a TextMate grammar, a Language Server, host-side build/run integration, and a Debug Adapter.
+**PureBasic Language Services** is a Visual Studio Code extension that provides PureBasic language support,
+including `IntelliSense`, `Debugging`, and `Code Navigation`. It supports PureBasic source files (`.pb`, `.pbi`) and also provides text-mode language support for PureBasic Forms files (`.pbf`). (For project management and form creation, see [Related Extensions](#related-extensions))
 
 ## Features
 
@@ -22,7 +23,8 @@
 - Signature Help (type `(` / hover)
 - Hover Documentation & Type Info
 - Outline: `Ctrl+Shift+O`
-- Built-in PureBasic function dataset shared by completion, hover, and signature help
+- Built-in PureBasic functions in completion, hover, and signature help - updated for PureBasic 6.40.
+- Built-In PureBasic constants in completion - updated for PureBasic 6.40.
 
 ### Navigation & Refactoring 🧭
 
@@ -35,31 +37,44 @@
 - Live Diagnostics
 - Code Actions (quick fixes/refactorings)
 - Missing include file diagnostics
-- `IncludeBinary` / `DataSection` validation
+- `IncludeBinary` diagnostics for invalid usage outside a `DataSection`
+- **PureBasic 6.40 migration diagnostics:**
+  - Error when `#PB_String_InPlace` is used with `ReplaceString()` (flag removed in PureBasic 6.40), with migration hint
+  - Warning when `Space()` is used as a Win32 API write buffer without a subsequent `PeekS()` length fixup (required since PureBasic 6.40 due to the reworked string manager)
+  - Semantic validation can be disabled via `purebasic.linting.enableSemanticValidation: false` for large files where the analysis impacts responsiveness
 
 ### PureBasic 🟦
 
 - Modules: `Module::Function`
 - Structures: member access via `\`
 - Constants: `#CONSTANT`
+- String variables with `$` sigil (`myVar$`) — fully supported in completion, hover, go-to-definition and rename
 - Arrays / Lists / Maps IntelliSense
 - Structure member completion, including chained access and `With` blocks
-- Type completion after `.` for suffixes, built-in types, structures, and interfaces
-- Native OS API IntelliSense via `Compilers/APIFunctionListing.txt`
-- Windows-only minimal API fallback suggestions when no listing is configured
+- Type completion after `.` for type suffixes, built-in types, structures, and interfaces
+- Native OS API IntelliSense (via PureBasic `APIFunctionListing.txt`)
+  - Loads OS-specific API functions from your PureBasic installation (`Compilers/APIFunctionListing.txt`)
+  - Provides Completion + Signature Help (including inline comments, if present in the listing)
+  - Windows-only minimal fallback suggestions if the listing is not configured/available
+- Common PB subsystems: Graphics/Game, Network, Database, Threading
 
 ### Compiler / Build / Run Integration (Toolchain) 🐞
 
 - Build Active Target command
 - Run Active Target command
 - Build & Run Active Target command
-- Standalone fallback resolution when no `.pbp` context is available
-- Configurable run mode (`spawn` or `terminal`)
-- VS Code debugger integration for PureBasic
-  - Breakpoints
-  - Step Over / Step Into / Step Out
-  - Variable inspection
-  - Call stack navigation
+- Standalone fallback build context when no `.pbp` project is active
+  - PureBasic IDE metadata in the source file
+  - `.vscode/launch.json`
+  - `<filename>.pb.cfg`
+  - `project.cfg`
+- Run mode selection for executable launch
+  - `spawn` for output-channel based execution
+  - `terminal` for interactive console programs
+- Breakpoints: Set breakpoints in your PureBasic code
+- Step Debugging: Step Over, Step Into, Step Out
+- Variable Inspection: View local and global variables
+- Call Stack: Navigate through the call stack
 
 ## Related Extensions
 
@@ -73,7 +88,7 @@
 
 - **PureBasic Forms Editor**  
   [![pb-forms-editor](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=forms-v*&label=forms)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)  
-  Visual designer and tooling for PureBasic Forms (`.pbf`). `pb-lang-support` contributes the text-mode language registration and grammar for `.pbf`.  
+  Visual designer and tooling for PureBasic Forms (`.pbf`). `pb-lang-support` adds the text-mode language support for these files.  
   [**View in Marketplace**](https://marketplace.visualstudio.com/items?itemName=CalDymos.pb-forms-editor)  
   [**View Repo**](https://github.com/CalDymos/vscode-pb-lang-suite/tree/main/packages/pb-forms-editor)
 
@@ -122,7 +137,8 @@ The extension provides some configuration options. Access these via:
   "purebasic.apiFunctionListingPath": "C:/PureBasic/Compilers/APIFunctionListing.txt",
   "purebasic.build.compiler": "pbcompiler",
   "purebasic.build.fallbackSource": "launchJson",
-  "purebasic.run.mode": "spawn"
+  "purebasic.run.mode": "spawn",
+  "purebasic.linting.enableSemanticValidation": true
 }
 ```
 

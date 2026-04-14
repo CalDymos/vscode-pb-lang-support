@@ -229,7 +229,7 @@ function parseVariablesInLine(line: string, lineNumber: number, currentScope: Sc
     // Match variable definition patterns
     const patterns = [
         // Global, Protected, Static, Define, Shared, Threaded variables
-        /^(Global|Protected|Static|Define|Shared|Threaded)\s+(\*?)(\w+)(?:\.(\w+))?(?:\(([^)]*)\))?/i,
+        /^(Global|Protected|Static|Define|Shared|Threaded)\s+(\*?)(\w+\$?)(?:\.(\w+))?(?:\(([^)]*)\))?/i,
         // Dim array
         /^Dim\s+(\w+)(?:\.(\w+))?(?:\(([^)]*)\))?/i,
         // NewList declaration
@@ -237,7 +237,7 @@ function parseVariablesInLine(line: string, lineNumber: number, currentScope: Sc
         // NewMap declaration
         /^(Global|Protected|Static|Define)?\s*NewMap\s+(\w+)(?:\.(\w+))?/i,
         // Local variable (simple variable declaration in procedure)
-        /^(\w+)(?:\.(\w+))?\s*=/i
+        /^(\w+\$?)(?:\.(\w+))?\s*=/i
     ];
 
     for (const pattern of patterns) {
@@ -253,7 +253,7 @@ function parseVariablesInLine(line: string, lineNumber: number, currentScope: Sc
                 const modifier = match[1];
                 const isPointer = match[2] === '*';
                 variableName = match[3];
-                variableType = match[4] || 'i';
+                variableType = match[4] || (variableName.endsWith('$') ? 's' : 'i');
                 const arraySize = match[5];
 
                 isGlobal = modifier?.toLowerCase() === 'global';
@@ -288,7 +288,7 @@ function parseVariablesInLine(line: string, lineNumber: number, currentScope: Sc
                 isStatic = modifier?.toLowerCase() === 'static';
             } else if (pattern === patterns[4]) { // 局部变量赋值
                 variableName = match[1];
-                variableType = match[2] || 'i';
+                variableType = match[2] || (variableName.endsWith('$') ? 's' : 'i');
                 // 只有在过程作用域内才考虑局部变量
                 if (currentScope.type !== ScopeType.Procedure) {
                     continue;
@@ -326,12 +326,12 @@ function parseParameters(paramString: string, lineNumber: number, currentScope: 
     const params = paramString.split(',');
     for (const param of params) {
         const trimmedParam = param.trim();
-        const paramMatch = trimmedParam.match(/^(\*?)(\w+)(?:\.(\w+))?/);
+        const paramMatch = trimmedParam.match(/^(\*?)(\w+\$?)(?:\.(\w+))?/);
 
         if (paramMatch) {
             const isPointer = paramMatch[1] === '*';
             const paramName = paramMatch[2];
-            const paramType = paramMatch[3] || 'unknown';
+            const paramType = paramMatch[3] || (paramName.endsWith('$') ? 's' : 'unknown');
 
             let finalType = paramType;
             if (isPointer) {

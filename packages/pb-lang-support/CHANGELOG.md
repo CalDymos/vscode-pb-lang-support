@@ -1,5 +1,77 @@
 # Changelog
 
+## 0.19.3
+
+### Added
+
+- Added `purebasic.linting.enableSemanticValidation` opt-out flag: when set
+  to `false` the `Space()`-as-API-buffer validator is skipped, allowing users
+  to trade diagnostic coverage for responsiveness on very large documents.
+
+### Fixed
+
+- Fixed completion flooding: built-in `#PB_*` constants are now gated behind a
+  2-character prefix in general (non-parameter) context and capped at 200 items;
+  `isIncomplete` is returned so the client re-requests as the user types more.
+- Fixed `@` address-operator rule in the TextMate grammar: the operand
+  (including optional `$` sigil) is now captured as `variable.name.purebasic`
+  so string-variable addresses (`@buf$`) are highlighted consistently.
+
+### Performance
+
+- `validateSpaceApiBuffers` now short-circuits with a three-token prefilter
+  (`Space(`, `@`, `_(`) before splitting the document into lines, reducing
+  overhead for the common case where none of the patterns are present.
+- Added per-line early-exit in `validateSpaceApiBuffers`: lines are skipped
+  entirely when no variable is being tracked and the line cannot be a
+  `Space()` assignment, avoiding `stripInlineComment` overhead on clean files.
+
+## 0.19.2
+
+### Fixed
+
+- Fixed `loadResidents` to use async FS operations (`fs.promises`) throughout
+  so the Node event loop is never blocked during residents indexing.
+- Fixed residents traversal to skip platform-irrelevant subdirectories
+  (`windows`, `linux`, `macos`) and the SpiderBasic-only `javascript` dir,
+  reducing unnecessary scanning on all platforms.
+- Fixed residents indexing startup: `loadResidents` is now fired as a
+  background task in `onInitialized` so the LSP client is not kept waiting
+  during FS traversal.
+- Fixed runaway traversal by adding a `MAX_DIRS_VISITED` (1000) cap alongside
+  the existing `MAX_RESIDENT_FILES` (200) cap; a warning is emitted via
+  `logError` when either limit is reached.
+
+## 0.19.1
+
+### Fixed
+
+- Fixed `getWordAtPosition` to include the trailing `$` sigil so string
+  variables (`myVar$`) are resolved correctly in hover, definition and
+  rename providers.
+- Fixed scope-manager variable patterns to capture the `$` sigil
+  (`\w+\$?`) so `Global`, `Protected`, `Static`, `Define`, `Shared`,
+  `Threaded` and implicit local assignments are parsed correctly for
+  string variables.
+- Fixed type inference in scope-manager and hover-provider: variables
+  and parameters whose name ends with `$` now default to type `s`
+  (string) instead of `i` / `unknown` when no explicit type suffix is
+  present.
+- Fixed parameter regex in `parseParameters` to capture the `$` sigil,
+  preventing string parameters from being treated as unknown-typed.
+- Fixed `deprecated-api-validator` to detect all occurrences of
+  `#PB_String_InPlace` on a line (not just the first) by switching to a
+  `/g`-flag loop; corrected diagnostic character ranges by accounting for
+  leading whitespace in the original line.
+- Fixed `space-buffer-validator` API-call detection by replacing the
+  flat `[^)]*`-regex with a character-level paren-depth scanner
+  (`findApiCallWithAddr`) that handles nested calls such as
+  `SomeApi_(Len(buf$), @buf$)` and correctly ignores `@` operands inside
+  string literals.
+- Fixed syntax-highlighting capture group for `$`-suffix string
+  variables: the `$` is now part of capture group 1 so the full token
+  (including sigil) receives the `variable.name.purebasic` scope.
+  
 ## 0.19.0
 
 ### Added
