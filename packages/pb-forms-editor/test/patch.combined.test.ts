@@ -38,6 +38,7 @@ import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
 // type of editFactory so that patch emitter functions (which expect vscode.TextDocument)
 // are accepted without additional casts at each call site.
 import type { TextDocument } from "vscode";
+import { MenuEntryMovePlacement } from "../src/shared/menu";
 
 const DEFAULT_SECTION_ID = "0";
 const menuId = DEFAULT_SECTION_ID;
@@ -598,7 +599,7 @@ test("roundtrips menu subtree move before sibling entry", () => {
   const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
     applyMenuEntryMove(document, menuId, subMenu!.source!.line, MENU_ENTRY_KIND.OpenSubMenu, {
       targetSourceLine: separator!.source!.line,
-      placement: "before",
+      placement: MenuEntryMovePlacement.Before,
     })
   );
 
@@ -631,7 +632,7 @@ test("roundtrips menu entry move into submenu as child block", () => {
   const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
     applyMenuEntryMove(document, menuId, openItem!.source!.line, MENU_ENTRY_KIND.MenuItem, {
       targetSourceLine: subMenu!.source!.line,
-      placement: "appendChild",
+      placement: MenuEntryMovePlacement.AppendChild,
     })
   );
 

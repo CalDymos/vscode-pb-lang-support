@@ -1,4 +1,4 @@
-import type { MenuEntryMovePlacement } from "../../shared/menu";
+import { MenuEntryMovePlacement } from "../../shared/menu";
 import * as vscode from "vscode";
 import { scanCalls } from "../parser/call-scanner";
 import { parseFormDocument } from "../parser/form-parser";
@@ -5777,7 +5777,7 @@ export function applyMenuEntryMove(
 
   let insertLine: number | undefined;
 
-  if (options.placement === "appendChild") {
+  if (options.placement === MenuEntryMovePlacement.AppendChild) {
     const anchored = findAnchoredMenuEntryInsert(document, calls, menuId, options.targetSourceLine);
     if (!anchored) return undefined;
     insertLine = anchored.insertLine;

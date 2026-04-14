@@ -1,7 +1,7 @@
 import { quotePbString, unquoteString } from "../parser/tokenizer";
 import type { DesignerTopLevelContainerSelection, DesignerTopLevelEntrySelection } from "./selection";
 import { parseStatusBarWidth } from "../statusbar/preview";
-import type { MenuEntryMovePlacement } from "../../shared/menu";
+import { MenuEntryMovePlacement } from "../../shared/menu";
 import type { FormToolBarEntry } from "../model";
 
 export type SourceLineLike = {
@@ -347,14 +347,14 @@ export function getPredictedMenuEntryMoveIndex(
   menu: MenuModelLike,
   sourceEntryIndex: number,
   targetEntryIndex: number,
-  placement: "before" | "after" | "appendChild"
+  placement: MenuEntryMovePlacement
 ): number | null {
   const entries = menu.entries ?? [];
   if (sourceEntryIndex < 0 || sourceEntryIndex >= entries.length) return null;
   if (targetEntryIndex < 0 || targetEntryIndex >= entries.length) return null;
 
   const sourceEndIndex = getMenuEntryBlockEndIndex(entries, sourceEntryIndex);
-  let insertIndex = placement === "before"
+  let insertIndex = placement === MenuEntryMovePlacement.Before
     ? targetEntryIndex
     : getMenuEntryBlockEndIndex(entries, targetEntryIndex) + 1;
 
@@ -815,7 +815,7 @@ export function getMenuEntryMoveTarget(args: {
     if (typeof targetSourceLine === "number") {
       return {
         targetSourceLine,
-        placement: "before",
+        placement: MenuEntryMovePlacement.Before,
         indicatorRect: { x: firstVisibleRoot.rect.x - 1, y: firstVisibleRoot.rect.y, w: 2, h: firstVisibleRoot.rect.h },
         indicatorOrientation: "vertical"
       };
@@ -839,7 +839,7 @@ export function getMenuEntryMoveTarget(args: {
     ) {
       return {
         targetSourceLine,
-        placement: "before",
+        placement: MenuEntryMovePlacement.Before,
         indicatorRect: { x: rect.x, y: rect.y - 1, w: rect.w, h: 2 },
         indicatorOrientation: "horizontal"
       };
@@ -854,7 +854,7 @@ export function getMenuEntryMoveTarget(args: {
     ) {
       return {
         targetSourceLine,
-        placement: "after",
+        placement: MenuEntryMovePlacement.After,
         indicatorRect: level === 0
           ? { x: rect.x + rect.w, y: rect.y, w: 2, h: rect.h }
           : { x: rect.x, y: rect.y + rect.h, w: rect.w, h: 2 },
@@ -877,7 +877,7 @@ export function getMenuEntryMoveTarget(args: {
       ) {
         return {
           targetSourceLine,
-          placement: "appendChild",
+          placement: MenuEntryMovePlacement.AppendChild,
           indicatorRect: { x: rect.x + rect.w, y: rect.y, w: footerRect.w, h: 2 },
           indicatorOrientation: "horizontal"
         };
