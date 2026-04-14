@@ -2,7 +2,7 @@
   "name": "pb-lang-support",
   "displayName": "PureBasic Language Services",
   "description": "%extension.description%",
-  "version": "0.19.1",
+  "version": "0.19.2",
   "publisher": "CalDymos",
   "author": {
     "name": "CalDymos"
@@ -501,7 +501,7 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "scrape:builtins": "node scripts/scrape-pb-docs.js",
-    "scrape:constants": "node scripts/scrape-pb-constants.js"    
+    "scrape:constants": "node scripts/scrape-pb-constants.js"
   },
   "dependencies": {
     "@vscode/debugadapter": "^1.68.0",
