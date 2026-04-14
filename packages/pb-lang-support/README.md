@@ -43,12 +43,14 @@ including `IntelliSense`, `Debugging`, and `Code Navigation`. It supports PureBa
 - **PureBasic 6.40 migration diagnostics:**
   - Error when `#PB_String_InPlace` is used with `ReplaceString()` (flag removed in PureBasic 6.40), with migration hint
   - Warning when `Space()` is used as a Win32 API write buffer without a subsequent `PeekS()` length fixup (required since PureBasic 6.40 due to the reworked string manager)
-  
+  - Semantic validation can be disabled via `purebasic.linting.enableSemanticValidation: false` for large files where the analysis impacts responsiveness
+
 ### PureBasic 🟦
 
 - Modules: `Module::Function`
 - Structures: member access via `\`
 - Constants: `#CONSTANT`
+- String variables with `$` sigil (`myVar$`) — fully supported in completion, hover, go-to-definition and rename
 - Arrays / Lists / Maps IntelliSense
 - Structure member completion, including chained access and `With` blocks
 - Type completion after `.` for type suffixes, built-in types, structures, and interfaces
@@ -103,14 +105,61 @@ The extension provides some configuration options. Access these via:
 - VSCode Settings (`Ctrl`+`,`)
 - Search for "PureBasic" to see all available options
 
-### Common Settings
+### Settings Reference
+
+#### General
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `purebasic.apiFunctionListingPath` | `string` | `""` | Path to `APIFunctionListing.txt` from your PureBasic installation (`Compilers/APIFunctionListing.txt`). Required for OS API IntelliSense. |
+| `purebasic.enableValidation` | `boolean` | `true` | Enable/disable all live diagnostics. |
+| `purebasic.enableCompletion` | `boolean` | `true` | Enable/disable completion suggestions. |
+| `purebasic.maxNumberOfProblems` | `number` | `100` | Maximum number of diagnostics reported per document. |
+| `purebasic.validationDelay` | `number` | `500` | Debounce delay in milliseconds before diagnostics are recomputed after a change. |
+
+#### Build & Run
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `purebasic.build.compiler` | `string` | `"pbcompiler"` | Path or name of the PureBasic compiler executable. |
+| `purebasic.build.fallbackSource` | `string` | `"launchJson"` | Fallback build context when no `.pbp` project is active. One of `launchJson`, `pbMetadata`, `pbCfg`, `projectCfg`. |
+| `purebasic.run.mode` | `string` | `"spawn"` | How the compiled executable is launched. `spawn` streams output to the Output channel; `terminal` runs it in the integrated terminal (use for interactive programs). |
+
+#### Linting
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `purebasic.linting.enableSemanticValidation` | `boolean` | `true` | Enable semantic validators (e.g. `Space()`-as-API-buffer check). Set to `false` to improve responsiveness on very large files. |
+| `purebasic.linting.enableCodeActions` | `boolean` | `true` | Enable quick-fix code actions alongside diagnostics. |
+| `purebasic.linting.checkUnusedVariables` | `boolean` | `true` | Warn on declared but unused variables. |
+| `purebasic.linting.checkUndefinedSymbols` | `boolean` | `true` | Warn on references to undefined symbols. |
+
+#### Formatting
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `purebasic.formatting.enabled` | `boolean` | `true` | Enable document formatting (`Shift+Alt+F`). |
+| `purebasic.formatting.indentSize` | `number` | `4` | Number of spaces per indentation level. |
+| `purebasic.formatting.insertSpaces` | `boolean` | `true` | Use spaces for indentation. |
+| `purebasic.formatting.trimTrailingWhitespace` | `boolean` | `true` | Remove trailing whitespace on save. |
+| `purebasic.formatting.trimFinalNewlines` | `boolean` | `true` | Remove extra blank lines at end of file. |
+
+#### Performance
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `purebasic.performance.maxFileSize` | `number` | `1048576` | Files larger than this byte threshold (default 1 MB) are excluded from full analysis. |
+| `purebasic.performance.enableIncrementalParsing` | `boolean` | `true` | Use incremental re-parsing on edits instead of a full re-parse. |
+
+### Example `settings.json`
 
 ```json
 {
   "purebasic.apiFunctionListingPath": "C:/PureBasic/Compilers/APIFunctionListing.txt",
   "purebasic.build.compiler": "pbcompiler",
   "purebasic.build.fallbackSource": "launchJson",
-  "purebasic.run.mode": "spawn"
+  "purebasic.run.mode": "spawn",
+  "purebasic.linting.enableSemanticValidation": true
 }
 ```
 
