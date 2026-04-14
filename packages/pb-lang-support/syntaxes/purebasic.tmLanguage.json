@@ -1,20 +1,48 @@
 {
   "scopeName": "source.purebasic",
   "patterns": [
-    { "include": "#inline-asm" },
-    { "include": "#comments" },
-    { "include": "#constants" },
-    { "include": "#keywords" },
-    { "include": "#numbers" },
-    { "include": "#strings" },
-    { "include": "#procedures" },
-    { "include": "#structures" },
-    { "include": "#functions" },
-    { "include": "#variables" },
-    { "include": "#operators" },
-    { "include": "#compiler-directives" },
-    { "include": "#types" },
-    { "include": "#labels" }
+    {
+      "include": "#inline-asm"
+    },
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#constants"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#procedures"
+    },
+    {
+      "include": "#structures"
+    },
+    {
+      "include": "#functions"
+    },
+    {
+      "include": "#variables"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "include": "#compiler-directives"
+    },
+    {
+      "include": "#types"
+    },
+    {
+      "include": "#labels"
+    }
   ],
   "repository": {
     "comments": {
@@ -26,7 +54,6 @@
         }
       ]
     },
-
     "constants": {
       "patterns": [
         {
@@ -39,7 +66,6 @@
         }
       ]
     },
-
     "keywords": {
       "patterns": [
         {
@@ -71,7 +97,6 @@
         }
       ]
     },
-
     "numbers": {
       "patterns": [
         {
@@ -88,7 +113,6 @@
         }
       ]
     },
-
     "strings": {
       "patterns": [
         {
@@ -96,10 +120,14 @@
           "begin": "\"",
           "end": "\"",
           "beginCaptures": {
-            "0": { "name": "punctuation.definition.string.begin.purebasic" }
+            "0": {
+              "name": "punctuation.definition.string.begin.purebasic"
+            }
           },
           "endCaptures": {
-            "0": { "name": "punctuation.definition.string.end.purebasic" }
+            "0": {
+              "name": "punctuation.definition.string.end.purebasic"
+            }
           }
         },
         {
@@ -109,28 +137,34 @@
         }
       ]
     },
-
     "procedures": {
       "patterns": [
         {
           "name": "entity.name.function.definition.purebasic",
           "match": "\\b(Procedure(?:C|DLL|CDLL)?(?:\\.\\w+)?)\\s+([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
-            "1": { "name": "storage.type.function.purebasic" },
-            "2": { "name": "entity.name.function.purebasic" }
+            "1": {
+              "name": "storage.type.function.purebasic"
+            },
+            "2": {
+              "name": "entity.name.function.purebasic"
+            }
           }
         },
         {
           "name": "entity.name.function.declaration.purebasic",
           "match": "\\b(Declare(?:C|DLL|CDLL)?(?:\\.\\w+)?)\\s+([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
-            "1": { "name": "storage.type.function.purebasic" },
-            "2": { "name": "entity.name.function.purebasic" }
+            "1": {
+              "name": "storage.type.function.purebasic"
+            },
+            "2": {
+              "name": "entity.name.function.purebasic"
+            }
           }
         }
       ]
     },
-
     "structures": {
       "patterns": [
         {
@@ -141,13 +175,16 @@
           "name": "entity.name.type.definition.purebasic",
           "match": "\\b(Structure|Interface|Enumeration)\\s+([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
-            "1": { "name": "storage.type.purebasic" },
-            "2": { "name": "entity.name.type.purebasic" }
+            "1": {
+              "name": "storage.type.purebasic"
+            },
+            "2": {
+              "name": "entity.name.type.purebasic"
+            }
           }
         }
       ]
     },
-
     "variables": {
       "patterns": [
         {
@@ -155,27 +192,34 @@
           "name": "variable.other.purebasic",
           "match": "\\b([A-Za-z_][A-Za-z0-9_]*\\$)",
           "captures": {
-            "1": { "name": "variable.name.purebasic" }
+            "1": {
+              "name": "variable.name.purebasic"
+            }
           }
         },
         {
           "name": "variable.other.typed.purebasic",
           "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\.([islfdqauc]|\\w+)\\b",
           "captures": {
-            "1": { "name": "variable.name.purebasic" },
-            "2": { "name": "storage.type.purebasic" }
+            "1": {
+              "name": "variable.name.purebasic"
+            },
+            "2": {
+              "name": "storage.type.purebasic"
+            }
           }
         },
         {
           "name": "variable.other.pointer.purebasic",
           "match": "\\*([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
-            "1": { "name": "variable.name.purebasic" }
+            "1": {
+              "name": "variable.name.purebasic"
+            }
           }
         }
       ]
     },
-
     "operators": {
       "patterns": [
         {
@@ -196,7 +240,6 @@
         }
       ]
     },
-
     "compiler-directives": {
       "patterns": [
         {
@@ -210,7 +253,6 @@
         }
       ]
     },
-
     "types": {
       "comment": "FIX: Added missing #types repository. Covers inline type suffixes (.i .l .w .b .c .s .f .d .q .a .u) used in variable/field declarations.",
       "patterns": [
@@ -220,7 +262,6 @@
         }
       ]
     },
-
     "labels": {
       "comment": "FIX: Added missing #labels repository. Covers label definitions (name:) and label-pointer expressions (?name).",
       "patterns": [
@@ -228,7 +269,9 @@
           "name": "entity.name.label.purebasic",
           "match": "^\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*:",
           "captures": {
-            "1": { "name": "entity.name.label.purebasic" }
+            "1": {
+              "name": "entity.name.label.purebasic"
+            }
           }
         },
         {
@@ -238,7 +281,6 @@
         }
       ]
     },
-
     "inline-asm": {
       "comment": "FIX: Added missing inline ASM line pattern. Lines starting with '!' are passed directly to the assembler.",
       "patterns": [
@@ -246,12 +288,13 @@
           "name": "meta.embedded.asm.purebasic",
           "match": "^\\s*(!.*)$",
           "captures": {
-            "1": { "name": "source.asm.inline.purebasic" }
+            "1": {
+              "name": "source.asm.inline.purebasic"
+            }
           }
         }
       ]
     },
-
     "functions": {
       "patterns": [
         {
@@ -273,7 +316,9 @@
         {
           "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\b\\s*(?=\\()",
           "captures": {
-            "1": { "name": "entity.name.function.purebasic" }
+            "1": {
+              "name": "entity.name.function.purebasic"
+            }
           }
         }
       ]
