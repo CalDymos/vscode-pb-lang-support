@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import { scanCalls } from "../parser/call-scanner";
 import { parseFormDocument } from "../parser/form-parser";
 import { parseGlobalVarNames } from "../parser/global-scanner";
+import { normalizePbImageValue } from "../parser/pb-image-value";
 import {
   findFirstProcedureLine,
   findProcedureBlock as findProcedureBlockInLines,
@@ -4502,9 +4503,7 @@ function mapImageArgsToImage(args: ImageArgs): FormImage {
   const pbAny = firstParam === PB_ANY;
   const assignedVar = args.assignedVar?.trim();
   const imageRaw = args.imageRaw.trim();
-  const normalized = args.inline
-    ? imageRaw.replace(/^\?+/, "").trim() || undefined
-    : (imageRaw.match(/^~?"([\s\S]*)"$/)?.[1]?.replace(/""/g, '"') ?? (imageRaw || undefined));
+  const normalized = normalizePbImageValue(imageRaw, args.inline);
 
   return {
     id: pbAny ? (assignedVar || PB_ANY) : firstParam,
@@ -6183,7 +6182,7 @@ export function applyImageUpdate(
         entry.pbAny = true;
         entry.firstParam = PB_ANY;
         entry.imageRaw = trimmedImageRaw;
-        entry.image = trimmedImageRaw.match(/^~?"([\s\S]*)"$/)?.[1]?.replace(/""/g, '"') ?? (trimmedImageRaw || undefined);
+        entry.image = normalizePbImageValue(trimmedImageRaw, false);
         images.push(entry);
 
         pendingRenames = reindexImages(images, windowVar);

@@ -32,6 +32,7 @@ import { inferGadgetCtorLocks, usesHeightLayoutReference, usesWidthLayoutReferen
 import { parseDesignerLayoutRaw } from "./layout-raw";
 import { parsePbColorLiteral } from "./pb-color";
 import { parsePbStringLiteral } from "./pb-string";
+import { normalizePbImageValue } from "./pb-image-value";
 import { parsePbImageReference } from "./pb-image-reference";
 import { parsePbFontReference } from "./pb-font-reference";
 import { parsePbWindowReference } from "./pb-window-reference";
@@ -1282,15 +1283,7 @@ function splitConcatenation(raw: string): string[] {
 }
 
 function normalizeImageValue(raw: string | undefined, inline: boolean): string | undefined {
-  const valueRaw = raw?.trim();
-  if (!valueRaw) return undefined;
-
-  if (inline) {
-    const label = valueRaw.replace(/^\?+/, "").trim();
-    return label.length ? label : undefined;
-  }
-
-  return unquoteString(valueRaw) ?? (valueRaw.length ? valueRaw : undefined);
+  return normalizePbImageValue(raw, inline);
 }
 
 function parseFormFont(assignedVar: string | undefined, args: string, source?: FormFont["source"]): FormFont | undefined {

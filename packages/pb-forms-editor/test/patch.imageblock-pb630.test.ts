@@ -104,6 +104,44 @@ EndProcedure
   assert.match(patchedText, /Procedure OpenFrmMain\(/);
 });
 
+test("updates image metadata through the shared image-value parser for escaped literals", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormImage
+  #ImgMainLogo
+EndEnumeration
+
+UsePNGImageDecoder()
+
+LoadImage(#ImgMainLogo,"logo.png")
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  OpenWindow(#FrmMain, x, y, width, height, "Images")
+EndProcedure
+`;
+
+  const parsed = parseFormDocument(text);
+  const sourceLine = parsed.images.find((entry) => entry.id === "#ImgMainLogo")?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected image source line.");
+
+  const args: ImageArgs = {
+    inline: false,
+    idRaw: "#ImgMainLogo",
+    imageRaw: '~"icons/""main"".png"',
+  };
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) => applyImageUpdate(document, sourceLine!, args));
+
+  const image = updated.images.find((entry) => entry.id === "#ImgMainLogo");
+  assert.ok(image, "Expected updated image entry.");
+  assert.equal(image?.image, 'icons/"main".png');
+  assert.match(patchedText, /LoadImage\(#ImgMainLogo, ~"icons\/""main""\.png"\)/);
+});
+
 test("rebuilds the decoder lines when the image file type changes", () => {
   const text = `; Form Designer for PureBasic - 6.30
 
