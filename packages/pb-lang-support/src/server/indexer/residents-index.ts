@@ -27,7 +27,23 @@ const MAX_RESIDENT_FILES = 200;
  * Maximum number of directories visited during traversal.
  * Prevents excessive scanning of deep/large trees with few .pb files.
  */
-const MAX_DIRS_VISITED = 1_000;
+const MAX_DIRS_VISITED = 1000;
+
+/**
+ * Lowercase directory names that are unconditionally skipped during traversal.
+ *
+ * - `javascript`: SpiderBasic-only residents — excluded until SB support.
+ * - Platform dirs (`windows`, `linux`, `macos`): only the dir matching the
+ *   current OS is kept; the others are excluded.  Comparison is case-insensitive
+ *   so `MacOS`, `macos`, `MACOS` are all handled correctly.
+ */
+const EXCLUDED_DIRS: ReadonlySet<string> = (() => {
+    const excluded = new Set<string>(['javascript']);
+    if (process.platform !== 'win32')  excluded.add('windows');
+    if (process.platform !== 'darwin') excluded.add('macos');
+    if (process.platform !== 'linux')  excluded.add('linux');
+    return excluded;
+})();
 
 // ── In-memory stores ──────────────────────────────────────────────────────────
 
@@ -196,7 +212,10 @@ async function _walk(
         if (out.length >= MAX_RESIDENT_FILES) break;
         const p = path.join(dir, e.name);
         if (e.isDirectory()) {
-            if (!e.name.startsWith('.')) subdirs.push(p);
+            const nameLower = e.name.toLowerCase();
+            if (!e.name.startsWith('.') && !EXCLUDED_DIRS.has(nameLower)) {
+                subdirs.push(p);
+            }
         } else if (e.isFile() && p.endsWith('.pb')) {
             out.push(p);
         }
