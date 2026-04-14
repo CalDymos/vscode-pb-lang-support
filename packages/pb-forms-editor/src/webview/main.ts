@@ -195,6 +195,7 @@ import {
 } from "../core/toolbox/panel";
 import { buildOriginalGadgetDeletePlan } from "../core/gadget/delete";
 import { quotePbString } from "../core/parser/tokenizer";
+import { isPbStringLiteral } from "../core/parser/pb-string";
 import {
   GADGET_KIND,
   type SourceRange,
@@ -1716,9 +1717,6 @@ function drawResolvedPreviewImage(
 
 const IMAGE_CAPABLE_GADGET_KINDS: ReadonlySet<string> = new Set([GADGET_KIND.ImageGadget, GADGET_KIND.ButtonImageGadget]);
 
-function isPbStringLiteral(raw?: string): boolean {
-  return /^"(?:[^"]|"")*"$/.test(raw?.trim() ?? "");
-}
 
 function canRelativizeImageEntry(entry?: FormImage): boolean {
   return Boolean(entry && !entry.inline && isPbStringLiteral(entry.imageRaw));

@@ -30,6 +30,7 @@ import {
 import { canHostInsertedGadgets } from "../gadget/insert";
 import { inferGadgetCtorLocks, usesHeightLayoutReference, usesWidthLayoutReference } from "../gadget/layout";
 import { parseDesignerLayoutRaw } from "./layout-raw";
+import { parsePbStringLiteral } from "./pb-string";
 import { asNumber, normalizeProcParamName, splitParams, unquoteString } from "./tokenizer";
 import { PbCall, scanCalls } from "./call-scanner";
 
@@ -1229,40 +1230,6 @@ function parseMenuItemText(textRaw: string | undefined): { text?: string; shortc
 
     return { text: undefined, shortcut: undefined };
   }
-
-/**
- * Parses only plain PureBasic string literals for the menu/text helper path.
- *
- * This intentionally stays stricter than `unquoteString()` from tokenizer.ts:
- * it accepts `"..."` / `~"..."` literals with doubled quotes, but rejects any
- * trailing or concatenated expression such as `"..." + Chr(9) + "..."`.
- *
- * The menu parser relies on that stricter boundary so plain captions and
- * shortcut concatenations stay distinguishable.
- */
-function parsePbStringLiteral(raw: string): string | undefined {
-  const value = raw.trim();
-  const unescaped = value.startsWith('~"') ? value.slice(1) : value;
-  if (unescaped.length < 2 || !unescaped.startsWith('"')) {
-    return undefined;
-  }
-
-  let i = 1;
-  while (i < unescaped.length) {
-    const ch = unescaped[i];
-    if (ch === '"' && unescaped[i + 1] === '"') {
-      i += 2;
-      continue;
-    }
-    if (ch === '"') {
-      if (i !== unescaped.length - 1) return undefined;
-      return unescaped.slice(1, -1).replace(/""/g, '"');
-    }
-    i++;
-  }
-
-  return undefined;
-}
 
 function parseMenuItemTextExpression(raw: string): { text?: string; shortcut?: string } | undefined {
   const parts = splitConcatenation(raw);

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isPbStringLiteral, parsePbStringLiteral, relativizeImagePath, toPbFilePathLiteral, toPbStringLiteral } from "../src/core/image/path";
+import { relativizeImagePath, toPbFilePathLiteral } from "../src/core/image/path";
+import { isPbStringLiteral, parsePbStringLiteral, toPbStringLiteral } from "../src/core/parser/pb-string";
 
 test("parsePbStringLiteral supports doubled quotes", () => {
   assert.equal(parsePbStringLiteral('"icons/""open"".png"'), 'icons/"open".png');
