@@ -17,6 +17,7 @@ export interface PureBasicSettings {
     symbols?: SymbolsSettings;
     performance?: PerformanceSettings;
     apiFunctionListingPath?: string; // Path to APIFunctionListing.txt for OS API signatures
+    residentsPath?: string;            // Direct path to folder containing Residents .pb source files
 }
 
 export interface FormattingSettings {
@@ -79,6 +80,7 @@ export const defaultSettings: PureBasicSettings = {
     enableCompletion: true,
     validationDelay: 500,
     apiFunctionListingPath: '',
+    residentsPath: '',
     formatting: {
         enabled: true,
         indentSize: 4,

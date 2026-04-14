@@ -13,7 +13,9 @@ import {
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { keywords, types, typeSuffixDefinitions, windowsApiFunctions, parsePureBasicConstantDefinition } from '../utils/constants';
 import { allBuiltinNames, findBuiltin } from '../utils/builtin-functions';
-import { stripInlineComment, isPositionInString } from '../utils/pb-lexer-utils';
+import { allBuiltinConstants, getParamConstantsResolved } from '../utils/builtin-constants';
+import { allResidentConstantNames, allResidentStructureNames } from '../indexer/residents-index';
+import { stripInlineComment, isPositionInString, createStringState, advanceStringState } from '../utils/pb-lexer-utils';
 import { ApiFunctionListing } from '../utils/api-function-listing';
 import { getAvailableModules, getModuleExports } from '../utils/module-resolver';
 import { analyzeScopesAndVariables, getActiveUsedModules, VariableInfo } from '../utils/scope-manager';
@@ -226,46 +228,130 @@ function handleCompletionInternal(
                 });
             });
 
+        // 5) Resident structure names (e.g. in6_addr, PROPVARIANT from PB Residents/)
+        allResidentStructureNames()
+            .filter(n => !p || n.toLowerCase().startsWith(p))
+            .forEach((n, idx) => {
+                items.push({
+                    label: n,
+                    kind: CompletionItemKind.Struct,
+                    data: 'res_tstruct_' + idx,
+                    detail: `Resident Structure ${n}`,
+                    documentation: `PureBasic Resident Structure: ${n}`,
+                    insertText: n,
+                    insertTextFormat: InsertTextFormat.PlainText,
+                    sortText: '4_' + n,
+                });
+            });
+
         return { isIncomplete: false, items };
     }
 
-    // Constant context (starting with #): only complete constants
+    // Constant context (starting with #): complete builtin + user-defined constants.
+    //
+    // Two modes:
+    //   Context-sensitive – cursor is inside a known function call:
+    //     show only the constants valid for that parameter (from pb-builtin-constants.json).
+    //   General – no function context or no mapping for this parameter:
+    //     show all #PB_* builtin constants.
+    //
+    // User-defined and UseModule constants are always appended (sorted after builtins).
     if (context.isConstantContext) {
         const items: CompletionItem[] = [];
+        // constPrefix is the text typed after '#', e.g. "PB_Win" when user typed "#PB_Win"
+        const pfx = ('#' + context.constPrefix).toLowerCase();
+
+        // ── 1. Builtin constants ──────────────────────────────────────────────
+        const fnCtx = context.functionCallContext;
+        const ctxConstants = fnCtx
+            ? getParamConstantsResolved(fnCtx.functionName, fnCtx.paramIndex)
+            : undefined;
+
+        // In general mode (no function-call context) gate builtin constants to avoid
+        // flooding the client with the entire #PB_* list when only "#" was typed.
+        //   – Skip builtins entirely when constPrefix < 2 chars (no context-sensitive mapping).
+        //   – Cap at GENERAL_BUILTIN_CAP items and signal isIncomplete so the client
+        //     re-requests as the user types more characters.
+        const GENERAL_BUILTIN_CAP = 200;
+        let builtinsTruncated = false;
+
+        const isGeneralMode = !ctxConstants;
+        if (!isGeneralMode || context.constPrefix.length >= 2) {
+            const builtinsToShow = ctxConstants ?? allBuiltinConstants;
+            let builtinCount = 0;
+            for (let idx = 0; idx < builtinsToShow.length; idx++) {
+                const c = builtinsToShow[idx];
+                if (!c.toLowerCase().startsWith(pfx)) { continue; }
+                if (isGeneralMode && builtinCount >= GENERAL_BUILTIN_CAP) {
+                    builtinsTruncated = true;
+                    break;
+                }
+                items.push({
+                    label: c,
+                    kind: CompletionItemKind.Constant,
+                    data: ctxConstants ? `pb_ctx_const_${idx}` : `pb_builtin_const_${idx}`,
+                    detail: ctxConstants ? 'PureBasic Constant (parameter)' : 'PureBasic Constant',
+                    documentation: `Built-in constant ${c}`,
+                    insertText: c,
+                    insertTextFormat: InsertTextFormat.PlainText,
+                    sortText: '0_' + c
+                });
+                builtinCount++;
+            }
+        }
+
+        // ── 2. User-defined constants ─────────────────────────────────────────
         const docSymbols = extractDocumentSymbols(document, documentCache);
         docSymbols.constants.forEach((c, idx) => {
-            if (c.name.toLowerCase().startsWith(context.constPrefix.toLowerCase())) {
-                items.push({
-                    label: `#${c.name}`,
-                    kind: CompletionItemKind.Constant,
-                    data: `const_${idx}`,
-                    detail: `Constant #${c.name}`,
-                    documentation: c.value ? `#${c.name} = ${c.value}` : `Constant ${c.name}`,
-                    insertText: `#${c.name}`,
-                    insertTextFormat: InsertTextFormat.PlainText
-                });
-            }
+            if (!('#' + c.name).toLowerCase().startsWith(pfx)) { return; }
+            items.push({
+                label: `#${c.name}`,
+                kind: CompletionItemKind.Constant,
+                data: `const_${idx}`,
+                detail: `Constant #${c.name}`,
+                documentation: c.value ? `#${c.name} = ${c.value}` : `Constant ${c.name}`,
+                insertText: `#${c.name}`,
+                insertTextFormat: InsertTextFormat.PlainText,
+                sortText: '1_' + c.name
+            });
         });
-        // UseModule exported constants
+
+        // ── 3. UseModule exported constants ───────────────────────────────────
         const usedModules2 = getActiveUsedModules(document.getText(), position.line);
         usedModules2.forEach(mod => {
             const ex = getModuleExports(mod, document, documentCache);
             ex.constants.forEach((c, i2) => {
-                if (c.name.toLowerCase().startsWith(context.constPrefix.toLowerCase())) {
-                    items.push({
-                        label: `#${c.name}`,
-                        kind: CompletionItemKind.Constant,
-                        data: `usemodule_const_${mod}_${i2}`,
-                        detail: `UseModule ${mod} → #${c.name}`,
-                        documentation: c.value ? `#${c.name} = ${c.value}` : `Constant ${c.name}`,
-                        insertText: `#${c.name}`,
-                        insertTextFormat: InsertTextFormat.PlainText
-                    });
-                }
+                if (!('#' + c.name).toLowerCase().startsWith(pfx)) { return; }
+                items.push({
+                    label: `#${c.name}`,
+                    kind: CompletionItemKind.Constant,
+                    data: `usemodule_const_${mod}_${i2}`,
+                    detail: `UseModule ${mod} → #${c.name}`,
+                    documentation: c.value ? `#${c.name} = ${c.value}` : `Constant ${c.name}`,
+                    insertText: `#${c.name}`,
+                    insertTextFormat: InsertTextFormat.PlainText,
+                    sortText: '1_' + c.name
+                });
             });
         });
 
-        return { isIncomplete: false, items };
+        // ── 4. Resident constants (#AF_INET6 etc.) ────────────────────────────
+        allResidentConstantNames().forEach((name, idx) => {
+            const label = `#${name}`;
+            if (!label.toLowerCase().startsWith(pfx)) { return; }
+            items.push({
+                label,
+                kind: CompletionItemKind.Constant,
+                data: `resident_const_${idx}`,
+                detail: 'Resident Constant',
+                documentation: `PureBasic Resident constant: ${label}`,
+                insertText: label,
+                insertTextFormat: InsertTextFormat.PlainText,
+                sortText: '2_' + name
+            });
+        });
+
+        return { isIncomplete: builtinsTruncated, items };
     }
 
     // Check if it's a module call Module::
@@ -445,6 +531,21 @@ function handleCompletionInternal(
             });
         }
     });
+
+    // Resident structure names (e.g. in6_addr, PROPVARIANT from PB Residents/)
+    allResidentStructureNames().forEach((name, idx) => {
+        if (!name.toLowerCase().startsWith(context.prefix.toLowerCase())) return;
+        completionItems.push({
+            label: name,
+            kind: CompletionItemKind.Class,
+            data: 'res_gstruct_' + idx,
+            detail: 'Resident Structure',
+            documentation: `PureBasic Resident Structure: ${name}`,
+            insertText: name,
+            insertTextFormat: InsertTextFormat.PlainText
+        });
+    });
+
     documentSymbols.interfaces.forEach((it, index) => {
         if (it.name.toLowerCase().startsWith(context.prefix.toLowerCase())) {
             completionItems.push({
@@ -882,6 +983,8 @@ function getTriggerContext(linePrefix: string): {
     withMemberPrefix: string;
     isAfterTypeAnnotation: boolean;
     typeAnnotationPrefix: string;
+    /** Non-null when the cursor is inside a function-call argument list. */
+    functionCallContext: { functionName: string; paramIndex: number } | null;
 } {
     // isInString – use the lexer-aware scanner that correctly handles both
     // regular "..." strings and escape ~"..." strings (where \" does not
@@ -942,6 +1045,13 @@ function getTriggerContext(linePrefix: string): {
     const match = linePrefix.match(/([a-zA-Z_][a-zA-Z0-9_]*)$/);
     const prefix = match ? match[1] : '';
 
+    // Detect whether the cursor is inside a function-call argument list.
+    // Used by the isConstantContext branch to offer context-sensitive #PB_* constants.
+    // Only meaningful when not in a string or module context.
+    const functionCallContext = (!isInString && !isAfterModuleOperator)
+        ? getFunctionCallContext(linePrefix)
+        : null;
+
     return {
         prefix,
         isInString,
@@ -958,7 +1068,8 @@ function getTriggerContext(linePrefix: string): {
         isAfterWithAccess,
         withMemberPrefix,
         isAfterTypeAnnotation,
-        typeAnnotationPrefix
+        typeAnnotationPrefix,
+        functionCallContext
     };
 }
 
@@ -974,6 +1085,73 @@ function getBaseType(typeStr: string): string {
     const base = arrIdx > -1 ? noPtr.substring(0, arrIdx) : noPtr;
     // Filter built-in short types (i,s,f, etc.), only meaningful for structure names (usually camelCase)
     return base;
+}
+
+// ── Function-call context detection ──────────────────────────────────────────
+//
+// Used by getTriggerContext to detect the active function name and 1-based
+// parameter index when the cursor is inside a function-call argument list.
+// Mirrors the equivalent logic in signature-provider.ts; candidate for
+// extraction to pb-lexer-utils if a third consumer arises.
+
+/**
+ * Returns { functionName, paramIndex (1-based) } when linePrefix ends inside
+ * a function-call argument list, otherwise null.
+ */
+function getFunctionCallContext(
+    linePrefix: string
+): { functionName: string; paramIndex: number } | null {
+    const parenIdx = findLastUnmatchedParenLocal(linePrefix);
+    if (parenIdx < 0) { return null; }
+
+    const before = linePrefix.substring(0, parenIdx).trimEnd();
+    const paramText = linePrefix.substring(parenIdx + 1);
+
+    // Accept Module::Function or plain Function
+    const fnMatch = before.match(/(?:\w+::)?(\w+)$/);
+    if (!fnMatch) { return null; }
+
+    return { functionName: fnMatch[1], paramIndex: calcParamIndex(paramText) + 1 };
+}
+
+/** Finds the index of the innermost unmatched '(' in s, skipping string literals. */
+function findLastUnmatchedParenLocal(s: string): number {
+    let inStr = false, isEsc = false;
+    const stack: number[] = [];
+    for (let i = 0; i < s.length; i++) {
+        const ch = s[i];
+        if (!inStr) {
+            if (ch === '"') { inStr = true; isEsc = i > 0 && s[i - 1] === '~'; }
+            else if (ch === '(') { stack.push(i); }
+            else if (ch === ')') { stack.pop(); }
+        } else {
+            if (ch === '"') {
+                if (isEsc) {
+                    let bs = 0, k = i - 1;
+                    while (k >= 0 && s[k] === '\\') { bs++; k--; }
+                    if (bs % 2 !== 0) { continue; }
+                }
+                inStr = false; isEsc = false;
+            }
+        }
+    }
+    return stack.length > 0 ? stack[stack.length - 1] : -1;
+}
+
+/** Counts commas at depth 0, skipping nested parens and strings → 0-based param index. */
+function calcParamIndex(text: string): number {
+    let count = 0, depth = 0;
+    const state = createStringState();
+    for (let i = 0; i < text.length; i++) {
+        advanceStringState(state, text, i);
+        if (!state.inString) {
+            const ch = text[i];
+            if (ch === '(') { depth++; }
+            else if (ch === ')') { depth--; }
+            else if (ch === ',' && depth === 0) { count++; }
+        }
+    }
+    return count;
 }
 
 // Build structure index: structure name -> member list

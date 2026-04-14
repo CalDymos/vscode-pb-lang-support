@@ -6,6 +6,7 @@
   "config.purebasic.enableCompletion.description": "IntelliSense-Vervollständigung aktivieren.",
   "config.purebasic.validationDelay.description": "Entprell-/Verzögerungszeit (ms) vor der Dokumentvalidierung.",
   "config.purebasic.apiFunctionListingPath.description": "Pfad zu PureBasic Compilers/APIFunctionListing.txt, um OS-API-IntelliSense zu aktivieren (native API-Aufrufe mit dem Suffix \"_\").",
+  "config.purebasic.residentsPath.description": "Direkter Pfad zum Ordner mit den PureBasic-Residents-.pb-Quelldateien (Strukturen und Konstanten) für IntelliSense zu indizieren.",
   "config.purebasic.formatting.enabled.description": "Codeformatierung aktivieren.",
   "config.purebasic.formatting.indentSize.description": "Anzahl der Leerzeichen für Einrückung.",
   "config.purebasic.formatting.tabSize.description": "Anzahl der Leerzeichen pro Tab.",

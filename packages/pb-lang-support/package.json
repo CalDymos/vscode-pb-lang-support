@@ -2,7 +2,7 @@
   "name": "pb-lang-support",
   "displayName": "PureBasic Language Services",
   "description": "%extension.description%",
-  "version": "0.18.2",
+  "version": "0.19.3",
   "publisher": "CalDymos",
   "author": {
     "name": "CalDymos"
@@ -79,6 +79,12 @@
           "default": "",
           "scope": "machine",
           "description": "%config.purebasic.apiFunctionListingPath.description%"
+        },
+        "purebasic.residentsPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "%config.purebasic.residentsPath.description%"
         },
         "purebasic.formatting.enabled": {
           "type": "boolean",
@@ -493,7 +499,9 @@
     "test": "jest",
     "test:unit": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "scrape:builtins": "node scripts/scrape-pb-docs.js",
+    "scrape:constants": "node scripts/scrape-pb-constants.js"
   },
   "dependencies": {
     "@vscode/debugadapter": "^1.68.0",
