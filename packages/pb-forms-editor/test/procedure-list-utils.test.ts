@@ -8,6 +8,7 @@ import {
   findProcedureBlockByName,
   parseProcedureHeaderLine
 } from "../src/core/parser/procedure-scanner";
+import { parseGlobalVarNames } from "../src/core/parser/global-scanner";
 import {
   resolveFixedProcedureSourcePaths,
   resolveProcedureEventFilePath,
@@ -87,4 +88,10 @@ test('findProcedureBlock and related helpers resolve supported procedure ranges 
   assert.equal(findFirstProcedureLine(lines), 1);
   assert.deepEqual(findProcedureBlock(lines, 2), { startLine: 1, endLine: 3 });
   assert.deepEqual(findProcedureBlockByName(lines, 'HandlePlain'), { startLine: 5, endLine: 6 });
+});
+
+
+test('parseGlobalVarNames returns trimmed Global declarations and ignores other lines', () => {
+  assert.deepEqual(parseGlobalVarNames('Global foo,   bar.baz , qux$'), ['foo', 'bar.baz', 'qux$']);
+  assert.deepEqual(parseGlobalVarNames('  Define foo'), []);
 });

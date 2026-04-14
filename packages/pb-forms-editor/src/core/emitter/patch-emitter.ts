@@ -2,6 +2,7 @@ import type { MenuEntryMovePlacement } from "../../shared/menu";
 import * as vscode from "vscode";
 import { scanCalls } from "../parser/call-scanner";
 import { parseFormDocument } from "../parser/form-parser";
+import { parseGlobalVarNames } from "../parser/global-scanner";
 import {
   findFirstProcedureLine,
   findProcedureBlock as findProcedureBlockInLines,
@@ -4821,15 +4822,6 @@ ${symbols.map(symbol => `  ${symbol}`).join("\n")}
 EndEnumeration
 
 `;
-}
-
-function parseGlobalVarNames(line: string): string[] {
-  const match = /^\s*Global\s+(.+?)\s*$/.exec(line);
-  if (!match) return [];
-  return match[1]
-    .split(",")
-    .map(part => part.trim())
-    .filter(Boolean);
 }
 
 function expandBlockWithTrailingBlank(document: vscode.TextDocument, block: LineBlock): LineBlock {
