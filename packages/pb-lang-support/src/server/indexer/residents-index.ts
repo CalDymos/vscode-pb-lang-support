@@ -20,8 +20,14 @@ import { fsPathToUri }                 from '../utils/fs-utils';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-/** Maximum number of resident files to index (safety cap). */
+/** Maximum number of resident .pb files to index. */
 const MAX_RESIDENT_FILES = 200;
+
+/**
+ * Maximum number of directories visited during traversal.
+ * Prevents excessive scanning of deep/large trees with few .pb files.
+ */
+const MAX_DIRS_VISITED = 1_000;
 
 // ── In-memory stores ──────────────────────────────────────────────────────────
 
@@ -78,6 +84,10 @@ export function allResidentStructureNames(): readonly string[] {
 /**
  * (Re-)loads all Residents symbols from `<residentsPath>` (used directly as scan root).
  *
+ * Uses async FS operations so the Node event loop is never blocked.
+ * Traversal is bounded by MAX_RESIDENT_FILES and MAX_DIRS_VISITED; a warning is
+ * emitted via `logError` when either cap is reached.
+ *
  * Clears any previously loaded entries first, so calling this again after a
  * configuration change always starts with a clean slate.
  * Safe to call with an empty string (becomes a no-op that resets state).
@@ -90,18 +100,18 @@ export async function loadResidents(
 
     if (!residentsPath) return;
 
-    const residentsDir = residentsPath;
     try {
-        if (!fs.existsSync(residentsDir)) return;
+        await fs.promises.access(residentsPath);
     } catch {
         return;
     }
 
-    const files = _collectPbFiles(residentsDir);
+    const files = await _collectPbFiles(residentsPath, logError);
+
     for (const filePath of files) {
         const uri = fsPathToUri(filePath);
         try {
-            const text    = fs.readFileSync(filePath, 'utf8');
+            const text    = await fs.promises.readFile(filePath, 'utf8');
             // parseTextOnly does not touch the symbol cache (no cache pollution).
             const symbols = optimizedSymbolParser.parseTextOnly(text);
             for (const sym of symbols) {
@@ -138,31 +148,63 @@ function _reset(): void {
     _residentStructureNames = [];
 }
 
-function _collectPbFiles(dir: string): string[] {
-    const out:  string[]      = [];
-    const seen: Set<string>   = new Set();
-    _walk(dir, out, seen);
-    return out.slice(0, MAX_RESIDENT_FILES);
+async function _collectPbFiles(
+    dir: string,
+    logError?: (msg: string) => void
+): Promise<string[]> {
+    const out:   string[]          = [];
+    const seen:  Set<string>       = new Set();
+    const stats: { dirs: number }  = { dirs: 0 };
+    await _walk(dir, out, seen, stats, logError);
+    return out;
 }
 
-function _walk(dir: string, out: string[], seen: Set<string>): void {
-    if (!dir || seen.has(dir) || out.length >= MAX_RESIDENT_FILES) return;
+async function _walk(
+    dir:      string,
+    out:      string[],
+    seen:     Set<string>,
+    stats:    { dirs: number },
+    logError?: (msg: string) => void
+): Promise<void> {
+    if (!dir || seen.has(dir)) return;
+
+    if (out.length >= MAX_RESIDENT_FILES) {
+        logError?.(
+            `Residents: file cap (${MAX_RESIDENT_FILES}) reached – indexing stopped.`
+        );
+        return;
+    }
+    if (stats.dirs >= MAX_DIRS_VISITED) {
+        logError?.(
+            `Residents: directory cap (${MAX_DIRS_VISITED}) reached – indexing stopped.`
+        );
+        return;
+    }
+
     seen.add(dir);
+    stats.dirs++;
 
     let entries: fs.Dirent[];
     try {
-        entries = fs.readdirSync(dir, { withFileTypes: true });
+        entries = await fs.promises.readdir(dir, { withFileTypes: true });
     } catch {
         return;
     }
 
+    const subdirs: string[] = [];
     for (const e of entries) {
-        if (out.length >= MAX_RESIDENT_FILES) return;
+        if (out.length >= MAX_RESIDENT_FILES) break;
         const p = path.join(dir, e.name);
         if (e.isDirectory()) {
-            if (!e.name.startsWith('.')) _walk(p, out, seen);
+            if (!e.name.startsWith('.')) subdirs.push(p);
         } else if (e.isFile() && p.endsWith('.pb')) {
             out.push(p);
         }
+    }
+
+    // Recurse sequentially – avoids spawning hundreds of parallel readdir calls.
+    for (const sub of subdirs) {
+        if (out.length >= MAX_RESIDENT_FILES || stats.dirs >= MAX_DIRS_VISITED) break;
+        await _walk(sub, out, seen, stats, logError);
     }
 }

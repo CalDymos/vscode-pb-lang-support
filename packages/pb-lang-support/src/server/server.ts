@@ -232,7 +232,12 @@ connection.onInitialized(async () => {
     // Initial load of the API function listing (non-hot path).
     await loadGlobalSettings();
     apiFunctionListing.load(globalSettings.apiFunctionListingPath ?? '');
-    await loadResidents(globalSettings.residentsPath ?? '', lspErrorLog);
+
+    // Residents indexing runs as a background task so onInitialized returns
+    // promptly and the client is not kept waiting during FS traversal.
+    void loadResidents(globalSettings.residentsPath ?? '', lspErrorLog).catch(err =>
+        logLspError('Failed to load residents', err)
+    );
 });
 
 // Custom Request: Clear Symbol Cache (to be used with the client command `purebasic.clearSymbolCache`)
