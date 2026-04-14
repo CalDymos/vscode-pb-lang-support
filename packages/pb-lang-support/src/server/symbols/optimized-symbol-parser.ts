@@ -118,6 +118,14 @@ export class OptimizedSymbolParser {
         symbolCache.clearAll();
     }
 
+    /**
+     * Parse text without touching the symbol cache.
+     * Intended for read-only sources such as PureBasic Residents files.
+     */
+    parseTextOnly(text: string): PureBasicSymbol[] {
+        return this.parseBasicSymbols(text);
+    }
+
     private async parseFull(uri: string, text: string, preAnalysis: any): Promise<ParsedDocument> {
         // Directly parse the entire document
         const symbols = this.parseBasicSymbols(text);

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.19.2
+
+### Fixed
+
+- Fixed `loadResidents` to use async FS operations (`fs.promises`) throughout
+  so the Node event loop is never blocked during residents indexing.
+- Fixed residents traversal to skip platform-irrelevant subdirectories
+  (`windows`, `linux`, `macos`) and the SpiderBasic-only `javascript` dir,
+  reducing unnecessary scanning on all platforms.
+- Fixed residents indexing startup: `loadResidents` is now fired as a
+  background task in `onInitialized` so the LSP client is not kept waiting
+  during FS traversal.
+- Fixed runaway traversal by adding a `MAX_DIRS_VISITED` (1000) cap alongside
+  the existing `MAX_RESIDENT_FILES` (200) cap; a warning is emitted via
+  `logError` when either limit is reached.
+
 ## 0.19.1
 
 ### Fixed
