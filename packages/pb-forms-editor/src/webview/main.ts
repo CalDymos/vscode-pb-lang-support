@@ -1734,17 +1734,6 @@ function canToggleImagePbAny(entry?: FormImage): boolean {
   return Boolean(entry.firstParam.trim().length);
 }
 
-function normalizeImageReference(raw?: string): { imageRaw?: string; imageId?: string } {
-  const imageRaw = raw?.trim();
-  if (!imageRaw) return {};
-  const m = /^ImageID\((.+)\)$/i.exec(imageRaw);
-  const imageId = (m?.[1]?.trim() || imageRaw).trim();
-  return {
-    imageRaw,
-    imageId: imageId.length ? imageId : undefined
-  };
-}
-
 function getImageReferenceHint(imageId?: string, label: "gadget" | "menu" | "toolbar" | "statusbar" = "gadget"): string {
   if (!imageId) {
     switch (label) {

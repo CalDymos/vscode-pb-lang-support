@@ -32,6 +32,7 @@ import { inferGadgetCtorLocks, usesHeightLayoutReference, usesWidthLayoutReferen
 import { parseDesignerLayoutRaw } from "./layout-raw";
 import { parsePbColorLiteral } from "./pb-color";
 import { parsePbStringLiteral } from "./pb-string";
+import { parsePbImageReference } from "./pb-image-reference";
 import { asNumber, normalizeProcParamName, splitParams, unquoteString } from "./tokenizer";
 import { PbCall, scanCalls } from "./call-scanner";
 
@@ -237,7 +238,7 @@ export function parseFormDocument(text: string): FormDocument {
         const idRaw = p[0]?.trim();
         const textRaw = p[1]?.trim();
         const parsedText = parseMenuItemText(textRaw);
-        const parsedIcon = parseImageReference(p[2]);
+        const parsedIcon = parsePbImageReference(p[2]);
         addMenuEntry({
           kind: MENU_ENTRY_KIND.MenuItem,
           level: menuLevel,
@@ -312,7 +313,7 @@ export function parseFormDocument(text: string): FormDocument {
       case TOOLBAR_ENTRY_KIND.ToolBarImageButton: {
         if (!curToolBar) break;
         const p = splitParams(c.args);
-        const parsedIcon = parseImageReference(p[1]);
+        const parsedIcon = parsePbImageReference(p[1]);
         addToolBarEntry({
           kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton,
           idRaw: p[0]?.trim(),
@@ -390,7 +391,7 @@ export function parseFormDocument(text: string): FormDocument {
         const p = splitParams(c.args);
         const statusBar = findStatusBarByReference(p[0]);
         updateStatusBarField(statusBar, p[1], (field) => {
-          const parsedImage = parseImageReference(p[2]);
+          const parsedImage = parsePbImageReference(p[2]);
           field.imageRaw = parsedImage.imageRaw;
           field.imageId = parsedImage.imageId;
           field.flagsRaw = p[3]?.trim() || undefined;
@@ -430,7 +431,7 @@ export function parseFormDocument(text: string): FormDocument {
             const beforeLen = g.items?.length ?? 0;
             const posRaw = (p[1] ?? "").trim();
             const textRaw = (p[2] ?? "").trim();
-            const parsedImage = parseImageReference(p[3]);
+            const parsedImage = parsePbImageReference(p[3]);
             const item: GadgetItem = {
               posRaw,
               textRaw,
@@ -1280,19 +1281,6 @@ function splitConcatenation(raw: string): string[] {
   return parts;
 }
 
-function parseImageReference(raw: string | undefined): { imageRaw?: string; imageId?: string } {
-  const imageRaw = raw?.trim();
-  if (!imageRaw) return {};
-
-  const imageIdMatch = /^ImageID\((.+)\)$/i.exec(imageRaw);
-  const imageId = imageIdMatch?.[1]?.trim() || imageRaw;
-
-  return {
-    imageRaw,
-    imageId: imageId.length ? imageId : undefined
-  };
-}
-
 function normalizeImageValue(raw: string | undefined, inline: boolean): string | undefined {
   const valueRaw = raw?.trim();
   if (!valueRaw) return undefined;
@@ -1552,7 +1540,7 @@ function parseGadgetConstructorDetails(kind: GadgetKind, params: string[]): {
 
     case GADGET_KIND.ButtonImageGadget:
     case GADGET_KIND.ImageGadget: {
-      const parsedImage = parseImageReference(params[5]);
+      const parsedImage = parsePbImageReference(params[5]);
       imageRaw = parsedImage.imageRaw;
       imageId = parsedImage.imageId;
       flagsExpr = params[6]?.trim() || undefined;
