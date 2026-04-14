@@ -267,20 +267,38 @@ function handleCompletionInternal(
             ? getParamConstantsResolved(fnCtx.functionName, fnCtx.paramIndex)
             : undefined;
 
-        const builtinsToShow = ctxConstants ?? allBuiltinConstants;
-        builtinsToShow.forEach((c, idx) => {
-            if (!c.toLowerCase().startsWith(pfx)) { return; }
-            items.push({
-                label: c,
-                kind: CompletionItemKind.Constant,
-                data: ctxConstants ? `pb_ctx_const_${idx}` : `pb_builtin_const_${idx}`,
-                detail: ctxConstants ? 'PureBasic Constant (parameter)' : 'PureBasic Constant',
-                documentation: `Built-in constant ${c}`,
-                insertText: c,
-                insertTextFormat: InsertTextFormat.PlainText,
-                sortText: '0_' + c
-            });
-        });
+        // In general mode (no function-call context) gate builtin constants to avoid
+        // flooding the client with the entire #PB_* list when only "#" was typed.
+        //   – Skip builtins entirely when constPrefix < 2 chars (no context-sensitive mapping).
+        //   – Cap at GENERAL_BUILTIN_CAP items and signal isIncomplete so the client
+        //     re-requests as the user types more characters.
+        const GENERAL_BUILTIN_CAP = 200;
+        let builtinsTruncated = false;
+
+        const isGeneralMode = !ctxConstants;
+        if (!isGeneralMode || context.constPrefix.length >= 2) {
+            const builtinsToShow = ctxConstants ?? allBuiltinConstants;
+            let builtinCount = 0;
+            for (let idx = 0; idx < builtinsToShow.length; idx++) {
+                const c = builtinsToShow[idx];
+                if (!c.toLowerCase().startsWith(pfx)) { continue; }
+                if (isGeneralMode && builtinCount >= GENERAL_BUILTIN_CAP) {
+                    builtinsTruncated = true;
+                    break;
+                }
+                items.push({
+                    label: c,
+                    kind: CompletionItemKind.Constant,
+                    data: ctxConstants ? `pb_ctx_const_${idx}` : `pb_builtin_const_${idx}`,
+                    detail: ctxConstants ? 'PureBasic Constant (parameter)' : 'PureBasic Constant',
+                    documentation: `Built-in constant ${c}`,
+                    insertText: c,
+                    insertTextFormat: InsertTextFormat.PlainText,
+                    sortText: '0_' + c
+                });
+                builtinCount++;
+            }
+        }
 
         // ── 2. User-defined constants ─────────────────────────────────────────
         const docSymbols = extractDocumentSymbols(document, documentCache);
@@ -333,7 +351,7 @@ function handleCompletionInternal(
             });
         });
 
-        return { isIncomplete: false, items };
+        return { isIncomplete: builtinsTruncated, items };
     }
 
     // Check if it's a module call Module::
