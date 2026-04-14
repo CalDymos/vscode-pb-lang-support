@@ -1,5 +1,6 @@
 import { GADGET_KIND } from "../model";
-import { quotePbString, unquoteString } from "../parser/tokenizer";
+import { parsePbStringLiteral } from "../parser/pb-string";
+import { quotePbString } from "../parser/tokenizer";
 import { parseDesignerLayoutRaw, parseUnscaledLayoutRaw, type DesignerLayoutNumericField } from "../parser/layout-raw";
 import { unscaleDisplayedLayoutValue } from "../utils/layout-dpi";
 import type { PreviewPlatform } from "../utils/form-settings-runtime";
@@ -232,7 +233,7 @@ function uniqueFlags(flags: readonly string[]): string[] {
 }
 
 function buildInspectorValue(raw: string | undefined, fallback: string | undefined): string {
-  const literal = raw ? unquoteString(raw) : undefined;
+  const literal = raw ? parsePbStringLiteral(raw) : undefined;
   if (literal !== undefined) return literal;
   if (typeof fallback === "string") return fallback;
   return raw?.trim() ?? "";

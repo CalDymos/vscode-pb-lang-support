@@ -238,8 +238,10 @@ test("uses the assigned gadget variable or enum symbol tail for the inspector Va
 });
 test("resolves inspector display values from raw gadget caption and tooltip expressions", () => {
   assert.equal(getGadgetTextInspectorValue({ textRaw: '"Caption"', text: "Caption" }), "Caption");
+  assert.equal(getGadgetTextInspectorValue({ textRaw: '~"Escaped ""Caption"""', text: 'Escaped "Caption"' }), 'Escaped "Caption"');
   assert.equal(getGadgetTextInspectorValue({ textRaw: "Caption$", text: "Caption$", textVariable: true }), "Caption$");
   assert.equal(getGadgetTooltipInspectorValue({ tooltipRaw: '"Hint"', tooltip: "Hint" }), "Hint");
+  assert.equal(getGadgetTooltipInspectorValue({ tooltipRaw: '~"Escaped ""Hint"""', tooltip: 'Escaped "Hint"' }), 'Escaped "Hint"');
   assert.equal(getGadgetTooltipInspectorValue({ tooltipRaw: "ToolTip$", tooltip: "ToolTip$", tooltipVariable: true }), "ToolTip$");
 });
 

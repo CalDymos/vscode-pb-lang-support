@@ -1,4 +1,5 @@
-import { quotePbString, unquoteString } from "../parser/tokenizer";
+import { parsePbStringLiteral } from "../parser/pb-string";
+import { quotePbString } from "../parser/tokenizer";
 import type { DesignerTopLevelContainerSelection, DesignerTopLevelEntrySelection } from "./selection";
 import { parseStatusBarWidth } from "../statusbar/preview";
 import { MenuEntryMovePlacement } from "../../shared/menu";
@@ -240,7 +241,7 @@ export function canResizeWindowHandleInCanvas(handle: "nw" | "n" | "ne" | "w" | 
 
 export function unquotePbString(raw?: string): string {
   if (!raw) return "";
-  return unquoteString(raw) ?? raw.trim();
+  return parsePbStringLiteral(raw) ?? raw.trim();
 }
 
 export function getMenuEntryLevel(entry: MenuEntryLike | undefined): number {

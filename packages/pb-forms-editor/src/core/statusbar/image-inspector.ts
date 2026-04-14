@@ -1,4 +1,5 @@
-import { quotePbString, unquoteString } from "../parser/tokenizer";
+import { parsePbStringLiteral } from "../parser/pb-string";
+import { quotePbString } from "../parser/tokenizer";
 
 export interface StatusBarCurrentImageEditCandidate {
   id?: string;
@@ -36,7 +37,7 @@ function parseCurrentImageLoadPath(raw: string): string | undefined {
   const trimmed = raw.trim();
   if (!trimmed.length) return undefined;
 
-  const literal = unquoteString(trimmed);
+  const literal = parsePbStringLiteral(trimmed);
   if (literal !== undefined) {
     return literal;
   }
