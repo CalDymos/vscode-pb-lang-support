@@ -30,6 +30,7 @@ import {
 import { canHostInsertedGadgets } from "../gadget/insert";
 import { inferGadgetCtorLocks, usesHeightLayoutReference, usesWidthLayoutReference } from "../gadget/layout";
 import { parseDesignerLayoutRaw } from "./layout-raw";
+import { parsePbColorLiteral } from "./pb-color";
 import { parsePbStringLiteral } from "./pb-string";
 import { asNumber, normalizeProcParamName, splitParams, unquoteString } from "./tokenizer";
 import { PbCall, scanCalls } from "./call-scanner";
@@ -529,7 +530,7 @@ export function parseFormDocument(text: string): FormDocument {
         if (p.length >= 3 && g) {
           const colorType = (p[1] ?? "").trim();
           const colorRaw = (p[2] ?? "").trim();
-          const color = parsePbColor(colorRaw);
+          const color = parsePbColorLiteral(colorRaw)?.previewColor;
 
           if (colorType === "#PB_Gadget_BackColor") {
             g.backColorRaw = colorRaw || undefined;
@@ -663,7 +664,7 @@ export function parseFormDocument(text: string): FormDocument {
           const colorRaw = (p[1] ?? "").trim();
           doc.window.colorRaw = colorRaw || undefined;
 
-          const color = parsePbColor(colorRaw);
+          const color = parsePbColorLiteral(colorRaw)?.previewColor;
           if (typeof color === "number") {
             doc.window.color = color;
           }
@@ -1156,29 +1157,6 @@ function windowMatchesReference(win: FormWindow | undefined, rawRef: string | un
   if (win.variable && win.variable === ref) return true;
   if (win.id.replace(/^#/, "") === ref) return true;
   return false;
-}
-
-function parsePbColor(raw: string | undefined): number | undefined {
-  const colorRaw = raw?.trim();
-  if (!colorRaw) return undefined;
-
-  if (/^\$[0-9a-f]+$/i.test(colorRaw)) {
-    const n = Number.parseInt(colorRaw.slice(1), 16);
-    return Number.isFinite(n) ? n : undefined;
-  }
-
-  const rgbMatch = /^RGB\((.+)\)$/i.exec(colorRaw);
-  if (!rgbMatch) return undefined;
-
-  const parts = splitParams(rgbMatch[1] ?? "");
-  if (parts.length !== 3) return undefined;
-
-  const r = asNumber(parts[0] ?? "");
-  const g = asNumber(parts[1] ?? "");
-  const b = asNumber(parts[2] ?? "");
-  if ([r, g, b].some((v) => typeof v !== "number")) return undefined;
-
-  return ((b as number) << 16) | ((g as number) << 8) | (r as number);
 }
 
 function splitFlagExpr(flagsExpr: string | undefined): string[] {

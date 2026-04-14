@@ -1,3 +1,5 @@
+import { parsePbColorLiteral } from "../parser/pb-color";
+
 export const WINDOW_COLOR_LITERAL_ERROR_MESSAGE = "Window Color accepts only RGB(r,g,b) or a $hex literal.";
 
 export function pbColorNumberToCssHex(value: number | undefined): string | undefined {
@@ -31,28 +33,14 @@ export function parseWindowColorInspectorInput(value: string | undefined):
   const raw = (value ?? "").trim();
   if (!raw.length) return { ok: true, raw: undefined, previewColor: undefined };
 
-  if (/^\$[0-9a-f]+$/i.test(raw)) {
-    const parsed = Number.parseInt(raw.slice(1), 16);
-    if (!Number.isFinite(parsed)) return { ok: false };
-    return { ok: true, raw, previewColor: parsed & 0xffffff };
-  }
+  const parsed = parsePbColorLiteral(raw);
+  if (!parsed) return { ok: false };
+  if (parsed.format === "hex") return { ok: true, raw: parsed.raw, previewColor: parsed.previewColor };
 
-  const rgbMatch = /^RGB\((.+)\)$/i.exec(raw);
-  if (!rgbMatch) return { ok: false };
-
-  const parts = (rgbMatch[1] ?? "").split(",");
-  if (parts.length !== 3) return { ok: false };
-
-  const channels = parts.map((part) => Number(part.trim()));
-  if (channels.some((channel) => !Number.isInteger(channel) || channel < 0 || channel > 255)) {
-    return { ok: false };
-  }
-
-  const [red, green, blue] = channels;
   return {
     ok: true,
-    raw: `RGB(${red},${green},${blue})`,
-    previewColor: ((blue as number) << 16) | ((green as number) << 8) | (red as number)
+    raw: `RGB(${parsed.red},${parsed.green},${parsed.blue})`,
+    previewColor: parsed.previewColor
   };
 }
 
