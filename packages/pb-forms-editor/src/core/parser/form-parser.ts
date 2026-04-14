@@ -33,6 +33,7 @@ import { parseDesignerLayoutRaw } from "./layout-raw";
 import { parsePbColorLiteral } from "./pb-color";
 import { parsePbStringLiteral } from "./pb-string";
 import { parsePbImageReference } from "./pb-image-reference";
+import { parsePbFontReference } from "./pb-font-reference";
 import { parsePbWindowReference } from "./pb-window-reference";
 import { asNumber, normalizeProcParamName, splitParams, unquoteString } from "./tokenizer";
 import { PbCall, scanCalls } from "./call-scanner";
@@ -564,10 +565,8 @@ export function parseFormDocument(text: string): FormDocument {
         const p = splitParams(c.args);
         const g = findGadgetByReference(gadgetById, p[0]);
         if (p.length >= 2 && g) {
-          const fontExpr = (p[1] ?? "").trim();
-          g.gadgetFontRaw = fontExpr || undefined;
-          const m = /^FontID\((.+)\)$/i.exec(fontExpr);
-          const fontId = m?.[1]?.trim();
+          const { fontRaw, fontId } = parsePbFontReference(p[1]);
+          g.gadgetFontRaw = fontRaw;
           const font = fontId ? fontById.get(fontId) : undefined;
           if (font) {
             g.gadgetFont = font.name;

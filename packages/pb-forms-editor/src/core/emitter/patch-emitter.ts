@@ -5794,7 +5794,7 @@ export function applyMenuEntryMove(
     );
     if (!targetRange) return undefined;
 
-    insertLine = options.placement === "before"
+    insertLine = options.placement === MenuEntryMovePlacement.Before
       ? targetRange.startLine
       : Math.min(document.lineCount, targetRange.endLine + 1);
   }
