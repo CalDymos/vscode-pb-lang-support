@@ -35,8 +35,12 @@ export function runDiagnostics(
     // They are fast (no I/O) and run on every keystroke (after debounce).
     diagnostics.push(...validateDocument(document.getText()));
 
-    // PB 6.40: Space()-as-API-buffer without PeekS() length fixup
-    diagnostics.push(...validateSpaceApiBuffers(document.getText()));
+    // PB 6.40: Space()-as-API-buffer without PeekS() length fixup.
+    // Gated behind enableSemanticValidation — users can opt out if the
+    // validator impacts responsiveness on very large documents.
+    if (settings.linting?.enableSemanticValidation !== false) {
+        diagnostics.push(...validateSpaceApiBuffers(document.getText()));
+    }
 
     // --- 2. Document validators -----------------------------------------
     // These require the TextDocument (URI) and may perform disk I/O.

@@ -256,6 +256,14 @@ function buildDiagnostic(
  * proportional to O(n · k) rather than O(n²).
  */
 export function validateSpaceApiBuffers(text: string): Diagnostic[] {
+    // ── Cheap prefilter ────────────────────────────────────────────────────
+    // All three tokens must be present for any match to be possible.
+    // Each test short-circuits on the first occurrence, so this is O(n) with
+    // very small constants and avoids the split + full scan for most files.
+    if (!/space\s*\(/i.test(text) || !text.includes('@') || !text.includes('_(')) {
+        return [];
+    }
+
     const diagnostics: Diagnostic[] = [];
     const lines = text.split(/\r?\n/);
 
@@ -268,6 +276,13 @@ export function validateSpaceApiBuffers(text: string): Diagnostic[] {
 
     for (let i = 0; i < lines.length; i++) {
         const raw      = lines[i];
+
+        // ── Early exit when there is nothing to track yet ─────────────────
+        // If no variable has been seen via Space() and this line cannot be a
+        // Space() assignment, skip the (relatively expensive) stripInlineComment
+        // + per-variable loop entirely.
+        if (tracked.size === 0 && !SPACE_ASSIGN_RE.test(raw)) { continue; }
+
         const stripped = stripInlineComment(raw).trimEnd();
 
         // ── Space() assignment? ────────────────────────────────────────────
