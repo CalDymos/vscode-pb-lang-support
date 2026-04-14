@@ -1,3 +1,4 @@
+import { parsePbWindowReference } from "../parser/pb-window-reference";
 import type { PreviewOsSkin, PreviewPlatform } from "../utils/form-settings-runtime";
 
 export const WINDOW_KNOWN_FLAGS = [
@@ -249,8 +250,7 @@ export type ParsedWindowParentInput = {
 };
 
 function unwrapWindowIdParent(raw: string): string | undefined {
-  const match = /^WindowID\((.*)\)$/i.exec(raw);
-  return match ? match[1] : undefined;
+  return parsePbWindowReference(raw)?.innerRaw;
 }
 
 export function getWindowParentInspectorValue(parentRaw: string | undefined, normalizedParent: string | undefined): string {

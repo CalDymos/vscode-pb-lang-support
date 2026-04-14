@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL, WINDOW_PREVIEW_PAGE_PADDING, buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewAddIconMetrics, getWindowPreviewBodyDecoration, getWindowPreviewCanvasOrigin, getWindowPreviewChromeTopPadding, getWindowPreviewClientBottomPadding, getWindowPreviewClientSidePadding, getWindowPreviewFrameDecoration, getWindowPreviewFrameStrokeRect, getWindowPreviewMenuBarDecoration, getWindowPreviewMenuFlyoutDecoration, getWindowPreviewMenuRootEntryRect, getWindowPreviewMenuSubmenuIconMetrics, getWindowPreviewStatusBarDecoration, getWindowPreviewStatusBarProgressDecoration, getWindowPreviewTitleBarDecoration, getWindowPreviewTitleBarHeight, getWindowPreviewTitleBarMetrics, getWindowPreviewTitleButtonAssetKind, getWindowPreviewTitleButtonLayout, getWindowPreviewTitleButtonSize, getWindowPreviewTitleButtons, getWindowPreviewTitleButtonSlots, getWindowPreviewTitleIconSize, getWindowPreviewTitleTextLayout, getWindowPreviewToolBarDecoration, usesWindowPreviewExternalMenuBar, getWindowVariableInspectorValue, hasWindowPreviewResizeGrip, hasWindowPreviewTitleBar, hasWindowPreviewTitleIcon, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput } from '../src/core/window/inspector';
+import { parsePbWindowReference } from '../src/core/parser/pb-window-reference';
 
 test('buildWindowFlagsExpr keeps original known window flag order and appends custom flags', () => {
   const expr = buildWindowFlagsExpr([
@@ -794,4 +795,19 @@ test('window preview root menu entry rect keeps the looser menu-bar selection ge
     w: 40,
     h: 19,
   });
+});
+
+
+test('parsePbWindowReference preserves the raw inner expression and offers a normalized inner reference', () => {
+  assert.deepEqual(parsePbWindowReference('WindowID(#FrmParent)'), {
+    innerRaw: '#FrmParent',
+    normalizedInner: '#FrmParent'
+  });
+
+  assert.deepEqual(parsePbWindowReference('WindowID(  #FrmParent  )'), {
+    innerRaw: '  #FrmParent  ',
+    normalizedInner: '#FrmParent'
+  });
+
+  assert.equal(parsePbWindowReference('ParentWindow'), undefined);
 });

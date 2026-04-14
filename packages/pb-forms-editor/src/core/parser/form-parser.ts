@@ -33,6 +33,7 @@ import { parseDesignerLayoutRaw } from "./layout-raw";
 import { parsePbColorLiteral } from "./pb-color";
 import { parsePbStringLiteral } from "./pb-string";
 import { parsePbImageReference } from "./pb-image-reference";
+import { parsePbWindowReference } from "./pb-window-reference";
 import { asNumber, normalizeProcParamName, splitParams, unquoteString } from "./tokenizer";
 import { PbCall, scanCalls } from "./call-scanner";
 
@@ -1136,9 +1137,9 @@ function normalizeWindowParent(raw: string | undefined): string | undefined {
   const parentRaw = raw?.trim();
   if (!parentRaw) return undefined;
 
-  const windowIdMatch = /^WindowID\((.+)\)$/i.exec(parentRaw);
-  if (windowIdMatch) {
-    return windowIdMatch[1]?.trim() || undefined;
+  const parsed = parsePbWindowReference(parentRaw);
+  if (parsed) {
+    return parsed.normalizedInner;
   }
 
   return "=" + parentRaw;
