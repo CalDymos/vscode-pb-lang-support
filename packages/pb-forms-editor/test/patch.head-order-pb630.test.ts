@@ -14,6 +14,7 @@ import {
 import { MENU_ENTRY_KIND } from "../src/core/model";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
+import { loadFixture } from "./helpers/loadFixture";
 
 function patchOnce(
   text: string,
@@ -33,30 +34,7 @@ function toLf(text: string): string {
 }
 
 test("preserves the PB 6.30 top-level head order across menu, image and font insertions", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
-
-Enumeration FormGadget
-  #Editor
-EndEnumeration
-
-; 0 Custom gadget initialisation (do Not remove this line)
-InitEditorGadget()
-
-ProcedureDLL EditorCallbackGadget, *scinotify.SCNotification)
-
-EndProcedure
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
-  OpenWindow(#FrmMain, x, y, width, height, "Combined")
-  EditorGadget(#Editor, 10, 10, 300, 120)
-  CreateMenu(0, WindowID(#FrmMain))
-  MenuTitle("File")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/67-head-order-combined-base.pbf");
 
   const menuArgs: MenuEntryArgs = {
     kind: MENU_ENTRY_KIND.MenuItem,
