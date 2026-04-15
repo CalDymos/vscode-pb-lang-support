@@ -11,6 +11,7 @@ import {
 } from "../src/core/emitter/patch-emitter";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
+import { loadFixture } from "./helpers/loadFixture";
 
 function patchAndReparse(
   text: string,
@@ -34,22 +35,7 @@ function toLf(text: string): string {
 }
 
 test("inserts the first image block before the font block and injects the required decoder", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
-
-Enumeration FormFont
-  #Font_FrmMain_0
-EndEnumeration
-
-LoadFont(#Font_FrmMain_0,"Arial", 10)
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  OpenWindow(#FrmMain, x, y, width, height, "Images")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/19-imageblock-before-font.pbf");
 
   const args: ImageArgs = {
     inline: false,
@@ -73,24 +59,7 @@ EndProcedure
 });
 
 test("removes the decoder together with the last remaining image in the block", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
-
-Enumeration FormImage
-  #ImgMainLogo
-EndEnumeration
-
-UsePNGImageDecoder()
-
-LoadImage(#ImgMainLogo,"logo.png")
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  OpenWindow(#FrmMain, x, y, width, height, "Images")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/20-imageblock-enum-single.pbf");
 
   const parsed = parseFormDocument(text);
   const sourceLine = parsed.images.find((entry) => entry.id === "#ImgMainLogo")?.source?.line;
@@ -105,24 +74,7 @@ EndProcedure
 });
 
 test("updates image metadata through the shared image-value parser for escaped literals", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
-
-Enumeration FormImage
-  #ImgMainLogo
-EndEnumeration
-
-UsePNGImageDecoder()
-
-LoadImage(#ImgMainLogo,"logo.png")
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  OpenWindow(#FrmMain, x, y, width, height, "Images")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/20-imageblock-enum-single.pbf");
 
   const parsed = parseFormDocument(text);
   const sourceLine = parsed.images.find((entry) => entry.id === "#ImgMainLogo")?.source?.line;
@@ -143,24 +95,7 @@ EndProcedure
 });
 
 test("rebuilds the decoder lines when the image file type changes", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
-
-Enumeration FormImage
-  #ImgMainLogo
-EndEnumeration
-
-UsePNGImageDecoder()
-
-LoadImage(#ImgMainLogo,"logo.png")
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  OpenWindow(#FrmMain, x, y, width, height, "Images")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/20-imageblock-enum-single.pbf");
 
   const parsed = parseFormDocument(text);
   const sourceLine = parsed.images.find((entry) => entry.id === "#ImgMainLogo")?.source?.line;
@@ -184,20 +119,7 @@ EndProcedure
 
 
 test("creates an Enumeration FormImage block when inserting the first enum image", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
-
-Enumeration FormMenu
-  #MenuMain
-EndEnumeration
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  OpenWindow(#FrmMain, x, y, width, height, "Images")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/21-imageblock-enum-with-menu.pbf");
 
   const args: ImageArgs = {
     inline: false,
@@ -227,16 +149,7 @@ EndProcedure
 });
 
 test("creates a Global image variable block when inserting the first pbAny image", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  OpenWindow(#FrmMain, x, y, width, height, "Images")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/26-imageblock-no-images-basic.pbf");
 
   const args: ImageArgs = {
     inline: false,
@@ -254,24 +167,7 @@ EndProcedure
 });
 
 test("moves image declarations from FormImage to Global when toggling the last enum image to pbAny", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
-
-Enumeration FormImage
-  #ImgMainLogo
-EndEnumeration
-
-UsePNGImageDecoder()
-
-LoadImage(#ImgMainLogo,"logo.png")
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  OpenWindow(#FrmMain, x, y, width, height, "Images")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/20-imageblock-enum-single.pbf");
 
   const parsed = parseFormDocument(text);
   const sourceLine = parsed.images.find((entry) => entry.id === "#ImgMainLogo")?.source?.line;
@@ -291,22 +187,7 @@ EndProcedure
 });
 
 test("moves image declarations from Global to FormImage when toggling the last pbAny image to enum mode", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Global ImgMainLogo
-
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
-
-UsePNGImageDecoder()
-
-ImgMainLogo = LoadImage(#PB_Any,"logo.png")
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  OpenWindow(#FrmMain, x, y, width, height, "Images")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/22-imageblock-pbany-single.pbf");
 
   const parsed = parseFormDocument(text);
   const sourceLine = parsed.images.find((entry) => entry.id === "ImgMainLogo")?.source?.line;
@@ -333,18 +214,7 @@ EndProcedure
 });
 
 test("inserts an enum image block before Declare and XIncludeFile boundaries", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
-
-Declare ResizeGadgetsFrmMain()
-XIncludeFile "events/form-main.pbi"
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  OpenWindow(#FrmMain, x, y, width, height, "Images")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/23-imageblock-boundary-declare-xinclude.pbf");
 
   const args: ImageArgs = {
     inline: false,
@@ -371,16 +241,7 @@ EndProcedure
 
 
 test("inserts an Enumeration FormImage block before custom gadget initialisation", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-; 0 Custom gadget initialisation (do Not remove this line)
-InitScintillaBridge()
-
-XIncludeFile "events/form-main.pbi"
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  OpenWindow(#PB_Any, x, y, width, height, "Images")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/24-imageblock-custom-gadget-base.pbf");
 
   const args: ImageArgs = {
     inline: false,
@@ -410,20 +271,7 @@ EndProcedure
 
 
 test("moves FormImage before custom gadget initialisation when toggling the last pbAny image to enum mode", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Global ImgMainLogo
-
-; 0 Custom gadget initialisation (do Not remove this line)
-InitScintillaBridge()
-
-ImgMainLogo = LoadImage(#PB_Any, "logo.png")
-
-XIncludeFile "events/form-main.pbi"
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  OpenWindow(#PB_Any, x, y, width, height, "Images")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/25-imageblock-custom-gadget-pbany-single.pbf");
 
   const sourceLine = text.split(/\r?\n/).findIndex((line) => line.includes('ImgMainLogo = LoadImage(#PB_Any, "logo.png")'));
   assert.notEqual(sourceLine, -1, 'Expected pbAny image line.');
@@ -449,16 +297,7 @@ EndProcedure
 
 
 test("inserts a pbAny image Global block before custom gadget initialisation", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-; 0 Custom gadget initialisation (do Not remove this line)
-InitScintillaBridge()
-
-XIncludeFile "events/form-main.pbi"
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  win = OpenWindow(#PB_Any, x, y, width, height, "Images")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/27-imageblock-custom-gadget-window-assignment.pbf");
 
   const args: ImageArgs = {
     inline: false,
@@ -484,18 +323,7 @@ EndProcedure
 });
 
 test("inserts a pbAny image Global block before Declare and XIncludeFile boundaries", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
-
-Declare ResizeGadgetsFrmMain()
-XIncludeFile "events/form-main.pbi"
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  OpenWindow(#FrmMain, x, y, width, height, "Images")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/23-imageblock-boundary-declare-xinclude.pbf");
 
   const args: ImageArgs = {
     inline: false,
@@ -521,30 +349,7 @@ EndProcedure
 });
 
 test("keeps a single blank line before FormFont when updating an existing image block", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
-
-Enumeration FormImage
-  #ImgMainLogo
-EndEnumeration
-
-UsePNGImageDecoder()
-
-LoadImage(#ImgMainLogo,"logo.png")
-
-Enumeration FormFont
-  #Font_FrmMain_0
-EndEnumeration
-
-LoadFont(#Font_FrmMain_0,"Arial", 10)
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  OpenWindow(#FrmMain, x, y, width, height, "Images")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/28-imageblock-enum-before-font-single.pbf");
 
   const parsed = parseFormDocument(text);
   const sourceLine = parsed.images.find((entry) => entry.id === "#ImgMainLogo")?.source?.line;
@@ -571,30 +376,7 @@ EndProcedure
 });
 
 test("keeps a single blank line before FormFont when deleting the last image block", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
-
-Enumeration FormImage
-  #ImgMainLogo
-EndEnumeration
-
-UsePNGImageDecoder()
-
-LoadImage(#ImgMainLogo,"logo.png")
-
-Enumeration FormFont
-  #Font_FrmMain_0
-EndEnumeration
-
-LoadFont(#Font_FrmMain_0,"Arial", 10)
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  OpenWindow(#FrmMain, x, y, width, height, "Images")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/28-imageblock-enum-before-font-single.pbf");
 
   const parsed = parseFormDocument(text);
   const sourceLine = parsed.images.find((entry) => entry.id === "#ImgMainLogo")?.source?.line;

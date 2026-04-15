@@ -12,6 +12,7 @@ import {
 import { TOOLBAR_ENTRY_KIND } from "../src/core/model";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
+import { loadFixture } from "./helpers/loadFixture";
 
 function patchAndReparse(
   text: string,
@@ -30,20 +31,7 @@ function patchAndReparse(
   };
 }
 
-const TOOLBAR_FIXTURE = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
-  OpenWindow(#FrmMain, x, y, width, height, "Toolbar", #PB_Window_SystemMenu)
-  CreateToolbar(0, WindowID(#FrmMain))
-  ToolBarImageButton(#TbSave, ImageID(#ImgSave))
-  ToolBarToolTip(0, #TbSave, "Save current form")
-  ToolBarSeparator()
-EndProcedure
-`;
+const TOOLBAR_FIXTURE = loadFixture("fixtures/smoke/09-toolbar-basic.pbf");
 
 test("migrates legacy ToolBarButton inserts to the PB 6.30 image-button path", () => {
   const args: ToolBarEntryArgs = {

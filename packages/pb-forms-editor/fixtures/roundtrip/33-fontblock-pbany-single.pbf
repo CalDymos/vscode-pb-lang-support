@@ -1,0 +1,13 @@
+; Form Designer for PureBasic - 6.30
+
+Global FontMain
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+FontMain = LoadFont(#PB_Any, "Arial", 10)
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  OpenWindow(#FrmMain, x, y, width, height, "Fonts")
+EndProcedure

@@ -727,19 +727,7 @@ test("roundtrips submenu delete removes matching CloseSubMenu and descendants", 
 });
 
 test("roundtrips menu title delete removes nested submenu block until next title", () => {
-  const text = [
-    'Procedure OpenFrmMain()',
-    '  CreateMenu(#MenuMain, WindowID(#FrmMain))',
-    '  MenuTitle("File")',
-    '  MenuItem(#MenuOpen, "Open")',
-    '  OpenSubMenu("Recent")',
-    '  MenuItem(#MenuRecent1, "Last file")',
-    '  CloseSubMenu()',
-    '  MenuTitle("Help")',
-    '  MenuItem(#MenuAbout, "About")',
-    'EndProcedure',
-    ''
-  ].join("\n");
+  const text = loadFixture("fixtures/roundtrip/17-menu-title-delete-nested-submenu.pbf");
 
   const parsed = parseFormDocument(text);
   const menuId = parsed.menus[0]?.id;
@@ -858,15 +846,7 @@ test("roundtrips toolbar tooltip set via toolbar entry source line", () => {
 });
 
 test("roundtrips toolbar tooltip insert directly after toolbar entry", () => {
-  const text = [
-    'Procedure OpenFrmMain()',
-    '  OpenWindow(#FrmMain, 0, 0, 320, 220, "Toolbar")',
-    '  CreateToolBar(#TbMain, WindowID(#FrmMain))',
-    '  ToolBarImageButton(#TbSave, ImageID(#ImgSave))',
-    '  ToolBarSeparator()',
-    'EndProcedure',
-    ''
-  ].join("\n");
+  const text = loadFixture("fixtures/roundtrip/18-toolbar-tooltip-insert-after-button.pbf");
 
   const parsedFixture = parseFormDocument(text);
   const toolBarId = parsedFixture.toolbars[0]?.id;

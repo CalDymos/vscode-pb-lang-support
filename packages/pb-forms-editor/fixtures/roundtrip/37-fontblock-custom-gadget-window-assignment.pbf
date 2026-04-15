@@ -1,0 +1,9 @@
+; Form Designer for PureBasic - 6.30
+
+; 0 Custom gadget initialisation (do Not remove this line)
+InitScintillaBridge()
+
+Declare ResizeGadgetsFrmMain()
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  winMain = OpenWindow(#PB_Any, x, y, width, height, "Fonts")
+EndProcedure
