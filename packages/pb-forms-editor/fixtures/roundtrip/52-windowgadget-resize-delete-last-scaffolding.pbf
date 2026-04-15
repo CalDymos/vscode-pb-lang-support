@@ -1,0 +1,28 @@
+; Form Designer for PureBasic - 6.30
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Declare ResizeGadgetsFrmMain()
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  ButtonGadget(#BtnApply, 10, 20, 80, 24, "Apply")
+EndProcedure
+
+Procedure ResizeGadgetsFrmMain()
+  Protected FormWindowWidth, FormWindowHeight
+  FormWindowWidth = WindowWidth(#FrmMain)
+  FormWindowHeight = WindowHeight(#FrmMain)
+  ResizeGadget(#BtnApply, FormWindowWidth - 310, 20, 80, 24)
+EndProcedure
+
+Procedure FrmMain_Events(event)
+  Select event
+    Case #PB_Event_SizeWindow
+      ResizeGadgetsFrmMain()
+    Case #PB_Event_CloseWindow
+      ProcedureReturn #False
+  EndSelect
+  ProcedureReturn #True
+EndProcedure

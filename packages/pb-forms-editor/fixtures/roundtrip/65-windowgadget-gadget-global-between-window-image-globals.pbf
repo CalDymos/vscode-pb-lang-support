@@ -1,0 +1,11 @@
+; Form Designer for PureBasic - 6.30
+
+Global winMain
+
+Global imgMain
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  winMain = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
+  gInput = StringGadget(#PB_Any, 10, 36, 220, 24, "")
+  ImageGadget(imgMain, 10, 70, 32, 32, 0)
+EndProcedure

@@ -64,19 +64,7 @@ test("patches window X/Y raw values through procedure defaults for #PB_Ignore pa
 });
 
 test("roundtrips existing ResizeGadget raw expressions without touching constructor geometry", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
-  OpenWindow(#FrmMain, x, y, width, height, "Main")
-  ButtonGadget(#BtnStretch, 10, 50, 80, 24, "Stretch")
-EndProcedure
-
-Procedure ResizeGadgetsFrmMain()
-  Protected FormWindowWidth, FormWindowHeight
-  FormWindowWidth = WindowWidth(#FrmMain)
-  FormWindowHeight = WindowHeight(#FrmMain)
-  ResizeGadget(#BtnStretch, 10, ToolBarHeight(0) + 10, FormWindowWidth - 40, FormWindowHeight - 120)
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/49-windowgadget-resize-existing-basic.pbf");
 
   const document = new FakeTextDocument(text);
   const edit = applyResizeGadgetRawUpdate(document.asTextDocument(), "#BtnStretch", {
@@ -101,28 +89,7 @@ EndProcedure
 });
 
 test("creates missing resize scaffolding when lock editing needs a new ResizeGadget line", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
-
-Enumeration FormGadget
-  #BtnApply
-EndEnumeration
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
-  OpenWindow(#FrmMain, x, y, width, height, "Main")
-  ButtonGadget(#BtnApply, 10, 20, 80, 24, "Apply")
-EndProcedure
-
-Procedure FrmMain_Events(event)
-  Select event
-    Case #PB_Event_CloseWindow
-      ProcedureReturn #False
-  EndSelect
-  ProcedureReturn #True
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/50-windowgadget-resize-create-with-events.pbf");
 
   const document = new FakeTextDocument(text);
   const edit = applyResizeGadgetMutation(document.asTextDocument(), "#BtnApply", {
@@ -147,20 +114,7 @@ EndProcedure
 
 
 test("adds resize procedure scaffolding without a sizewindow hook when no event procedure exists", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
-
-Enumeration FormGadget
-  #BtnApply
-EndEnumeration
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
-  OpenWindow(#FrmMain, x, y, width, height, "Main")
-  ButtonGadget(#BtnApply, 10, 20, 80, 24, "Apply")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/51-windowgadget-resize-create-no-events.pbf");
 
   const document = new FakeTextDocument(text);
   const edit = applyResizeGadgetMutation(document.asTextDocument(), "#BtnApply", {
@@ -186,35 +140,7 @@ EndProcedure
 
 
 test("removes now-empty resize scaffolding when the last ResizeGadget line is deleted", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
-
-Declare ResizeGadgetsFrmMain()
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
-  OpenWindow(#FrmMain, x, y, width, height, "Main")
-  ButtonGadget(#BtnApply, 10, 20, 80, 24, "Apply")
-EndProcedure
-
-Procedure ResizeGadgetsFrmMain()
-  Protected FormWindowWidth, FormWindowHeight
-  FormWindowWidth = WindowWidth(#FrmMain)
-  FormWindowHeight = WindowHeight(#FrmMain)
-  ResizeGadget(#BtnApply, FormWindowWidth - 310, 20, 80, 24)
-EndProcedure
-
-Procedure FrmMain_Events(event)
-  Select event
-    Case #PB_Event_SizeWindow
-      ResizeGadgetsFrmMain()
-    Case #PB_Event_CloseWindow
-      ProcedureReturn #False
-  EndSelect
-  ProcedureReturn #True
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/52-windowgadget-resize-delete-last-scaffolding.pbf");
 
   const document = new FakeTextDocument(text);
   const edit = applyResizeGadgetMutation(document.asTextDocument(), "#BtnApply", {
@@ -1649,21 +1575,7 @@ test("roundtrips combined scrollarea container updates in fixture 06", () => {
 
 
 test("re-inserts Enumeration FormWindow before FormImage when toggling a pbAny window back to enum mode", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormImage
-  #ImgMainLogo
-EndEnumeration
-
-UsePNGImageDecoder()
-
-LoadImage(#ImgMainLogo, "logo.png")
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  win = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
-  ImageGadget(#PB_Any, 10, 10, 32, 32, ImageID(#ImgMainLogo))
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/54-windowgadget-window-enum-before-image-block.pbf");
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
     applyWindowPbAnyToggle(document, "win", false, "win", "#FrmMain", undefined)
@@ -1683,18 +1595,7 @@ EndProcedure
 });
 
 test("re-inserts Enumeration FormWindow before an existing FormFont block", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormFont
-  #FontMain
-EndEnumeration
-
-LoadFont(#FontMain, "Arial", 10)
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  win = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/55-windowgadget-window-enum-before-font-block.pbf");
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
     applyWindowPbAnyToggle(document, "win", false, "win", "#FrmMain", undefined)
@@ -1714,14 +1615,7 @@ EndProcedure
 });
 
 test("re-inserts Enumeration FormWindow before image decoder lines when no enum anchor exists yet", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-UsePNGImageDecoder()
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  win = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/56-windowgadget-window-enum-before-image-decoder.pbf");
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
     applyWindowPbAnyToggle(document, "win", false, "win", "#FrmMain", undefined)
@@ -1741,18 +1635,7 @@ EndProcedure
 });
 
 test("re-inserts Enumeration FormWindow before ProcedureDLL and XIncludeFile boundaries", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-ProcedureDLL ScintillaCallbackGadget, *scinotify.SCNotification)
-  
-EndProcedure
-
-XIncludeFile "events/form-main.pbi"
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  win = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/57-windowgadget-window-enum-before-proceduredll-xinclude.pbf");
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
     applyWindowPbAnyToggle(document, "win", false, "win", "#FrmMain", undefined)
@@ -1773,14 +1656,7 @@ EndProcedure
 
 
 test("inserts a missing pbAny window Global before XIncludeFile when renaming the variable", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-XIncludeFile "events/form-main.pbi"
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  win = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/58-windowgadget-window-global-before-xinclude.pbf");
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
     applyWindowVariableNamePatch(document, "winMain")
@@ -1798,20 +1674,7 @@ EndProcedure
 });
 
 test("inserts a missing pbAny window Global before existing gadget and image globals", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Global gadgetMain
-
-Global imgMain
-
-Enumeration FormImage
-  #ImgMain
-EndEnumeration
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  win = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/59-windowgadget-window-global-before-gadget-image-globals.pbf");
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
     applyWindowVariableNamePatch(document, "winMain")
@@ -1832,17 +1695,7 @@ EndProcedure
 
 
 test("inserts a missing pbAny window Global before custom gadget initialisation", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-; 0 Custom gadget initialisation (do Not remove this line)
-InitScintillaBridge()
-
-XIncludeFile "events/form-main.pbi"
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  win = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/60-windowgadget-window-global-before-custom-init.pbf");
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
     applyWindowVariableNamePatch(document, "winMain")
@@ -1882,22 +1735,7 @@ EndProcedure
 });
 
 test("patches the selected pbAny window variable name by window key", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Global HelperWin
-Global Window_0
-
-Procedure OpenHelper()
-  HelperWin = OpenWindow(#PB_Any, 0, 0, 40, 40, "Helper")
-EndProcedure
-
-Procedure OpenWindow_0(x = 0, y = 0, width = 220, height = 140)
-  Window_0 = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
-EndProcedure
-
-Procedure Window_0_Events(event)
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/61-windowgadget-window-rename-selected-pbany.pbf");
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
     applyWindowVariableNamePatch(document, "Window_1", "Window_0")
@@ -1916,18 +1754,7 @@ EndProcedure
 
 
 test("removes the trailing blank line of the last window Global when toggling back to enum mode", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Global winMain
-
-Enumeration FormImage
-  #ImgMain
-EndEnumeration
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  winMain = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/62-windowgadget-window-enum-remove-last-global-before-image-block.pbf");
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
     applyWindowPbAnyToggle(document, "winMain", false, "winMain", "#FrmMain", undefined)
@@ -1951,22 +1778,7 @@ EndProcedure
 
 
 test("re-inserts Enumeration FormGadget before custom gadget initialisation and ProcedureDLL boundaries", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-; 0 Custom gadget initialisation (do Not remove this line)
-InitScintillaBridge()
-
-ProcedureDLL ScintillaCallbackGadget, *scinotify.SCNotification)
-
-EndProcedure
-
-XIncludeFile "events/form-main.pbi"
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  OpenWindow(#FrmMain, x, y, width, height, "Window Basic")
-  ButtonGadget(#BtnOk, 10, 10, 80, 24, "OK")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/63-windowgadget-gadget-enum-before-custom-init-proceduredll.pbf");
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
     applyRectPatch(document, "#BtnOk", 20, 24, 90, 28)
@@ -1995,24 +1807,7 @@ EndProcedure
 });
 
 test("re-inserts Enumeration FormGadget before FormMenu when patching an enum gadget", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
-
-Enumeration FormMenu
-  #MenuSave
-EndEnumeration
-
-; 0 Custom gadget initialisation (do Not remove this line)
-InitScintillaBridge()
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  OpenWindow(#FrmMain, x, y, width, height, "Window Basic")
-  ButtonGadget(#BtnOk, 10, 10, 80, 24, "OK")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/64-windowgadget-gadget-enum-before-menu-block.pbf");
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
     applyRectPatch(document, "#BtnOk", 20, 24, 90, 28)
@@ -2040,18 +1835,7 @@ EndProcedure
 });
 
 test("inserts a missing pbAny gadget Global between window and image globals", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Global winMain
-
-Global imgMain
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  winMain = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
-  gInput = StringGadget(#PB_Any, 10, 36, 220, 24, "")
-  ImageGadget(imgMain, 10, 70, 32, 32, 0)
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/65-windowgadget-gadget-global-between-window-image-globals.pbf");
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
     applyGadgetOpenArgsUpdate(document, "gInput", { textRaw: 'Value$' })
@@ -2121,19 +1905,7 @@ test("roundtrips combined splitter container updates in fixture 07", () => {
 
 
 test("deletes an existing ResizeGadget line when lock editing no longer requires it", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
-  OpenWindow(#FrmMain, x, y, width, height, "Main")
-  ButtonGadget(#BtnStretch, 10, 50, 80, 24, "Stretch")
-EndProcedure
-
-Procedure ResizeGadgetsFrmMain()
-  Protected FormWindowWidth, FormWindowHeight
-  FormWindowWidth = WindowWidth(#FrmMain)
-  FormWindowHeight = WindowHeight(#FrmMain)
-  ResizeGadget(#BtnStretch, FormWindowWidth - 310, 50, 80, 24)
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/53-windowgadget-resize-delete-line-basic.pbf");
 
   const document = new FakeTextDocument(text);
   const edit = applyResizeGadgetDelete(document.asTextDocument(), "#BtnStretch");

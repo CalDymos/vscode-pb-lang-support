@@ -1,0 +1,14 @@
+; Form Designer for PureBasic - 6.30
+
+Enumeration FormImage
+  #ImgMainLogo
+EndEnumeration
+
+UsePNGImageDecoder()
+
+LoadImage(#ImgMainLogo, "logo.png")
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  win = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
+  ImageGadget(#PB_Any, 10, 10, 32, 32, ImageID(#ImgMainLogo))
+EndProcedure

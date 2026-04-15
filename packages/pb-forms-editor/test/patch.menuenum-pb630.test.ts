@@ -12,6 +12,7 @@ import {
 } from "../src/core/emitter/patch-emitter";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
+import { loadFixture } from "./helpers/loadFixture";
 
 function patchAndReparse(
   text: string,
@@ -31,25 +32,7 @@ function patchAndReparse(
 }
 
 test("inserts FormMenu before custom gadget initialisation when missing", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
-
-Enumeration FormGadget
-  #Editor
-EndEnumeration
-
-; 0 Custom gadget initialisation (do Not remove this line)
-InitEditorGadget()
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
-  OpenWindow(#FrmMain, x, y, width, height, "Menu")
-  CreateMenu(0, WindowID(#FrmMain))
-  MenuTitle("File")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/43-menuenum-custom-gadget-base.pbf");
 
   const args: MenuEntryArgs = {
     kind: MENU_ENTRY_KIND.MenuItem,
@@ -71,20 +54,7 @@ EndProcedure
 
 
 test("inserts FormMenu before ProcedureDLL and XIncludeFile boundaries when no prior enums exist", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-ProcedureDLL ScintillaCallbackGadget, *scinotify.SCNotification)
-
-EndProcedure
-
-XIncludeFile "events/form-main.pbi"
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
-  OpenWindow(#FrmMain, x, y, width, height, "Menu")
-  CreateMenu(0, WindowID(#FrmMain))
-  MenuTitle("File")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/44-menuenum-proceduredll-xinclude-boundary.pbf");
 
   const args: MenuEntryArgs = {
     kind: MENU_ENTRY_KIND.MenuItem,
@@ -108,27 +78,7 @@ EndProcedure
 });
 
 test("removes an empty FormMenu block when deleting the last menu symbol", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
-
-Enumeration FormGadget
-  #Editor
-EndEnumeration
-
-Enumeration FormMenu
-  #MenuSave
-EndEnumeration
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
-  OpenWindow(#FrmMain, x, y, width, height, "Menu")
-  CreateMenu(0, WindowID(#FrmMain))
-  MenuTitle("File")
-  MenuItem(#MenuSave, "Save")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/45-menuenum-basic-single-symbol.pbf");
 
   const parsed = parseFormDocument(text);
   const target = parsed.menus[0]?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem && entry.idRaw === "#MenuSave");
@@ -144,27 +94,7 @@ EndProcedure
 });
 
 test("updates FormMenu symbols when renaming the only menu id", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
-
-Enumeration FormGadget
-  #Editor
-EndEnumeration
-
-Enumeration FormMenu
-  #MenuSave
-EndEnumeration
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
-  OpenWindow(#FrmMain, x, y, width, height, "Menu")
-  CreateMenu(0, WindowID(#FrmMain))
-  MenuTitle("File")
-  MenuItem(#MenuSave, "Save")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/45-menuenum-basic-single-symbol.pbf");
 
   const parsed = parseFormDocument(text);
   const target = parsed.menus[0]?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem && entry.idRaw === "#MenuSave");
@@ -188,22 +118,7 @@ EndProcedure
 
 
 test("inserts FormMenu before an existing FormImage block when no window or gadget enum is present", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormImage
-  #ImgSave
-EndEnumeration
-
-UsePNGImageDecoder()
-
-LoadImage(#ImgSave, "save.png")
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
-  OpenWindow(#PB_Any, x, y, width, height, "Menu")
-  CreateImageMenu(0, WindowID(#PB_Any))
-  MenuTitle("File")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/46-menuenum-before-image-block.pbf");
 
   const args: MenuEntryArgs = {
     kind: MENU_ENTRY_KIND.MenuItem,
@@ -225,20 +140,7 @@ EndProcedure
 
 
 test("inserts FormMenu before an existing FormFont block when no window or gadget enum is present", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormFont
-  #FontMain
-EndEnumeration
-
-LoadFont(#FontMain, "Arial", 10)
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
-  OpenWindow(#PB_Any, x, y, width, height, "Menu")
-  CreateMenu(0, WindowID(#PB_Any))
-  MenuTitle("File")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/47-menuenum-before-font-block.pbf");
 
   const args: MenuEntryArgs = {
     kind: MENU_ENTRY_KIND.MenuItem,
@@ -264,16 +166,7 @@ EndProcedure
 });
 
 test("inserts FormMenu before image decoder lines when no enum anchor exists yet", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-UsePNGImageDecoder()
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
-  OpenWindow(#PB_Any, x, y, width, height, "Menu")
-  CreateMenu(0, WindowID(#PB_Any))
-  MenuTitle("File")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/48-menuenum-before-image-decoder.pbf");
 
   const args: MenuEntryArgs = {
     kind: MENU_ENTRY_KIND.MenuItem,

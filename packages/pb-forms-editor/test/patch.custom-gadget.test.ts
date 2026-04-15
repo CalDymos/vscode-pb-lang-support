@@ -11,23 +11,9 @@ import {
 import { GADGET_KIND } from "../src/core/model";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
+import { loadFixture } from "./helpers/loadFixture";
 
-const CUSTOM_GADGET_FIXTURE = `; Form Designer for PureBasic - 6.30
-; EnableExplicit
-
-Enumeration FormWindow
-  #Form
-EndEnumeration
-
-Procedure OpenForm(x = 0, y = 0, width = 260, height = 180)
-  If OpenWindow(#Form, x, y, width, height, "Custom", #PB_Window_SystemMenu)
-    ; 0 Custom gadget initialisation (do Not remove this line)
-    InitFancyWidget()
-    ; 0 Custom gadget creation (do not remove this line) FancyWidget(%id%, %x%, %y%, %w%, %h%, %txt%)
-    FancyWidget(#Fancy, 10, 20, 130, 24, "Caption")
-  EndIf
-EndProcedure
-`;
+const CUSTOM_GADGET_FIXTURE = loadFixture("fixtures/roundtrip/66-custom-gadget-marker-pair-basic.pbf");
 
 test("parses original custom gadget marker pairs into a CustomGadget model entry", () => {
   const doc = parseFormDocument(CUSTOM_GADGET_FIXTURE);

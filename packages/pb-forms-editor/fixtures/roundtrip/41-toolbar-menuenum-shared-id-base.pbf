@@ -1,0 +1,22 @@
+; Form Designer for PureBasic - 6.30
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #Editor
+EndEnumeration
+
+Enumeration FormMenu
+  #MenuOpen
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
+  OpenWindow(#FrmMain, x, y, width, height, "Shared Id")
+  CreateImageMenu(0, WindowID(#FrmMain))
+  MenuTitle("File")
+  MenuItem(#MenuOpen, "Open")
+  CreateToolbar(0, WindowID(#FrmMain))
+  ToolBarSeparator()
+EndProcedure

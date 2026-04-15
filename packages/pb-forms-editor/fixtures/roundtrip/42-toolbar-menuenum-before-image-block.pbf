@@ -1,0 +1,15 @@
+; Form Designer for PureBasic - 6.30
+
+Enumeration FormImage
+  #ImgSave
+EndEnumeration
+
+UsePNGImageDecoder()
+
+LoadImage(#ImgSave, "save.png")
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
+  OpenWindow(#PB_Any, x, y, width, height, "Toolbar Only")
+  CreateToolbar(0, WindowID(#PB_Any))
+  ToolBarSeparator()
+EndProcedure

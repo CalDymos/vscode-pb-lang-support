@@ -1,0 +1,15 @@
+; Form Designer for PureBasic - 6.30
+
+Global HelperWin
+Global Window_0
+
+Procedure OpenHelper()
+  HelperWin = OpenWindow(#PB_Any, 0, 0, 40, 40, "Helper")
+EndProcedure
+
+Procedure OpenWindow_0(x = 0, y = 0, width = 220, height = 140)
+  Window_0 = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
+EndProcedure
+
+Procedure Window_0_Events(event)
+EndProcedure

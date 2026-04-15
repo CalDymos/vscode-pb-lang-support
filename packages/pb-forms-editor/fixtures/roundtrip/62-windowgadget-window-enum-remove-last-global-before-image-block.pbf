@@ -1,0 +1,11 @@
+; Form Designer for PureBasic - 6.30
+
+Global winMain
+
+Enumeration FormImage
+  #ImgMain
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  winMain = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
+EndProcedure
