@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.19.4
+
+### Fixed
+
+- Fixed Language Server not starting after VSIX installation: webpack
+  now resolves `vscode-languageclient` via its ESM entry point
+  (`mainFields: ['module', 'main']`), eliminating unresolvable dynamic
+  `require('./impl/...')` calls in the CJS build at runtime.
+  A `jsonc-parser` ESM alias is added as an additional safeguard.
+
 ## 0.19.3
 
 ### Added
