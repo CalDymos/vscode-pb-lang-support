@@ -61,38 +61,32 @@ test("preserves the PB 6.30 top-level head order across menu, image and font ins
   const normalized = toLf(patchedText);
   const parsed = parseFormDocument(patchedText);
 
-  assert.ok(normalized.includes([
+  const orderedMarkers = [
     'Enumeration FormWindow',
-    '  #FrmMain',
-    'EndEnumeration',
-    '',
     'Enumeration FormGadget',
-    '  #Editor',
-    'EndEnumeration',
-    '',
     'Enumeration FormMenu',
-    '  #MenuSave',
-    'EndEnumeration',
-    '',
     'Enumeration FormImage',
-    '  #ImgMainLogo',
-    'EndEnumeration',
-    '',
-    '; 0 Custom gadget initialisation (do Not remove this line)',
-    'InitEditorGadget()',
-    '',
     'UsePNGImageDecoder()',
-    '',
     'LoadImage(#ImgMainLogo, "logo.png")',
-    '',
     'Enumeration FormFont',
-    '  #FontMain',
-    'EndEnumeration',
-    '',
     'LoadFont(#FontMain, "Arial", 10, #PB_Font_Bold)',
-    '',
-    'ProcedureDLL EditorCallbackGadget, *scinotify.SCNotification)',
-  ].join("\n")));
+    'Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)',
+    '  CreateMenu(0, WindowID(#FrmMain))',
+    '  MenuTitle("File")',
+    '  MenuItem(#MenuSave, "Save")',
+    '  ScintillaGadget(#Editor, 10, 10, 300, 120, @Callback_Scintilla_0())',
+  ];
+
+  let lastIndex = -1;
+  for (const marker of orderedMarkers) {
+    const index = normalized.indexOf(marker);
+    assert.notEqual(index, -1, `Expected marker not found: ${marker}`);
+    assert.ok(index > lastIndex, `Expected marker order after previous block: ${marker}`);
+    lastIndex = index;
+  }
+
+  assert.equal(normalized.includes("InitEditorGadget()"), false);
+  assert.equal(normalized.includes("ProcedureDLL EditorCallbackGadget, *scinotify.SCNotification)"), false);
 
   assert.ok(parsed.menus[0]?.entries.some((entry) => entry.idRaw === "#MenuSave"));
   assert.ok(parsed.images.some((entry) => entry.id === "#ImgMainLogo"));
