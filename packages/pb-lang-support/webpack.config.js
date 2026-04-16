@@ -1,6 +1,33 @@
 const path = require('path');
 
+// Shared resolve config for all bundles.
+//
+// - extensions: resolves TypeScript and JavaScript modules without requiring
+//   explicit file extensions in imports.
+// - mainFields: ['module', 'main'] prefers ESM entry points before CommonJS.
+//   This is important for packages such as jsonc-parser, whose non-ESM builds
+//   can leave internal requires like './impl/format' unresolved in packaged
+//   VSIX bundles.
+// - fallback: these Node.js built-ins are available natively for target:'node'.
+//   Setting them to false avoids accidental browser polyfill injection.
+const sharedResolve = {
+    extensions: ['.ts', '.js'],
+    mainFields: ['module', 'main'],
+    fallback: {
+        fs: false,
+        path: false,
+        crypto: false,
+    },
+};
+
+const tsRule = {
+    test: /\.ts$/,
+    exclude: /node_modules/,
+    use: [{ loader: 'ts-loader' }],
+};
+
 module.exports = (env, argv) => [
+    // ── Extension Host ──────────────────────────────────────────────────────
     {
         target: 'node',
         entry: './src/extension.ts',
@@ -10,36 +37,23 @@ module.exports = (env, argv) => [
             libraryTarget: 'commonjs2',
             devtoolModuleFilenameTemplate: '../[resource-path]',
         },
-        devtool: "source-map",
+        devtool: 'source-map',
         externals: {
             vscode: 'commonjs vscode',
         },
         resolve: {
-            extensions: ['.ts', '.js'],
-            mainFields: ['main', 'module'],
-            fallback: {
-                "fs": false,
-                "path": false,
-                "crypto": false
-            }
+            ...sharedResolve,
+            alias: {
+                'jsonc-parser$': require.resolve('jsonc-parser/lib/esm/main.js'),
+            },
         },
-        module: {
-            rules: [
-                {
-                    test: /\.ts$/,
-                    exclude: /node_modules/,
-                    use: [
-                        {
-                            loader: 'ts-loader',
-                        },
-                    ],
-                },
-            ],
-        },
-        optimization: {
-            minimize: argv.mode === 'production',
-        },
+        module: { rules: [tsRule] },
+        optimization: { minimize: argv.mode === 'production' },
     },
+    // ── Language Server ──────────────────────────────────────────────────────
+    //
+    // Runs as a separate Node.js process started by the extension host.
+    // The output path must match the serverModule path used in extension.ts.
     {
         target: 'node',
         entry: './src/server/server.ts',
@@ -49,38 +63,17 @@ module.exports = (env, argv) => [
             libraryTarget: 'commonjs2',
             devtoolModuleFilenameTemplate: '../../[resource-path]',
         },
+        devtool: 'source-map',
         externals: {
             vscode: 'commonjs vscode',
         },
-        resolve: {
-            extensions: ['.ts', '.js'],
-            mainFields: ['main', 'module'],
-            fallback: {
-                "fs": false,
-                "path": false,
-                "crypto": false
-            }
-        },
-        module: {
-            rules: [
-                {
-                    test: /\.ts$/,
-                    exclude: /node_modules/,
-                    use: [
-                        {
-                            loader: 'ts-loader',
-                        },
-                    ],
-                },
-            ],
-        },
-        optimization: {
-            minimize: argv.mode === 'production',
-        },
+        resolve: sharedResolve,
+        module: { rules: [tsRule] },
+        optimization: { minimize: argv.mode === 'production' },
     },
-    // Debug Adapter – runs as a standalone Node.js child process.
-    // target: 'node' means Node.js built-ins (fs/path/crypto/...) are available,
-    // so no browser polyfill fallbacks are needed here.
+    // ── Debug Adapter ────────────────────────────────────────────────────────
+    //
+    // Runs as a standalone Node.js child process for debugger integration.
     {
         target: 'node',
         entry: './src/debug/debugAdapter.ts',
@@ -90,29 +83,12 @@ module.exports = (env, argv) => [
             libraryTarget: 'commonjs2',
             devtoolModuleFilenameTemplate: '../../[resource-path]',
         },
-        devtool: "source-map",
+        devtool: 'source-map',
         externals: {
             vscode: 'commonjs vscode',
         },
-        resolve: {
-            extensions: ['.ts', '.js'],
-            mainFields: ['main', 'module'],
-        },
-        module: {
-            rules: [
-                {
-                    test: /\.ts$/,
-                    exclude: /node_modules/,
-                    use: [
-                        {
-                            loader: 'ts-loader',
-                        },
-                    ],
-                },
-            ],
-        },
-        optimization: {
-            minimize: argv.mode === 'production',
-        },
-    }
+        resolve: sharedResolve,
+        module: { rules: [tsRule] },
+        optimization: { minimize: argv.mode === 'production' },
+    },
 ];
