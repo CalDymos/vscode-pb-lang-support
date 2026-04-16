@@ -1070,7 +1070,7 @@ export function applyMovePatch(
   const customGadget = parsed.gadgets.find(entry => entry.id === gadgetKey && entry.kind === GADGET_KIND.CustomGadget);
   if (customGadget) {
     const nextGadget: Gadget = { ...customGadget, x: Math.trunc(x), y: Math.trunc(y) };
-    return applyCustomGadgetCreationLineEdit(document, nextGadget);
+    return applyCustomGadgetCreationLineEdit(document, nextGadget, parsed.window);
   }
 
   const calls = scanDocumentCalls(document, scanRange);
@@ -1109,7 +1109,7 @@ export function applyRectPatch(
       w: Math.trunc(w),
       h: Math.trunc(h)
     };
-    return applyCustomGadgetCreationLineEdit(document, nextGadget);
+    return applyCustomGadgetCreationLineEdit(document, nextGadget, parsed.window);
   }
 
   const calls = scanDocumentCalls(document, scanRange);
@@ -2335,11 +2335,27 @@ function buildCustomGadgetTextReplacement(gadget: Gadget): string {
   return '""';
 }
 
-function buildCustomGadgetCreationLine(gadget: Gadget, indent: string): string | undefined {
+function buildCustomGadgetWindowHandleRaw(window: FormWindow | undefined): string | undefined {
+  if (!window) return undefined;
+
+  const windowRef = window.pbAny
+    ? window.variable?.trim() || window.id?.trim()
+    : window.firstParam?.trim() || window.id?.trim();
+  if (!windowRef) return undefined;
+
+  return `WindowID(${windowRef})`;
+}
+
+function buildCustomGadgetCreationLine(
+  gadget: Gadget,
+  indent: string,
+  window: FormWindow | undefined
+): string | undefined {
   const templateRaw = normalizeOptionalGridString(gadget.customCreateRaw);
   if (!templateRaw) return undefined;
 
   const idRaw = buildCustomGadgetIdRaw(gadget);
+  const hwndRaw = buildCustomGadgetWindowHandleRaw(window) ?? idRaw;
   const replacements: Record<string, string> = {
     "%id%": idRaw,
     "%x%": String(Math.trunc(gadget.x)),
@@ -2347,7 +2363,7 @@ function buildCustomGadgetCreationLine(gadget: Gadget, indent: string): string |
     "%w%": String(Math.trunc(gadget.w)),
     "%h%": String(Math.trunc(gadget.h)),
     "%txt%": buildCustomGadgetTextReplacement(gadget),
-    "%hwnd%": idRaw
+    "%hwnd%": hwndRaw
   };
 
   let line = templateRaw;
@@ -2360,14 +2376,15 @@ function buildCustomGadgetCreationLine(gadget: Gadget, indent: string): string |
 
 function applyCustomGadgetCreationLineEdit(
   document: vscode.TextDocument,
-  gadget: Gadget
+  gadget: Gadget,
+  window: FormWindow | undefined
 ): vscode.WorkspaceEdit | undefined {
   if (!gadget.source) return undefined;
 
   const line = gadget.source.line;
   if (line < 0 || line >= document.lineCount) return undefined;
 
-  const rebuilt = buildCustomGadgetCreationLine(gadget, getLineIndent(document, line));
+  const rebuilt = buildCustomGadgetCreationLine(gadget, getLineIndent(document, line), window);
   if (!rebuilt) return undefined;
 
   const edit = new vscode.WorkspaceEdit();
@@ -2406,7 +2423,7 @@ export function applyGadgetOpenArgsUpdate(
       nextGadget.text = literalText ?? nextTextRaw;
       nextGadget.textVariable = literalText === undefined && nextTextRaw.length > 0;
     }
-    return applyCustomGadgetCreationLineEdit(document, nextGadget);
+    return applyCustomGadgetCreationLineEdit(document, nextGadget, parsed.window);
   }
 
   const calls = scanDocumentCalls(document, scanRange);
@@ -2498,7 +2515,7 @@ export function applyCustomGadgetCodeUpdate(
       `${markerIndent}; ${markerIndex} Custom gadget creation (do not remove this line) ${nextGadget.customCreateRaw}`
     );
 
-    const rebuiltLine = buildCustomGadgetCreationLine(nextGadget, getLineIndent(document, gadget.source.line));
+    const rebuiltLine = buildCustomGadgetCreationLine(nextGadget, getLineIndent(document, gadget.source.line), parsed.window);
     if (!rebuiltLine) return undefined;
     edit.replace(document.uri, document.lineAt(gadget.source.line).range, rebuiltLine);
     changed = true;

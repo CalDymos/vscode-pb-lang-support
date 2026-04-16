@@ -1,4 +1,4 @@
-; Form Designer for PureBasic - 6.30
+﻿; Form Designer for PureBasic - 6.40
 ; Warning: this file uses a strict syntax, if you edit it, make sure to respect the Form Designer limitation or it won't be opened again.
 
 ;
@@ -6,6 +6,8 @@
 ; Manual modification is possible to adjust existing commands, but anything else will be dropped when the code is compiled.
 ; Event procedures need to be put in another source file.
 ;
+
+Global ButtonImage_0
 
 Enumeration FormWindow
   #FrmMain
@@ -17,6 +19,10 @@ EndEnumeration
 
 LoadFont(#Font_FrmMain_0,"Arial", 10)
 
+
 Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
   OpenWindow(#FrmMain, x, y, width, height, "Images")
+  ButtonImage_0 = ButtonImageGadget(#PB_Any, 80, 80, 70, 30, 0)
+  SetGadgetFont(ButtonImage_0, FontID(#Font_FrmMain_0))
 EndProcedure
+

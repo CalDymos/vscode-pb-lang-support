@@ -45,6 +45,10 @@ const menuId = DEFAULT_SECTION_ID;
 const toolBarId = DEFAULT_SECTION_ID;
 const statusBarId = DEFAULT_SECTION_ID;
 
+function stripBomAndToLf(text: string): string {
+  return text.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
+}
+
 // NOTE: editFactory receives a vscode.TextDocument, not a FakeTextDocument directly.
 // The VSCode Language Server resolves @types/vscode regardless of tsconfig.test.json,
 // so passing FakeTextDocument where TextDocument is expected causes TS2345.
@@ -862,7 +866,7 @@ test("roundtrips toolbar tooltip insert directly after toolbar entry", () => {
   const updatedToolBar = parsed.toolbars.find((tb) => tb.id === toolBarId);
   assert.ok(updatedToolBar, "Expected updated toolbar.");
   assert.equal(updatedToolBar!.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton)?.tooltip, "Save current form");
-  assert.match(patchedText, /ToolBarImageButton\(#TbSave, ImageID\(#ImgSave\)\)[\s\S]*ToolBarToolTip\((0|#TbMain), #TbSave, "Save current form"\)[\s\S]*ToolBarSeparator\(\)/);
+  assert.match(patchedText, /ToolBarImageButton\(#TbSave,\s*ImageID\(#Img_FrmMain_0\)\)[\s\S]*ToolBarToolTip\(0, #TbSave, "Save current form"\)[\s\S]*ToolBarSeparator\(\)/);
 });
 
 test("roundtrips toolbar tooltip clear removes linked tooltip line", () => {
@@ -1307,6 +1311,46 @@ test("roundtrips create-and-assign workflow for image gadget", () => {
   assert.ok(image, "Expected inserted image entry.");
   assert.equal(image?.imageRaw, '"new-logo.png"');
   assert.match(patchedText, /LoadImage\(#ImgNewLogo, "new-logo\.png"\)/);
+});
+
+test("roundtrips create-and-assign workflow for the first image block before FormFont in fixture 19", () => {
+  const text = loadFixture("fixtures/roundtrip/19-imageblock-before-font.pbf");
+
+  const { parsed, patchedText } = patchTwiceAndReparse(
+    text,
+    (document) => applyGadgetOpenArgsUpdate(document, "ButtonImage_0", { imageRaw: "ImageID(#Img_FrmMain_0)" }),
+    (document) => applyImageInsert(document, {
+      inline: false,
+      idRaw: "#Img_FrmMain_0",
+      imageRaw: '"logo.png"',
+    })
+  );
+
+  const gadget = parsed.gadgets.find((entry) => entry.id === "ButtonImage_0");
+  const image = parsed.images.find((entry) => entry.id === "#Img_FrmMain_0");
+  const normalized = stripBomAndToLf(patchedText);
+
+  assert.equal(gadget?.kind, "ButtonImageGadget");
+  assert.equal(gadget?.imageRaw, "ImageID(#Img_FrmMain_0)");
+  assert.equal(gadget?.imageId, "#Img_FrmMain_0");
+  assert.ok(image, "Expected inserted image entry.");
+  assert.equal(image?.imageRaw, '"logo.png"');
+  assert.match(patchedText, /ButtonImage_0 = ButtonImageGadget\(#PB_Any, 80, 80, 70, 30, ImageID\(#Img_FrmMain_0\)\)/);
+  assert.ok(normalized.includes([
+    'Enumeration FormWindow',
+    '  #FrmMain',
+    'EndEnumeration',
+    '',
+    'Enumeration FormImage',
+    '  #Img_FrmMain_0',
+    'EndEnumeration',
+    '',
+    'UsePNGImageDecoder()',
+    '',
+    'LoadImage(#Img_FrmMain_0, "logo.png")',
+    '',
+    'Enumeration FormFont',
+  ].join("\n")));
 });
 
 test("roundtrips create-and-assign workflow for menu item", () => {

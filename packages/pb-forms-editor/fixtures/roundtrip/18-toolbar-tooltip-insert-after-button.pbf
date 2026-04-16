@@ -1,4 +1,4 @@
-﻿; Form Designer for PureBasic - 6.30
+﻿; Form Designer for PureBasic - 6.40
 ; Warning: this file uses a strict syntax, if you edit it, make sure to respect the Form Designer limitation or it won't be opened again.
 
 ;
@@ -12,22 +12,22 @@ Enumeration FormWindow
 EndEnumeration
 
 Enumeration FormMenu
-  #TbMain
   #TbSave
 EndEnumeration
 
 Enumeration FormImage
-  #ImgSave
+  #Img_FrmMain_0
 EndEnumeration
 
 UsePNGImageDecoder()
 
-LoadImage(#ImgSave,"icons/save.png")
+LoadImage(#Img_FrmMain_0,"icons/save.png")
 
 
 Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
   OpenWindow(#FrmMain, x, y, width, height, "Toolbar")
-  CreateToolbar(#TbMain, WindowID(#FrmMain))
-  ToolBarImageButton(#TbSave, ImageID(#ImgSave))
+  CreateToolBar(0, WindowID(#FrmMain))
+  ToolBarImageButton(#TbSave,ImageID(#Img_FrmMain_0))
   ToolBarSeparator()
 EndProcedure
+

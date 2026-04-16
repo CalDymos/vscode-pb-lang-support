@@ -62,14 +62,14 @@ test("removes the decoder together with the last remaining image in the block", 
   const text = loadFixture("fixtures/roundtrip/20-imageblock-enum-single.pbf");
 
   const parsed = parseFormDocument(text);
-  const sourceLine = parsed.images.find((entry) => entry.id === "#ImgMainLogo")?.source?.line;
+  const sourceLine = parsed.images.find((entry) => entry.id === "#Img_FrmMain_0")?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected image source line.");
 
   const { parsed: updated, patchedText } = patchAndReparse(text, (document) => applyImageDelete(document, sourceLine!));
 
   assert.equal(updated.images.length, 0);
   assert.doesNotMatch(patchedText, /UsePNGImageDecoder\(\)/);
-  assert.doesNotMatch(patchedText, /LoadImage\(#ImgMainLogo, "logo\.png"\)/);
+  assert.doesNotMatch(patchedText, /LoadImage\(#Img_FrmMain_0, "logo\.png"\)/);
   assert.match(patchedText, /Procedure OpenFrmMain\(/);
 });
 
@@ -77,44 +77,44 @@ test("updates image metadata through the shared image-value parser for escaped l
   const text = loadFixture("fixtures/roundtrip/20-imageblock-enum-single.pbf");
 
   const parsed = parseFormDocument(text);
-  const sourceLine = parsed.images.find((entry) => entry.id === "#ImgMainLogo")?.source?.line;
+  const sourceLine = parsed.images.find((entry) => entry.id === "#Img_FrmMain_0")?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected image source line.");
 
   const args: ImageArgs = {
     inline: false,
-    idRaw: "#ImgMainLogo",
+    idRaw: "#Img_FrmMain_0",
     imageRaw: '~"icons/""main"".png"',
   };
 
   const { parsed: updated, patchedText } = patchAndReparse(text, (document) => applyImageUpdate(document, sourceLine!, args));
 
-  const image = updated.images.find((entry) => entry.id === "#ImgMainLogo");
+  const image = updated.images.find((entry) => entry.id === "#Img_FrmMain_0");
   assert.ok(image, "Expected updated image entry.");
   assert.equal(image?.image, 'icons/"main".png');
-  assert.match(patchedText, /LoadImage\(#ImgMainLogo, ~"icons\/""main""\.png"\)/);
+  assert.match(patchedText, /LoadImage\(#Img_FrmMain_0, ~"icons\/""main""\.png"\)/);
 });
 
 test("rebuilds the decoder lines when the image file type changes", () => {
   const text = loadFixture("fixtures/roundtrip/20-imageblock-enum-single.pbf");
 
   const parsed = parseFormDocument(text);
-  const sourceLine = parsed.images.find((entry) => entry.id === "#ImgMainLogo")?.source?.line;
+  const sourceLine = parsed.images.find((entry) => entry.id === "#Img_FrmMain_0")?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected image source line.");
 
   const args: ImageArgs = {
     inline: false,
-    idRaw: "#ImgMainLogo",
+    idRaw: "#Img_FrmMain_0",
     imageRaw: '"logo.jpg"',
   };
 
   const { parsed: updated, patchedText } = patchAndReparse(text, (document) => applyImageUpdate(document, sourceLine!, args));
 
-  const image = updated.images.find((entry) => entry.id === "#ImgMainLogo");
+  const image = updated.images.find((entry) => entry.id === "#Img_FrmMain_0");
   assert.ok(image, "Expected updated image entry.");
   assert.equal(image?.image, "logo.jpg");
   assert.match(patchedText, /UseJPEGImageDecoder\(\)/);
   assert.doesNotMatch(patchedText, /UsePNGImageDecoder\(\)/);
-  assert.match(patchedText, /LoadImage\(#ImgMainLogo, "logo\.jpg"\)/);
+  assert.match(patchedText, /LoadImage\(#Img_FrmMain_0, "logo\.jpg"\)/);
 });
 
 
@@ -170,7 +170,7 @@ test("moves image declarations from FormImage to Global when toggling the last e
   const text = loadFixture("fixtures/roundtrip/20-imageblock-enum-single.pbf");
 
   const parsed = parseFormDocument(text);
-  const sourceLine = parsed.images.find((entry) => entry.id === "#ImgMainLogo")?.source?.line;
+  const sourceLine = parsed.images.find((entry) => entry.id === "#Img_FrmMain_0")?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected image source line.");
 
   const { patchedText } = patchAndReparse(text, (document) => applyImageUpdate(document, sourceLine!, {
@@ -182,7 +182,7 @@ test("moves image declarations from FormImage to Global when toggling the last e
   const normalized = toLf(patchedText);
 
   assert.ok(normalized.includes(['Global ImgMainLogo', '', 'Enumeration FormWindow'].join("\n")));
-  assert.ok(!normalized.includes(['Enumeration FormImage', '  #ImgMainLogo', 'EndEnumeration'].join("\n")));
+  assert.ok(!normalized.includes(['Enumeration FormImage', '  #Img_FrmMain_0', 'EndEnumeration'].join("\n")));
   assert.match(patchedText, /ImgMainLogo = LoadImage\(#PB_Any, "logo\.png"\)/);
 });
 
