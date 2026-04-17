@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.20.0
+
+### Added
+
+- Added IntelliSense support for PureBasic Forms text mode (`.pbf`):
+  - Completion for common built-in gadget, window, menu, toolbar and
+    status bar commands with snippet insertion .
+  - Hover documentation showing the full function signature and
+    description for any recognized `.pbf` built-in.
+  - Signature help triggered by `(` and `,` showing the active
+    parameter for the current call.
+  - All three providers share a single `pbf-builtins.ts` data source
+    and operate independently of the Language Server.
+
 ## 0.19.4
 
 ### Fixed

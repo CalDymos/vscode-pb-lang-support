@@ -27,6 +27,8 @@ including `IntelliSense`, `Debugging`, and `Code Navigation`. It supports PureBa
 - Outline: `Ctrl+Shift+O`
 - Built-in PureBasic functions in completion, hover, and signature help - updated for PureBasic 6.40.
 - Built-In PureBasic constants in completion - updated for PureBasic 6.40.
+- PureBasic Forms (`.pbf`): small completion, hover and signature help for
+  gadget, window, menu, toolbar and status bar commands.
 
 ### Navigation & Refactoring 🧭
 
@@ -176,7 +178,9 @@ The extension provides some configuration options. Access these via:
 
 1. Open any `.pbf` file in text mode
 2. Edit the form source with PureBasic syntax highlighting
-3. Use the same editor tooling for navigation, formatting, and symbol-based features where applicable
+3. Use `Ctrl+Space` for completion of gadget and window commands
+4. Type `(` to see signature help with parameter hints
+5. Hover over any built-in command to see its signature and description
 
 ### Quick Debug Setup
 
