@@ -1,4 +1,4 @@
-; Form Designer for PureBasic - 6.30
+﻿; Form Designer for PureBasic - 6.40
 ; Warning: this file uses a strict syntax, if you edit it, make sure to respect the Form Designer limitation or it won't be opened again.
 
 ;
@@ -7,7 +7,9 @@
 ; Event procedures need to be put in another source file.
 ;
 
-Global ImgMainLogo
+Global Image_0
+
+Global Img_FrmMain_0
 
 Enumeration FormWindow
   #FrmMain
@@ -15,8 +17,11 @@ EndEnumeration
 
 UsePNGImageDecoder()
 
-ImgMainLogo = LoadImage(#PB_Any,"logo.png")
+Img_FrmMain_0 = LoadImage(#PB_Any,"logo.png")
+
 
 Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
   OpenWindow(#FrmMain, x, y, width, height, "Images")
+  Image_0 = ImageGadget(#PB_Any, 49, 41, 56, 38, ImageID(Img_FrmMain_0))
 EndProcedure
+

@@ -13,7 +13,7 @@ InitMyCustomGadget()
 
 Procedure Openwin(x = 0, y = 0, width = 220, height = 140)
   win = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
-  ; 0 Custom gadget creation (do not remove this line) MyCustomGadget(%id%, %x%, %y%, %w%, %h%, %txt%)
-  MyCustomGadget(, 0, 0, 0, 0, "")
+  ; 0 Custom gadget creation (do not remove this line) MyCustomGadget(%id%, %x%, %y%, %w%, %h%, %txt%, %hWnd%)
+  MyCustomGadget(#Custom, 0, 0, 0, 0, "Custom Text", 0)
 EndProcedure
 

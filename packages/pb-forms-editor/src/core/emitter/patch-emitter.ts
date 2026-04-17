@@ -2335,7 +2335,7 @@ function buildCustomGadgetTextReplacement(gadget: Gadget): string {
   return '""';
 }
 
-function buildCustomGadgetWindowHandleRaw(window: FormWindow | undefined): string | undefined {
+function buildCustomGadgetWindowHandle(window: FormWindow | undefined, mode: 'hWnd' | 'WndID'): string | undefined {
   if (!window) return undefined;
 
   const windowRef = window.pbAny
@@ -2343,7 +2343,9 @@ function buildCustomGadgetWindowHandleRaw(window: FormWindow | undefined): strin
     : window.firstParam?.trim() || window.id?.trim();
   if (!windowRef) return undefined;
 
-  return `WindowID(${windowRef})`;
+  return mode === 'hWnd'
+    ? `WindowID(${windowRef})`
+    : `${windowRef}`;
 }
 
 function buildCustomGadgetCreationLine(
@@ -2355,7 +2357,8 @@ function buildCustomGadgetCreationLine(
   if (!templateRaw) return undefined;
 
   const idRaw = buildCustomGadgetIdRaw(gadget);
-  const hwndRaw = buildCustomGadgetWindowHandleRaw(window) ?? idRaw;
+  const hwndRaw = buildCustomGadgetWindowHandle(window, 'hWnd') ?? '0';
+  const hwndIdRaw = buildCustomGadgetWindowHandle(window, 'WndID') ?? '0';
   const replacements: Record<string, string> = {
     "%id%": idRaw,
     "%x%": String(Math.trunc(gadget.x)),
@@ -2363,7 +2366,8 @@ function buildCustomGadgetCreationLine(
     "%w%": String(Math.trunc(gadget.w)),
     "%h%": String(Math.trunc(gadget.h)),
     "%txt%": buildCustomGadgetTextReplacement(gadget),
-    "%hwnd%": hwndRaw
+    "%hwnd%": hwndRaw,
+    "%wndid%": hwndIdRaw,
   };
 
   let line = templateRaw;

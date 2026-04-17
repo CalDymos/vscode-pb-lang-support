@@ -385,7 +385,7 @@ export function buildGadgetTooltipRaw(value: string, isVariable: boolean): strin
 
 
 export function getCustomGadgetHelpDisplay(): string {
-  return "%id% %x% %y% %w% %h% %txt% %hwnd% ";
+  return "%id% %x% %y% %w% %h% %txt% %hwnd% %wndid% ";
 }
 
 export function getGadgetFontDisplaySummary(gadget: GadgetFontLike): string {

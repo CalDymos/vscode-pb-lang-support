@@ -1,4 +1,4 @@
-; Form Designer for PureBasic - 6.30
+﻿; Form Designer for PureBasic - 6.40
 ; Warning: this file uses a strict syntax, if you edit it, make sure to respect the Form Designer limitation or it won't be opened again.
 
 ;
@@ -12,9 +12,14 @@ Enumeration FormWindow
 EndEnumeration
 
 Enumeration FormMenu
-  #MenuMain
+  #MenuItem_2
 EndEnumeration
+
 
 Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
   OpenWindow(#FrmMain, x, y, width, height, "Images")
+  CreateMenu(0, WindowID(#FrmMain))
+  MenuTitle("MenuTitle")
+  MenuItem(#MenuItem_2, "MenuItem2")
 EndProcedure
+

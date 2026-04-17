@@ -39,18 +39,18 @@ test("inserts the first image block before the font block and injects the requir
 
   const args: ImageArgs = {
     inline: false,
-    idRaw: "#ImgMainLogo",
+    idRaw: "#Img_FrmMain_0",
     imageRaw: '"logo.png"',
   };
 
   const { parsed, patchedText } = patchAndReparse(text, (document) => applyImageInsert(document, args));
 
-  const image = parsed.images.find((entry) => entry.id === "#ImgMainLogo");
+  const image = parsed.images.find((entry) => entry.id === "#Img_FrmMain_0");
   assert.ok(image, "Expected inserted image entry.");
   assert.equal(image?.image, "logo.png");
   assert.match(
     patchedText,
-    /UsePNGImageDecoder\(\)\r?\n\r?\nLoadImage\(#ImgMainLogo, "logo\.png"\)\r?\n\r?\nEnumeration FormFont/s
+    /UsePNGImageDecoder\(\)\r?\n\r?\nLoadImage\(#Img_FrmMain_0, "logo\.png"\)\r?\n\r?\nEnumeration FormFont/s
   );
   assert.doesNotMatch(
     patchedText,
@@ -123,7 +123,7 @@ test("creates an Enumeration FormImage block when inserting the first enum image
 
   const args: ImageArgs = {
     inline: false,
-    idRaw: "#ImgMainLogo",
+    idRaw: "#Img_FrmMain_0",
     imageRaw: '"logo.png"',
   };
 
@@ -133,16 +133,17 @@ test("creates an Enumeration FormImage block when inserting the first enum image
   assert.ok(normalized.includes(
     [
       'Enumeration FormMenu',
-      '  #MenuMain',
+      '  #MenuItem_2',
       'EndEnumeration',
       '',
+      '',
       'Enumeration FormImage',
-      '  #ImgMainLogo',
+      '  #Img_FrmMain_0',
       'EndEnumeration',
       '',
       'UsePNGImageDecoder()',
       '',
-      'LoadImage(#ImgMainLogo, "logo.png")',
+      'LoadImage(#Img_FrmMain_0, "logo.png")',
     ].join("\n")
   ));
   assert.doesNotMatch(patchedText, /^Global\s+/m);
@@ -190,35 +191,37 @@ test("moves image declarations from Global to FormImage when toggling the last p
   const text = loadFixture("fixtures/roundtrip/22-imageblock-pbany-single.pbf");
 
   const parsed = parseFormDocument(text);
-  const sourceLine = parsed.images.find((entry) => entry.id === "ImgMainLogo")?.source?.line;
+  const sourceLine = parsed.images.find((entry) => entry.id === "Img_FrmMain_0")?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected image source line.");
 
   const { patchedText } = patchAndReparse(text, (document) => applyImageUpdate(document, sourceLine!, {
     inline: false,
-    idRaw: "#ImgMainLogo",
+    idRaw: "#Img_FrmMain_0",
     imageRaw: '"logo.png"',
   }));
   const normalized = toLf(patchedText);
 
-  assert.ok(!/^Global ImgMainLogo$/m.test(patchedText));
+  assert.ok(!/^Global Img_FrmMain_0$/m.test(patchedText));
   assert.ok(normalized.includes([
+    'Global Image_0',
+    '',
     'Enumeration FormWindow',
     '  #FrmMain',
     'EndEnumeration',
     '',
     'Enumeration FormImage',
-    '  #ImgMainLogo',
+    '  #Img_FrmMain_0',
     'EndEnumeration',
   ].join("\n")));
-  assert.match(patchedText, /LoadImage\(#ImgMainLogo, "logo\.png"\)/);
+  assert.match(patchedText, /LoadImage\(#Img_FrmMain_0, "logo\.png"\)/);
 });
 
-test("inserts an enum image block before Declare and XIncludeFile boundaries", () => {
-  const text = loadFixture("fixtures/roundtrip/23-imageblock-boundary-declare-xinclude.pbf");
+test("inserts an enum image block before Declare boundaries", () => {
+  const text = loadFixture("fixtures/roundtrip/23-imageblock-boundary-declare.pbf");
 
   const args: ImageArgs = {
     inline: false,
-    idRaw: "#ImgMainLogo",
+    idRaw: "#Img_FrmMain_0",
     imageRaw: '"logo.png"',
   };
 
@@ -227,15 +230,14 @@ test("inserts an enum image block before Declare and XIncludeFile boundaries", (
 
   assert.ok(normalized.includes([
     'Enumeration FormImage',
-    '  #ImgMainLogo',
+    '  #Img_FrmMain_0',
     'EndEnumeration',
     '',
     'UsePNGImageDecoder()',
     '',
-    'LoadImage(#ImgMainLogo, "logo.png")',
+    'LoadImage(#Img_FrmMain_0, "logo.png")',
     '',
     'Declare ResizeGadgetsFrmMain()',
-    'XIncludeFile "events/form-main.pbi"',
   ].join("\n")));
 });
 
@@ -245,7 +247,7 @@ test("inserts an Enumeration FormImage block before custom gadget initialisation
 
   const args: ImageArgs = {
     inline: false,
-    idRaw: "#ImgMainLogo",
+    idRaw: "#Img_FrmMain_0",
     imageRaw: '"logo.png"',
   };
 
@@ -254,18 +256,21 @@ test("inserts an Enumeration FormImage block before custom gadget initialisation
 
   assert.ok(normalized.includes([
     'Enumeration FormImage',
-    '  #ImgMainLogo',
+    '  #Img_FrmMain_0',
     'EndEnumeration',
     '',
     '; 0 Custom gadget initialisation (do Not remove this line)',
-    'InitScintillaBridge()',
+    'InitMyCustomGadget()',
   ].join("\n")));
   assert.ok(normalized.includes([
+    'InitMyCustomGadget()',
+    '',
+    '',
     'UsePNGImageDecoder()',
     '',
-    'LoadImage(#ImgMainLogo, "logo.png")',
+    'LoadImage(#Img_FrmMain_0, "logo.png")',
     '',
-    'XIncludeFile "events/form-main.pbi"',
+    'Procedure OpenFrmMain(',
   ].join("\n")));
 });
 
@@ -273,26 +278,27 @@ test("inserts an Enumeration FormImage block before custom gadget initialisation
 test("moves FormImage before custom gadget initialisation when toggling the last pbAny image to enum mode", () => {
   const text = loadFixture("fixtures/roundtrip/25-imageblock-custom-gadget-pbany-single.pbf");
 
-  const sourceLine = text.split(/\r?\n/).findIndex((line) => line.includes('ImgMainLogo = LoadImage(#PB_Any, "logo.png")'));
-  assert.notEqual(sourceLine, -1, 'Expected pbAny image line.');
+  const parsed = parseFormDocument(text);
+  const sourceLine = parsed.images.find((entry) => entry.id === "Img_FrmMain_0")?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected pbAny image line.");
 
-  const { patchedText } = patchAndReparse(text, (document) => applyImageUpdate(document, sourceLine, {
+  const { patchedText } = patchAndReparse(text, (document) => applyImageUpdate(document, sourceLine!, {
     inline: false,
-    idRaw: '#ImgMainLogo',
+    idRaw: '#Img_FrmMain_0',
     imageRaw: '"logo.png"',
   }));
   const normalized = toLf(patchedText);
 
   assert.ok(normalized.includes([
     'Enumeration FormImage',
-    '  #ImgMainLogo',
+    '  #Img_FrmMain_0',
     'EndEnumeration',
     '',
     '; 0 Custom gadget initialisation (do Not remove this line)',
-    'InitScintillaBridge()',
+    'InitMyCustomGadget()',
   ].join("\n")));
-  assert.doesNotMatch(patchedText, /^Global\s+ImgMainLogo\s*$/m);
-  assert.match(patchedText, /LoadImage\(#ImgMainLogo, "logo\.png"\)/);
+  assert.doesNotMatch(patchedText, /^Global\s+Img_FrmMain_0\s*$/m);
+  assert.match(patchedText, /LoadImage\(#Img_FrmMain_0, "logo\.png"\)/);
 });
 
 
@@ -310,20 +316,25 @@ test("inserts a pbAny image Global block before custom gadget initialisation", (
   const normalized = toLf(patchedText);
 
   assert.ok(normalized.includes([
+    'Global win',
+    '',
+    'Global Custom_0',
+    '',
     'Global ImgMainLogo',
     '',
     '; 0 Custom gadget initialisation (do Not remove this line)',
-    'InitScintillaBridge()',
+    'InitMyCustomGadget()',
   ].join("\n")));
   assert.ok(normalized.includes([
     'ImgMainLogo = LoadImage(#PB_Any, "logo.png")',
     '',
-    'XIncludeFile "events/form-main.pbi"',
+    'Procedure Openwin(',
   ].join("\n")));
+  assert.doesNotMatch(patchedText, /XIncludeFile\s+"events\/form-main\.pbi"/);
 });
 
-test("inserts a pbAny image Global block before Declare and XIncludeFile boundaries", () => {
-  const text = loadFixture("fixtures/roundtrip/23-imageblock-boundary-declare-xinclude.pbf");
+test("inserts a pbAny image Global block before Declare boundaries", () => {
+  const text = loadFixture("fixtures/roundtrip/23-imageblock-boundary-declare.pbf");
 
   const args: ImageArgs = {
     inline: false,
@@ -344,7 +355,6 @@ test("inserts a pbAny image Global block before Declare and XIncludeFile boundar
     'ImgMainLogo = LoadImage(#PB_Any, "logo.png")',
     '',
     'Declare ResizeGadgetsFrmMain()',
-    'XIncludeFile "events/form-main.pbi"',
   ].join("\n")));
 });
 
@@ -352,23 +362,23 @@ test("keeps a single blank line before FormFont when updating an existing image 
   const text = loadFixture("fixtures/roundtrip/28-imageblock-enum-before-font-single.pbf");
 
   const parsed = parseFormDocument(text);
-  const sourceLine = parsed.images.find((entry) => entry.id === "#ImgMainLogo")?.source?.line;
+  const sourceLine = parsed.images.find((entry) => entry.id === "#Img_FrmMain_0")?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected image source line.");
 
   const { patchedText } = patchAndReparse(text, (document) => applyImageUpdate(document, sourceLine!, {
     inline: false,
-    idRaw: "#ImgMainLogo",
+    idRaw: "#Img_FrmMain_0",
     imageRaw: '"logo.jpg"',
   }));
 
   const normalized = toLf(patchedText);
   assert.ok(normalized.includes([
-    'LoadImage(#ImgMainLogo, "logo.jpg")',
+    'LoadImage(#Img_FrmMain_0, "logo.jpg")',
     '',
     'Enumeration FormFont',
   ].join("\n")));
   assert.ok(!normalized.includes([
-    'LoadImage(#ImgMainLogo, "logo.jpg")',
+    'LoadImage(#Img_FrmMain_0, "logo.jpg")',
     '',
     '',
     'Enumeration FormFont',
@@ -379,7 +389,7 @@ test("keeps a single blank line before FormFont when deleting the last image blo
   const text = loadFixture("fixtures/roundtrip/28-imageblock-enum-before-font-single.pbf");
 
   const parsed = parseFormDocument(text);
-  const sourceLine = parsed.images.find((entry) => entry.id === "#ImgMainLogo")?.source?.line;
+  const sourceLine = parsed.images.find((entry) => entry.id === "#Img_FrmMain_0")?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected image source line.");
 
   const { patchedText } = patchAndReparse(text, (document) => applyImageDelete(document, sourceLine!));

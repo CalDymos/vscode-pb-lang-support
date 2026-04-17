@@ -1,4 +1,4 @@
-; Form Designer for PureBasic - 6.30
+﻿; Form Designer for PureBasic - 6.40
 ; Warning: this file uses a strict syntax, if you edit it, make sure to respect the Form Designer limitation or it won't be opened again.
 
 ;
@@ -7,10 +7,21 @@
 ; Event procedures need to be put in another source file.
 ;
 
-; 0 Custom gadget initialisation (do Not remove this line)
-InitScintillaBridge()
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
 
-XIncludeFile "events/form-main.pbi"
+Enumeration FormGadget
+  #Custom_0
+EndEnumeration
+
+; 0 Custom gadget initialisation (do Not remove this line)
+InitMyCustomGadget()
+
+
 Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  OpenWindow(#PB_Any, x, y, width, height, "Images")
+  OpenWindow(#FrmMain, x, y, width, height, "Images")
+  ; 0 Custom gadget creation (do not remove this line) MyCustomGadget(%id%, %x%, %y%, %w%, %h%, %txt%, %hWnd%)
+  MyCustomGadget(#Custom_0, 0, 0, 0, 0, "", WindowID(#FrmMain))
 EndProcedure
+

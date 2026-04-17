@@ -34,19 +34,19 @@ function toLf(text: string): string {
   return text.replace(/\r\n/g, "\n");
 }
 
-test("parses top-level FormFont declarations from the PB 6.30 fixture", () => {
+test("parses top-level FormFont declarations from the PB 6.40 fixture", () => {
   const text = loadFixture("fixtures/roundtrip/29-fontblock-top-level-parse.pbf");
 
   const parsed = parseFormDocument(text);
   const font = parsed.fonts.find((entry) => entry.id === "#Font_FrmMain_0");
 
   assert.ok(font, "Expected parsed top-level font entry.");
-  assert.equal(font?.name, "Arial");
+  assert.equal(font?.name, "Marlett");
   assert.equal(font?.size, 10);
   assert.equal(font?.flagsRaw, "#PB_Font_Bold");
 });
 
-test("inserts the first enum font block after the image block and before the procedure", () => {
+test("inserts the first enum font block after the image block and before the procedure in the PB 6.40 fixture", () => {
   const text = loadFixture("fixtures/roundtrip/30-fontblock-before-procedure-after-image.pbf");
 
   const args: FontArgs = {
@@ -62,7 +62,8 @@ test("inserts the first enum font block after the image block and before the pro
 
   assert.ok(font, "Expected inserted font entry.");
   assert.ok(normalized.includes([
-    'LoadImage(#ImgMainLogo, "logo.png")',
+    'LoadImage(#Img_FrmMain_0,"logo.png")',
+    '',
     '',
     'Enumeration FormFont',
     '  #Font_FrmMain_0',
@@ -121,7 +122,7 @@ test("moves font declarations from Global to FormFont when toggling the last pbA
   const text = loadFixture("fixtures/roundtrip/33-fontblock-pbany-single.pbf");
 
   const parsed = parseFormDocument(text);
-  const sourceLine = parsed.fonts.find((entry) => entry.id === "FontMain")?.source?.line;
+  const sourceLine = parsed.fonts.find((entry) => entry.id === "Font_FrmMain_0")?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected font source line.");
 
   const args: FontArgs = {
@@ -139,7 +140,7 @@ test("moves font declarations from Global to FormFont when toggling the last pbA
     '  #Font_FrmMain_0',
     'EndEnumeration',
   ].join("\n")));
-  assert.doesNotMatch(patchedText, /^Global FontMain$/m);
+  assert.doesNotMatch(patchedText, /^Global Font_FrmMain_0$/m);
   assert.match(patchedText, /LoadFont\(#Font_FrmMain_0, "Arial", 10, #PB_Font_Italic\)/);
 });
 

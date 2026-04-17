@@ -261,7 +261,7 @@ test("formats parsed gadget font metadata into a compact display summary", () =>
 
 
 test("returns the original custom-gadget help placeholder line", () => {
-  assert.equal(getCustomGadgetHelpDisplay(), "%id% %x% %y% %w% %h% %txt% %hwnd% ");
+  assert.equal(getCustomGadgetHelpDisplay(), "%id% %x% %y% %w% %h% %txt% %hwnd% %wndid% ");
 });
 
 
