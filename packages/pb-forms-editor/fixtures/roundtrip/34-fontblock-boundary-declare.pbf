@@ -12,16 +12,21 @@ Enumeration FormWindow
 EndEnumeration
 
 Enumeration FormGadget
-  #CustomGadget
+  #Text_0
 EndEnumeration
 
-; 0 Custom gadget initialisation (do Not remove this line)
-MyCustomGadget()
+Declare ResizeGadgetsFrmMain()
 
 
 Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
   OpenWindow(#FrmMain, x, y, width, height, "Fonts")
-  ; 0 Custom gadget creation (do not remove this line) MyCustomGadget(%id%, %x%, %y%, %w%, %h%, %txt%, %hwnd%)
-  MyCustomGadget(#CustomGadget, 0, 0, 0, 0, "Custom", WindowID(#FrmMain))
+  TextGadget(#Text_0, 75, 49, 71, 30, "")
+EndProcedure
+
+Procedure ResizeGadgetsFrmMain()
+  Protected FormWindowWidth, FormWindowHeight
+  FormWindowWidth = WindowWidth(#FrmMain)
+  FormWindowHeight = WindowHeight(#FrmMain)
+  ResizeGadget(#Text_0, 75, 65, FormWindowWidth - 149, FormWindowHeight - 147)
 EndProcedure
 

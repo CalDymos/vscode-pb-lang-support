@@ -144,8 +144,8 @@ test("moves font declarations from Global to FormFont when toggling the last pbA
   assert.match(patchedText, /LoadFont\(#Font_FrmMain_0, "Arial", 10, #PB_Font_Italic\)/);
 });
 
-test("inserts an enum font block before Declare and XIncludeFile boundaries", () => {
-  const text = loadFixture("fixtures/roundtrip/34-fontblock-boundary-declare-xinclude.pbf");
+test("inserts an enum font block before Declare boundaries", () => {
+  const text = loadFixture("fixtures/roundtrip/34-fontblock-boundary-declare.pbf");
 
   const args: FontArgs = {
     idRaw: "#Font_FrmMain_0",
@@ -165,12 +165,11 @@ test("inserts an enum font block before Declare and XIncludeFile boundaries", ()
     'LoadFont(#Font_FrmMain_0, "Arial", 10, #PB_Font_Bold)',
     '',
     'Declare ResizeGadgetsFrmMain()',
-    'XIncludeFile "events/form-main.pbi"',
   ].join("\n")));
 });
 
-test("inserts a pbAny font Global block before Declare and XIncludeFile boundaries", () => {
-  const text = loadFixture("fixtures/roundtrip/34-fontblock-boundary-declare-xinclude.pbf");
+test("inserts a pbAny font Global block before Declare boundaries", () => {
+  const text = loadFixture("fixtures/roundtrip/34-fontblock-boundary-declare.pbf");
 
   const args: FontArgs = {
     idRaw: "#PB_Any",
@@ -187,7 +186,6 @@ test("inserts a pbAny font Global block before Declare and XIncludeFile boundari
     'FontMain = LoadFont(#PB_Any, "Arial", 10)',
     '',
     'Declare ResizeGadgetsFrmMain()',
-    'XIncludeFile "events/form-main.pbi"',
   ].join("\n")));
 });
 
@@ -241,7 +239,7 @@ test("keeps a single blank line before Declare when deleting the last font block
   ].join("\n")));
 });
 
-test("inserts an enum font block after custom gadget initialisation and before Declare", () => {
+test("inserts an enum font block after custom gadget initialisation and before Procedure", () => {
   const text = loadFixture("fixtures/roundtrip/36-fontblock-custom-gadget-base.pbf");
 
   const args: FontArgs = {
@@ -260,7 +258,8 @@ test("inserts an enum font block after custom gadget initialisation and before D
 
   assert.ok(normalized.includes([
     '; 0 Custom gadget initialisation (do Not remove this line)',
-    'InitScintillaBridge()',
+    'MyCustomGadget()',
+    '',
     '',
     'Enumeration FormFont',
     '  #Font_FrmMain_0',
@@ -268,11 +267,11 @@ test("inserts an enum font block after custom gadget initialisation and before D
     '',
     'LoadFont(#Font_FrmMain_0, "Arial", 10, #PB_Font_Bold)',
     '',
-    'Declare ResizeGadgetsFrmMain()',
+    'Procedure OpenFrmMain',
   ].join("\n")));
 });
 
-test("inserts a pbAny font load block after custom gadget initialisation and before Declare", () => {
+test("inserts a pbAny font load block after custom gadget initialisation and before Procedure", () => {
   const text = loadFixture("fixtures/roundtrip/36-fontblock-custom-gadget-base.pbf");
 
   const args: FontArgs = {
@@ -292,11 +291,12 @@ test("inserts a pbAny font load block after custom gadget initialisation and bef
 
   assert.ok(normalized.includes([
     '; 0 Custom gadget initialisation (do Not remove this line)',
-    'InitScintillaBridge()',
+    'MyCustomGadget()',
+    '',
     '',
     'FontMain = LoadFont(#PB_Any, "Arial", 10, #PB_Font_Bold)',
     '',
-    'Declare ResizeGadgetsFrmMain()',
+    'Procedure OpenFrmMain',
   ].join("\n")));
 });
 
