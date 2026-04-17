@@ -12,6 +12,9 @@ import { buildPbCompilerArgs } from './host/pbcompiler/pbcompiler-args';
 import {splitPbFile, PbFileSplit} from './host/utils/pb-metadata';
 import { readHostSettings } from './host/config/settings';
 import { LANGUAGE_ID } from './shared/constants';
+import { PbfCompletionProvider } from './pbf/completion-provider';
+import { PbfSignatureHelpProvider } from './pbf/signature-provider';
+import { PbfHoverProvider } from './pbf/hover-provider';
 
 
 let client: LanguageClient;
@@ -141,6 +144,24 @@ export function activate(context: vscode.ExtensionContext) {
 
         // Register folding provider for PureBasic meta section
         registerFoldingProvider(context);
+
+        // Register small completion / signature help and hover provider for .pbf files
+        context.subscriptions.push(
+            vscode.languages.registerCompletionItemProvider(
+                { language: 'purebasic-form' },
+                new PbfCompletionProvider()
+            ),
+            vscode.languages.registerSignatureHelpProvider(
+                { language: 'purebasic-form' },
+                new PbfSignatureHelpProvider(),
+                '(',   // triggers: opening parenthesis
+                ','    // Re-trigger: comma → continue counting active
+            ),
+            vscode.languages.registerHoverProvider(
+                { language: 'purebasic-form' },
+                new PbfHoverProvider()
+            )
+        );
 
         // Start the language server.
         console.log('Starting Language Server...');
