@@ -258,7 +258,7 @@ test("inserts an enum font block after custom gadget initialisation and before P
 
   assert.ok(normalized.includes([
     '; 0 Custom gadget initialisation (do Not remove this line)',
-    'MyCustomGadget()',
+    'InitMyCustomGadget()',
     '',
     '',
     'Enumeration FormFont',
@@ -291,7 +291,7 @@ test("inserts a pbAny font load block after custom gadget initialisation and bef
 
   assert.ok(normalized.includes([
     '; 0 Custom gadget initialisation (do Not remove this line)',
-    'MyCustomGadget()',
+    'InitMyCustomGadget()',
     '',
     '',
     'FontMain = LoadFont(#PB_Any, "Arial", 10, #PB_Font_Bold)',
@@ -318,8 +318,10 @@ test("inserts an enum font block after custom gadget initialisation even without
   const normalized = toLf(patchedText);
 
   assert.ok(normalized.includes([
+    'Global CustomGadget',
+    '',
     '; 0 Custom gadget initialisation (do Not remove this line)',
-    'InitScintillaBridge()',
+    'InitMyCustomGadget()',
     '',
     'Enumeration FormFont',
     '  #Font_FrmMain_0',
@@ -327,7 +329,7 @@ test("inserts an enum font block after custom gadget initialisation even without
     '',
     'LoadFont(#Font_FrmMain_0, "Arial", 10, #PB_Font_Bold)',
     '',
-    'Declare ResizeGadgetsFrmMain()',
+    'Procedure OpenwinMain',
   ].join("\n")));
 });
 
@@ -351,10 +353,11 @@ test("inserts a pbAny font load block after custom gadget initialisation even wi
 
   assert.ok(normalized.includes([
     '; 0 Custom gadget initialisation (do Not remove this line)',
-    'InitScintillaBridge()',
+    'InitMyCustomGadget()',
     '',
     'FontMain = LoadFont(#PB_Any, "Arial", 10, #PB_Font_Bold)',
     '',
-    'Declare ResizeGadgetsFrmMain()',
+    'Procedure OpenwinMain',
   ].join("\n")));
+  assert.doesNotMatch(patchedText, /^Global\s+FontMain$/m);
 });

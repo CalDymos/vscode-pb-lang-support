@@ -16,7 +16,7 @@ Enumeration FormGadget
 EndEnumeration
 
 ; 0 Custom gadget initialisation (do Not remove this line)
-MyCustomGadget()
+InitMyCustomGadget()
 
 
 Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
