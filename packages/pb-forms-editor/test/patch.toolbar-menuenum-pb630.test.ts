@@ -4,6 +4,7 @@ import type { TextDocument } from "vscode";
 
 import { parseFormDocument } from "../src/core/parser/form-parser";
 import {
+  applyImageInsert,
   applyToolBarEntryDelete,
   applyToolBarEntryInsert,
   applyToolBarEntryUpdate,
@@ -16,12 +17,33 @@ import { loadFixture } from "./helpers/loadFixture";
 
 function patchAndReparse(
   text: string,
-  editFactory: (document: TextDocument) => ReturnType<typeof applyToolBarEntryInsert> | ReturnType<typeof applyToolBarEntryUpdate> | ReturnType<typeof applyToolBarEntryDelete>
+  editFactory: (document: TextDocument) => ReturnType<typeof applyImageInsert> | ReturnType<typeof applyToolBarEntryInsert> | ReturnType<typeof applyToolBarEntryUpdate> | ReturnType<typeof applyToolBarEntryDelete>
 ) {
   const document = new FakeTextDocument(text);
   const edit = editFactory(document.asTextDocument());
   assert.ok(edit, "Expected a WorkspaceEdit result.");
   const patchedText = applyWorkspaceEditToText(text, edit!);
+  return {
+    patchedText,
+    parsed: parseFormDocument(patchedText),
+  };
+}
+
+function patchTwiceAndReparse(
+  text: string,
+  firstEditFactory: (document: TextDocument) => ReturnType<typeof applyImageInsert> | ReturnType<typeof applyToolBarEntryInsert> | ReturnType<typeof applyToolBarEntryUpdate> | ReturnType<typeof applyToolBarEntryDelete>,
+  secondEditFactory: (document: TextDocument) => ReturnType<typeof applyImageInsert> | ReturnType<typeof applyToolBarEntryInsert> | ReturnType<typeof applyToolBarEntryUpdate> | ReturnType<typeof applyToolBarEntryDelete>
+) {
+  const firstDocument = new FakeTextDocument(text);
+  const firstEdit = firstEditFactory(firstDocument.asTextDocument());
+  assert.ok(firstEdit, "Expected the first WorkspaceEdit result.");
+  const intermediateText = applyWorkspaceEditToText(text, firstEdit!);
+
+  const secondDocument = new FakeTextDocument(intermediateText);
+  const secondEdit = secondEditFactory(secondDocument.asTextDocument());
+  assert.ok(secondEdit, "Expected the second WorkspaceEdit result.");
+  const patchedText = applyWorkspaceEditToText(intermediateText, secondEdit!);
+
   return {
     patchedText,
     parsed: parseFormDocument(patchedText),
@@ -102,23 +124,29 @@ test("does not duplicate an enum symbol when menu and toolbar share the same id"
   assert.doesNotMatch(patchedText, /Enumeration FormMenu\r?\n  #MenuOpen\r?\n  #MenuOpen/);
 });
 
-
-test("inserts toolbar-only FormMenu before image decoder and load blocks when no window or gadget enum is present", () => {
+test("keeps toolbar-only FormMenu before the first image block when a toolbar image is created on a 6.40 base without enum or image declarations", () => {
   const text = loadFixture("fixtures/roundtrip/42-toolbar-menuenum-before-image-block.pbf");
 
-  const args: ToolBarEntryArgs = {
+  const toolBarArgs: ToolBarEntryArgs = {
     kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton,
     idRaw: "#TbSave",
-    iconRaw: "ImageID(#ImgSave)",
+    iconRaw: "ImageID(#Img_FrmMain_0)",
   };
 
-  const { patchedText, parsed } = patchAndReparse(text, (document) =>
-    applyToolBarEntryInsert(document, "0", args)
+  const { patchedText, parsed } = patchTwiceAndReparse(
+    text,
+    (document) => applyImageInsert(document, { inline: false, idRaw: "#Img_FrmMain_0", imageRaw: '"FileSave.png"' }),
+    (document) => applyToolBarEntryInsert(document, "0", toolBarArgs)
   );
 
   assert.match(
     patchedText,
-    /Enumeration FormMenu\r?\n  #TbSave\r?\nEndEnumeration\r?\n\r?\nEnumeration FormImage\r?\n  #ImgSave\r?\nEndEnumeration/
+    /Global FrmMain\r?\n\r?\n\r?\nEnumeration FormMenu\r?\n  #TbSave\r?\nEndEnumeration\r?\n\r?\nEnumeration FormImage\r?\n  #Img_FrmMain_0\r?\nEndEnumeration\r?\n\r?\nUsePNGImageDecoder\(\)\r?\n\r?\nLoadImage\(#Img_FrmMain_0,"FileSave\.png"\)/
+  );
+  assert.match(
+    patchedText,
+    /CreateToolBar\(0, WindowID\(FrmMain\)\)\r?\n  ToolBarSeparator\(\)\r?\n  ToolBarImageButton\(#TbSave, ImageID\(#Img_FrmMain_0\)\)/
   );
   assert.ok(parsed.toolbars[0]?.entries.some((entry) => entry.idRaw === "#TbSave"));
+  assert.ok(parsed.images.some((entry) => entry.id === "#Img_FrmMain_0" && entry.imageRaw === '"FileSave.png"'));
 });

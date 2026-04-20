@@ -1161,7 +1161,7 @@ test("roundtrips image insert after existing image block", () => {
   assert.ok(insertedImage, "Expected inserted image entry.");
   assert.equal(insertedImage?.inline, false);
   assert.equal(insertedImage?.image, "close.png");
-  assert.match(patchedText, /LoadImage\(#ImgClose, "close\.png"\)/);
+  assert.match(patchedText, /LoadImage\(#ImgClose,"close\.png"\)/);
 });
 
 test("roundtrips image update for pbAny catch image", () => {
@@ -1185,7 +1185,7 @@ test("roundtrips image update for pbAny catch image", () => {
   assert.equal(updatedImage?.inline, true);
   assert.equal(updatedImage?.imageRaw, "?ImgSaveData");
   assert.equal(updatedImage?.image, "ImgSaveData");
-  assert.match(patchedText, /Img_FrmImages_2 = CatchImage\(#PB_Any, \?ImgSaveData\)/);
+  assert.match(patchedText, /Img_FrmImages_2 = CatchImage\(#PB_Any,\?ImgSaveData\)/);
 });
 
 test("roundtrips image update from load image to catch image without changing raw value", () => {
@@ -1208,7 +1208,7 @@ test("roundtrips image update from load image to catch image without changing ra
   assert.equal(updatedImage?.inline, true);
   assert.equal(updatedImage?.firstParam, "#Img_FrmImages_0");
   assert.equal(updatedImage?.imageRaw, '"open.png"');
-  assert.match(patchedText, /CatchImage\(#Img_FrmImages_0, "open\.png"\)/);
+  assert.match(patchedText, /CatchImage\(#Img_FrmImages_0,"open\.png"\)/);
 });
 
 test("roundtrips image update from catch image to load image without changing raw value", () => {
@@ -1231,7 +1231,7 @@ test("roundtrips image update from catch image to load image without changing ra
   assert.equal(updatedImage?.inline, false);
   assert.equal(updatedImage?.firstParam, "#Img_FrmImages_3");
   assert.equal(updatedImage?.imageRaw, "?Img_FrmImages_3");
-  assert.match(patchedText, /LoadImage\(#Img_FrmImages_3, \?Img_FrmImages_3\)/);
+  assert.match(patchedText, /LoadImage\(#Img_FrmImages_3,\?Img_FrmImages_3\)/);
 });
 
 test("roundtrips image delete", () => {
@@ -1244,7 +1244,7 @@ test("roundtrips image delete", () => {
   );
 
   assert.equal(updated.images.some((image) => image.id === "#Img_FrmImages_3"), false);
-  assert.doesNotMatch(patchedText, /CatchImage\(#ImgState, \?ImgState\)/);
+  assert.doesNotMatch(patchedText, /CatchImage\(#ImgState,\?ImgState\)/);
 });
 
 test("roundtrips choose-file gadget workflow with auto-resize patch sequence", () => {
@@ -1267,7 +1267,7 @@ test("roundtrips choose-file gadget workflow with auto-resize patch sequence", (
   assert.ok(image, "Expected inserted file-backed image entry.");
   assert.equal(image?.imageRaw, '"chosen.png"');
   assert.match(patchedText, /ImageGadget\(#ImgPreview, 20, 20, 96, 48, ImageID\(#ImgChosen\)\)/);
-  assert.match(patchedText, /LoadImage\(#ImgChosen, "chosen\.png"\)/);
+  assert.match(patchedText, /LoadImage\(#ImgChosen,"chosen\.png"\)/);
 });
 
 test("roundtrips choose-file button image gadget workflow with auto-resize patch sequence", () => {
@@ -1291,7 +1291,7 @@ test("roundtrips choose-file button image gadget workflow with auto-resize patch
   assert.ok(image, "Expected inserted file-backed image entry for button image gadget.");
   assert.equal(image?.imageRaw, '"toolbar/apply-selected.png"');
   assert.match(patchedText, /ButtonImageGadget\(#BtnApply, 52, [^,]+, 128, 36, ImageID\(#ImgBtnChosen\)\)/);
-  assert.match(patchedText, /LoadImage\(#ImgBtnChosen, "toolbar\/apply-selected\.png"\)/);
+  assert.match(patchedText, /LoadImage\(#ImgBtnChosen,"toolbar\/apply-selected\.png"\)/);
 });
 
 test("roundtrips create-and-assign workflow for image gadget", () => {
@@ -1310,7 +1310,7 @@ test("roundtrips create-and-assign workflow for image gadget", () => {
   assert.equal(gadget?.imageId, "#ImgNewLogo");
   assert.ok(image, "Expected inserted image entry.");
   assert.equal(image?.imageRaw, '"new-logo.png"');
-  assert.match(patchedText, /LoadImage\(#ImgNewLogo, "new-logo\.png"\)/);
+  assert.match(patchedText, /LoadImage\(#ImgNewLogo,"new-logo\.png"\)/);
 });
 
 test("roundtrips create-and-assign workflow for the first image block before FormFont in fixture 19", () => {
@@ -1347,7 +1347,7 @@ test("roundtrips create-and-assign workflow for the first image block before For
     '',
     'UsePNGImageDecoder()',
     '',
-    'LoadImage(#Img_FrmMain_0, "logo.png")',
+    'LoadImage(#Img_FrmMain_0,"logo.png")',
     '',
     'Enumeration FormFont',
   ].join("\n")));
@@ -1407,7 +1407,7 @@ test("roundtrips create-and-assign workflow for toolbar image button with pbAny 
   assert.equal(updatedButton?.iconRaw, "ImageID(imgToolbarNew)");
   assert.equal(updatedButton?.iconId, "imgToolbarNew");
   assert.ok(image, "Expected inserted pbAny toolbar image entry.");
-  assert.match(patchedText, /imgToolbarNew = CatchImage\(#PB_Any, \?TbImgNew\)/);
+  assert.match(patchedText, /imgToolbarNew = CatchImage\(#PB_Any,\?TbImgNew\)/);
 });
 
 test("roundtrips create-and-assign workflow for statusbar field", () => {
@@ -1583,7 +1583,7 @@ test("roundtrips image pbAny toggle from enum image and updates gadget plus menu
   assert.equal(image?.variable, "ImgOpen");
   assert.equal(gadget?.imageId, "ImgOpen");
   assert.equal(updatedOpen?.iconId, "ImgOpen");
-  assert.match(patchedText, /ImgOpen = LoadImage\(#PB_Any, "open\.png"\)/);
+  assert.match(patchedText, /ImgOpen = LoadImage\(#PB_Any,"open\.png"\)/);
   assert.match(patchedText, /ImageGadget\(#ImgPreview, 10, [^,]+, 32, 32, ImageID\(ImgOpen\)\)/);
   assert.match(patchedText, /MenuItem\(#MenuOpen, "Open", ImageID\(ImgOpen\)\)/);
 });
@@ -1620,7 +1620,7 @@ test("roundtrips image pbAny toggle from pbAny image and updates toolbar referen
   assert.equal(image?.pbAny, false);
   assert.equal(image?.firstParam, "#imgSave");
   assert.equal(updatedButton?.iconId, "#imgSave");
-  assert.match(patchedText, /LoadImage\(#imgSave, "save\.png"\)/);
+  assert.match(patchedText, /LoadImage\(#imgSave,"save\.png"\)/);
   assert.match(patchedText, /ToolBarImageButton\(#TbSave, ImageID\(#imgSave\)\)/);
 });
 
@@ -1654,7 +1654,7 @@ test("roundtrips image pbAny toggle updates statusbar references", () => {
   assert.ok(image, "Expected pbAny status image entry after toggle.");
   assert.equal(image?.pbAny, true);
   assert.equal(updatedField?.imageId, "ImgState");
-  assert.match(patchedText, /ImgState = CatchImage\(#PB_Any, \?ImgState\)/);
+  assert.match(patchedText, /ImgState = CatchImage\(#PB_Any,\?ImgState\)/);
   assert.match(patchedText, /StatusBarImage\(0, 0, ImageID\(ImgState\)\)/);
 });
 
@@ -1791,7 +1791,7 @@ test("roundtrips statusbar CurrentImage auto-create for a new path-like string a
   assert.ok(insertedImage, "Expected the new LoadImage entry to be inserted.");
   assert.equal(insertedImage?.image, "./icons/new.png");
   assert.equal(removedImage, undefined);
-  assert.match(patchedText, /LoadImage\(#Img_FrmImages_2, "\.\/icons\/new\.png"\)/);
+  assert.match(patchedText, /LoadImage\(#Img_FrmImages_2,"\.\/icons\/new\.png"\)/);
   assert.match(patchedText, /StatusBarImage\(0, 0, ImageID\(#Img_FrmImages_2\)\)/);
   assert.doesNotMatch(patchedText, /CatchImage\(#Img_FrmImages_3,\?Img_FrmImages_3\)/);
 });
@@ -1820,7 +1820,7 @@ test("roundtrips image pbAny toggle updates button image gadget references", () 
   assert.equal(image?.pbAny, true);
   assert.equal(gadget?.kind, "ButtonImageGadget");
   assert.equal(gadget?.imageId, "ImgRelative");
-  assert.match(patchedText, /ImgRelative = LoadImage\(#PB_Any, "\.\/icons\/apply\.png"\)/);
+  assert.match(patchedText, /ImgRelative = LoadImage\(#PB_Any,"\.\/icons\/apply\.png"\)/);
   assert.match(patchedText, /ButtonImageGadget\(#BtnApply, 52, [^,]+, 96, 28, ImageID\(ImgRelative\)\)/);
 });
 

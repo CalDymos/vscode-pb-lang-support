@@ -67,7 +67,7 @@ test("preserves the PB 6.30 top-level head order across menu, image and font ins
     'Enumeration FormMenu',
     'Enumeration FormImage',
     'UsePNGImageDecoder()',
-    'LoadImage(#ImgMainLogo, "logo.png")',
+    'LoadImage(#ImgMainLogo,"logo.png")',
     'Enumeration FormFont',
     'LoadFont(#FontMain, "Arial", 10, #PB_Font_Bold)',
     'Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)',

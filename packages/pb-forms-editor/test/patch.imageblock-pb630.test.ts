@@ -50,7 +50,7 @@ test("inserts the first image block before the font block and injects the requir
   assert.equal(image?.image, "logo.png");
   assert.match(
     patchedText,
-    /UsePNGImageDecoder\(\)\r?\n\r?\nLoadImage\(#Img_FrmMain_0, "logo\.png"\)\r?\n\r?\nEnumeration FormFont/s
+    /UsePNGImageDecoder\(\)\r?\n\r?\nLoadImage\(#Img_FrmMain_0,"logo\.png"\)\r?\n\r?\nEnumeration FormFont/s
   );
   assert.doesNotMatch(
     patchedText,
@@ -69,7 +69,7 @@ test("removes the decoder together with the last remaining image in the block", 
 
   assert.equal(updated.images.length, 0);
   assert.doesNotMatch(patchedText, /UsePNGImageDecoder\(\)/);
-  assert.doesNotMatch(patchedText, /LoadImage\(#Img_FrmMain_0, "logo\.png"\)/);
+  assert.doesNotMatch(patchedText, /LoadImage\(#Img_FrmMain_0,"logo\.png"\)/);
   assert.match(patchedText, /Procedure OpenFrmMain\(/);
 });
 
@@ -91,7 +91,7 @@ test("updates image metadata through the shared image-value parser for escaped l
   const image = updated.images.find((entry) => entry.id === "#Img_FrmMain_0");
   assert.ok(image, "Expected updated image entry.");
   assert.equal(image?.image, 'icons/"main".png');
-  assert.match(patchedText, /LoadImage\(#Img_FrmMain_0, ~"icons\/""main""\.png"\)/);
+  assert.match(patchedText, /LoadImage\(#Img_FrmMain_0,~"icons\/""main""\.png"\)/);
 });
 
 test("rebuilds the decoder lines when the image file type changes", () => {
@@ -114,7 +114,7 @@ test("rebuilds the decoder lines when the image file type changes", () => {
   assert.equal(image?.image, "logo.jpg");
   assert.match(patchedText, /UseJPEGImageDecoder\(\)/);
   assert.doesNotMatch(patchedText, /UsePNGImageDecoder\(\)/);
-  assert.match(patchedText, /LoadImage\(#Img_FrmMain_0, "logo\.jpg"\)/);
+  assert.match(patchedText, /LoadImage\(#Img_FrmMain_0,"logo\.jpg"\)/);
 });
 
 
@@ -143,7 +143,7 @@ test("creates an Enumeration FormImage block when inserting the first enum image
       '',
       'UsePNGImageDecoder()',
       '',
-      'LoadImage(#Img_FrmMain_0, "logo.png")',
+      'LoadImage(#Img_FrmMain_0,"logo.png")',
     ].join("\n")
   ));
   assert.doesNotMatch(patchedText, /^Global\s+/m);
@@ -163,7 +163,7 @@ test("creates a Global image variable block when inserting the first pbAny image
   const normalized = toLf(patchedText);
 
   assert.ok(normalized.includes(['Global ImgMainLogo', '', 'Enumeration FormWindow'].join("\n")));
-  assert.match(patchedText, /ImgMainLogo = LoadImage\(#PB_Any, "logo\.png"\)/);
+  assert.match(patchedText, /ImgMainLogo = LoadImage\(#PB_Any,"logo\.png"\)/);
   assert.doesNotMatch(patchedText, /Enumeration FormImage/);
 });
 
@@ -184,7 +184,7 @@ test("moves image declarations from FormImage to Global when toggling the last e
 
   assert.ok(normalized.includes(['Global ImgMainLogo', '', 'Enumeration FormWindow'].join("\n")));
   assert.ok(!normalized.includes(['Enumeration FormImage', '  #Img_FrmMain_0', 'EndEnumeration'].join("\n")));
-  assert.match(patchedText, /ImgMainLogo = LoadImage\(#PB_Any, "logo\.png"\)/);
+  assert.match(patchedText, /ImgMainLogo = LoadImage\(#PB_Any,"logo\.png"\)/);
 });
 
 test("moves image declarations from Global to FormImage when toggling the last pbAny image to enum mode", () => {
@@ -213,7 +213,7 @@ test("moves image declarations from Global to FormImage when toggling the last p
     '  #Img_FrmMain_0',
     'EndEnumeration',
   ].join("\n")));
-  assert.match(patchedText, /LoadImage\(#Img_FrmMain_0, "logo\.png"\)/);
+  assert.match(patchedText, /LoadImage\(#Img_FrmMain_0,"logo\.png"\)/);
 });
 
 test("inserts an enum image block before Declare boundaries", () => {
@@ -235,7 +235,7 @@ test("inserts an enum image block before Declare boundaries", () => {
     '',
     'UsePNGImageDecoder()',
     '',
-    'LoadImage(#Img_FrmMain_0, "logo.png")',
+    'LoadImage(#Img_FrmMain_0,"logo.png")',
     '',
     'Declare ResizeGadgetsFrmMain()',
   ].join("\n")));
@@ -268,7 +268,7 @@ test("inserts an Enumeration FormImage block before custom gadget initialisation
     '',
     'UsePNGImageDecoder()',
     '',
-    'LoadImage(#Img_FrmMain_0, "logo.png")',
+    'LoadImage(#Img_FrmMain_0,"logo.png")',
     '',
     'Procedure OpenFrmMain(',
   ].join("\n")));
@@ -298,7 +298,7 @@ test("moves FormImage before custom gadget initialisation when toggling the last
     'InitMyCustomGadget()',
   ].join("\n")));
   assert.doesNotMatch(patchedText, /^Global\s+Img_FrmMain_0\s*$/m);
-  assert.match(patchedText, /LoadImage\(#Img_FrmMain_0, "logo\.png"\)/);
+  assert.match(patchedText, /LoadImage\(#Img_FrmMain_0,"logo\.png"\)/);
 });
 
 
@@ -326,7 +326,7 @@ test("inserts a pbAny image Global block before custom gadget initialisation", (
     'InitMyCustomGadget()',
   ].join("\n")));
   assert.ok(normalized.includes([
-    'ImgMainLogo = LoadImage(#PB_Any, "logo.png")',
+    'ImgMainLogo = LoadImage(#PB_Any,"logo.png")',
     '',
     'Procedure Openwin(',
   ].join("\n")));
@@ -352,7 +352,7 @@ test("inserts a pbAny image Global block before Declare boundaries", () => {
     'Enumeration FormWindow',
   ].join("\n")));
   assert.ok(normalized.includes([
-    'ImgMainLogo = LoadImage(#PB_Any, "logo.png")',
+    'ImgMainLogo = LoadImage(#PB_Any,"logo.png")',
     '',
     'Declare ResizeGadgetsFrmMain()',
   ].join("\n")));
@@ -373,12 +373,12 @@ test("keeps a single blank line before FormFont when updating an existing image 
 
   const normalized = toLf(patchedText);
   assert.ok(normalized.includes([
-    'LoadImage(#Img_FrmMain_0, "logo.jpg")',
+    'LoadImage(#Img_FrmMain_0,"logo.jpg")',
     '',
     'Enumeration FormFont',
   ].join("\n")));
   assert.ok(!normalized.includes([
-    'LoadImage(#Img_FrmMain_0, "logo.jpg")',
+    'LoadImage(#Img_FrmMain_0,"logo.jpg")',
     '',
     '',
     'Enumeration FormFont',

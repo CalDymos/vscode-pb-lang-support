@@ -103,6 +103,10 @@ function isBlankLine(document: vscode.TextDocument, line: number): boolean {
   return document.lineAt(line).text.trim() === "";
 }
 
+function getDocumentEol(document: vscode.TextDocument): string {
+  return document.getText().includes("\r\n") ? "\r\n" : "\n";
+}
+
 function skipBlankLines(document: vscode.TextDocument, line: number): number {
   let nextLine = line;
   while (nextLine < document.lineCount && isBlankLine(document, nextLine)) {
@@ -537,13 +541,9 @@ function collectMenuEnumSymbols(menus: FormMenu[], toolbars: FormToolBar[] = [])
   return symbols;
 }
 
-function buildMenuEnumBlock(symbols: string[]): string {
+function buildMenuEnumBlock(symbols: string[], eol = "\n"): string {
   if (!symbols.length) return "";
-  return `Enumeration ${ENUM_NAMES.menus}
-${symbols.map(symbol => `  ${symbol}`).join("\n")}
-EndEnumeration
-
-`;
+  return `Enumeration ${ENUM_NAMES.menus}${eol}${symbols.map(symbol => `  ${symbol}`).join(eol)}${eol}EndEnumeration${eol}${eol}`;
 }
 
 function isNamedEnumerationLine(text: string, enumName: string): boolean {
@@ -605,8 +605,30 @@ function applyMenuEnumPatch(
     document,
     menuEnumBlock ? expandBlockWithTrailingBlank(document, menuEnumBlock) : undefined,
     findMenuEnumInsertLine(document),
-    buildMenuEnumBlock(symbols)
+    buildMenuEnumBlock(symbols, getDocumentEol(document))
   );
+}
+
+function buildMenuCreateLine(document: vscode.TextDocument, call: PbCall, hasIcons: boolean): string {
+  const indent = getLineIndent(document, call.range.line);
+  const createName = hasIcons ? "CreateImageMenu" : "CreateMenu";
+  return `${indent}${createName}(${call.args})`;
+}
+
+function applyMenuCreateModePatch(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  menuId: string,
+  hasIcons: boolean
+): void {
+  if (!hasIcons) return;
+
+  const create = findCreateCallById(calls, PB_CALL.createMenu, menuId);
+  if (!create) return;
+  if (create.name === "CreateImageMenu") return;
+
+  appendWorkspaceEdit(edit, replaceCallLinePreserveSuffix(document, create, buildMenuCreateLine(document, create, true)));
 }
 
 function buildToolBarImageButtonLine(args: ToolBarEntryArgs): string {
@@ -4447,11 +4469,11 @@ function buildImageLine(args: ImageArgs): string {
   if (idRaw === PB_ANY) {
     const assignedVar = args.assignedVar?.trim();
     if (assignedVar) {
-      return `${assignedVar} = ${procName}(${PB_ANY}, ${imageRaw})`;
+      return `${assignedVar} = ${procName}(${PB_ANY},${imageRaw})`;
     }
   }
 
-  return `${procName}(${idRaw}, ${imageRaw})`;
+  return `${procName}(${idRaw},${imageRaw})`;
 }
 
 function buildFontLine(args: FontArgs): string {
@@ -4827,22 +4849,16 @@ function getImageEnumSymbols(images: FormImage[]): string[] {
     .filter(id => id.length > 0 && id.startsWith("#"));
 }
 
-function buildImageGlobalBlock(images: FormImage[]): string {
+function buildImageGlobalBlock(images: FormImage[], eol = "\n"): string {
   const globals = getImageGlobalVars(images);
   if (!globals.length) return "";
-  return `Global ${globals.join(", ")}
-
-`;
+  return `Global ${globals.join(", ")}${eol}${eol}`;
 }
 
-function buildImageEnumBlock(images: FormImage[]): string {
+function buildImageEnumBlock(images: FormImage[], eol = "\n"): string {
   const symbols = getImageEnumSymbols(images);
   if (!symbols.length) return "";
-  return `Enumeration ${ENUM_NAMES.images}
-${symbols.map(symbol => `  ${symbol}`).join("\n")}
-EndEnumeration
-
-`;
+  return `Enumeration ${ENUM_NAMES.images}${eol}${symbols.map(symbol => `  ${symbol}`).join(eol)}${eol}EndEnumeration${eol}${eol}`;
 }
 
 function expandBlockWithTrailingBlank(document: vscode.TextDocument, block: LineBlock): LineBlock {
@@ -4973,10 +4989,50 @@ function findImageGlobalInsertLine(document: vscode.TextDocument): number {
   }
 
   if (lastGlobal >= 0) {
-    return skipBlankLines(document, lastGlobal + 1);
+    return lastGlobal + 1;
   }
 
   return firstAnchor;
+}
+
+
+function applyFreshImageGlobalInsert(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  insertLine: number,
+  rebuiltGlobalBlock: string
+): void {
+  if (!rebuiltGlobalBlock.length) return;
+
+  let hasGlobalAbove = false;
+  for (let i = 0; i < insertLine; i++) {
+    if (/^\s*Global\b/i.test(document.lineAt(i).text)) {
+      hasGlobalAbove = true;
+      break;
+    }
+  }
+
+  if (!hasGlobalAbove) {
+    edit.insert(document.uri, new vscode.Position(insertLine, 0), rebuiltGlobalBlock);
+    return;
+  }
+
+  let blankRunEnd = insertLine;
+  while (blankRunEnd < document.lineCount && document.lineAt(blankRunEnd).text.trim() === "") {
+    blankRunEnd += 1;
+  }
+
+  const insertText = `\n${rebuiltGlobalBlock}`;
+  if (insertLine < blankRunEnd) {
+    edit.replace(
+      document.uri,
+      new vscode.Range(new vscode.Position(insertLine, 0), new vscode.Position(blankRunEnd, 0)),
+      insertText
+    );
+    return;
+  }
+
+  edit.insert(document.uri, new vscode.Position(insertLine, 0), insertText);
 }
 
 function findImageEnumInsertLine(document: vscode.TextDocument, calls: PbCall[]): number {
@@ -5038,7 +5094,7 @@ function getHeadBlockReplaceEnd(document: vscode.TextDocument, lastLine: number)
   return document.lineAt(lastLine).rangeIncludingLineBreak.end;
 }
 
-function buildImageBlock(images: FormImage[], indent: string): string {
+function buildImageBlock(images: FormImage[], indent: string, eol = "\n"): string {
   if (!images.length) return "";
 
   const decoderLines = getRequiredImageDecoders(images).map(name => `${indent}${name}()`);
@@ -5054,8 +5110,7 @@ function buildImageBlock(images: FormImage[], indent: string): string {
     parts.push(...decoderLines, "");
   }
   parts.push(...imageLines, "");
-  return `${parts.join("\n")}
-`;
+  return `${parts.join(eol)}${eol}`;
 }
 
 function findImageInsertLine(document: vscode.TextDocument, calls: PbCall[]): number {
@@ -5168,22 +5223,28 @@ function applyImageMutation(
     ? imageCalls[0].range.line
     : (decoderLines.length ? decoderLines[0] : findImageBlockInsertLine(document, calls));
   const indent = document.lineCount ? getLineIndent(document, Math.min(anchorLine, document.lineCount - 1)) : "";
-  const rebuilt = buildImageBlock(nextImages, indent);
+  const eol = getDocumentEol(document);
+  const rebuilt = buildImageBlock(nextImages, indent, eol);
 
   const edit = new vscode.WorkspaceEdit();
 
   const imageGlobalBlock = findImageGlobalBlock(document, parsed.images);
-  const rebuiltGlobalBlock = buildImageGlobalBlock(nextImages);
-  applyOptionalBlockPatch(
-    edit,
-    document,
-    imageGlobalBlock,
-    findImageGlobalInsertLine(document),
-    rebuiltGlobalBlock
-  );
+  const rebuiltGlobalBlock = buildImageGlobalBlock(nextImages, eol);
+  const imageGlobalInsertLine = findImageGlobalInsertLine(document);
+  if (imageGlobalBlock) {
+    applyOptionalBlockPatch(
+      edit,
+      document,
+      imageGlobalBlock,
+      imageGlobalInsertLine,
+      rebuiltGlobalBlock
+    );
+  } else {
+    applyFreshImageGlobalInsert(edit, document, imageGlobalInsertLine, rebuiltGlobalBlock);
+  }
 
   const imageEnumBlock = findNamedEnumerationBlock(document, ENUM_NAMES.images);
-  const rebuiltEnumBlock = buildImageEnumBlock(nextImages);
+  const rebuiltEnumBlock = buildImageEnumBlock(nextImages, eol);
   const imageBlockInsertLine = findImageBlockInsertLine(document, calls);
   const imageEnumInsertLine = findImageEnumInsertLine(document, calls);
   const combineFreshEnumAndImageInsert = !imageCalls.length
@@ -5286,7 +5347,7 @@ function applySectionEntryInsert(
   const insertPos = new vscode.Position(Math.min(document.lineCount, insertAfterLine + 1), 0);
 
   const edit = new vscode.WorkspaceEdit();
-  edit.insert(document.uri, insertPos, line);
+  edit.insert(document.uri, insertPos, `${buildLine(indent)}${getDocumentEol(document)}`);
   return edit;
 }
 
@@ -5709,12 +5770,16 @@ export function applyMenuEntryInsert(
   if (!edit) return undefined;
 
   const idRaw = args.idRaw?.trim();
+  const parsed = parseFormDocument(document.getText());
+  const menu = parsed.menus.find(entry => entry.id === menuId);
   if (!menuEnumPatched && idRaw?.startsWith("#")) {
-    const parsed = parseFormDocument(document.getText());
     const symbols = collectMenuEnumSymbols(parsed.menus, parsed.toolbars);
     if (!symbols.includes(idRaw)) symbols.push(idRaw);
     applyMenuEnumPatch(edit, document, calls, symbols);
   }
+
+  const hasIcons = menu?.entries.some(entry => !!entry.iconRaw?.trim()) || !!args.iconRaw?.trim();
+  applyMenuCreateModePatch(edit, document, calls, menuId, hasIcons);
 
   return edit;
 }
@@ -5744,8 +5809,12 @@ export function applyMenuEntryUpdate(
   const target = menu?.entries.find(entry => entry.source?.line === sourceLine && entry.kind.toLowerCase() === args.kind.toLowerCase());
   if (target) {
     target.idRaw = args.idRaw;
+    target.iconRaw = args.iconRaw;
   }
   applyMenuEnumPatch(edit, document, calls, collectMenuEnumSymbols(menus, parsed.toolbars));
+  const nextMenu = menus.find(entry => entry.id === menuId);
+  const hasIcons = !!nextMenu?.entries.some(entry => !!entry.iconRaw?.trim());
+  applyMenuCreateModePatch(edit, document, calls, menuId, hasIcons);
   return edit;
 }
 
@@ -5777,6 +5846,8 @@ export function applyMenuEntryDelete(
     if (targetIndex >= 0) menu.entries.splice(targetIndex, 1);
   }
   applyMenuEnumPatch(edit, document, calls, collectMenuEnumSymbols(menus, parsed.toolbars));
+  const hasIcons = !!menu?.entries.some(entry => !!entry.iconRaw?.trim());
+  applyMenuCreateModePatch(edit, document, calls, menuId, hasIcons);
   return edit;
 }
 
