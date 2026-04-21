@@ -29,9 +29,10 @@ LoadImage(#Img_FrmMain_1,"icons/save.png")
 
 Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
   OpenWindow(#FrmMain, x, y, width, height, "Toolbar")
-  CreateToolBar(0, WindowID(#FrmMain))
+  CreateToolbar(0, WindowID(#FrmMain))
   ToolBarImageButton(#TbNew,ImageID(#Img_FrmMain_0), #PB_ToolBar_Toggle)
   ToolBarImageButton(#TbSave,ImageID(#Img_FrmMain_1), #PB_ToolBar_Toggle)
   ToolBarToolTip(0, #TbSave, "Save current form")
   ToolBarSeparator()
 EndProcedure
+

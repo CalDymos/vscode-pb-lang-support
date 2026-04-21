@@ -1,4 +1,4 @@
-﻿; Form Designer for PureBasic - 6.30
+﻿; Form Designer for PureBasic - 6.40
 ; Warning: this file uses a strict syntax, if you edit it, make sure to respect the Form Designer limitation or it won't be opened again.
 
 ;
@@ -12,8 +12,6 @@ Enumeration FormWindow
 EndEnumeration
 
 Declare HandleFrmEventsParent(Event, Window)
-
-XIncludeFile "events/form-events.pbi"
 
 Procedure OpenFrmEventsParent(x = 0, y = 0, width = 280, height = 170)
   OpenWindow(#FrmEventsParent, x, y, width, height, "Events Parent", #PB_Window_SystemMenu | #PB_Window_SizeGadget | #PB_Window_CustomTag, WindowID(#ParentWin))

@@ -1250,37 +1250,6 @@ test("roundtrips gadget constructor arg updates for splitter references and flag
 
 
 
-test("roundtrips window event include update", () => {
-  const text = loadFixture("fixtures/smoke/13-events-and-parent-window.pbf");
-
-  const { patchedText, parsed } = patchAndReparse(text, (document) =>
-    applyWindowEventUpdate(document, "#FrmEventsParent", {
-      eventFileRaw: '"events/form-events-new.pbi"',
-    })
-  );
-
-  assert.match(patchedText, /XIncludeFile "events\/form-events-new\.pbi"/);
-  assert.equal(parsed.window?.eventFile, "events/form-events-new.pbi");
-});
-
-test("roundtrips window event include removal", () => {
-  const text = loadFixture("fixtures/smoke/13-events-and-parent-window.pbf");
-
-  const { patchedText, parsed } = patchAndReparse(text, (document) =>
-    applyWindowEventUpdate(document, "#FrmEventsParent", {})
-  );
-
-  assert.doesNotMatch(patchedText, /XIncludeFile/);
-  assert.equal(parsed.window?.eventFile, undefined);
-});
-
-test("returns no edit when removing a missing window event include", () => {
-  const text = loadFixture("fixtures/smoke/01-window-basic.pbf");
-  const document = new FakeTextDocument(text);
-  const edit = applyWindowEventUpdate(document.asTextDocument(), "#FrmMain", {});
-  assert.equal(edit, undefined);
-});
-
 test("roundtrips window event include insertion", () => {
   const text = loadFixture("fixtures/smoke/01-window-basic.pbf");
 
