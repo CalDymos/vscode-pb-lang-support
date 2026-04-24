@@ -33,8 +33,9 @@ export class FakeTextDocument {
 
     const lineStarts = this.getLineStarts();
     const startOffset = lineStarts[line];
-    const text = lines[line];
-    const endOffset = startOffset + text.length;
+    const rawLine = lines[line];
+    const text = rawLine.replace(/\r$/, "");   // remove '\r' from text (CRLF-Fixtures)
+    const endOffset = startOffset + rawLine.length;  
     const hasLineBreak = line < lines.length - 1 || this.text.endsWith("\n");
     const endWithBreak = hasLineBreak ? endOffset + 1 : endOffset;
 

@@ -4800,17 +4800,27 @@ function applyFontMutation(
 }
 
 const IMAGE_DECODER_ORDER = [
-  { name: "UseJPEGImageDecoder", pattern: /(?:jpg|jpeg)/i },
-  { name: "UsePNGImageDecoder", pattern: /png/i },
-  { name: "UseJTAImageDecoder", pattern: /tga/i },
-  { name: "UseTIFFImageDecoder", pattern: /tiff/i },
+  { name: "UseJPEGImageDecoder", extensions: ["jpg", "jpeg"] },
+  { name: "UseJPEG2000ImageDecoder", extensions: ["jp2", "jpeg2000"] },
+  { name: "UsePNGImageDecoder", extensions: ["png"] },
+  { name: "UseTGAImageDecoder", extensions: ["tga"] },
+  { name: "UseTIFFImageDecoder", extensions: ["tif", "tiff"] },
+  { name: "UseGIFImageDecoder", extensions: ["gif"] },
 ] as const;
+
+const LEGACY_IMAGE_DECODER_LINES = new Set([
+  "UseJTAImageDecoder()",
+]);
 
 function getRequiredImageDecoders(images: FormImage[]): string[] {
   const result: string[] = [];
 
   for (const decoder of IMAGE_DECODER_ORDER) {
-    const hasMatch = images.some(image => !image.inline && decoder.pattern.test(image.image ?? image.imageRaw));
+    const hasMatch = images.some(image => {
+      if (image.inline) return false;
+      const extension = getExternalImageExtension(image);
+      return extension ? (decoder.extensions as readonly string[]).includes(extension) : false;
+    });
     if (hasMatch) {
       result.push(decoder.name);
     }
@@ -4819,9 +4829,19 @@ function getRequiredImageDecoders(images: FormImage[]): string[] {
   return result;
 }
 
+function getExternalImageExtension(image: FormImage): string | undefined {
+  const value = (image.image?.trim().length ? image.image : parsePbStringLiteral(image.imageRaw))?.trim();
+  if (!value) return undefined;
+
+  const pathEnd = value.split(/[?#]/, 1)[0]?.trim();
+  const match = /\.([a-z0-9]+)$/i.exec(pathEnd);
+  return match?.[1]?.toLowerCase();
+}
+
 function isImageDecoderLine(text: string): boolean {
   const trimmed = text.trim();
-  return IMAGE_DECODER_ORDER.some(decoder => trimmed === `${decoder.name}()`);
+  return IMAGE_DECODER_ORDER.some(decoder => trimmed === `${decoder.name}()`)
+    || LEGACY_IMAGE_DECODER_LINES.has(trimmed);
 }
 
 function findImageBlockInsertLine(document: vscode.TextDocument, calls: PbCall[]): number {
@@ -5618,9 +5638,9 @@ function buildStatusBarDecorationLine(statusBarId: string, field: FormStatusBarF
   const flags = field.flagsRaw?.trim();
   const flagsSuffix = flags ? `, ${flags}` : "";
 
-  if (field.progressBar) {
-    const progress = field.progressRaw?.trim() || "0";
-    return `StatusBarProgress(${statusBarId}, ${index}, ${progress}${flagsSuffix})`;
+  const text = field.textRaw?.trim();
+  if (text) {
+    return `StatusBarText(${statusBarId}, ${index}, ${text}${flagsSuffix})`;
   }
 
   const image = field.imageRaw?.trim();
@@ -5628,9 +5648,9 @@ function buildStatusBarDecorationLine(statusBarId: string, field: FormStatusBarF
     return `StatusBarImage(${statusBarId}, ${index}, ${image}${flagsSuffix})`;
   }
 
-  const text = field.textRaw?.trim();
-  if (text) {
-    return `StatusBarText(${statusBarId}, ${index}, ${text}${flagsSuffix})`;
+  if (field.progressBar) {
+    const progress = field.progressRaw?.trim() || "0";
+    return `StatusBarProgress(${statusBarId}, ${index}, ${progress}${flagsSuffix})`;
   }
 
   return undefined;

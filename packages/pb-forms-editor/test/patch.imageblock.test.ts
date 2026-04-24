@@ -58,6 +58,127 @@ test("inserts the first image block before the font block and injects the requir
   );
 });
 
+test("uses the valid PB TGA decoder name instead of the original Form Designer typo", () => {
+  const text = loadFixture("fixtures/roundtrip/26-imageblock-no-images-basic.pbf");
+
+  const args: ImageArgs = {
+    inline: false,
+    idRaw: "#Img_FrmMain_0",
+    imageRaw: '"logo.tga"',
+  };
+
+  const { patchedText } = patchAndReparse(text, document => applyImageInsert(document, args));
+
+  assert.match(patchedText, /UseTGAImageDecoder\(\)/);
+  assert.doesNotMatch(patchedText, /UseJTAImageDecoder\(\)/);
+});
+
+
+test("emits valid PB decoders for GIF and JPEG2000 images", () => {
+  const baseText = loadFixture("fixtures/roundtrip/26-imageblock-no-images-basic.pbf");
+
+  const { patchedText: gifText } = patchAndReparse(baseText, document => applyImageInsert(document, {
+    inline: false,
+    idRaw: "#Img_FrmMain_0",
+    imageRaw: '"logo.gif"',
+  }));
+
+  assert.match(gifText, /UseGIFImageDecoder\(\)/);
+  assert.match(gifText, /LoadImage\(#Img_FrmMain_0,"logo\.gif"\)/);
+
+  const { patchedText: jpeg2000Text } = patchAndReparse(baseText, document => applyImageInsert(document, {
+    inline: false,
+    idRaw: "#Img_FrmMain_0",
+    imageRaw: '"logo.jpeg2000"',
+  }));
+
+  assert.match(jpeg2000Text, /UseJPEG2000ImageDecoder\(\)/);
+  assert.doesNotMatch(jpeg2000Text, /UseJPEGImageDecoder\(\)/);
+  assert.match(jpeg2000Text, /LoadImage\(#Img_FrmMain_0,"logo\.jpeg2000"\)/);
+});
+
+test("uses the file extension instead of matching decoder names inside parent paths", () => {
+  const baseText = loadFixture("fixtures/roundtrip/26-imageblock-no-images-basic.pbf");
+
+  const { patchedText } = patchAndReparse(baseText, document => applyImageInsert(document, {
+    inline: false,
+    idRaw: "#Img_FrmMain_0",
+    imageRaw: '"assets/png-icons/logo.bmp"',
+  }));
+
+  assert.ok(!patchedText.includes("UsePNGImageDecoder()"));
+  assert.ok(!patchedText.includes("UseGIFImageDecoder()"));
+  assert.ok(patchedText.includes('LoadImage(#Img_FrmMain_0,"assets/png-icons/logo.bmp")'));
+});
+
+test("replaces the legacy original TGA decoder typo when rebuilding an existing image block", () => {
+  const text = [
+    "; Form Designer for PureBasic - 6.40",
+    "",
+    "Enumeration FormWindow",
+    "  #FrmMain",
+    "EndEnumeration",
+    "",
+    "Enumeration FormImage",
+    "  #Img_FrmMain_0",
+    "EndEnumeration",
+    "",
+    "UseJTAImageDecoder()",
+    "",
+    'LoadImage(#Img_FrmMain_0,"logo.tga")',
+    "",
+    "Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)",
+    '  OpenWindow(#FrmMain, x, y, width, height, "Images")',
+    "EndProcedure",
+    "",
+  ].join("\n");
+
+  const parsed = parseFormDocument(text);
+  const sourceLine = parsed.images.find((entry) => entry.id === "#Img_FrmMain_0")?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected image source line.");
+
+  const { patchedText } = patchAndReparse(text, document => applyImageUpdate(document, sourceLine!, {
+    inline: false,
+    idRaw: "#Img_FrmMain_0",
+    imageRaw: '"logo.png"',
+  }));
+
+  assert.match(patchedText, /UsePNGImageDecoder\(\)/);
+  assert.doesNotMatch(patchedText, /UseJTAImageDecoder\(\)/);
+  assert.doesNotMatch(patchedText, /UseTGAImageDecoder\(\)/);
+  assert.match(patchedText, /LoadImage\(#Img_FrmMain_0,"logo\.png"\)/);
+});
+
+test("removes stale decoder lines when rebuilding with a non-decoder external extension", () => {
+  const text = loadFixture("fixtures/roundtrip/20-imageblock-enum-single.pbf");
+
+  const parsed = parseFormDocument(text);
+  const sourceLine = parsed.images.find((entry) => entry.id === "#Img_FrmMain_0")?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected image source line.");
+
+  const { patchedText } = patchAndReparse(text, document => applyImageUpdate(document, sourceLine!, {
+    inline: false,
+    idRaw: "#Img_FrmMain_0",
+    imageRaw: '"assets/png-icons/logo.bmp"',
+  }));
+
+  assert.doesNotMatch(patchedText, /UsePNGImageDecoder\(\)/);
+  assert.match(patchedText, /LoadImage\(#Img_FrmMain_0,"assets\/png-icons\/logo\.bmp"\)/);
+});
+
+test("emits the TIFF decoder for .tif external image extensions", () => {
+  const baseText = loadFixture("fixtures/roundtrip/26-imageblock-no-images-basic.pbf");
+
+  const { patchedText } = patchAndReparse(baseText, document => applyImageInsert(document, {
+    inline: false,
+    idRaw: "#Img_FrmMain_0",
+    imageRaw: '"logo.tif"',
+  }));
+
+  assert.match(patchedText, /UseTIFFImageDecoder\(\)/);
+  assert.match(patchedText, /LoadImage\(#Img_FrmMain_0,"logo\.tif"\)/);
+});
+
 test("removes the decoder together with the last remaining image in the block", () => {
   const text = loadFixture("fixtures/roundtrip/20-imageblock-enum-single.pbf");
 

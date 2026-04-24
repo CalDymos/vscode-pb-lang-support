@@ -56,6 +56,21 @@ test("migrates legacy ToolBarButton inserts to the PB 6.30 image-button path", (
   assert.match(patchedText, /ToolBarToolTip\(0, #TbOpen, "Open file"\)/);
 });
 
+
+test("keeps toolbar image button without assigned image as zero instead of original empty ImageID call", () => {
+  const args: ToolBarEntryArgs = {
+    kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton,
+    idRaw: "#TbNoImage",
+  };
+
+  const { patchedText } = patchAndReparse(TOOLBAR_FIXTURE, (document) =>
+    applyToolBarEntryInsert(document, "0", args)
+  );
+
+  assert.match(patchedText, /ToolBarImageButton\(#TbNoImage, 0\)/);
+  assert.doesNotMatch(patchedText, /ToolBarImageButton\(#TbNoImage, ImageID\(\)\)/);
+});
+
 test("migrates legacy ToolBarStandardButton updates to ToolBarImageButton", () => {
   const text = `; Form Designer for PureBasic - 6.30
 

@@ -1075,7 +1075,32 @@ test("normalizes rebuilt statusbar sections to per-field Add/Decoration order", 
 });
 
 
-test("core statusbar patcher still preserves explicit progress raw values when used directly", () => {
+test("normalizes rebuilt statusbar decorations to original text-image-progress precedence", () => {
+  const { text, statusBar, statusBarId } = parseStatusFixture();
+  const sourceLine = statusBar.fields[1]?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected source line for statusbar field.");
+
+  const { parsed, patchedText } = patchAndReparse(text, (document) =>
+    applyStatusBarFieldUpdate(document, statusBarId, sourceLine!, {
+      widthRaw: "120",
+      textRaw: '"Done"',
+      imageRaw: "ImageID(#Img_FrmMain_0)",
+      flagsRaw: "#PB_StatusBar_Raised",
+      progressBar: true,
+      progressRaw: "75"
+    })
+  );
+
+  const updatedStatusBar = parsed.statusbars.find((sb) => sb.id === statusBarId);
+  assert.ok(updatedStatusBar, "Expected statusbar after update.");
+  assert.equal(updatedStatusBar!.fields[1]?.text, "Done");
+  assert.equal(updatedStatusBar!.fields[1]?.flagsRaw, "#PB_StatusBar_Raised");
+  assert.match(patchedText, /StatusBarText\(0, 1, "Done", #PB_StatusBar_Raised\)/);
+  assert.doesNotMatch(patchedText, /StatusBarImage\(0, 1,/);
+  assert.doesNotMatch(patchedText, /StatusBarProgress\(0, 1,/);
+});
+
+test("normalizes statusbar progress values to the original Form Designer save format", () => {
   const { text, statusBar, statusBarId } = parseStatusFixture();
   const sourceLine = statusBar.fields[1]?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected source line for progress statusbar field.");
