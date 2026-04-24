@@ -107,6 +107,19 @@ test("auto-creates a new LoadImage entry for a path-like CurrentImage string", (
   assert.equal(resolution.imageRaw, '"./icons/new.png"');
 });
 
+
+
+test("auto-creates a new LoadImage entry for escaped PB string literals", () => {
+  const resolution = resolveStatusBarCurrentImageCreate(
+    [],
+    ' ~"./icons/""new"".png" ',
+    "#FrmImages"
+  );
+
+  assert.equal(resolution.imageIdRaw, "#Img_FrmImages_0");
+  assert.equal(resolution.imageRaw, '"./icons/""new"".png"');
+});
+
 test("rejects ambiguous non-path CurrentImage strings for automatic creation", () => {
   const resolution = resolveStatusBarCurrentImageCreate([], "ImgInlineLabel", "#FrmImages");
 

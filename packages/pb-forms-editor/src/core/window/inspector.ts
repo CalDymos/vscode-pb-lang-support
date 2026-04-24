@@ -1,3 +1,6 @@
+import { parsePbWindowReference } from "../parser/pb-window-reference";
+import type { PreviewOsSkin, PreviewPlatform } from "../utils/form-settings-runtime";
+
 export const WINDOW_KNOWN_FLAGS = [
   "#PB_Window_SystemMenu",
   "#PB_Window_MinimizeGadget",
@@ -32,8 +35,8 @@ export type WindowPreviewTitleButtons = {
   showMaximize: boolean;
 };
 
-export type WindowPreviewPlatformSkin = "windows" | "linux" | "macos";
-export type WindowPreviewOsSkin = "windows7" | "windows8" | "linux" | "macos";
+export type WindowPreviewPlatformSkin = PreviewPlatform;
+export type WindowPreviewOsSkin = PreviewOsSkin;
 export type WindowPreviewTitleButtonKind = "minimize" | "maximize" | "close";
 export type WindowPreviewTitleButtonSlot = {
   kind: WindowPreviewTitleButtonKind;
@@ -247,8 +250,7 @@ export type ParsedWindowParentInput = {
 };
 
 function unwrapWindowIdParent(raw: string): string | undefined {
-  const match = /^WindowID\((.*)\)$/i.exec(raw);
-  return match ? match[1] : undefined;
+  return parsePbWindowReference(raw)?.innerRaw;
 }
 
 export function getWindowParentInspectorValue(parentRaw: string | undefined, normalizedParent: string | undefined): string {

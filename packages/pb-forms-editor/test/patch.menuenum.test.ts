@@ -5,6 +5,7 @@ import type { TextDocument } from "vscode";
 import { parseFormDocument } from "../src/core/parser/form-parser";
 import { MENU_ENTRY_KIND } from "../src/core/model";
 import {
+  applyImageInsert,
   applyMenuEntryDelete,
   applyMenuEntryInsert,
   applyMenuEntryUpdate,
@@ -12,6 +13,7 @@ import {
 } from "../src/core/emitter/patch-emitter";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
+import { loadFixture } from "./helpers/loadFixture";
 
 function patchAndReparse(
   text: string,
@@ -30,26 +32,29 @@ function patchAndReparse(
   };
 }
 
+function patchTwiceAndReparse(
+  text: string,
+  firstEditFactory: (document: TextDocument) => ReturnType<typeof applyImageInsert>,
+  secondEditFactory: (document: TextDocument) => ReturnType<typeof applyMenuEntryInsert>
+) {
+  const firstDocument = new FakeTextDocument(text);
+  const firstEdit = firstEditFactory(firstDocument.asTextDocument());
+  assert.ok(firstEdit, "Expected first WorkspaceEdit result.");
+  const firstPatchedText = applyWorkspaceEditToText(text, firstEdit!);
+
+  const secondDocument = new FakeTextDocument(firstPatchedText);
+  const secondEdit = secondEditFactory(secondDocument.asTextDocument());
+  assert.ok(secondEdit, "Expected second WorkspaceEdit result.");
+  const patchedText = applyWorkspaceEditToText(firstPatchedText, secondEdit!);
+
+  return {
+    patchedText,
+    parsed: parseFormDocument(patchedText),
+  };
+}
+
 test("inserts FormMenu before custom gadget initialisation when missing", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
-
-Enumeration FormGadget
-  #Editor
-EndEnumeration
-
-; 0 Custom gadget initialisation (do Not remove this line)
-InitEditorGadget()
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
-  OpenWindow(#FrmMain, x, y, width, height, "Menu")
-  CreateMenu(0, WindowID(#FrmMain))
-  MenuTitle("File")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/43-menuenum-custom-gadget-base.pbf");
 
   const args: MenuEntryArgs = {
     kind: MENU_ENTRY_KIND.MenuItem,
@@ -68,67 +73,8 @@ EndProcedure
   assert.equal(parsed.menus[0]?.entries.some((entry) => entry.idRaw === "#MenuSave"), true);
 });
 
-
-
-test("inserts FormMenu before ProcedureDLL and XIncludeFile boundaries when no prior enums exist", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-ProcedureDLL ScintillaCallbackGadget, *scinotify.SCNotification)
-
-EndProcedure
-
-XIncludeFile "events/form-main.pbi"
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
-  OpenWindow(#FrmMain, x, y, width, height, "Menu")
-  CreateMenu(0, WindowID(#FrmMain))
-  MenuTitle("File")
-EndProcedure
-`;
-
-  const args: MenuEntryArgs = {
-    kind: MENU_ENTRY_KIND.MenuItem,
-    idRaw: "#MenuSave",
-    textRaw: '"Save"',
-  };
-
-  const { patchedText, parsed } = patchAndReparse(text, (document) =>
-    applyMenuEntryInsert(document, "0", args)
-  );
-
-  const normalized = patchedText.replace(/\r\n/g, "\n");
-  assert.ok(normalized.includes([
-    'Enumeration FormMenu',
-    '  #MenuSave',
-    'EndEnumeration',
-    '',
-    'ProcedureDLL ScintillaCallbackGadget, *scinotify.SCNotification)',
-  ].join("\n")));
-  assert.equal(parsed.menus[0]?.entries.some((entry) => entry.idRaw === "#MenuSave"), true);
-});
-
 test("removes an empty FormMenu block when deleting the last menu symbol", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
-
-Enumeration FormGadget
-  #Editor
-EndEnumeration
-
-Enumeration FormMenu
-  #MenuSave
-EndEnumeration
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
-  OpenWindow(#FrmMain, x, y, width, height, "Menu")
-  CreateMenu(0, WindowID(#FrmMain))
-  MenuTitle("File")
-  MenuItem(#MenuSave, "Save")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/45-menuenum-basic-single-symbol.pbf");
 
   const parsed = parseFormDocument(text);
   const target = parsed.menus[0]?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem && entry.idRaw === "#MenuSave");
@@ -144,27 +90,7 @@ EndProcedure
 });
 
 test("updates FormMenu symbols when renaming the only menu id", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
-
-Enumeration FormGadget
-  #Editor
-EndEnumeration
-
-Enumeration FormMenu
-  #MenuSave
-EndEnumeration
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
-  OpenWindow(#FrmMain, x, y, width, height, "Menu")
-  CreateMenu(0, WindowID(#FrmMain))
-  MenuTitle("File")
-  MenuItem(#MenuSave, "Save")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/45-menuenum-basic-single-symbol.pbf");
 
   const parsed = parseFormDocument(text);
   const target = parsed.menus[0]?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem && entry.idRaw === "#MenuSave");
@@ -186,112 +112,123 @@ EndProcedure
   assert.match(patchedText, /MenuItem\(#MenuStore, "Save"\)/);
 });
 
-
-test("inserts FormMenu before an existing FormImage block when no window or gadget enum is present", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormImage
-  #ImgSave
-EndEnumeration
-
-UsePNGImageDecoder()
-
-LoadImage(#ImgSave, "save.png")
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
-  OpenWindow(#PB_Any, x, y, width, height, "Menu")
-  CreateImageMenu(0, WindowID(#PB_Any))
-  MenuTitle("File")
-EndProcedure
-`;
+test("inserts the first menu icon block before the image decoder and upgrades CreateMenu to CreateImageMenu", () => {
+  const text = loadFixture("fixtures/roundtrip/46-menuenum-before-image-block.pbf");
 
   const args: MenuEntryArgs = {
     kind: MENU_ENTRY_KIND.MenuItem,
     idRaw: "#MenuSave",
     textRaw: '"Save"',
-    iconRaw: 'ImageID(#ImgSave)',
+    iconRaw: "ImageID(Img_FrmMain_0)",
   };
 
-  const { patchedText, parsed } = patchAndReparse(text, (document) =>
-    applyMenuEntryInsert(document, "0", args)
+  const { patchedText, parsed } = patchTwiceAndReparse(
+    text,
+    (document) => applyImageInsert(document, {
+      inline: false,
+      idRaw: "#PB_Any",
+      assignedVar: "Img_FrmMain_0",
+      imageRaw: '"FileSave.png"',
+    }),
+    (document) => applyMenuEntryInsert(document, "0", args)
   );
 
-  assert.match(
-    patchedText,
-    /Enumeration FormMenu\r?\n  #MenuSave\r?\nEndEnumeration\r?\n\r?\nEnumeration FormImage\r?\n  #ImgSave\r?\nEndEnumeration/
-  );
-  assert.ok(parsed.menus[0]?.entries.some((entry) => entry.idRaw === "#MenuSave"));
-});
-
-
-test("inserts FormMenu before an existing FormFont block when no window or gadget enum is present", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormFont
-  #FontMain
-EndEnumeration
-
-LoadFont(#FontMain, "Arial", 10)
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
-  OpenWindow(#PB_Any, x, y, width, height, "Menu")
-  CreateMenu(0, WindowID(#PB_Any))
-  MenuTitle("File")
-EndProcedure
-`;
-
-  const args: MenuEntryArgs = {
-    kind: MENU_ENTRY_KIND.MenuItem,
-    idRaw: "#MenuSave",
-    textRaw: '"Save"',
-  };
-
-  const { patchedText, parsed } = patchAndReparse(text, (document) =>
-    applyMenuEntryInsert(document, "0", args)
-  );
-
-  const normalized = patchedText.replace(/\r\n/g, "\n");
-  assert.ok(normalized.includes([
-    'Enumeration FormMenu',
-    '  #MenuSave',
-    'EndEnumeration',
+  const normalized = patchedText.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
+  const expected = [
+    '; Form Designer for PureBasic - 6.40',
+    '; Warning: this file uses a strict syntax, if you edit it, make sure to respect the Form Designer limitation or it won\'t be opened again.',
     '',
-    'Enumeration FormFont',
-    '  #FontMain',
-    'EndEnumeration',
-  ].join("\n")));
-  assert.ok(parsed.menus[0]?.entries.some((entry) => entry.idRaw === "#MenuSave"));
-});
-
-test("inserts FormMenu before image decoder lines when no enum anchor exists yet", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-UsePNGImageDecoder()
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
-  OpenWindow(#PB_Any, x, y, width, height, "Menu")
-  CreateMenu(0, WindowID(#PB_Any))
-  MenuTitle("File")
-EndProcedure
-`;
-
-  const args: MenuEntryArgs = {
-    kind: MENU_ENTRY_KIND.MenuItem,
-    idRaw: "#MenuSave",
-    textRaw: '"Save"',
-  };
-
-  const { patchedText, parsed } = patchAndReparse(text, (document) =>
-    applyMenuEntryInsert(document, "0", args)
-  );
-
-  const normalized = patchedText.replace(/\r\n/g, "\n");
-  assert.ok(normalized.includes([
+    ';',
+    '; This code is automatically generated by the Form Designer.',
+    '; Manual modification is possible to adjust existing commands, but anything else will be dropped when the code is compiled.',
+    '; Event procedures need to be put in another source file.',
+    ';',
+    '',
+    'Global FrmMain',
+    '',
+    'Global Img_FrmMain_0',
+    '',
     'Enumeration FormMenu',
     '  #MenuSave',
     'EndEnumeration',
     '',
     'UsePNGImageDecoder()',
+    '',
+    'Img_FrmMain_0 = LoadImage(#PB_Any,"FileSave.png")',
+    '',
+    'Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)',
+    '  FrmMain = OpenWindow(#PB_Any, x, y, width, height, "Menu")',
+    '  CreateImageMenu(0, WindowID(FrmMain))',
+    '  MenuTitle("File")',
+    '  MenuItem(#MenuSave, "Save", ImageID(Img_FrmMain_0))',
+    'EndProcedure',
+    '',
+    '',
+  ].join("\n");
+  assert.equal(normalized, expected);
+  assert.ok(parsed.menus[0]?.entries.some((entry) => entry.idRaw === "#MenuSave"));
+  assert.ok(parsed.images.some((entry) => entry.id === "Img_FrmMain_0"));
+});
+
+test("inserts FormMenu before an existing FormFont block when no window or gadget enum is present", () => {
+  const text = loadFixture("fixtures/roundtrip/47-menuenum-before-font-block.pbf");
+
+  const args: MenuEntryArgs = {
+    kind: MENU_ENTRY_KIND.MenuItem,
+    idRaw: "#MenuSave",
+    textRaw: '"Save"',
+  };
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyMenuEntryInsert(document, "0", args)
+  );
+
+  const normalized = patchedText.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
+  assert.ok(normalized.includes([
+    "Global FrmMain",
+    "",
+    "Global Editor1",
+    "",
+    "Enumeration FormMenu",
+    "  #MenuSave",
+    "EndEnumeration",
+    "",
+    "Enumeration FormFont",
+    "  #Font_FrmMain_0",
+    "EndEnumeration",
   ].join("\n")));
+  assert.match(patchedText, /MenuItem\(#MenuSave, "Save"\)/);
+  assert.ok(parsed.menus[0]?.entries.some((entry) => entry.idRaw === "#MenuSave"));
+});
+
+test("inserts FormMenu before image decoder lines when no enum anchor exists yet", () => {
+  const text = loadFixture("fixtures/roundtrip/48-menuenum-before-image-decoder.pbf");
+
+  const args: MenuEntryArgs = {
+    kind: MENU_ENTRY_KIND.MenuItem,
+    idRaw: "#MenuSave",
+    textRaw: '"Save"',
+  };
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyMenuEntryInsert(document, "0", args)
+  );
+
+  const normalized = patchedText.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
+  assert.ok(normalized.includes([
+    "Global FrmMain",
+    "",
+    "Global ImgButton",
+    "",
+    "Global Img_FrmMain_0",
+    "",
+    "Enumeration FormMenu",
+    "  #MenuSave",
+    "EndEnumeration",
+    "",
+    "UsePNGImageDecoder()",
+  ].join("\n")));
+  assert.match(patchedText, /CreateMenu\(0, WindowID\(FrmMain\)\)/);
+  assert.match(patchedText, /MenuItem\(#MenuSave, "Save"\)/);
   assert.ok(parsed.menus[0]?.entries.some((entry) => entry.idRaw === "#MenuSave"));
 });

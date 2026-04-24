@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { parseDesignerLayoutRaw, parseUnscaledLayoutRaw } from "../src/core/parser/layout-raw";
 import {
   commitDisplayedLayoutPoint,
   commitDisplayedLayoutRect,
@@ -10,8 +11,6 @@ import {
   getLayoutDpiScale,
   getStableDisplayedLayoutValue,
   isLayoutDpiScalingActive,
-  parseDesignerLayoutRaw,
-  parseUnscaledLayoutRaw,
   unscaleDisplayedLayoutValue,
 } from "../src/core/utils/layout-dpi";
 

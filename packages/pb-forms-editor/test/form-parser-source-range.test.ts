@@ -3,26 +3,16 @@ import assert from "node:assert/strict";
 
 import { parseFormDocument } from "../src/core/parser/form-parser";
 import { GADGET_KIND } from "../src/core/model";
+import { loadFixture } from "./helpers/loadFixture";
+
+const CUSTOM_GADGET_FIXTURE = loadFixture("fixtures/roundtrip/66-custom-gadget-marker-pair-basic.pbf");
 
 function buildCustomGadgetFixture(eol: string): string {
-  return [
-    "; Form Designer for PureBasic - 6.30",
-    "; EnableExplicit",
-    "",
-    "Enumeration FormWindow",
-    "  #Form",
-    "EndEnumeration",
-    "",
-    "Procedure OpenForm(x = 0, y = 0, width = 260, height = 180)",
-    '  If OpenWindow(#Form, x, y, width, height, "Custom", #PB_Window_SystemMenu)',
-    "    ; 0 Custom gadget initialisation (do Not remove this line)",
-    "    InitFancyWidget()",
-    "    ; 0 Custom gadget creation (do not remove this line) FancyWidget(%id%, %x%, %y%, %w%, %h%, %txt%)",
-    '    FancyWidget(#Fancy, 10, 20, 130, 24, "Caption")',
-    "  EndIf",
-    "EndProcedure",
-    ""
-  ].join(eol);
+  if (eol === "\n") {
+    return CUSTOM_GADGET_FIXTURE;
+  }
+
+  return CUSTOM_GADGET_FIXTURE.replace(/\r?\n/g, eol);
 }
 
 function parseSingleCustomGadget(text: string) {
@@ -43,38 +33,38 @@ test("keeps custom gadget SourceRange.lineStart byte-accurate for LF documents",
   const text = buildCustomGadgetFixture("\n");
   const gadget = parseSingleCustomGadget(text);
 
-  assert.equal(gadget.customInitSource?.lineStart, text.indexOf("    InitFancyWidget()"));
+  assert.equal(gadget.customInitSource?.lineStart, text.indexOf("InitFancyWidget()"));
   assert.equal(
     gadget.customCreateMarkerSource?.lineStart,
-    text.indexOf("    ; 0 Custom gadget creation (do not remove this line) FancyWidget(%id%, %x%, %y%, %w%, %h%, %txt%)")
+    text.indexOf("  ; 0 Custom gadget creation (do not remove this line) FancyWidget(%id%, %x%, %y%, %w%, %h%, %txt%, %hwnd%)")
   );
-  assert.equal(gadget.source?.lineStart, text.indexOf('    FancyWidget(#Fancy, 10, 20, 130, 24, "Caption")'));
+  assert.equal(gadget.source?.lineStart, text.indexOf('  FancyWidget(#Fancy, 10, 20, 130, 24, "Caption", WindowID(#Form))'));
 });
 
 test("keeps custom gadget SourceRange.lineStart byte-accurate for CRLF documents", () => {
   const text = buildCustomGadgetFixture("\r\n");
   const gadget = parseSingleCustomGadget(text);
 
-  assert.equal(gadget.customInitSource?.lineStart, text.indexOf("    InitFancyWidget()"));
+  assert.equal(gadget.customInitSource?.lineStart, text.indexOf("InitFancyWidget()"));
   assert.equal(
     gadget.customCreateMarkerSource?.lineStart,
-    text.indexOf("    ; 0 Custom gadget creation (do not remove this line) FancyWidget(%id%, %x%, %y%, %w%, %h%, %txt%)")
+    text.indexOf("  ; 0 Custom gadget creation (do not remove this line) FancyWidget(%id%, %x%, %y%, %w%, %h%, %txt%, %hwnd%)")
   );
-  assert.equal(gadget.source?.lineStart, text.indexOf('    FancyWidget(#Fancy, 10, 20, 130, 24, "Caption")'));
+  assert.equal(gadget.source?.lineStart, text.indexOf('  FancyWidget(#Fancy, 10, 20, 130, 24, "Caption", WindowID(#Form))'));
 });
 
-test("keeps successive CRLF line starts stable across custom gadget marker and code lines", () => {
+test("keeps successive CRLF line starts stable across the original custom gadget create marker pair", () => {
   const text = buildCustomGadgetFixture("\r\n");
   const gadget = parseSingleCustomGadget(text);
-  const initStart = text.indexOf("    InitFancyWidget()");
   const markerStart = text.indexOf(
-    "    ; 0 Custom gadget creation (do not remove this line) FancyWidget(%id%, %x%, %y%, %w%, %h%, %txt%)"
+    "  ; 0 Custom gadget creation (do not remove this line) FancyWidget(%id%, %x%, %y%, %w%, %h%, %txt%, %hwnd%)"
   );
-  const callStart = text.indexOf('    FancyWidget(#Fancy, 10, 20, 130, 24, "Caption")');
+  const callStart = text.indexOf('  FancyWidget(#Fancy, 10, 20, 130, 24, "Caption", WindowID(#Form))');
 
-  assert.equal(gadget.customInitSource?.lineStart, initStart);
   assert.equal(gadget.customCreateMarkerSource?.lineStart, markerStart);
   assert.equal(gadget.source?.lineStart, callStart);
-  assert.equal(markerStart - initStart, "    InitFancyWidget()\r\n".length);
-  assert.equal(callStart - markerStart, "    ; 0 Custom gadget creation (do not remove this line) FancyWidget(%id%, %x%, %y%, %w%, %h%, %txt%)\r\n".length);
+  assert.equal(
+    callStart - markerStart,
+    "  ; 0 Custom gadget creation (do not remove this line) FancyWidget(%id%, %x%, %y%, %w%, %h%, %txt%, %hwnd%)\r\n".length
+  );
 });

@@ -1,4 +1,4 @@
-﻿; Form Designer for PureBasic - 6.30
+﻿; Form Designer for PureBasic - 6.40
 ; Warning: this file uses a strict syntax, if you edit it, make sure to respect the Form Designer limitation or it won't be opened again.
 
 ;
@@ -29,10 +29,9 @@ LoadImage(#Img_FrmMain_1,"icons/save.png")
 
 Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
   OpenWindow(#FrmMain, x, y, width, height, "Toolbar")
-  CreateToolbar(0, WindowID(#FrmMain))
+  CreateToolBar(0, WindowID(#FrmMain))
   ToolBarImageButton(#TbNew,ImageID(#Img_FrmMain_0), #PB_ToolBar_Toggle)
   ToolBarImageButton(#TbSave,ImageID(#Img_FrmMain_1), #PB_ToolBar_Toggle)
   ToolBarToolTip(0, #TbSave, "Save current form")
   ToolBarSeparator()
 EndProcedure
-

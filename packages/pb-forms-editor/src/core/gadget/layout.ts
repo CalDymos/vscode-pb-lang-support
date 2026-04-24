@@ -1,6 +1,6 @@
 import type { PreviewRect } from "../preview/chrome";
 import type { Gadget } from "../model";
-import { parseDesignerLayoutRaw } from "../utils/layout-dpi";
+import { parseDesignerLayoutRaw } from "../parser/layout-raw";
 
 const HEIGHT_REFERENCE_RE = /FormWindowHeight|WindowHeight|GadgetHeight|GetGadgetAttribute/i;
 const WIDTH_REFERENCE_RE = /FormWindowWidth|WindowWidth|GadgetWidth|GetGadgetAttribute/i;

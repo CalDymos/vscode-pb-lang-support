@@ -4,6 +4,7 @@ import type { TextDocument } from "vscode";
 
 import { parseFormDocument } from "../src/core/parser/form-parser";
 import {
+  applyImageInsert,
   applyToolBarEntryDelete,
   applyToolBarEntryInsert,
   applyToolBarEntryUpdate,
@@ -12,10 +13,11 @@ import {
 import { TOOLBAR_ENTRY_KIND } from "../src/core/model";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
+import { loadFixture } from "./helpers/loadFixture";
 
 function patchAndReparse(
   text: string,
-  editFactory: (document: TextDocument) => ReturnType<typeof applyToolBarEntryInsert> | ReturnType<typeof applyToolBarEntryUpdate> | ReturnType<typeof applyToolBarEntryDelete>
+  editFactory: (document: TextDocument) => ReturnType<typeof applyImageInsert> | ReturnType<typeof applyToolBarEntryInsert> | ReturnType<typeof applyToolBarEntryUpdate> | ReturnType<typeof applyToolBarEntryDelete>
 ) {
   const document = new FakeTextDocument(text);
   const edit = editFactory(document.asTextDocument());
@@ -27,51 +29,26 @@ function patchAndReparse(
   };
 }
 
-const TOOLBAR_ONLY_FIXTURE = `; Form Designer for PureBasic - 6.30
+function patchTwiceAndReparse(
+  text: string,
+  firstEditFactory: (document: TextDocument) => ReturnType<typeof applyImageInsert> | ReturnType<typeof applyToolBarEntryInsert> | ReturnType<typeof applyToolBarEntryUpdate> | ReturnType<typeof applyToolBarEntryDelete>,
+  secondEditFactory: (document: TextDocument) => ReturnType<typeof applyImageInsert> | ReturnType<typeof applyToolBarEntryInsert> | ReturnType<typeof applyToolBarEntryUpdate> | ReturnType<typeof applyToolBarEntryDelete>
+) {
+  const firstDocument = new FakeTextDocument(text);
+  const firstEdit = firstEditFactory(firstDocument.asTextDocument());
+  assert.ok(firstEdit, "Expected the first WorkspaceEdit result.");
+  const intermediateText = applyWorkspaceEditToText(text, firstEdit!);
 
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
+  const secondDocument = new FakeTextDocument(intermediateText);
+  const secondEdit = secondEditFactory(secondDocument.asTextDocument());
+  assert.ok(secondEdit, "Expected the second WorkspaceEdit result.");
+  const patchedText = applyWorkspaceEditToText(intermediateText, secondEdit!);
 
-Enumeration FormGadget
-  #Editor
-EndEnumeration
-
-; 0 Custom gadget initialisation (do Not remove this line)
-Editor_CustomInit()
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
-  OpenWindow(#FrmMain, x, y, width, height, "Toolbar Only")
-  CreateToolbar(0, WindowID(#FrmMain))
-  ToolBarSeparator()
-EndProcedure
-`;
-
-const MENU_AND_TOOLBAR_FIXTURE = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
-
-Enumeration FormGadget
-  #Editor
-EndEnumeration
-
-Enumeration FormMenu
-  #MenuOpen
-  #TbSave
-EndEnumeration
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
-  OpenWindow(#FrmMain, x, y, width, height, "Menu and Toolbar")
-  CreateImageMenu(0, WindowID(#FrmMain))
-  MenuTitle("File")
-  MenuItem(#MenuOpen, "Open")
-  CreateToolbar(0, WindowID(#FrmMain))
-  ToolBarImageButton(#TbSave, ImageID(#ImgSave))
-  ToolBarToolTip(0, #TbSave, "Save")
-EndProcedure
-`;
+  return {
+    patchedText,
+    parsed: parseFormDocument(patchedText),
+  };
+}
 
 test("inserts toolbar ids into FormMenu before custom gadget initialisation when missing", () => {
   const args: ToolBarEntryArgs = {
@@ -80,7 +57,7 @@ test("inserts toolbar ids into FormMenu before custom gadget initialisation when
     iconRaw: "ImageID(#ImgSave)",
   };
 
-  const { patchedText, parsed } = patchAndReparse(TOOLBAR_ONLY_FIXTURE, (document) =>
+  const { patchedText, parsed } = patchAndReparse(loadFixture("fixtures/roundtrip/38-toolbar-menuenum-toolbar-only-custom-gadget-base.pbf"), (document) =>
     applyToolBarEntryInsert(document, "0", args)
   );
 
@@ -94,7 +71,8 @@ test("inserts toolbar ids into FormMenu before custom gadget initialisation when
 });
 
 test("updates FormMenu symbols when renaming the only toolbar id", () => {
-  const parsed = parseFormDocument(MENU_AND_TOOLBAR_FIXTURE);
+  const text = loadFixture("fixtures/roundtrip/39-toolbar-menuenum-menu-and-toolbar-base.pbf");
+  const parsed = parseFormDocument(text);
   const sourceLine = parsed.toolbars[0]?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSave")?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected toolbar entry source line.");
 
@@ -104,7 +82,7 @@ test("updates FormMenu symbols when renaming the only toolbar id", () => {
     iconRaw: "ImageID(#ImgSave)",
   };
 
-  const { patchedText } = patchAndReparse(MENU_AND_TOOLBAR_FIXTURE, (document) =>
+  const { patchedText } = patchAndReparse(text, (document) =>
     applyToolBarEntryUpdate(document, "0", sourceLine!, args)
   );
 
@@ -113,23 +91,7 @@ test("updates FormMenu symbols when renaming the only toolbar id", () => {
 });
 
 test("removes FormMenu when deleting the last toolbar symbol", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
-
-Enumeration FormMenu
-  #TbSave
-EndEnumeration
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
-  OpenWindow(#FrmMain, x, y, width, height, "Toolbar Only")
-  CreateToolbar(0, WindowID(#FrmMain))
-  ToolBarImageButton(#TbSave, ImageID(#ImgSave))
-  ToolBarToolTip(0, #TbSave, "Save")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/40-toolbar-menuenum-toolbar-only-last-symbol.pbf");
 
   const parsed = parseFormDocument(text);
   const sourceLine = parsed.toolbars[0]?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSave")?.source?.line;
@@ -144,29 +106,7 @@ EndProcedure
 });
 
 test("does not duplicate an enum symbol when menu and toolbar share the same id", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
-
-Enumeration FormGadget
-  #Editor
-EndEnumeration
-
-Enumeration FormMenu
-  #MenuOpen
-EndEnumeration
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
-  OpenWindow(#FrmMain, x, y, width, height, "Shared Id")
-  CreateImageMenu(0, WindowID(#FrmMain))
-  MenuTitle("File")
-  MenuItem(#MenuOpen, "Open")
-  CreateToolbar(0, WindowID(#FrmMain))
-  ToolBarSeparator()
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/41-toolbar-menuenum-shared-id-base.pbf");
 
   const args: ToolBarEntryArgs = {
     kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton,
@@ -184,38 +124,29 @@ EndProcedure
   assert.doesNotMatch(patchedText, /Enumeration FormMenu\r?\n  #MenuOpen\r?\n  #MenuOpen/);
 });
 
+test("keeps toolbar-only FormMenu before the first image block when a toolbar image is created on a 6.40 base without enum or image declarations", () => {
+  const text = loadFixture("fixtures/roundtrip/42-toolbar-menuenum-before-image-block.pbf");
 
-test("inserts toolbar-only FormMenu before image decoder and load blocks when no window or gadget enum is present", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormImage
-  #ImgSave
-EndEnumeration
-
-UsePNGImageDecoder()
-
-LoadImage(#ImgSave, "save.png")
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
-  OpenWindow(#PB_Any, x, y, width, height, "Toolbar Only")
-  CreateToolbar(0, WindowID(#PB_Any))
-  ToolBarSeparator()
-EndProcedure
-`;
-
-  const args: ToolBarEntryArgs = {
+  const toolBarArgs: ToolBarEntryArgs = {
     kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton,
     idRaw: "#TbSave",
-    iconRaw: "ImageID(#ImgSave)",
+    iconRaw: "ImageID(#Img_FrmMain_0)",
   };
 
-  const { patchedText, parsed } = patchAndReparse(text, (document) =>
-    applyToolBarEntryInsert(document, "0", args)
+  const { patchedText, parsed } = patchTwiceAndReparse(
+    text,
+    (document) => applyImageInsert(document, { inline: false, idRaw: "#Img_FrmMain_0", imageRaw: '"FileSave.png"' }),
+    (document) => applyToolBarEntryInsert(document, "0", toolBarArgs)
   );
 
   assert.match(
     patchedText,
-    /Enumeration FormMenu\r?\n  #TbSave\r?\nEndEnumeration\r?\n\r?\nEnumeration FormImage\r?\n  #ImgSave\r?\nEndEnumeration/
+    /Global FrmMain\r?\n\r?\n\r?\nEnumeration FormMenu\r?\n  #TbSave\r?\nEndEnumeration\r?\n\r?\nEnumeration FormImage\r?\n  #Img_FrmMain_0\r?\nEndEnumeration\r?\n\r?\nUsePNGImageDecoder\(\)\r?\n\r?\nLoadImage\(#Img_FrmMain_0,"FileSave\.png"\)/
+  );
+  assert.match(
+    patchedText,
+    /CreateToolBar\(0, WindowID\(FrmMain\)\)\r?\n  ToolBarSeparator\(\)\r?\n  ToolBarImageButton\(#TbSave, ImageID\(#Img_FrmMain_0\)\)/
   );
   assert.ok(parsed.toolbars[0]?.entries.some((entry) => entry.idRaw === "#TbSave"));
+  assert.ok(parsed.images.some((entry) => entry.id === "#Img_FrmMain_0" && entry.imageRaw === '"FileSave.png"'));
 });

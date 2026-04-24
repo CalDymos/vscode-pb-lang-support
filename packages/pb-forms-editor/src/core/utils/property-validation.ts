@@ -1,4 +1,4 @@
-import { unquoteString } from "../parser/tokenizer";
+import { isPbStringLiteral } from "../parser/pb-string";
 
 export const PB_VARIABLE_INVALID_CHARS = [" ", ".", "-", "/", "\\", "|", "?", "!", "@", "£", "$", "="] as const;
 
@@ -21,8 +21,7 @@ export function isValidPbVariableReference(value: string): boolean {
 }
 
 export function isPbStringLiteralRaw(raw: string | undefined): boolean {
-  if (!raw) return false;
-  return unquoteString(raw) !== undefined;
+  return isPbStringLiteral(raw);
 }
 
 export function requiresPbVariableValidation(raw: string | undefined): boolean {

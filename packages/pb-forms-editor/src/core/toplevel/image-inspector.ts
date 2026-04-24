@@ -1,4 +1,4 @@
-export type TopLevelSelectedImageInspectorTarget = "menuEntry" | "toolBarEntry" | "statusBarField";
+import type { TopLevelSelectedImageInspectorTarget } from "./selection";
 
 export interface TopLevelSelectedImageInspectorConfig {
   currentImageEditable: boolean;

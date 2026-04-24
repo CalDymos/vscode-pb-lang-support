@@ -1,7 +1,17 @@
+import { MenuEntryMovePlacement } from "../../shared/menu";
 import * as vscode from "vscode";
 import { scanCalls } from "../parser/call-scanner";
 import { parseFormDocument } from "../parser/form-parser";
-import { asNumber, normalizeProcParamName, quotePbString, splitParams, unquoteString } from "../parser/tokenizer";
+import { parseGlobalVarNames } from "../parser/global-scanner";
+import { normalizePbImageValue } from "../parser/pb-image-value";
+import { parsePbStringLiteral } from "../parser/pb-string";
+import {
+  findFirstProcedureLine,
+  findProcedureBlock as findProcedureBlockInLines,
+  findProcedureBlockByName as findProcedureBlockByNameInLines,
+  type ProcedureLineBlock,
+} from "../parser/procedure-scanner";
+import { asNumber, normalizeProcParamName, quotePbString, splitParams } from "../parser/tokenizer";
 import { buildInsertedGadgetIdentity, canHostInsertedGadgets, isInsertableGadgetKind, shouldInsertGadgetAsPbAny, type InsertableGadgetKind } from "../gadget/insert";
 import { buildOriginalGadgetDeletePlan, collectRequestedGadgetDeleteIds } from "../gadget/delete";
 import { ENUM_NAMES, FormFont, FormImage, FormMenu, FormMenuEntry, FormStatusBarField, FormToolBar, FormToolBarEntry, FormWindow, Gadget, ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, PB_ANY, ToolBarEntryKind, GADGET_KIND } from "../model";
@@ -91,6 +101,10 @@ function getLineIndent(document: vscode.TextDocument, line: number): string {
 function isBlankLine(document: vscode.TextDocument, line: number): boolean {
   if (line < 0 || line >= document.lineCount) return false;
   return document.lineAt(line).text.trim() === "";
+}
+
+function getDocumentEol(document: vscode.TextDocument): string {
+  return document.getText().includes("\r\n") ? "\r\n" : "\n";
 }
 
 function skipBlankLines(document: vscode.TextDocument, line: number): number {
@@ -312,7 +326,6 @@ export interface MenuEntryInsertOptions {
   parentSourceLine?: number;
 }
 
-export type MenuEntryMovePlacement = "before" | "after" | "appendChild";
 
 export interface MenuEntryMoveOptions {
   targetSourceLine: number;
@@ -419,13 +432,13 @@ function normalizeMenuTextForShortcut(textRaw: string): string {
   const raw = textRaw.trim();
   const tabConcat = /^(.*)\+\s*Chr\(\s*9\s*\)\s*\+\s*(.*)$/i.exec(raw);
   if (tabConcat) {
-    const literal = unquoteString(tabConcat[1].trim());
+    const literal = parsePbStringLiteral(tabConcat[1]);
     if (literal !== undefined) {
       return quotePbString(literal);
     }
   }
 
-  const literal = unquoteString(raw);
+  const literal = parsePbStringLiteral(raw);
   if (literal !== undefined) {
     // A plain string literal has no embedded shortcut in PBF format;
     // shortcuts are always expressed as "..." + Chr(9) + "..." (handled above).
@@ -528,13 +541,9 @@ function collectMenuEnumSymbols(menus: FormMenu[], toolbars: FormToolBar[] = [])
   return symbols;
 }
 
-function buildMenuEnumBlock(symbols: string[]): string {
+function buildMenuEnumBlock(symbols: string[], eol = "\n"): string {
   if (!symbols.length) return "";
-  return `Enumeration ${ENUM_NAMES.menus}
-${symbols.map(symbol => `  ${symbol}`).join("\n")}
-EndEnumeration
-
-`;
+  return `Enumeration ${ENUM_NAMES.menus}${eol}${symbols.map(symbol => `  ${symbol}`).join(eol)}${eol}EndEnumeration${eol}${eol}`;
 }
 
 function isNamedEnumerationLine(text: string, enumName: string): boolean {
@@ -596,8 +605,30 @@ function applyMenuEnumPatch(
     document,
     menuEnumBlock ? expandBlockWithTrailingBlank(document, menuEnumBlock) : undefined,
     findMenuEnumInsertLine(document),
-    buildMenuEnumBlock(symbols)
+    buildMenuEnumBlock(symbols, getDocumentEol(document))
   );
+}
+
+function buildMenuCreateLine(document: vscode.TextDocument, call: PbCall, hasIcons: boolean): string {
+  const indent = getLineIndent(document, call.range.line);
+  const createName = hasIcons ? "CreateImageMenu" : "CreateMenu";
+  return `${indent}${createName}(${call.args})`;
+}
+
+function applyMenuCreateModePatch(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  menuId: string,
+  hasIcons: boolean
+): void {
+  if (!hasIcons) return;
+
+  const create = findCreateCallById(calls, PB_CALL.createMenu, menuId);
+  if (!create) return;
+  if (create.name === "CreateImageMenu") return;
+
+  appendWorkspaceEdit(edit, replaceCallLinePreserveSuffix(document, create, buildMenuCreateLine(document, create, true)));
 }
 
 function buildToolBarImageButtonLine(args: ToolBarEntryArgs): string {
@@ -683,7 +714,7 @@ function findToolBarToolTipCall(
 // Helpers for window id / pbAny patching
 // -----------------------------------------------------------------------------
 
-type LineBlock = { startLine: number; endLine: number };
+type LineBlock = ProcedureLineBlock;
 
 function findNamedEnumerationBlock(document: vscode.TextDocument, enumName: string): LineBlock | undefined {
   const startRe = new RegExp(`^\\s*Enumeration\\s+${enumName}\\b`, "i");
@@ -795,63 +826,56 @@ function ensureWindowEnumeration(edit: vscode.WorkspaceEdit, document: vscode.Te
   edit.insert(document.uri, new vscode.Position(anchor, 0), blockText);
 }
 
-function findProcedureBlock(document: vscode.TextDocument, line: number): LineBlock | undefined {
-  let startLine: number | undefined;
-  for (let i = line; i >= 0; i--) {
-    const t = document.lineAt(i).text;
-    if (/^\s*EndProcedure\b/i.test(t)) break;
-    if (/^\s*Procedure\b/i.test(t)) {
-      startLine = i;
-      break;
-    }
-  }
-  if (startLine === undefined) return undefined;
-  for (let i = line; i < document.lineCount; i++) {
-    const t = document.lineAt(i).text;
-    if (/^\s*EndProcedure\b/i.test(t)) {
-      return { startLine, endLine: i };
-    }
-  }
-  return undefined;
-}
+function getDocumentLines(document: vscode.TextDocument): string[] {
+  const lines: string[] = [];
 
-function parseProcedureName(line: string): { name: string; nameStart: number; nameEnd: number } | undefined {
-  // Matches: Procedure xxx(...), Procedure.i xxx(...), Procedure.s xxx(...)
-  const m = /^\s*Procedure(?:\.\w+)?\s+([A-Za-z_]\w*)\s*\(/.exec(line);
-  if (!m) return undefined;
-
-  const name = m[1];
-  const idx = line.indexOf(name);
-  if (idx < 0) return undefined;
-
-  return { name, nameStart: idx, nameEnd: idx + name.length };
-}
-
-function findProcedureBlockByName(document: vscode.TextDocument, procName: string): LineBlock | undefined {
   for (let i = 0; i < document.lineCount; i++) {
-    const parsed = parseProcedureName(document.lineAt(i).text);
-    if (!parsed || parsed.name !== procName) continue;
-    return findProcedureBlock(document, i);
+    lines.push(document.lineAt(i).text);
   }
 
-  return undefined;
+  return lines;
+}
+
+function findProcedureBlock(document: vscode.TextDocument, line: number) {
+  return findProcedureBlockInLines(getDocumentLines(document), line);
+}
+
+function findProcedureBlockByName(document: vscode.TextDocument, procName: string) {
+  return findProcedureBlockByNameInLines(getDocumentLines(document), procName);
 }
 
 function resolveWindowEventProcedureBlock(
   document: vscode.TextDocument,
   window: FormWindow,
   openCallLine: number
-): { openProc: LineBlock; eventProc: LineBlock; usesSeparateEventProc: boolean } | undefined {
+ ): { openProc: LineBlock; eventProc: LineBlock } | undefined {
   const openProc = findProcedureBlock(document, openCallLine);
   if (!openProc) return undefined;
 
   const eventProcName = `${window.variable}_Events`;
   const separateProc = findProcedureBlockByName(document, eventProcName);
   if (separateProc) {
-    return { openProc, eventProc: separateProc, usesSeparateEventProc: true };
+    return { openProc, eventProc: separateProc };
   }
 
-  return { openProc, eventProc: openProc, usesSeparateEventProc: false };
+  return undefined;
+}
+
+function resolveWindowEventBootstrapContext(
+  document: vscode.TextDocument,
+  window: FormWindow,
+  openCallLine: number
+): { openProc: LineBlock; eventProc?: LineBlock } | undefined {
+  const openProc = findProcedureBlock(document, openCallLine);
+  if (!openProc) return undefined;
+
+  const eventProcName = `${window.variable}_Events`;
+  const eventProc = findProcedureBlockByName(document, eventProcName);
+  return { openProc, eventProc };
+}
+
+function hasUnsupportedInlineWindowEventBlocks(document: vscode.TextDocument, openProc: LineBlock): boolean {
+  return Boolean(findWindowEventMenuBlock(document, openProc) || findWindowEventGadgetBlock(document, openProc));
 }
 
 function replaceWordInRange(
@@ -1068,7 +1092,7 @@ export function applyMovePatch(
   const customGadget = parsed.gadgets.find(entry => entry.id === gadgetKey && entry.kind === GADGET_KIND.CustomGadget);
   if (customGadget) {
     const nextGadget: Gadget = { ...customGadget, x: Math.trunc(x), y: Math.trunc(y) };
-    return applyCustomGadgetCreationLineEdit(document, nextGadget);
+    return applyCustomGadgetCreationLineEdit(document, nextGadget, parsed.window);
   }
 
   const calls = scanDocumentCalls(document, scanRange);
@@ -1107,7 +1131,7 @@ export function applyRectPatch(
       w: Math.trunc(w),
       h: Math.trunc(h)
     };
-    return applyCustomGadgetCreationLineEdit(document, nextGadget);
+    return applyCustomGadgetCreationLineEdit(document, nextGadget, parsed.window);
   }
 
   const calls = scanDocumentCalls(document, scanRange);
@@ -1174,6 +1198,234 @@ export function applyResizeGadgetRawUpdate(
   params[4] = hRaw;
 
   return replaceCallArgsEdit(document, call, params);
+}
+
+function findResizeDeclareLine(document: vscode.TextDocument, procName: string): number | undefined {
+  const re = new RegExp(`^\\s*Declare\\s+${escapeRegExp(procName)}\\s*\\(\\s*\\)\\s*$`, "i");
+  for (let i = 0; i < document.lineCount; i++) {
+    if (re.test(document.lineAt(i).text)) return i;
+  }
+  return undefined;
+}
+
+function findResizeDeclareInsertLine(document: vscode.TextDocument): number {
+  for (let i = 0; i < document.lineCount; i++) {
+    const trimmed = document.lineAt(i).text.trim();
+    if (/^Declare\b/i.test(trimmed) || /^XIncludeFile\b/i.test(trimmed) || /^Procedure(?:\.\w+)?\b/i.test(trimmed)) {
+      return i;
+    }
+  }
+  return document.lineCount;
+}
+
+function buildResizeGadgetCallLine(gadget: Gadget, args: GadgetResizeRawArgs): string | undefined {
+  const firstParam = gadget.pbAny ? gadget.id?.trim() : gadget.firstParam?.trim();
+  const xRaw = normalizeOptionalRaw(args.xRaw);
+  const yRaw = normalizeOptionalRaw(args.yRaw);
+  const wRaw = normalizeOptionalRaw(args.wRaw);
+  const hRaw = normalizeOptionalRaw(args.hRaw);
+  if (!firstParam || !xRaw || !yRaw || !wRaw || !hRaw) return undefined;
+  return `  ResizeGadget(${firstParam}, ${xRaw}, ${yRaw}, ${wRaw}, ${hRaw})`;
+}
+
+function buildResizeProcedureBlock(procName: string, windowRef: string, resizeLine: string): string {
+  return `Procedure ${procName}()
+  Protected FormWindowWidth, FormWindowHeight
+  FormWindowWidth = WindowWidth(${windowRef})
+  FormWindowHeight = WindowHeight(${windowRef})
+${resizeLine}
+EndProcedure
+
+`;
+}
+
+function ensureResizeProcedureDeclare(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  procName: string
+): void {
+  if (findResizeDeclareLine(document, procName) !== undefined) return;
+
+  const insertLine = findResizeDeclareInsertLine(document);
+  const nextTrimmed = insertLine < document.lineCount ? document.lineAt(insertLine).text.trim() : "";
+  const suffix = /^Procedure(?:\.\w+)?\b/i.test(nextTrimmed) ? "\n\n" : "\n";
+  edit.insert(document.uri, new vscode.Position(insertLine, 0), `Declare ${procName}()${suffix}`);
+}
+
+function ensureResizeProcedureBlock(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  window: FormWindow,
+  gadget: Gadget,
+  args: GadgetResizeRawArgs,
+  procName: string
+): void {
+  const resizeLine = buildResizeGadgetCallLine(gadget, args);
+  if (!resizeLine) return;
+
+  const existingProc = findProcedureBlockByName(document, procName);
+  if (existingProc) {
+    const existingResizeCalls = calls.filter(c => c.name === "ResizeGadget" && c.range.line >= existingProc.startLine && c.range.line <= existingProc.endLine);
+    const insertLine = existingResizeCalls.length
+      ? existingResizeCalls[existingResizeCalls.length - 1].range.line + 1
+      : existingProc.endLine;
+    edit.insert(document.uri, new vscode.Position(insertLine, 0), `${resizeLine}\n`);
+    return;
+  }
+
+  const windowRef = window.pbAny ? (window.id?.trim() ?? "") : window.firstParam.trim();
+  if (!windowRef) return;
+
+  const openCall = findCallByStableKey(calls, window.id, name => name === "OpenWindow");
+  if (!openCall) return;
+  const openProc = findProcedureBlock(document, openCall.range.line);
+  if (!openProc) return;
+
+  const insertLine = skipBlankLines(document, openProc.endLine + 1);
+  edit.insert(document.uri, new vscode.Position(insertLine, 0), `\n${buildResizeProcedureBlock(procName, windowRef, resizeLine)}`);
+}
+
+function ensureResizeEventCase(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  window: FormWindow,
+  calls: PbCall[],
+  procName: string
+): void {
+  const openCall = findCallByStableKey(calls, window.id, name => name === "OpenWindow");
+  if (!openCall) return;
+
+  const context = resolveWindowEventProcedureBlock(document, window, openCall.range.line);
+  if (!context) return;
+
+  const block = findWindowEventSelectBlock(document, context.eventProc);
+  // Match the original Form Designer output: ResizeGadgets...() is generated independently,
+  // but the SizeWindow hook is emitted only when a window event Select block already exists.
+  if (!block) return;
+
+  const procCall = `${procName}()`;
+  const sizeBranch = findEventCaseBranch(document, { startLine: block.selectLine, endLine: block.endLine }, caseRaw => caseRaw.trim().toLowerCase() === "#pb_event_sizewindow");
+  if (sizeBranch?.procLine !== undefined) {
+    appendWorkspaceEdit(edit, replaceEventProcLine(document, sizeBranch.procLine, procCall));
+    return;
+  }
+  if (sizeBranch) {
+    appendWorkspaceEdit(edit, insertEventProcLineAfterCase(document, sizeBranch.caseLine, procCall));
+    return;
+  }
+
+  let insertLine = block.endLine;
+  let firstCaseLine: number | undefined;
+  for (let i = block.selectLine + 1; i < block.endLine; i++) {
+    const line = document.lineAt(i).text.split(";")[0]?.trim() ?? "";
+    if (/^Case\b/i.test(line)) {
+      firstCaseLine = i;
+      break;
+    }
+  }
+  if (typeof firstCaseLine === "number") {
+    insertLine = firstCaseLine;
+  }
+
+  appendWorkspaceEdit(edit, insertEventCaseBranch(document, insertLine, block.selectLine, "#PB_Event_SizeWindow", procCall));
+}
+
+function cleanupResizeScaffoldingIfEmpty(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  window: FormWindow,
+  calls: PbCall[],
+  removedCallLine: number,
+  procName: string
+): void {
+  const remainingResizeCalls = calls.filter(c => c.name === "ResizeGadget" && c.range.line !== removedCallLine);
+  if (remainingResizeCalls.length > 0) return;
+
+  const declareLine = findResizeDeclareLine(document, procName);
+  if (declareLine !== undefined) {
+    const deleteStart = declareLine > 0 && isBlankLine(document, declareLine - 1) && declareLine + 1 < document.lineCount && isBlankLine(document, declareLine + 1)
+      ? declareLine - 1
+      : declareLine;
+    edit.delete(
+      document.uri,
+      new vscode.Range(
+        new vscode.Position(deleteStart, 0),
+        document.lineAt(declareLine).rangeIncludingLineBreak.end
+      )
+    );
+  }
+
+  const procBlock = findProcedureBlockByName(document, procName);
+  if (procBlock) {
+    const deleteStart = procBlock.startLine > 0 && isBlankLine(document, procBlock.startLine - 1)
+      ? procBlock.startLine - 1
+      : procBlock.startLine;
+    edit.delete(
+      document.uri,
+      new vscode.Range(
+        new vscode.Position(deleteStart, 0),
+        new vscode.Position(procBlock.endLine + 1, 0)
+      )
+    );
+  }
+
+  const openCall = findCallByStableKey(calls, window.id, name => name === "OpenWindow");
+  if (!openCall) return;
+
+  const context = resolveWindowEventProcedureBlock(document, window, openCall.range.line);
+  if (!context) return;
+
+  const block = findWindowEventSelectBlock(document, context.eventProc);
+  if (!block) return;
+
+  const sizeBranch = findEventCaseBranch(document, { startLine: block.selectLine, endLine: block.endLine }, caseRaw => caseRaw.trim().toLowerCase() === "#pb_event_sizewindow");
+  if (sizeBranch) {
+    appendWorkspaceEdit(edit, deleteEventCaseBranch(document, sizeBranch));
+  }
+}
+
+export function applyResizeGadgetMutation(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  args: GadgetResizeRawArgs & { deleteResize?: boolean },
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const gadget = parsed.gadgets.find(entry => entry.id === gadgetKey);
+  const window = parsed.window;
+  if (!gadget || !window?.variable) return undefined;
+
+  const procName = buildResizeProcName(window.variable);
+  const calls = scanDocumentCalls(document, scanRange);
+  const existingCall = findCallByStableKey(calls, gadgetKey, name => name === "ResizeGadget");
+
+  if (args.deleteResize) {
+    if (!existingCall) return undefined;
+    const remainingResizeCalls = calls.filter(c => c.name === "ResizeGadget" && c.range.line !== existingCall.range.line);
+    const edit = remainingResizeCalls.length > 0
+      ? applyResizeGadgetDelete(document, gadgetKey, scanRange)
+      : new vscode.WorkspaceEdit();
+    if (!edit) return undefined;
+    if (remainingResizeCalls.length > 0) {
+      return edit;
+    }
+    cleanupResizeScaffoldingIfEmpty(edit, document, window, calls, existingCall.range.line, procName);
+    return edit;
+  }
+
+  if (existingCall) {
+    return applyResizeGadgetRawUpdate(document, gadgetKey, args, scanRange);
+  }
+
+  const resizeLine = buildResizeGadgetCallLine(gadget, args);
+  if (!resizeLine) return undefined;
+
+  const edit = new vscode.WorkspaceEdit();
+  ensureResizeProcedureDeclare(edit, document, procName);
+  ensureResizeProcedureBlock(edit, document, calls, window, gadget, args, procName);
+  ensureResizeEventCase(edit, document, window, calls, procName);
+  return edit;
 }
 
 export function applyWindowRectPatch(
@@ -2105,11 +2357,30 @@ function buildCustomGadgetTextReplacement(gadget: Gadget): string {
   return '""';
 }
 
-function buildCustomGadgetCreationLine(gadget: Gadget, indent: string): string | undefined {
+function buildCustomGadgetWindowHandle(window: FormWindow | undefined, mode: 'hWnd' | 'WndID'): string | undefined {
+  if (!window) return undefined;
+
+  const windowRef = window.pbAny
+    ? window.variable?.trim() || window.id?.trim()
+    : window.firstParam?.trim() || window.id?.trim();
+  if (!windowRef) return undefined;
+
+  return mode === 'hWnd'
+    ? `WindowID(${windowRef})`
+    : `${windowRef}`;
+}
+
+function buildCustomGadgetCreationLine(
+  gadget: Gadget,
+  indent: string,
+  window: FormWindow | undefined
+): string | undefined {
   const templateRaw = normalizeOptionalGridString(gadget.customCreateRaw);
   if (!templateRaw) return undefined;
 
   const idRaw = buildCustomGadgetIdRaw(gadget);
+  const hwndRaw = buildCustomGadgetWindowHandle(window, 'hWnd') ?? '0';
+  const hwndIdRaw = buildCustomGadgetWindowHandle(window, 'WndID') ?? '0';
   const replacements: Record<string, string> = {
     "%id%": idRaw,
     "%x%": String(Math.trunc(gadget.x)),
@@ -2117,7 +2388,8 @@ function buildCustomGadgetCreationLine(gadget: Gadget, indent: string): string |
     "%w%": String(Math.trunc(gadget.w)),
     "%h%": String(Math.trunc(gadget.h)),
     "%txt%": buildCustomGadgetTextReplacement(gadget),
-    "%hwnd%": idRaw
+    "%hwnd%": hwndRaw,
+    "%wndid%": hwndIdRaw,
   };
 
   let line = templateRaw;
@@ -2130,14 +2402,15 @@ function buildCustomGadgetCreationLine(gadget: Gadget, indent: string): string |
 
 function applyCustomGadgetCreationLineEdit(
   document: vscode.TextDocument,
-  gadget: Gadget
+  gadget: Gadget,
+  window: FormWindow | undefined
 ): vscode.WorkspaceEdit | undefined {
   if (!gadget.source) return undefined;
 
   const line = gadget.source.line;
   if (line < 0 || line >= document.lineCount) return undefined;
 
-  const rebuilt = buildCustomGadgetCreationLine(gadget, getLineIndent(document, line));
+  const rebuilt = buildCustomGadgetCreationLine(gadget, getLineIndent(document, line), window);
   if (!rebuilt) return undefined;
 
   const edit = new vscode.WorkspaceEdit();
@@ -2171,12 +2444,12 @@ export function applyGadgetOpenArgsUpdate(
     const nextGadget: Gadget = { ...customGadget };
     if (args.textRaw !== undefined) {
       const nextTextRaw = normalizeOptionalRaw(args.textRaw) ?? '""';
-      const literalText = unquoteString(nextTextRaw);
+      const literalText = parsePbStringLiteral(nextTextRaw);
       nextGadget.textRaw = nextTextRaw;
       nextGadget.text = literalText ?? nextTextRaw;
       nextGadget.textVariable = literalText === undefined && nextTextRaw.length > 0;
     }
-    return applyCustomGadgetCreationLineEdit(document, nextGadget);
+    return applyCustomGadgetCreationLineEdit(document, nextGadget, parsed.window);
   }
 
   const calls = scanDocumentCalls(document, scanRange);
@@ -2268,7 +2541,7 @@ export function applyCustomGadgetCodeUpdate(
       `${markerIndent}; ${markerIndex} Custom gadget creation (do not remove this line) ${nextGadget.customCreateRaw}`
     );
 
-    const rebuiltLine = buildCustomGadgetCreationLine(nextGadget, getLineIndent(document, gadget.source.line));
+    const rebuiltLine = buildCustomGadgetCreationLine(nextGadget, getLineIndent(document, gadget.source.line), parsed.window);
     if (!rebuiltLine) return undefined;
     edit.replace(document.uri, document.lineAt(gadget.source.line).range, rebuiltLine);
     changed = true;
@@ -3444,7 +3717,7 @@ function findWindowEventSelectBlock(document: vscode.TextDocument, proc: LineBlo
 }
 
 function findWindowDefaultHandlerBlock(document: vscode.TextDocument, proc: LineBlock): WindowEventProcBlock | undefined {
-  return findWindowEventSelectBlock(document, proc) ?? findWindowEventGadgetBlock(document, proc);
+  return findWindowEventSelectBlock(document, proc);
 }
 
 function blockHasCaseBranches(document: vscode.TextDocument, block: LineBlock): boolean {
@@ -3473,17 +3746,161 @@ function blockHasCaseBranches(document: vscode.TextDocument, block: LineBlock): 
   return false;
 }
 
-function buildWindowEventProcCall(window: FormWindow, procName: string, usesSeparateEventProc: boolean): string {
-  return usesSeparateEventProc ? `${procName}(event, ${window.id})` : `${procName}()`;
+function buildWindowEventProcCall(window: FormWindow, procName: string): string {
+  return `${procName}(event, ${window.id})`;
 }
 
-function buildGadgetEventProcCall(procName: string, usesSeparateEventProc: boolean): string {
-  return usesSeparateEventProc ? `${procName}(EventType())` : `${procName}()`;
+function buildGadgetEventProcCall(procName: string): string {
+  return `${procName}(EventType())`;
 }
 
-function buildMenuEventProcCall(procName: string, usesSeparateEventProc: boolean): string {
-  return usesSeparateEventProc ? `${procName}(EventMenu())` : `${procName}()`;
+function buildMenuEventProcCall(procName: string): string {
+  return `${procName}(EventMenu())`;
 }
+
+type EventBinding = {
+  caseRaw: string;
+  procName: string;
+};
+
+function collectMenuEventBindings(
+  parsed: ReturnType<typeof parseFormDocument>,
+  override?: { entryIdRaw: string; eventProc?: string }
+): EventBinding[] {
+  const bindings: EventBinding[] = [];
+
+  const pushEntry = (entryIdRaw: string | undefined, eventProc: string | undefined) => {
+    if (!entryIdRaw) return;
+    const rawProc = override && override.entryIdRaw === entryIdRaw ? override.eventProc : eventProc;
+    const normalizedProc = normalizeOptionalRaw(rawProc);
+    if (!normalizedProc) return;
+    bindings.push({ caseRaw: entryIdRaw, procName: normalizedProc });
+  };
+
+  for (const entry of parsed.menus.flatMap(menu => menu.entries)) {
+    pushEntry(entry.idRaw, entry.event);
+  }
+
+  for (const entry of parsed.toolbars.flatMap(toolBar => toolBar.entries)) {
+    pushEntry(entry.idRaw, entry.event);
+  }
+
+  return bindings;
+}
+
+function collectGadgetEventBindings(
+  parsed: ReturnType<typeof parseFormDocument>,
+  override?: { gadgetKey: string; eventProc?: string }
+): EventBinding[] {
+  const bindings: EventBinding[] = [];
+
+  for (const gadget of parsed.gadgets) {
+    const rawProc = override && override.gadgetKey === gadget.id ? override.eventProc : gadget.eventProc;
+    const normalizedProc = normalizeOptionalGridString(rawProc);
+    if (!normalizedProc) continue;
+    bindings.push({ caseRaw: gadget.id, procName: normalizedProc });
+  }
+
+  return bindings;
+}
+
+function buildSeparateWindowEventsProcedure(
+  document: vscode.TextDocument,
+  window: FormWindow,
+  options: {
+    windowEventProc?: string;
+    gadgetBindings?: EventBinding[];
+    menuBindings?: EventBinding[];
+    includeSizeWindow?: boolean;
+  }
+): string {
+  const base = window.variable ?? windowBaseFromSymbol(window.id);
+  const eventProcName = buildEventsProcName(base);
+  const resizeProcName = buildResizeProcName(base);
+  const includeSizeWindow = options.includeSizeWindow ?? !!findProcedureBlockByName(document, resizeProcName);
+  const menuBindings = options.menuBindings ?? [];
+  const gadgetBindings = options.gadgetBindings ?? [];
+  const windowEventProc = normalizeOptionalGridString(options.windowEventProc);
+  const lines: string[] = [
+    `Procedure ${eventProcName}(event)`,
+    `  Select event`,
+  ];
+
+  if (includeSizeWindow) {
+    lines.push(
+      `    Case #PB_Event_SizeWindow`,
+      `      ${resizeProcName}()`
+    );
+  }
+
+  lines.push(
+    `    Case #PB_Event_CloseWindow`,
+    `      ProcedureReturn #False`,
+    ``,
+    `    Case #PB_Event_Menu`,
+    `      Select EventMenu()`
+  );
+
+  for (const binding of menuBindings) {
+    lines.push(
+      `        Case ${binding.caseRaw}`,
+      `          ${buildMenuEventProcCall(binding.procName)}`
+    );
+  }
+
+  lines.push(
+    `      EndSelect`,
+    ``,
+    `    Case #PB_Event_Gadget`,
+    `      Select EventGadget()`
+  );
+
+  for (const binding of gadgetBindings) {
+    lines.push(
+      `        Case ${binding.caseRaw}`,
+      `          ${buildGadgetEventProcCall(binding.procName)}`
+    );
+  }
+
+  lines.push(`      EndSelect`);
+
+  if (windowEventProc) {
+    lines.push(
+      `    Default`,
+      `      ${buildWindowEventProcCall(window, windowEventProc)}`
+    );
+  }
+
+  lines.push(
+    `  EndSelect`,
+    `  ProcedureReturn #True`,
+    `EndProcedure`,
+    ``
+  );
+
+  return `${lines.join("\n")}\n`;
+}
+
+function insertSeparateWindowEventsProcedure(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  openProc: LineBlock,
+  procedureText: string
+): void {
+  let insertLine = openProc.endLine + 1;
+  let hasBlankSeparator = false;
+
+  while (insertLine < document.lineCount && document.lineAt(insertLine).text.trim() === "") {
+    hasBlankSeparator = true;
+    insertLine++;
+  }
+
+  const text = hasBlankSeparator ? procedureText : `
+
+${procedureText}`;
+  edit.insert(document.uri, new vscode.Position(insertLine, 0), text);
+}
+
 
 export function applyWindowEventUpdate(
   document: vscode.TextDocument,
@@ -3537,30 +3954,16 @@ export function applyWindowGenerateEventLoopUpdate(
   const openCall = findCallByStableKey(calls, windowKey, name => name === "OpenWindow");
   if (!openCall) return undefined;
 
-  const context = resolveWindowEventProcedureBlock(document, window, openCall.range.line);
+  const context = resolveWindowEventBootstrapContext(document, window, openCall.range.line);
   if (!context) return undefined;
 
-  const eventGadgetBlock = findWindowEventGadgetBlock(document, context.eventProc);
-  const eventMenuBlock = findWindowEventMenuBlock(document, context.eventProc);
+  if (!enabled) {
+    if (!context.eventProc) return undefined;
 
-  if (enabled) {
-    if (eventGadgetBlock || eventMenuBlock || context.usesSeparateEventProc) return undefined;
+    const eventGadgetBlock = findWindowEventGadgetBlock(document, context.eventProc);
+    const eventMenuBlock = findWindowEventMenuBlock(document, context.eventProc);
+    if (!eventGadgetBlock && !eventMenuBlock) return undefined;
 
-    const bodyIndent = getLineIndent(document, openCall.range.line);
-    const edit = new vscode.WorkspaceEdit();
-    edit.insert(
-      document.uri,
-      new vscode.Position(context.openProc.endLine, 0),
-      `${bodyIndent}Select EventGadget()
-${bodyIndent}EndSelect
-`
-    );
-    return edit;
-  }
-
-  if (!eventGadgetBlock && !eventMenuBlock) return undefined;
-
-  if (context.usesSeparateEventProc) {
     const menuHasCases = eventMenuBlock ? blockHasCaseBranches(document, eventMenuBlock) : false;
     const gadgetHasCases = eventGadgetBlock?.hasCaseBranches ?? false;
     if (menuHasCases || gadgetHasCases) return undefined;
@@ -3576,17 +3979,36 @@ ${bodyIndent}EndSelect
     return edit;
   }
 
-  if (eventMenuBlock) return undefined;
-  if (!eventGadgetBlock) return undefined;
-  if (eventGadgetBlock.hasCaseBranches) return undefined;
+  if (context.eventProc) {
+    const eventGadgetBlock = findWindowEventGadgetBlock(document, context.eventProc);
+    const eventMenuBlock = findWindowEventMenuBlock(document, context.eventProc);
+    if (eventGadgetBlock || eventMenuBlock) return undefined;
+  }
 
   const edit = new vscode.WorkspaceEdit();
-  edit.delete(
+  if (!context.eventProc) {
+    if (hasUnsupportedInlineWindowEventBlocks(document, context.openProc)) return undefined;
+    const procedureText = buildSeparateWindowEventsProcedure(document, window, {
+      windowEventProc: parsed.window?.eventProc,
+      menuBindings: collectMenuEventBindings(parsed),
+      gadgetBindings: collectGadgetEventBindings(parsed),
+    });
+    insertSeparateWindowEventsProcedure(edit, document, context.openProc, procedureText);
+    return edit;
+  }
+
+  const procedureText = buildSeparateWindowEventsProcedure(document, window, {
+    windowEventProc: parsed.window?.eventProc,
+    menuBindings: collectMenuEventBindings(parsed),
+    gadgetBindings: collectGadgetEventBindings(parsed),
+  });
+  edit.replace(
     document.uri,
     new vscode.Range(
-      new vscode.Position(eventGadgetBlock.selectLine, 0),
-      new vscode.Position(eventGadgetBlock.endLine + 1, 0)
-    )
+      new vscode.Position(context.eventProc.startLine, 0),
+      new vscode.Position(context.eventProc.endLine + 1, 0)
+    ),
+    procedureText
   );
   return edit;
 }
@@ -3605,20 +4027,37 @@ export function applyWindowEventProcUpdate(
   const openCall = findCallByStableKey(calls, windowKey, name => name === "OpenWindow");
   if (!openCall) return undefined;
 
-  const context = resolveWindowEventProcedureBlock(document, window, openCall.range.line);
+  const context = resolveWindowEventBootstrapContext(document, window, openCall.range.line);
   if (!context) return undefined;
+
+  const normalizedEventProc = normalizeOptionalGridString(eventProc);
+  if (!context.eventProc) {
+    if (!normalizedEventProc) return undefined;
+    if (hasUnsupportedInlineWindowEventBlocks(document, context.openProc)) return undefined;
+
+    const edit = new vscode.WorkspaceEdit();
+    const procedureText = buildSeparateWindowEventsProcedure(document, window, {
+      windowEventProc: normalizedEventProc,
+      menuBindings: collectMenuEventBindings(parsed),
+      gadgetBindings: collectGadgetEventBindings(parsed),
+    });
+    insertSeparateWindowEventsProcedure(edit, document, context.openProc, procedureText);
+    return edit;
+  }
 
   const block = findWindowDefaultHandlerBlock(document, context.eventProc);
   if (!block) return undefined;
 
-  const normalizedEventProc = normalizeOptionalGridString(eventProc);
   const procCall = normalizedEventProc
-    ? buildWindowEventProcCall(window, normalizedEventProc, context.usesSeparateEventProc)
+    ? buildWindowEventProcCall(window, normalizedEventProc)
     : undefined;
   const edit = new vscode.WorkspaceEdit();
 
   if (block.procLine !== undefined) {
     if (!procCall) {
+      if (block.defaultLine !== undefined) {
+        edit.delete(document.uri, document.lineAt(block.defaultLine).rangeIncludingLineBreak);
+      }
       edit.delete(document.uri, document.lineAt(block.procLine).rangeIncludingLineBreak);
       return edit;
     }
@@ -3664,17 +4103,31 @@ export function applyGadgetEventProcUpdate(
   const openCall = findCallByStableKey(calls, window.id, (name) => name === "OpenWindow");
   if (!openCall) return undefined;
 
-  const context = resolveWindowEventProcedureBlock(document, window, openCall.range.line);
+  const context = resolveWindowEventBootstrapContext(document, window, openCall.range.line);
   if (!context) return undefined;
+
+  const normalizedEventProc = normalizeOptionalGridString(eventProc);
+  if (!context.eventProc) {
+    if (!normalizedEventProc) return undefined;
+    if (hasUnsupportedInlineWindowEventBlocks(document, context.openProc)) return undefined;
+
+    const edit = new vscode.WorkspaceEdit();
+    const procedureText = buildSeparateWindowEventsProcedure(document, window, {
+      windowEventProc: parsed.window?.eventProc,
+      menuBindings: collectMenuEventBindings(parsed),
+      gadgetBindings: collectGadgetEventBindings(parsed, { gadgetKey, eventProc: normalizedEventProc }),
+    });
+    insertSeparateWindowEventsProcedure(edit, document, context.openProc, procedureText);
+    return edit;
+  }
 
   const block = findWindowEventGadgetBlock(document, context.eventProc);
   if (!block) return undefined;
 
   const caseRaw = gadget.id;
   const branch = findEventCaseBranch(document, { startLine: block.selectLine, endLine: block.endLine }, (raw) => raw === caseRaw);
-  const normalizedEventProc = normalizeOptionalGridString(eventProc);
   const procCall = normalizedEventProc
-    ? buildGadgetEventProcCall(normalizedEventProc, context.usesSeparateEventProc)
+    ? buildGadgetEventProcCall(normalizedEventProc)
     : undefined;
 
   if (branch) {
@@ -3711,16 +4164,30 @@ export function applyMenuEntryEventUpdate(
   const openCall = findCallByStableKey(calls, window.id, (name) => name === "OpenWindow");
   if (!openCall) return undefined;
 
-  const context = resolveWindowEventProcedureBlock(document, window, openCall.range.line);
+  const context = resolveWindowEventBootstrapContext(document, window, openCall.range.line);
   if (!context) return undefined;
+
+  const normalizedEventProc = normalizeOptionalRaw(eventProc);
+  if (!context.eventProc) {
+    if (!normalizedEventProc) return undefined;
+    if (hasUnsupportedInlineWindowEventBlocks(document, context.openProc)) return undefined;
+
+    const edit = new vscode.WorkspaceEdit();
+    const procedureText = buildSeparateWindowEventsProcedure(document, window, {
+      windowEventProc: parsed.window?.eventProc,
+      menuBindings: collectMenuEventBindings(parsed, { entryIdRaw, eventProc: normalizedEventProc }),
+      gadgetBindings: collectGadgetEventBindings(parsed),
+    });
+    insertSeparateWindowEventsProcedure(edit, document, context.openProc, procedureText);
+    return edit;
+  }
 
   const block = findWindowEventMenuBlock(document, context.eventProc);
   if (!block) return undefined;
 
   const branch = findEventCaseBranch(document, block, (raw) => raw === entryIdRaw);
-  const normalizedEventProc = normalizeOptionalRaw(eventProc);
   const procCall = normalizedEventProc
-    ? buildMenuEventProcCall(normalizedEventProc, context.usesSeparateEventProc)
+    ? buildMenuEventProcCall(normalizedEventProc)
     : undefined;
 
   if (branch) {
@@ -3756,16 +4223,30 @@ export function applyToolBarEntryEventUpdate(
   const openCall = findCallByStableKey(calls, window.id, (name) => name === "OpenWindow");
   if (!openCall) return undefined;
 
-  const context = resolveWindowEventProcedureBlock(document, window, openCall.range.line);
+  const context = resolveWindowEventBootstrapContext(document, window, openCall.range.line);
   if (!context) return undefined;
+
+  const normalizedEventProc = normalizeOptionalRaw(eventProc);
+  if (!context.eventProc) {
+    if (!normalizedEventProc) return undefined;
+    if (hasUnsupportedInlineWindowEventBlocks(document, context.openProc)) return undefined;
+
+    const edit = new vscode.WorkspaceEdit();
+    const procedureText = buildSeparateWindowEventsProcedure(document, window, {
+      windowEventProc: parsed.window?.eventProc,
+      menuBindings: collectMenuEventBindings(parsed, { entryIdRaw, eventProc: normalizedEventProc }),
+      gadgetBindings: collectGadgetEventBindings(parsed),
+    });
+    insertSeparateWindowEventsProcedure(edit, document, context.openProc, procedureText);
+    return edit;
+  }
 
   const block = findWindowEventMenuBlock(document, context.eventProc);
   if (!block) return undefined;
 
   const branch = findEventCaseBranch(document, block, (raw) => raw === entryIdRaw);
-  const normalizedEventProc = normalizeOptionalRaw(eventProc);
   const procCall = normalizedEventProc
-    ? buildMenuEventProcCall(normalizedEventProc, context.usesSeparateEventProc)
+    ? buildMenuEventProcCall(normalizedEventProc)
     : undefined;
 
   if (branch) {
@@ -3988,11 +4469,11 @@ function buildImageLine(args: ImageArgs): string {
   if (idRaw === PB_ANY) {
     const assignedVar = args.assignedVar?.trim();
     if (assignedVar) {
-      return `${assignedVar} = ${procName}(${PB_ANY}, ${imageRaw})`;
+      return `${assignedVar} = ${procName}(${PB_ANY},${imageRaw})`;
     }
   }
 
-  return `${procName}(${idRaw}, ${imageRaw})`;
+  return `${procName}(${idRaw},${imageRaw})`;
 }
 
 function buildFontLine(args: FontArgs): string {
@@ -4032,7 +4513,7 @@ function mapFontArgsToFont(args: FontArgs): FormFont {
   const assignedVar = args.assignedVar?.trim();
   const nameRaw = args.nameRaw.trim();
   const sizeRaw = args.sizeRaw.trim();
-  const name = unquoteString(nameRaw) ?? undefined;
+  const name = parsePbStringLiteral(nameRaw) ?? undefined;
   const size = asNumber(sizeRaw);
 
   return {
@@ -4066,9 +4547,7 @@ function mapImageArgsToImage(args: ImageArgs): FormImage {
   const pbAny = firstParam === PB_ANY;
   const assignedVar = args.assignedVar?.trim();
   const imageRaw = args.imageRaw.trim();
-  const normalized = args.inline
-    ? imageRaw.replace(/^\?+/, "").trim() || undefined
-    : (imageRaw.match(/^~?"([\s\S]*)"$/)?.[1]?.replace(/""/g, '"') ?? (imageRaw || undefined));
+  const normalized = normalizePbImageValue(imageRaw, args.inline);
 
   return {
     id: pbAny ? (assignedVar || PB_ANY) : firstParam,
@@ -4145,15 +4624,8 @@ function isTopLevelGlobalAnchorLine(text: string): boolean {
     || isTopLevelHeadBoundaryLine(text);
 }
 
-function getFirstProcedureLine(document: vscode.TextDocument): number {
-  for (let i = 0; i < document.lineCount; i++) {
-    if (/^\s*ProcedureDLL\b/i.test(document.lineAt(i).text) || /^\s*Procedure(?:\.\w+)?\b/i.test(document.lineAt(i).text)) return i;
-  }
-  return document.lineCount;
-}
-
 function findFontLoadCalls(calls: PbCall[], document: vscode.TextDocument): PbCall[] {
-  const firstProcedureLine = getFirstProcedureLine(document);
+  const firstProcedureLine = findFirstProcedureLine(getDocumentLines(document));
   return calls.filter(call => call.name === "LoadFont" && call.range.line < firstProcedureLine);
 }
 
@@ -4265,9 +4737,7 @@ function buildFontLoadBlock(fonts: FormFont[], indent: string): string {
     assignedVar: font.pbAny ? font.id : undefined,
   })}`);
 
-  return `${lines.join("\n")}
-
-`;
+  return `${lines.join("\n")}\n\n`;
 }
 
 function applyFontMutation(
@@ -4379,31 +4849,16 @@ function getImageEnumSymbols(images: FormImage[]): string[] {
     .filter(id => id.length > 0 && id.startsWith("#"));
 }
 
-function buildImageGlobalBlock(images: FormImage[]): string {
+function buildImageGlobalBlock(images: FormImage[], eol = "\n"): string {
   const globals = getImageGlobalVars(images);
   if (!globals.length) return "";
-  return `Global ${globals.join(", ")}
-
-`;
+  return `Global ${globals.join(", ")}${eol}${eol}`;
 }
 
-function buildImageEnumBlock(images: FormImage[]): string {
+function buildImageEnumBlock(images: FormImage[], eol = "\n"): string {
   const symbols = getImageEnumSymbols(images);
   if (!symbols.length) return "";
-  return `Enumeration ${ENUM_NAMES.images}
-${symbols.map(symbol => `  ${symbol}`).join("\n")}
-EndEnumeration
-
-`;
-}
-
-function parseGlobalVarNames(line: string): string[] {
-  const match = /^\s*Global\s+(.+?)\s*$/.exec(line);
-  if (!match) return [];
-  return match[1]
-    .split(",")
-    .map(part => part.trim())
-    .filter(Boolean);
+  return `Enumeration ${ENUM_NAMES.images}${eol}${symbols.map(symbol => `  ${symbol}`).join(eol)}${eol}EndEnumeration${eol}${eol}`;
 }
 
 function expandBlockWithTrailingBlank(document: vscode.TextDocument, block: LineBlock): LineBlock {
@@ -4534,10 +4989,50 @@ function findImageGlobalInsertLine(document: vscode.TextDocument): number {
   }
 
   if (lastGlobal >= 0) {
-    return skipBlankLines(document, lastGlobal + 1);
+    return lastGlobal + 1;
   }
 
   return firstAnchor;
+}
+
+
+function applyFreshImageGlobalInsert(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  insertLine: number,
+  rebuiltGlobalBlock: string
+): void {
+  if (!rebuiltGlobalBlock.length) return;
+
+  let hasGlobalAbove = false;
+  for (let i = 0; i < insertLine; i++) {
+    if (/^\s*Global\b/i.test(document.lineAt(i).text)) {
+      hasGlobalAbove = true;
+      break;
+    }
+  }
+
+  if (!hasGlobalAbove) {
+    edit.insert(document.uri, new vscode.Position(insertLine, 0), rebuiltGlobalBlock);
+    return;
+  }
+
+  let blankRunEnd = insertLine;
+  while (blankRunEnd < document.lineCount && document.lineAt(blankRunEnd).text.trim() === "") {
+    blankRunEnd += 1;
+  }
+
+  const insertText = `\n${rebuiltGlobalBlock}`;
+  if (insertLine < blankRunEnd) {
+    edit.replace(
+      document.uri,
+      new vscode.Range(new vscode.Position(insertLine, 0), new vscode.Position(blankRunEnd, 0)),
+      insertText
+    );
+    return;
+  }
+
+  edit.insert(document.uri, new vscode.Position(insertLine, 0), insertText);
 }
 
 function findImageEnumInsertLine(document: vscode.TextDocument, calls: PbCall[]): number {
@@ -4599,7 +5094,7 @@ function getHeadBlockReplaceEnd(document: vscode.TextDocument, lastLine: number)
   return document.lineAt(lastLine).rangeIncludingLineBreak.end;
 }
 
-function buildImageBlock(images: FormImage[], indent: string): string {
+function buildImageBlock(images: FormImage[], indent: string, eol = "\n"): string {
   if (!images.length) return "";
 
   const decoderLines = getRequiredImageDecoders(images).map(name => `${indent}${name}()`);
@@ -4615,8 +5110,7 @@ function buildImageBlock(images: FormImage[], indent: string): string {
     parts.push(...decoderLines, "");
   }
   parts.push(...imageLines, "");
-  return `${parts.join("\n")}
-`;
+  return `${parts.join(eol)}${eol}`;
 }
 
 function findImageInsertLine(document: vscode.TextDocument, calls: PbCall[]): number {
@@ -4729,22 +5223,28 @@ function applyImageMutation(
     ? imageCalls[0].range.line
     : (decoderLines.length ? decoderLines[0] : findImageBlockInsertLine(document, calls));
   const indent = document.lineCount ? getLineIndent(document, Math.min(anchorLine, document.lineCount - 1)) : "";
-  const rebuilt = buildImageBlock(nextImages, indent);
+  const eol = getDocumentEol(document);
+  const rebuilt = buildImageBlock(nextImages, indent, eol);
 
   const edit = new vscode.WorkspaceEdit();
 
   const imageGlobalBlock = findImageGlobalBlock(document, parsed.images);
-  const rebuiltGlobalBlock = buildImageGlobalBlock(nextImages);
-  applyOptionalBlockPatch(
-    edit,
-    document,
-    imageGlobalBlock,
-    findImageGlobalInsertLine(document),
-    rebuiltGlobalBlock
-  );
+  const rebuiltGlobalBlock = buildImageGlobalBlock(nextImages, eol);
+  const imageGlobalInsertLine = findImageGlobalInsertLine(document);
+  if (imageGlobalBlock) {
+    applyOptionalBlockPatch(
+      edit,
+      document,
+      imageGlobalBlock,
+      imageGlobalInsertLine,
+      rebuiltGlobalBlock
+    );
+  } else {
+    applyFreshImageGlobalInsert(edit, document, imageGlobalInsertLine, rebuiltGlobalBlock);
+  }
 
   const imageEnumBlock = findNamedEnumerationBlock(document, ENUM_NAMES.images);
-  const rebuiltEnumBlock = buildImageEnumBlock(nextImages);
+  const rebuiltEnumBlock = buildImageEnumBlock(nextImages, eol);
   const imageBlockInsertLine = findImageBlockInsertLine(document, calls);
   const imageEnumInsertLine = findImageEnumInsertLine(document, calls);
   const combineFreshEnumAndImageInsert = !imageCalls.length
@@ -4847,7 +5347,7 @@ function applySectionEntryInsert(
   const insertPos = new vscode.Position(Math.min(document.lineCount, insertAfterLine + 1), 0);
 
   const edit = new vscode.WorkspaceEdit();
-  edit.insert(document.uri, insertPos, line);
+  edit.insert(document.uri, insertPos, `${buildLine(indent)}${getDocumentEol(document)}`);
   return edit;
 }
 
@@ -5270,12 +5770,16 @@ export function applyMenuEntryInsert(
   if (!edit) return undefined;
 
   const idRaw = args.idRaw?.trim();
+  const parsed = parseFormDocument(document.getText());
+  const menu = parsed.menus.find(entry => entry.id === menuId);
   if (!menuEnumPatched && idRaw?.startsWith("#")) {
-    const parsed = parseFormDocument(document.getText());
     const symbols = collectMenuEnumSymbols(parsed.menus, parsed.toolbars);
     if (!symbols.includes(idRaw)) symbols.push(idRaw);
     applyMenuEnumPatch(edit, document, calls, symbols);
   }
+
+  const hasIcons = menu?.entries.some(entry => !!entry.iconRaw?.trim()) || !!args.iconRaw?.trim();
+  applyMenuCreateModePatch(edit, document, calls, menuId, hasIcons);
 
   return edit;
 }
@@ -5305,8 +5809,12 @@ export function applyMenuEntryUpdate(
   const target = menu?.entries.find(entry => entry.source?.line === sourceLine && entry.kind.toLowerCase() === args.kind.toLowerCase());
   if (target) {
     target.idRaw = args.idRaw;
+    target.iconRaw = args.iconRaw;
   }
   applyMenuEnumPatch(edit, document, calls, collectMenuEnumSymbols(menus, parsed.toolbars));
+  const nextMenu = menus.find(entry => entry.id === menuId);
+  const hasIcons = !!nextMenu?.entries.some(entry => !!entry.iconRaw?.trim());
+  applyMenuCreateModePatch(edit, document, calls, menuId, hasIcons);
   return edit;
 }
 
@@ -5338,6 +5846,8 @@ export function applyMenuEntryDelete(
     if (targetIndex >= 0) menu.entries.splice(targetIndex, 1);
   }
   applyMenuEnumPatch(edit, document, calls, collectMenuEnumSymbols(menus, parsed.toolbars));
+  const hasIcons = !!menu?.entries.some(entry => !!entry.iconRaw?.trim());
+  applyMenuCreateModePatch(edit, document, calls, menuId, hasIcons);
   return edit;
 }
 
@@ -5359,7 +5869,7 @@ export function applyMenuEntryMove(
 
   let insertLine: number | undefined;
 
-  if (options.placement === "appendChild") {
+  if (options.placement === MenuEntryMovePlacement.AppendChild) {
     const anchored = findAnchoredMenuEntryInsert(document, calls, menuId, options.targetSourceLine);
     if (!anchored) return undefined;
     insertLine = anchored.insertLine;
@@ -5376,7 +5886,7 @@ export function applyMenuEntryMove(
     );
     if (!targetRange) return undefined;
 
-    insertLine = options.placement === "before"
+    insertLine = options.placement === MenuEntryMovePlacement.Before
       ? targetRange.startLine
       : Math.min(document.lineCount, targetRange.endLine + 1);
   }
@@ -5765,7 +6275,7 @@ export function applyImageUpdate(
         entry.pbAny = true;
         entry.firstParam = PB_ANY;
         entry.imageRaw = trimmedImageRaw;
-        entry.image = trimmedImageRaw.match(/^~?"([\s\S]*)"$/)?.[1]?.replace(/""/g, '"') ?? (trimmedImageRaw || undefined);
+        entry.image = normalizePbImageValue(trimmedImageRaw, false);
         images.push(entry);
 
         pendingRenames = reindexImages(images, windowVar);

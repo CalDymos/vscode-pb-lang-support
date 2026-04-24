@@ -1,9 +1,8 @@
+import type { DesignerOsSkin, WarningPresenceMode, WarningVersionUpgradeMode } from "../../shared/designer-settings";
 import type { FormHeaderInfo, FormIssue } from "../model";
 
 export type PreviewPlatform = "windows" | "linux" | "macos";
-export type PreviewOsSkin = "windows7" | "windows8" | "linux" | "macos";
-export type WarningPresenceMode = "never" | "always";
-export type WarningVersionUpgradeMode = "never" | "ifBackwardCompatibilityIsAffected" | "always";
+export type PreviewOsSkin = DesignerOsSkin;
 
 export const PB_FORM_DESIGNER_SUPPORTED_VERSION = "6.30";
 export const PB_FORM_DESIGNER_BREAKING_UPGRADE_VERSIONS = [610, 621] as const;

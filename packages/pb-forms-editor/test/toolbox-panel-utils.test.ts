@@ -19,7 +19,7 @@ test("toolbox panel keeps the verified gadget order within the containers group"
   }
   assert.deepEqual(
     containers.items.map(item => item.label),
-    ["Cursor", "Container", "Frame", "Panel", "ScrollArea", "Splitter"]
+    ["Container", "Frame", "Panel", "ScrollArea", "Splitter"]
   );
 });
 

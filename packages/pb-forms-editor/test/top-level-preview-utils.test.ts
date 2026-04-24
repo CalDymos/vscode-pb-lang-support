@@ -358,6 +358,7 @@ test("exposes pb-style flags, string unquoting and top-level preview widths", ()
   assert.equal(hasPbFlag("#PB_StatusBar_Center | #PB_StatusBar_Raised", "#PB_StatusBar_Center"), true);
   assert.equal(hasPbFlag("#PB_StatusBar_Raised", "#PB_StatusBar_Center"), false);
   assert.equal(unquotePbString('  "Status"  '), "Status");
+  assert.equal(unquotePbString(' ~"Escaped ""Status""" '), 'Escaped "Status"');
   assert.equal(unquotePbString("Status"), "Status");
 
   assert.deepEqual(getStatusBarFieldWidths({
