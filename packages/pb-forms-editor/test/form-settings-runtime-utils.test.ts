@@ -31,7 +31,7 @@ test('configured unrecognised-file warnings can suppress the parser header warni
 });
 
 test('configured downgrade warnings follow the original always/never switch', () => {
-  const header = { version: '6.40', line: 3, hasStrictSyntaxWarning: true };
+  const header = { version: '6.50', line: 3, hasStrictSyntaxWarning: true };
 
   const warnIssues = applyConfiguredFormVersionWarnings([], header, {
     warningUnrecognizedFile: 'always',
@@ -47,6 +47,18 @@ test('configured downgrade warnings follow the original always/never switch', ()
     warningVersionDowngrade: 'never'
   });
   assert.deepEqual(mutedIssues, []);
+});
+
+test('configured version warnings treat PB 6.40 as the current supported target', () => {
+  const header = { version: '6.40', line: 3, hasStrictSyntaxWarning: true };
+
+  const issues = applyConfiguredFormVersionWarnings([], header, {
+    warningUnrecognizedFile: 'always',
+    warningVersionUpgrade: 'always',
+    warningVersionDowngrade: 'always'
+  });
+
+  assert.deepEqual(issues, []);
 });
 
 test('configured upgrade warnings respect the original breaking-only mode', () => {

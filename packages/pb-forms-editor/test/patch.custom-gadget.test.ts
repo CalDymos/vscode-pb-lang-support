@@ -14,7 +14,7 @@ import { stripBomAndToLf } from "./helpers/testUtils";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
 import { loadFixture } from "./helpers/loadFixture";
 
-const CUSTOM_GADGET_FIXTURE = loadFixture("fixtures/roundtrip/66-custom-gadget-marker-pair-basic.pbf");
+const CUSTOM_GADGET_FIXTURE = stripBomAndToLf(loadFixture("fixtures/roundtrip/66-custom-gadget-marker-pair-basic.pbf"));
 
 test("parses original custom gadget marker pairs into a CustomGadget model entry", () => {
   const doc = parseFormDocument(CUSTOM_GADGET_FIXTURE);
@@ -61,6 +61,22 @@ test("deletes the original custom gadget init marker pair when InitCode is clear
   assert.doesNotMatch(updated, /Custom gadget initialisation/);
   assert.doesNotMatch(updated, /InitFancyWidget\(\)/);
   assert.match(updated, /Custom gadget creation/);
+});
+
+test("deletes the original custom gadget init marker pair in CRLF fixtures", () => {
+  const crlfFixture = CUSTOM_GADGET_FIXTURE.replace(/\n/g, "\r\n");
+  const document = new FakeTextDocument(crlfFixture);
+  const edit = applyCustomGadgetCodeUpdate(document.asTextDocument(), "#Fancy", {
+    customInitRaw: ""
+  });
+
+  assert.ok(edit);
+  const updated = applyWorkspaceEditToText(crlfFixture, edit!);
+  assert.doesNotMatch(updated, /Custom gadget initialisation/);
+  assert.doesNotMatch(updated, /InitFancyWidget\(\)/);
+  assert.match(updated, /\r\nProcedure OpenForm/);
+  assert.match(updated, /; 0 Custom gadget creation \(do not remove this line\) FancyWidget\(%id%, %x%, %y%, %w%, %h%, %txt%, %hwnd%\)\r\n/);
+  assert.doesNotMatch(updated, /(?<!\r)\n/);
 });
 
 test("patches custom gadget caption changes through the generated creation line", () => {
@@ -132,3 +148,18 @@ EndProcedure
   assert.match(moved, /FancyGadget = FancyWidget\(#PB_Any, 14, 28, 130, 24, "Caption", WindowID\(winMain\)\)/);
 });
 
+
+test("patches custom gadget code in CRLF fixtures", () => {
+  const crlfFixture = CUSTOM_GADGET_FIXTURE.replace(/\n/g, "\r\n");
+  const document = new FakeTextDocument(crlfFixture);
+  const edit = applyCustomGadgetCodeUpdate(document.asTextDocument(), "#Fancy", {
+    customInitRaw: "InitOtherWidget()",
+    customCreateRaw: "OtherWidget(%id%, %x%, %y%, %w%, %h%, %txt%)"
+  });
+
+  assert.ok(edit);
+  const updated = applyWorkspaceEditToText(crlfFixture, edit!);
+  assert.match(updated, /InitOtherWidget\(\)\r\n/);
+  assert.match(updated, /; 0 Custom gadget creation \(do not remove this line\) OtherWidget\(%id%, %x%, %y%, %w%, %h%, %txt%\)\r\n/);
+  assert.match(updated, /OtherWidget\(#Fancy, 10, 20, 130, 24, "Caption"\)\r\n/);
+});

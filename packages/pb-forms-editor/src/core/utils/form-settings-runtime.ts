@@ -4,7 +4,7 @@ import type { FormHeaderInfo, FormIssue } from "../model";
 export type PreviewPlatform = "windows" | "linux" | "macos";
 export type PreviewOsSkin = DesignerOsSkin;
 
-export const PB_FORM_DESIGNER_SUPPORTED_VERSION = "6.30";
+export const PB_FORM_DESIGNER_SUPPORTED_VERSION = "6.40";
 export const PB_FORM_DESIGNER_BREAKING_UPGRADE_VERSIONS = [610, 621] as const;
 export const MISSING_FORM_DESIGNER_HEADER_ISSUE = "Missing Form Designer header ('; Form Designer for PureBasic - x.xx').";
 
