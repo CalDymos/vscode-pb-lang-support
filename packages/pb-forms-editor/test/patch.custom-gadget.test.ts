@@ -10,6 +10,7 @@ import {
 } from "../src/core/emitter/patch-emitter";
 import { GADGET_KIND } from "../src/core/model";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
+import { stripBomAndToLf } from "./helpers/testUtils";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
 import { loadFixture } from "./helpers/loadFixture";
 
@@ -97,7 +98,8 @@ test("preserves exact non-empty InitCode and CreateCode grid strings", () => {
   });
 
   assert.ok(edit);
-  const updated = applyWorkspaceEditToText(CUSTOM_GADGET_FIXTURE, edit!);
+  // NOTE: normalize CRLF → LF so assertions are line-ending agnostic
+  const updated = stripBomAndToLf(applyWorkspaceEditToText(CUSTOM_GADGET_FIXTURE, edit!));
   assert.ok(updated.includes("InitOtherWidget()  \n"));
   assert.ok(updated.includes("Custom gadget creation (do not remove this line)  OtherWidget(%id%, %x%, %y%, %w%, %h%, %txt%)  \n"));
   assert.ok(updated.includes('  OtherWidget(#Fancy, 10, 20, 130, 24, "Caption")  \n'));

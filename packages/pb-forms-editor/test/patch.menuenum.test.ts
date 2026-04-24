@@ -14,6 +14,7 @@ import {
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
 import { loadFixture } from "./helpers/loadFixture";
+import { stripBomAndToLf } from "./helpers/testUtils";
 
 function patchAndReparse(
   text: string,
@@ -133,7 +134,7 @@ test("inserts the first menu icon block before the image decoder and upgrades Cr
     (document) => applyMenuEntryInsert(document, "0", args)
   );
 
-  const normalized = patchedText.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
+  const normalized = stripBomAndToLf(patchedText);
   const expected = [
     '; Form Designer for PureBasic - 6.40',
     '; Warning: this file uses a strict syntax, if you edit it, make sure to respect the Form Designer limitation or it won\'t be opened again.',
@@ -183,7 +184,7 @@ test("inserts FormMenu before an existing FormFont block when no window or gadge
     applyMenuEntryInsert(document, "0", args)
   );
 
-  const normalized = patchedText.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
+  const normalized = stripBomAndToLf(patchedText);
   assert.ok(normalized.includes([
     "Global FrmMain",
     "",
@@ -214,7 +215,7 @@ test("inserts FormMenu before image decoder lines when no enum anchor exists yet
     applyMenuEntryInsert(document, "0", args)
   );
 
-  const normalized = patchedText.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
+  const normalized = stripBomAndToLf(patchedText);
   assert.ok(normalized.includes([
     "Global FrmMain",
     "",

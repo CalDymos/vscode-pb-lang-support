@@ -31,6 +31,7 @@ import {
 } from "../src/core/emitter/patch-emitter";
 import { MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND } from "../src/core/model";
 import { loadFixture } from "./helpers/loadFixture";
+import { stripBomAndToLf } from "./helpers/testUtils";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
 
@@ -44,10 +45,6 @@ const DEFAULT_SECTION_ID = "0";
 const menuId = DEFAULT_SECTION_ID;
 const toolBarId = DEFAULT_SECTION_ID;
 const statusBarId = DEFAULT_SECTION_ID;
-
-function stripBomAndToLf(text: string): string {
-  return text.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
-}
 
 // NOTE: editFactory receives a vscode.TextDocument, not a FakeTextDocument directly.
 // The VSCode Language Server resolves @types/vscode regardless of tsconfig.test.json,

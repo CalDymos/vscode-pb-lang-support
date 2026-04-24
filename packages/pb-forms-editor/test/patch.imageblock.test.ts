@@ -12,6 +12,7 @@ import {
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
 import { loadFixture } from "./helpers/loadFixture";
+import { stripBomAndToLf } from "./helpers/testUtils";
 
 function patchAndReparse(
   text: string,
@@ -28,10 +29,6 @@ function patchAndReparse(
     patchedText,
     parsed: parseFormDocument(patchedText),
   };
-}
-
-function toLf(text: string): string {
-  return text.replace(/\r\n/g, "\n");
 }
 
 test("inserts the first image block before the font block and injects the required decoder", () => {
@@ -249,7 +246,7 @@ test("creates an Enumeration FormImage block when inserting the first enum image
   };
 
   const { patchedText } = patchAndReparse(text, (document) => applyImageInsert(document, args));
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
 
   assert.ok(normalized.includes(
     [
@@ -281,7 +278,7 @@ test("creates a Global image variable block when inserting the first pbAny image
   };
 
   const { patchedText } = patchAndReparse(text, (document) => applyImageInsert(document, args));
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
 
   assert.ok(normalized.includes(['Global ImgMainLogo', '', 'Enumeration FormWindow'].join("\n")));
   assert.match(patchedText, /ImgMainLogo = LoadImage\(#PB_Any,"logo\.png"\)/);
@@ -301,7 +298,7 @@ test("moves image declarations from FormImage to Global when toggling the last e
     assignedVar: "ImgMainLogo",
     imageRaw: '"logo.png"',
   }));
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
 
   assert.ok(normalized.includes(['Global ImgMainLogo', '', 'Enumeration FormWindow'].join("\n")));
   assert.ok(!normalized.includes(['Enumeration FormImage', '  #Img_FrmMain_0', 'EndEnumeration'].join("\n")));
@@ -320,7 +317,7 @@ test("moves image declarations from Global to FormImage when toggling the last p
     idRaw: "#Img_FrmMain_0",
     imageRaw: '"logo.png"',
   }));
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
 
   assert.ok(!/^Global Img_FrmMain_0$/m.test(patchedText));
   assert.ok(normalized.includes([
@@ -347,7 +344,7 @@ test("inserts an enum image block before Declare boundaries", () => {
   };
 
   const { patchedText } = patchAndReparse(text, (document) => applyImageInsert(document, args));
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
 
   assert.ok(normalized.includes([
     'Enumeration FormImage',
@@ -373,7 +370,7 @@ test("inserts an Enumeration FormImage block before custom gadget initialisation
   };
 
   const { patchedText } = patchAndReparse(text, (document) => applyImageInsert(document, args));
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
 
   assert.ok(normalized.includes([
     'Enumeration FormImage',
@@ -408,7 +405,7 @@ test("moves FormImage before custom gadget initialisation when toggling the last
     idRaw: '#Img_FrmMain_0',
     imageRaw: '"logo.png"',
   }));
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
 
   assert.ok(normalized.includes([
     'Enumeration FormImage',
@@ -434,7 +431,7 @@ test("inserts a pbAny image Global block before custom gadget initialisation", (
   };
 
   const { patchedText } = patchAndReparse(text, (document) => applyImageInsert(document, args));
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
 
   assert.ok(normalized.includes([
     'Global win',
@@ -465,7 +462,7 @@ test("inserts a pbAny image Global block before Declare boundaries", () => {
   };
 
   const { patchedText } = patchAndReparse(text, (document) => applyImageInsert(document, args));
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
 
   assert.ok(normalized.includes([
     'Global ImgMainLogo',
@@ -492,7 +489,7 @@ test("keeps a single blank line before FormFont when updating an existing image 
     imageRaw: '"logo.jpg"',
   }));
 
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
   assert.ok(normalized.includes([
     'LoadImage(#Img_FrmMain_0,"logo.jpg")',
     '',
@@ -515,7 +512,7 @@ test("keeps a single blank line before FormFont when deleting the last image blo
 
   const { patchedText } = patchAndReparse(text, (document) => applyImageDelete(document, sourceLine!));
 
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
   assert.ok(normalized.includes([
     'EndEnumeration',
     '',

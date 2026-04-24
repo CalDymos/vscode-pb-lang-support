@@ -5,6 +5,7 @@ import { parseFormDocument } from "../src/core/parser/form-parser";
 import { applyGadgetDelete, applyGadgetEventProcUpdate, applyGadgetInsert, applyGadgetItemUpdate, applyGadgetOpenArgsUpdate, applyGadgetPbAnyToggle, applyGadgetPropertyUpdate, applyGadgetReparent, applyMenuEntryEventUpdate, applyMovePatch, applyRectPatch, applyResizeGadgetDelete, applyResizeGadgetMutation, applyResizeGadgetRawUpdate, applyToolBarEntryEventUpdate, applyWindowEventProcUpdate, applyWindowEventUpdate, applyWindowGenerateEventLoopUpdate, applyWindowOpenArgsUpdate, applyWindowPbAnyToggle, applyWindowPropertyUpdate, applyWindowRectPatch, applyWindowVariableNamePatch } from "../src/core/emitter/patch-emitter";
 import { loadFixture } from "./helpers/loadFixture";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
+import { stripBomAndToLf } from "./helpers/testUtils";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
 
 // NOTE: TextDocument is imported as a type only — it is used as the parameter
@@ -1577,7 +1578,7 @@ test("re-inserts Enumeration FormWindow before FormImage when toggling a pbAny w
     applyWindowPbAnyToggle(document, "win", false, "win", "#FrmMain", undefined)
   );
 
-  const normalized = patchedText.replace(/\r\n/g, "\n");
+  const normalized = stripBomAndToLf(patchedText);
   assert.ok(normalized.includes([
     'Enumeration FormWindow',
     '  #FrmMain',
@@ -1597,7 +1598,7 @@ test("re-inserts Enumeration FormWindow before an existing FormFont block", () =
     applyWindowPbAnyToggle(document, "win", false, "win", "#FrmMain", undefined)
   );
 
-  const normalized = patchedText.replace(/\r\n/g, "\n");
+  const normalized = stripBomAndToLf(patchedText);
   assert.ok(normalized.includes([
     'Enumeration FormWindow',
     '  #FrmMain',
@@ -1617,7 +1618,7 @@ test("re-inserts Enumeration FormWindow before image decoder lines when no enum 
     applyWindowPbAnyToggle(document, "win", false, "win", "#FrmMain", undefined)
   );
 
-  const normalized = patchedText.replace(/\r\n/g, "\n");
+  const normalized = stripBomAndToLf(patchedText);
   assert.ok(normalized.includes([
     'Enumeration FormWindow',
     '  #FrmMain',
@@ -1639,7 +1640,7 @@ test("inserts a missing pbAny window Global before existing gadget and image glo
     applyWindowVariableNamePatch(document, "winMain")
   );
 
-  const normalized = patchedText.replace(/\r\n/g, "\n");
+  const normalized = stripBomAndToLf(patchedText);
   assert.ok(normalized.includes([
     'Global winMain',
     '',
@@ -1661,7 +1662,7 @@ test("inserts a missing pbAny window Global before custom gadget initialisation"
     applyWindowVariableNamePatch(document, "winMain")
   );
 
-  const normalized = patchedText.replace(/\r\n/g, "\n");
+  const normalized = stripBomAndToLf(patchedText);
   assert.ok(normalized.includes([
     'Global winMain',
     '',
@@ -1722,7 +1723,7 @@ test("removes the trailing blank line of the last window Global when toggling ba
     applyWindowPbAnyToggle(document, "winMain", false, "winMain", "#FrmMain", undefined)
   );
 
-  const normalized = patchedText.replace(/\r\n/g, "\n");
+  const normalized = stripBomAndToLf(patchedText);
   assert.ok(normalized.includes([
     'Enumeration FormWindow',
     '  #FrmMain',
@@ -1747,7 +1748,7 @@ test("preserves Enumeration FormGadget before custom gadget initialisation when 
     applyRectPatch(document, "#BtnOk", 20, 24, 90, 28)
   );
 
-  const normalized = patchedText.replace(/\r\n/g, "\n");
+  const normalized = stripBomAndToLf(patchedText);
   assert.ok(normalized.includes([
     'Enumeration FormGadget',
     '  #BtnOk',
@@ -1778,7 +1779,7 @@ test("re-inserts Enumeration FormGadget before FormMenu when patching an enum ga
     applyRectPatch(document, "#BtnOk", 20, 24, 90, 28)
   );
 
-  const normalized = patchedText.replace(/\r\n/g, "\n");
+  const normalized = stripBomAndToLf(patchedText);
   assert.match(normalized, /Enumeration FormWindow\n  #FrmMain\nEndEnumeration\n\nEnumeration FormGadget[\s\S]*?  #BtnOk\n[\s\S]*?EndEnumeration\n\nEnumeration FormMenu/);
   assert.match(normalized, /^Global CustomGadget$/m);
   assert.doesNotMatch(normalized, /^Global BtnOk(?:,|$)/m);
@@ -1800,7 +1801,7 @@ test("inserts a missing pbAny gadget Global between window and image globals", (
     applyGadgetOpenArgsUpdate(document, "gInput", { textRaw: 'Value$' })
   );
 
-  const normalized = patchedText.replace(/\r\n/g, "\n");
+  const normalized = stripBomAndToLf(patchedText);
   assert.ok(normalized.includes([
     'Global winMain',
     '',

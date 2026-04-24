@@ -1,6 +1,11 @@
 import type { Position, Range, TextLine } from "vscode";
 import { Position as VscodePosition, Range as VscodeRange } from "vscode";
 
+type FakeDocumentLine = {
+  text: string;
+  rawLength: number;
+};
+
 // NOTE: FakeTextDocument intentionally does NOT implement vscode.TextDocument.
 // The VSCode Language Server always resolves @types/vscode regardless of
 // tsconfig.test.json "types": [] — so implementing the interface would require
@@ -25,25 +30,24 @@ export class FakeTextDocument {
     return this.text;
   }
 
-  public lineAt(line: number): TextLine {
+  public lineAt(lineNumber: number): TextLine {
     const lines = this.getLines();
-    if (line < 0 || line >= lines.length) {
-      throw new RangeError(`Line out of range: ${line}`);
+    if (lineNumber < 0 || lineNumber >= lines.length) {
+      throw new RangeError(`Line out of range: ${lineNumber}`);
     }
 
     const lineStarts = this.getLineStarts();
-    const startOffset = lineStarts[line];
-    const rawLine = lines[line];
-    const text = rawLine.replace(/\r$/, "");   // remove '\r' from text (CRLF-Fixtures)
-    const endOffset = startOffset + rawLine.length;  
-    const hasLineBreak = line < lines.length - 1 || this.text.endsWith("\n");
-    const endWithBreak = hasLineBreak ? endOffset + 1 : endOffset;
+    const startOffset = lineStarts[lineNumber];
+    const line = lines[lineNumber];
+    const text = line.text;
+    const endOffset = startOffset + text.length;
+    const endWithBreak = startOffset + line.rawLength;
 
     // NOTE: "as TextLine" cast is intentional — we only implement the fields
     // actually used by patchEmitter and test helpers. The real vscode.TextLine
     // has additional members we don't need. Do NOT remove the cast.
     return {
-      lineNumber: line,
+      lineNumber,
       text,
       firstNonWhitespaceCharacterIndex: text.search(/\S/),
       isEmptyOrWhitespace: text.trim().length === 0,
@@ -80,17 +84,38 @@ export class FakeTextDocument {
     const line = Math.max(0, position.line);
     const lineStart = starts[line];
 
-    // NOTE: character is clamped to the line's own length, not text.length.
-    // Clamping against text.length could silently position into the next line.
+    // NOTE: character is clamped to the line's own content length, not the raw
+    // source length. This matches vscode.TextDocument for CRLF files, where
+    // lineAt().text and lineAt().range exclude the line break bytes.
     const lines = this.getLines();
-    const lineLength = lines[line]?.length ?? 0;
+    const lineLength = lines[line]?.text.length ?? 0;
     const character = Math.min(position.character, lineLength);
 
     return lineStart + character;
   }
 
-  private getLines(): string[] {
-    return this.text.split("\n");
+  private getLines(): FakeDocumentLine[] {
+    const lines: FakeDocumentLine[] = [];
+    let lineStart = 0;
+    let i = 0;
+
+    while (i < this.text.length) {
+      const ch = this.text[i];
+      if (ch !== "\r" && ch !== "\n") {
+        i += 1;
+        continue;
+      }
+
+      const eolLength = ch === "\r" && this.text[i + 1] === "\n" ? 2 : 1;
+      const lineText = this.text.slice(lineStart, i);
+      lines.push({ text: lineText, rawLength: lineText.length + eolLength });
+      i += eolLength;
+      lineStart = i;
+    }
+
+    lines.push({ text: this.text.slice(lineStart), rawLength: this.text.length - lineStart });
+
+    return lines;
   }
 
   private getLineStarts(): number[] {
@@ -98,12 +123,9 @@ export class FakeTextDocument {
     const starts: number[] = [];
     let offset = 0;
 
-    for (let i = 0; i < lines.length; i++) {
+    for (const line of lines) {
       starts.push(offset);
-      offset += lines[i].length;
-      if (i < lines.length - 1 || this.text.endsWith("\n")) {
-        offset += 1;
-      }
+      offset += line.rawLength;
     }
 
     if (starts.length === 0) {
