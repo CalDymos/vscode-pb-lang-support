@@ -206,7 +206,7 @@ test("removes now-empty resize scaffolding when the last ResizeGadget line is de
 });
 
 test("inserts a new top-level gadget with original defaults", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
   OpenWindow(#FrmMain, x, y, width, height, "Main")
 EndProcedure
@@ -229,7 +229,7 @@ EndProcedure
 
 
 test("preserves original top-level Windows toolbar Y expressions when patching gadget rects", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
   OpenWindow(#FrmMain, x, y, width, height, "Main")
   CreateToolBar(0, WindowID(#FrmMain))
@@ -248,7 +248,7 @@ EndProcedure
 });
 
 test("inserts a new top-level Windows toolbar gadget with the original toolbar Y padding expression", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
   OpenWindow(#FrmMain, x, y, width, height, "Main")
   CreateToolBar(0, WindowID(#FrmMain))
@@ -266,7 +266,7 @@ EndProcedure
 });
 
 test("inserts a new panel child into the active panel item", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -300,7 +300,7 @@ EndProcedure
 });
 
 test("inserts a new child gadget into a frame gadget with #PB_Frame_Container", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -331,7 +331,7 @@ EndProcedure
 });
 
 test("inserts a new splitter gadget for two existing top-level siblings", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -365,7 +365,7 @@ EndProcedure
 });
 
 test("rejects splitter insertion when the selected gadgets do not share the same source parent", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -396,7 +396,7 @@ EndProcedure
 });
 
 test("reparents selected gadgets when inserting a splitter into a different target parent", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -439,7 +439,7 @@ EndProcedure
 });
 
 test("reparents a normal gadget into a container and resets its origin", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -469,7 +469,7 @@ EndProcedure
 });
 
 test("reparents a gadget subtree into a panel tab", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -507,7 +507,7 @@ EndProcedure
 });
 
 test("reparents a splitter together with its referenced gadgets", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -550,7 +550,7 @@ EndProcedure
 
 
 test("reparents a splitter and moves its SetGadgetState before the new parent closes", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -585,7 +585,7 @@ EndProcedure
   assert.equal(splitter?.stateRaw, '80');
 });
 test("rejects reparenting into the selected gadget subtree", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -612,7 +612,7 @@ EndProcedure
 });
 
 test("deletes a top-level gadget together with its managed lines and event binding", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -652,7 +652,7 @@ EndProcedure
 });
 
 test("merges secondary gadget delete edits when WorkspaceEdit only exposes entries()", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -721,7 +721,7 @@ test("deletes a panel gadget recursively with all child gadgets and tab items", 
 });
 
 test("deletes a frame gadget with #PB_Frame_Container recursively including CloseGadgetList", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -750,7 +750,7 @@ EndProcedure
 });
 
 test("deletes a custom gadget including the original marker pair", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -783,7 +783,7 @@ EndProcedure
 });
 
 test("deletes a container recursively when it contains a custom gadget", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -846,7 +846,7 @@ test("keeps a splitter child gadget when the original delete logic would no-op",
 });
 
 test("deletes descendants of a splitter child container but keeps the container itself", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -890,7 +890,7 @@ EndProcedure
 });
 
 test("deletes splitter-owned child gadgets when deleting their parent container subtree", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -1677,7 +1677,7 @@ test("inserts a missing pbAny window Global before custom gadget initialisation"
 
 
 test("preserves leading and trailing spaces when patching a window variable name", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 
 Enumeration FormWindow
   #Window_0

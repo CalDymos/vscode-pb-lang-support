@@ -381,7 +381,7 @@ test("roundtrips menu entry insert into leaf menu item footer by promoting paren
 
 test("roundtrips menu entry insert into empty submenu footer", () => {
   const text = [
-    '; Form Designer for PureBasic - 6.30',
+    '; Form Designer for PureBasic - 6.40',
     'Enumeration FormMenu',
     '  #MenuOpen',
     'EndEnumeration',
@@ -429,7 +429,7 @@ test("roundtrips menu entry insert into empty submenu footer", () => {
 
 test("roundtrips menu entry insert into empty submenu footer with placeholder comment before close", () => {
   const text = [
-    '; Form Designer for PureBasic - 6.30',
+    '; Form Designer for PureBasic - 6.40',
     'Enumeration FormMenu',
     '  #MenuOpen',
     'EndEnumeration',
@@ -513,7 +513,7 @@ test("roundtrips menu entry update", () => {
 
 
 test("preserves raw menu expressions when adding a shortcut to non-literal captions", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 
 Enumeration FormWindow
   #FrmMain
@@ -1947,7 +1947,7 @@ test("roundtrips combined top-level chrome updates in fixture 14", () => {
 
 
 test("trims menu constants during selected-entry style updates", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
   OpenWindow(#FrmMain, x, y, width, height, "Menu")
   CreateMenu(0, WindowID(#FrmMain))
@@ -1967,7 +1967,7 @@ EndProcedure
 });
 
 test("trims toolbar variables during selected-entry style updates", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
   OpenWindow(#FrmMain, x, y, width, height, "Toolbar")
   CreateToolBar(0, WindowID(#FrmMain))

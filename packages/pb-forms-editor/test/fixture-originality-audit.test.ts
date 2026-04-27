@@ -129,3 +129,16 @@ test("keeps canonical .pbf fixtures on the PB 6.40 header", () => {
     `Canonical .pbf fixtures must use the PB 6.40 Form Designer header: ${unexpected.join(", ")}`
   );
 });
+
+
+test("keeps sample .pbf files on the PB 6.40 header", () => {
+  const unexpected = findMissingRequiredHeader(/^\uFEFF?; Form Designer for PureBasic - 6\.40(?:\r?\n|$)/, [
+    path.join(process.cwd(), "samples"),
+  ]);
+
+  assert.deepEqual(
+    unexpected,
+    [],
+    `Sample .pbf files must use the PB 6.40 Form Designer header: ${unexpected.join(", ")}`
+  );
+});

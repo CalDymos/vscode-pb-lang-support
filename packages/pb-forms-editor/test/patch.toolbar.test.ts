@@ -33,7 +33,7 @@ function patchAndReparse(
 
 const TOOLBAR_FIXTURE = loadFixture("fixtures/smoke/09-toolbar-basic.pbf");
 
-test("migrates legacy ToolBarButton inserts to the PB 6.30 image-button path", () => {
+test("migrates legacy ToolBarButton inserts to the current image-button path", () => {
   const args: ToolBarEntryArgs = {
     kind: TOOLBAR_ENTRY_KIND.ToolBarButton,
     idRaw: "#TbOpen",
