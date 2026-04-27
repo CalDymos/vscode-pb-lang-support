@@ -32,12 +32,17 @@ import {
   shouldShowGadgetParentDetail,
   shouldShowGadgetTabDetail
 } from "../src/core/gadget/inspector";
+import { GADGET_KIND, GADGET_KIND_SET } from "../src/core/model";
 
-test("marks original text-capable gadget constructors as caption-editable", () => {
+test("marks only persistent caption/callback constructor paths as caption-editable", () => {
   assert.equal(canEditGadgetText("StringGadget"), true);
   assert.equal(canEditGadgetText("ButtonGadget"), true);
   assert.equal(canEditGadgetText("OptionGadget"), true);
   assert.equal(canEditGadgetText("CustomGadget"), true);
+  assert.equal(canEditGadgetText("ScintillaGadget"), true);
+  assert.equal(canEditGadgetText("ButtonImageGadget"), false);
+  assert.equal(canEditGadgetText("CalendarGadget"), false);
+  assert.equal(canEditGadgetText("ComboBoxGadget"), false);
   assert.equal(canEditGadgetText("ImageGadget"), false);
   assert.equal(canEditGadgetText("ProgressBarGadget"), false);
 });
@@ -50,6 +55,44 @@ test("marks original color-capable gadget kinds for front/back color editing", (
   assert.equal(canEditGadgetColors("ImageGadget"), false);
 });
 
+test("keeps the gadget color inspector matrix aligned with FD_SelectGadget", () => {
+  const expectedColorKinds = [
+    GADGET_KIND.CalendarGadget,
+    GADGET_KIND.ContainerGadget,
+    GADGET_KIND.EditorGadget,
+    GADGET_KIND.ExplorerListGadget,
+    GADGET_KIND.ExplorerTreeGadget,
+    GADGET_KIND.HyperLinkGadget,
+    GADGET_KIND.ListIconGadget,
+    GADGET_KIND.ListViewGadget,
+    GADGET_KIND.ProgressBarGadget,
+    GADGET_KIND.ScrollAreaGadget,
+    GADGET_KIND.SpinGadget,
+    GADGET_KIND.StringGadget,
+    GADGET_KIND.TextGadget,
+    GADGET_KIND.TreeGadget
+  ].sort();
+
+  const actualColorKinds = [...GADGET_KIND_SET]
+    .filter(kind => canEditGadgetColors(kind))
+    .sort();
+
+  assert.deepEqual(actualColorKinds, expectedColorKinds);
+});
+
+test("keeps the original constructor-range inspector matrix exact", () => {
+  const actualRangeLabels = [...GADGET_KIND_SET]
+    .filter(kind => getGadgetCtorRangeFieldLabels(kind) !== undefined)
+    .map(kind => [kind, getGadgetCtorRangeFieldLabels(kind)] as const);
+
+  assert.deepEqual(actualRangeLabels, [
+    [GADGET_KIND.SpinGadget, { minLabel: "Min", maxLabel: "Max", title: "Matches the original Min / Max constructor arguments." }],
+    [GADGET_KIND.TrackBarGadget, { minLabel: "Min", maxLabel: "Max", title: "Matches the original Min / Max constructor arguments." }],
+    [GADGET_KIND.ProgressBarGadget, { minLabel: "Min", maxLabel: "Max", title: "Matches the original Min / Max constructor arguments." }],
+    [GADGET_KIND.ScrollAreaGadget, { minLabel: "InnerWidth", maxLabel: "InnerHeight", title: "Matches the original InnerWidth / InnerHeight constructor arguments." }],
+    [GADGET_KIND.ScrollBarGadget, { minLabel: "Min", maxLabel: "Max", title: "Matches the original Min / Max constructor arguments." }]
+  ]);
+});
 
 test("marks only original item-editor gadget kinds for inspector item sections", () => {
   assert.equal(canInspectGadgetItems("PanelGadget"), true);
@@ -130,6 +173,97 @@ test("uses only parsed boolean gadget disabled state for the designer preview ov
   assert.equal(isGadgetDisabledInDesignerPreview(undefined), false);
 });
 
+test("keeps the original caption row visibility matrix aligned with FD_SelectGadget", () => {
+  const expectedCaptionVisibleKinds = [
+    GADGET_KIND.ButtonGadget,
+    GADGET_KIND.ButtonImageGadget,
+    GADGET_KIND.CalendarGadget,
+    GADGET_KIND.CanvasGadget,
+    GADGET_KIND.CheckBoxGadget,
+    GADGET_KIND.ComboBoxGadget,
+    GADGET_KIND.ContainerGadget,
+    GADGET_KIND.CustomGadget,
+    GADGET_KIND.DateGadget,
+    GADGET_KIND.EditorGadget,
+    GADGET_KIND.ExplorerComboGadget,
+    GADGET_KIND.ExplorerListGadget,
+    GADGET_KIND.ExplorerTreeGadget,
+    GADGET_KIND.FrameGadget,
+    GADGET_KIND.HyperLinkGadget,
+    GADGET_KIND.ImageGadget,
+    GADGET_KIND.IPAddressGadget,
+    GADGET_KIND.ListIconGadget,
+    GADGET_KIND.ListViewGadget,
+    GADGET_KIND.OpenGLGadget,
+    GADGET_KIND.OptionGadget,
+    GADGET_KIND.PanelGadget,
+    GADGET_KIND.ProgressBarGadget,
+    GADGET_KIND.ScintillaGadget,
+    GADGET_KIND.ScrollAreaGadget,
+    GADGET_KIND.ScrollBarGadget,
+    GADGET_KIND.SpinGadget,
+    GADGET_KIND.SplitterGadget,
+    GADGET_KIND.StringGadget,
+    GADGET_KIND.TextGadget,
+    GADGET_KIND.TrackBarGadget,
+    GADGET_KIND.TreeGadget,
+    GADGET_KIND.WebGadget,
+    GADGET_KIND.WebViewGadget
+  ].sort();
+
+  const actualCaptionVisibleKinds = [...GADGET_KIND_SET]
+    .filter(kind => getGadgetCaptionFieldConfig(kind) !== undefined)
+    .sort();
+
+  assert.deepEqual(actualCaptionVisibleKinds, expectedCaptionVisibleKinds);
+});
+
+test("keeps caption editability limited to persistent constructor or custom-gadget creation paths", () => {
+  const actualTextEditableKinds = [...GADGET_KIND_SET]
+    .filter(kind => getGadgetCaptionFieldConfig(kind)?.textEditable === true)
+    .sort();
+
+  assert.deepEqual(actualTextEditableKinds, [
+    GADGET_KIND.ButtonGadget,
+    GADGET_KIND.CheckBoxGadget,
+    GADGET_KIND.CustomGadget,
+    GADGET_KIND.DateGadget,
+    GADGET_KIND.ExplorerComboGadget,
+    GADGET_KIND.ExplorerListGadget,
+    GADGET_KIND.ExplorerTreeGadget,
+    GADGET_KIND.FrameGadget,
+    GADGET_KIND.HyperLinkGadget,
+    GADGET_KIND.ListIconGadget,
+    GADGET_KIND.OptionGadget,
+    GADGET_KIND.ScintillaGadget,
+    GADGET_KIND.StringGadget,
+    GADGET_KIND.TextGadget,
+    GADGET_KIND.WebGadget
+  ].sort());
+});
+
+test("keeps caption variable toggles limited to original captionvariable emitter paths", () => {
+  const actualVariableEditableKinds = [...GADGET_KIND_SET]
+    .filter(kind => getGadgetCaptionFieldConfig(kind)?.variableToggleEditable === true)
+    .sort();
+
+  assert.deepEqual(actualVariableEditableKinds, [
+    GADGET_KIND.ButtonGadget,
+    GADGET_KIND.CheckBoxGadget,
+    GADGET_KIND.CustomGadget,
+    GADGET_KIND.DateGadget,
+    GADGET_KIND.ExplorerComboGadget,
+    GADGET_KIND.ExplorerListGadget,
+    GADGET_KIND.ExplorerTreeGadget,
+    GADGET_KIND.FrameGadget,
+    GADGET_KIND.HyperLinkGadget,
+    GADGET_KIND.OptionGadget,
+    GADGET_KIND.StringGadget,
+    GADGET_KIND.TextGadget,
+    GADGET_KIND.WebGadget
+  ].sort());
+});
+
 test("returns the original caption field behavior for Date, Scintilla, Editor and Canvas gadgets", () => {
   assert.deepEqual(getGadgetCaptionFieldConfig("DateGadget"), {
     label: "Mask",
@@ -144,14 +278,19 @@ test("returns the original caption field behavior for Date, Scintilla, Editor an
   assert.deepEqual(getGadgetCaptionFieldConfig("EditorGadget"), {
     label: "Caption",
     textEditable: false,
-    variableToggleEditable: true
+    variableToggleEditable: false
   });
   assert.deepEqual(getGadgetCaptionFieldConfig("CanvasGadget"), {
     label: "Caption",
     textEditable: false,
-    variableToggleEditable: true
+    variableToggleEditable: false
   });
-  assert.equal(getGadgetCaptionFieldConfig("ImageGadget"), undefined);
+  assert.deepEqual(getGadgetCaptionFieldConfig("ImageGadget"), {
+    label: "Caption",
+    textEditable: false,
+    variableToggleEditable: false
+  });
+  assert.equal(getGadgetCaptionFieldConfig("Unknown"), undefined);
 });
 
 
@@ -1002,4 +1141,3 @@ test("shows non-original gadget parent and tab detail rows only when they actual
   assert.equal(shouldShowGadgetTabDetail({ parentItem: 3 }), true);
   assert.equal(shouldShowGadgetTabDetail({}), false);
 });
-

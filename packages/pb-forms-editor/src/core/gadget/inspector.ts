@@ -113,10 +113,11 @@ export type GadgetInspectorDetailsLike = {
   parentItem?: number;
 };
 
-const GADGET_TEXT_CAPABLE_KINDS: ReadonlySet<string> = new Set([
+const GADGET_CAPTION_VISIBLE_KINDS: ReadonlySet<string> = new Set([
   GADGET_KIND.ButtonGadget,
   GADGET_KIND.ButtonImageGadget,
   GADGET_KIND.CalendarGadget,
+  GADGET_KIND.CanvasGadget,
   GADGET_KIND.CheckBoxGadget,
   GADGET_KIND.ComboBoxGadget,
   GADGET_KIND.ContainerGadget,
@@ -128,15 +129,58 @@ const GADGET_TEXT_CAPABLE_KINDS: ReadonlySet<string> = new Set([
   GADGET_KIND.ExplorerTreeGadget,
   GADGET_KIND.FrameGadget,
   GADGET_KIND.HyperLinkGadget,
+  GADGET_KIND.ImageGadget,
+  GADGET_KIND.IPAddressGadget,
   GADGET_KIND.ListIconGadget,
   GADGET_KIND.ListViewGadget,
-  GADGET_KIND.MDIGadget,
+  GADGET_KIND.OpenGLGadget,
   GADGET_KIND.OptionGadget,
   GADGET_KIND.PanelGadget,
+  GADGET_KIND.ProgressBarGadget,
+  GADGET_KIND.ScintillaGadget,
+  GADGET_KIND.ScrollAreaGadget,
+  GADGET_KIND.ScrollBarGadget,
+  GADGET_KIND.SpinGadget,
+  GADGET_KIND.SplitterGadget,
+  GADGET_KIND.StringGadget,
+  GADGET_KIND.TextGadget,
+  GADGET_KIND.TrackBarGadget,
+  GADGET_KIND.TreeGadget,
+  GADGET_KIND.WebGadget,
+  GADGET_KIND.WebViewGadget
+]);
+
+const GADGET_TEXT_CAPABLE_KINDS: ReadonlySet<string> = new Set([
+  GADGET_KIND.ButtonGadget,
+  GADGET_KIND.CheckBoxGadget,
+  GADGET_KIND.CustomGadget,
+  GADGET_KIND.DateGadget,
+  GADGET_KIND.ExplorerComboGadget,
+  GADGET_KIND.ExplorerListGadget,
+  GADGET_KIND.ExplorerTreeGadget,
+  GADGET_KIND.FrameGadget,
+  GADGET_KIND.HyperLinkGadget,
+  GADGET_KIND.ListIconGadget,
+  GADGET_KIND.OptionGadget,
   GADGET_KIND.ScintillaGadget,
   GADGET_KIND.StringGadget,
   GADGET_KIND.TextGadget,
-  GADGET_KIND.TreeGadget,
+  GADGET_KIND.WebGadget
+]);
+
+const GADGET_CAPTION_VARIABLE_CAPABLE_KINDS: ReadonlySet<string> = new Set([
+  GADGET_KIND.ButtonGadget,
+  GADGET_KIND.CheckBoxGadget,
+  GADGET_KIND.CustomGadget,
+  GADGET_KIND.DateGadget,
+  GADGET_KIND.ExplorerComboGadget,
+  GADGET_KIND.ExplorerListGadget,
+  GADGET_KIND.ExplorerTreeGadget,
+  GADGET_KIND.FrameGadget,
+  GADGET_KIND.HyperLinkGadget,
+  GADGET_KIND.OptionGadget,
+  GADGET_KIND.StringGadget,
+  GADGET_KIND.TextGadget,
   GADGET_KIND.WebGadget
 ]);
 
@@ -353,20 +397,25 @@ export function getGadgetVariableInspectorValue(gadget: { variable?: string; fir
 }
 
 export function getGadgetCaptionFieldConfig(kind: string | undefined): GadgetCaptionFieldConfig | undefined {
-  if (kind === GADGET_KIND.CanvasGadget) {
-    return { label: "Caption", textEditable: false, variableToggleEditable: true };
+  if (typeof kind !== "string" || !GADGET_CAPTION_VISIBLE_KINDS.has(kind)) return undefined;
+
+  if (kind === GADGET_KIND.DateGadget) {
+    return {
+      label: "Mask",
+      textEditable: canEditGadgetText(kind),
+      variableToggleEditable: GADGET_CAPTION_VARIABLE_CAPABLE_KINDS.has(kind)
+    };
   }
-  if (!canEditGadgetText(kind)) return undefined;
-  switch (kind) {
-    case GADGET_KIND.DateGadget:
-      return { label: "Mask", textEditable: true, variableToggleEditable: true };
-    case GADGET_KIND.ScintillaGadget:
-      return { label: "Callback", textEditable: true, variableToggleEditable: false };
-    case GADGET_KIND.EditorGadget:
-      return { label: "Caption", textEditable: false, variableToggleEditable: true };
-    default:
-      return { label: "Caption", textEditable: true, variableToggleEditable: true };
+
+  if (kind === GADGET_KIND.ScintillaGadget) {
+    return { label: "Callback", textEditable: true, variableToggleEditable: false };
   }
+
+  return {
+    label: "Caption",
+    textEditable: canEditGadgetText(kind),
+    variableToggleEditable: GADGET_CAPTION_VARIABLE_CAPABLE_KINDS.has(kind)
+  };
 }
 
 export function buildGadgetTextRaw(value: string, isVariable: boolean): string {
