@@ -189,6 +189,11 @@ const GADGET_CHECKED_STATE_CAPABLE_KINDS: ReadonlySet<string> = new Set([
   GADGET_KIND.OptionGadget
 ]);
 
+const GADGET_IMAGE_ROW_CAPABLE_KINDS: ReadonlySet<string> = new Set([
+  GADGET_KIND.ImageGadget,
+  GADGET_KIND.ButtonImageGadget
+]);
+
 const GADGET_CTOR_RANGE_FIELD_LABELS: ReadonlyMap<string, GadgetCtorRangeFieldLabels> = new Map([
   [GADGET_KIND.ProgressBarGadget, { minLabel: "Min", maxLabel: "Max", title: "Matches the original Min / Max constructor arguments." }],
   [GADGET_KIND.ScrollBarGadget, { minLabel: "Min", maxLabel: "Max", title: "Matches the original Min / Max constructor arguments." }],
@@ -314,6 +319,22 @@ export function canEditGadgetColors(kind: string | undefined): boolean {
 
 export function canEditGadgetCheckedState(kind: string | undefined): boolean {
   return typeof kind === "string" && GADGET_CHECKED_STATE_CAPABLE_KINDS.has(kind);
+}
+
+export function canInspectGadgetImageRows(kind: string | undefined): boolean {
+  return typeof kind === "string" && GADGET_IMAGE_ROW_CAPABLE_KINDS.has(kind);
+}
+
+export function canInspectGadgetSplitterPosition(kind: string | undefined): boolean {
+  return kind === GADGET_KIND.SplitterGadget;
+}
+
+export function canInspectCustomGadgetCodeRows(kind: string | undefined): boolean {
+  return kind === GADGET_KIND.CustomGadget;
+}
+
+export function canInspectGadgetSelectProc(kind: string | undefined): boolean {
+  return typeof kind === "string" && GADGET_CAPTION_VISIBLE_KINDS.has(kind);
 }
 
 export function canInspectGadgetItems(kind: string | undefined): boolean {

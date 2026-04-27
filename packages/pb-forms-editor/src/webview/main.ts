@@ -134,7 +134,11 @@ import {
   canEditGadgetCheckedState,
   canEditGadgetColors,
   canInspectGadgetColumns,
+  canInspectCustomGadgetCodeRows,
+  canInspectGadgetImageRows,
   canInspectGadgetItems,
+  canInspectGadgetSelectProc,
+  canInspectGadgetSplitterPosition,
   getCustomGadgetHelpDisplay,
   getGadgetCaptionFieldConfig,
   getGadgetCurrentImageDisplay,
@@ -1715,7 +1719,6 @@ function drawResolvedPreviewImage(
   return true;
 }
 
-const IMAGE_CAPABLE_GADGET_KINDS: ReadonlySet<string> = new Set([GADGET_KIND.ImageGadget, GADGET_KIND.ButtonImageGadget]);
 
 
 function canRelativizeImageEntry(entry?: FormImage): boolean {
@@ -3042,7 +3045,7 @@ function hitTestGadget(mx: number, my: number): Gadget | null {
     if (!layout.visible) continue;
     if (!rectContainsPoint(layout.rect, lx, ly)) continue;
     if (!rectContainsPoint(layout.clip, lx, ly)) continue;
-    if (g.kind === GADGET_KIND.SplitterGadget) {
+    if (canInspectGadgetSplitterPosition(g.kind)) {
       const splitterBarRect = intersectRect(getSplitterBarRect(layout.rect, hasPbFlag(g.flagsExpr, "#PB_Splitter_Vertical"), metrics.splitterWidth, g.state), layout.clip);
       if (!isPointOnRectBorder(layout.rect, lx, ly) && !rectContainsPoint(splitterBarRect, lx, ly)) {
         continue;
@@ -11174,7 +11177,7 @@ function renderProps() {
   if (showsColumnsInspector) {
     propsEl.appendChild(row("Columns", readonlyInput(String(g.columns?.length ?? 0))));
   }
-  const isImageCapableGadget = IMAGE_CAPABLE_GADGET_KINDS.has(g.kind);
+  const isImageCapableGadget = canInspectGadgetImageRows(g.kind);
   const gadgetImage = findImageEntryById(g.imageId);
 
   const deleteGadgetBtn = document.createElement("button");
@@ -11574,7 +11577,7 @@ function renderProps() {
     }
   }
 
-  if (g.kind === GADGET_KIND.CustomGadget) {
+  if (canInspectCustomGadgetCodeRows(g.kind)) {
     propsEl.appendChild(
       row(
         "SelectGadget",
@@ -11664,7 +11667,7 @@ function renderProps() {
   };
   propsEl.appendChild(row("", changeParentBtn));
 
-  if (g.kind === GADGET_KIND.SplitterGadget) {
+  if (canInspectGadgetSplitterPosition(g.kind)) {
     propsEl.appendChild(
       row(
         "Splitter Position",
@@ -11747,28 +11750,30 @@ function renderProps() {
     if (pendingEl) propsEl.appendChild(pendingEl);
   }
 
-  propsEl.appendChild(
-    row(
-      "SelectProc",
-      editableComboInput(
-        g.eventProc ?? "",
-        getProcedureSuggestions(),
-        v => {
-          g.eventProc = v.length ? v : undefined;
-          post({
-            type: WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc,
-            id: g.id,
-            eventProc: v.length ? v : undefined
-          });
-          renderProps();
-        },
-        {
-          title: "Choose an existing procedure or type a procedure name.",
-          placeholder: "Type or pick a procedure"
-        }
+  if (canInspectGadgetSelectProc(g.kind)) {
+    propsEl.appendChild(
+      row(
+        "SelectProc",
+        editableComboInput(
+          g.eventProc ?? "",
+          getProcedureSuggestions(),
+          v => {
+            g.eventProc = v.length ? v : undefined;
+            post({
+              type: WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc,
+              id: g.id,
+              eventProc: v.length ? v : undefined
+            });
+            renderProps();
+          },
+          {
+            title: "Choose an existing procedure or type a procedure name.",
+            placeholder: "Type or pick a procedure"
+          }
+        )
       )
-    )
-  );
+    );
+  }
 
   const gadgetKnownFlags = getGadgetKnownFlags(g.kind);
   const enabledGadgetFlags = new Set(

@@ -11,8 +11,12 @@ import {
   canEditGadgetColors,
   canEditGadgetHorizontalLocks,
   canEditGadgetText,
+  canInspectCustomGadgetCodeRows,
   canInspectGadgetColumns,
+  canInspectGadgetImageRows,
   canInspectGadgetItems,
+  canInspectGadgetSelectProc,
+  canInspectGadgetSplitterPosition,
   getGadgetCtorRangeFieldLabels,
   getCustomGadgetHelpDisplay,
   getGadgetBooleanInspectorState,
@@ -92,6 +96,50 @@ test("keeps the original constructor-range inspector matrix exact", () => {
     [GADGET_KIND.ScrollAreaGadget, { minLabel: "InnerWidth", maxLabel: "InnerHeight", title: "Matches the original InnerWidth / InnerHeight constructor arguments." }],
     [GADGET_KIND.ScrollBarGadget, { minLabel: "Min", maxLabel: "Max", title: "Matches the original Min / Max constructor arguments." }]
   ]);
+});
+
+test("keeps the original gadget image row matrix exact", () => {
+  const actualImageRowsKinds = [...GADGET_KIND_SET]
+    .filter(kind => canInspectGadgetImageRows(kind))
+    .sort();
+
+  assert.deepEqual(actualImageRowsKinds, [
+    GADGET_KIND.ButtonImageGadget,
+    GADGET_KIND.ImageGadget
+  ].sort());
+});
+
+test("keeps the original checked-state special row matrix exact", () => {
+  const actualCheckedKinds = [...GADGET_KIND_SET]
+    .filter(kind => canEditGadgetCheckedState(kind))
+    .sort();
+
+  assert.deepEqual(actualCheckedKinds, [
+    GADGET_KIND.CheckBoxGadget,
+    GADGET_KIND.OptionGadget
+  ].sort());
+});
+
+test("keeps the original splitter-position special row limited to SplitterGadget", () => {
+  const actualSplitterKinds = [...GADGET_KIND_SET]
+    .filter(kind => canInspectGadgetSplitterPosition(kind));
+
+  assert.deepEqual(actualSplitterKinds, [GADGET_KIND.SplitterGadget]);
+});
+
+test("keeps original custom-gadget code rows limited to CustomGadget", () => {
+  const actualCustomCodeKinds = [...GADGET_KIND_SET]
+    .filter(kind => canInspectCustomGadgetCodeRows(kind));
+
+  assert.deepEqual(actualCustomCodeKinds, [GADGET_KIND.CustomGadget]);
+});
+
+test("keeps gadget SelectProc visible for original FD_SelectGadget-visible gadget kinds", () => {
+  assert.equal(canInspectGadgetSelectProc(GADGET_KIND.ButtonGadget), true);
+  assert.equal(canInspectGadgetSelectProc(GADGET_KIND.CustomGadget), true);
+  assert.equal(canInspectGadgetSelectProc(GADGET_KIND.MDIGadget), false);
+  assert.equal(canInspectGadgetSelectProc(GADGET_KIND.Unknown), false);
+  assert.equal(canInspectGadgetSelectProc(undefined), false);
 });
 
 test("marks only original item-editor gadget kinds for inspector item sections", () => {
