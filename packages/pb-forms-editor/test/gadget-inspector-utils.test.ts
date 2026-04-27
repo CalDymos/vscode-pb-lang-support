@@ -13,10 +13,12 @@ import {
   canEditGadgetText,
   canInspectCustomGadgetCodeRows,
   canInspectGadgetColumns,
+  canInspectGadgetBaseRows,
   canInspectGadgetImageRows,
   canInspectGadgetItems,
   canInspectGadgetSelectProc,
   canInspectGadgetSplitterPosition,
+  canInspectGadgetTooltipRows,
   getGadgetCtorRangeFieldLabels,
   getCustomGadgetHelpDisplay,
   getGadgetBooleanInspectorState,
@@ -24,19 +26,63 @@ import {
   isGadgetDisabledInDesignerPreview,
   isGadgetHiddenInDesignerPreview,
   getGadgetCurrentImageDisplay,
+  getGadgetConstantsFieldConfig,
+  getGadgetFontFieldConfig,
   getGadgetKnownFlags,
+  getGadgetParentFieldConfig,
+  getGadgetResizeLockFieldConfig,
   getGadgetCtorRangeInspectorValue,
   isDpiScaledGadgetCtorRange,
   isDpiScaledGadgetState,
   getGadgetVariableInspectorValue,
   getGadgetFontDisplaySummary,
   getGadgetTextInspectorValue,
+  getCustomGadgetSelectPresetFieldConfig,
+  getGadgetSelectProcFieldConfig,
+  getGadgetTooltipFieldConfig,
   getGadgetTooltipInspectorValue,
   buildGadgetFlagsExpr,
   shouldShowGadgetParentDetail,
   shouldShowGadgetTabDetail
 } from "../src/core/gadget/inspector";
 import { GADGET_KIND, GADGET_KIND_SET } from "../src/core/model";
+
+const ORIGINAL_FD_SELECT_GADGET_BASE_ROW_KINDS = [
+  GADGET_KIND.ButtonGadget,
+  GADGET_KIND.ButtonImageGadget,
+  GADGET_KIND.CalendarGadget,
+  GADGET_KIND.CanvasGadget,
+  GADGET_KIND.CheckBoxGadget,
+  GADGET_KIND.ComboBoxGadget,
+  GADGET_KIND.ContainerGadget,
+  GADGET_KIND.CustomGadget,
+  GADGET_KIND.DateGadget,
+  GADGET_KIND.EditorGadget,
+  GADGET_KIND.ExplorerComboGadget,
+  GADGET_KIND.ExplorerListGadget,
+  GADGET_KIND.ExplorerTreeGadget,
+  GADGET_KIND.FrameGadget,
+  GADGET_KIND.HyperLinkGadget,
+  GADGET_KIND.ImageGadget,
+  GADGET_KIND.IPAddressGadget,
+  GADGET_KIND.ListIconGadget,
+  GADGET_KIND.ListViewGadget,
+  GADGET_KIND.OpenGLGadget,
+  GADGET_KIND.OptionGadget,
+  GADGET_KIND.PanelGadget,
+  GADGET_KIND.ProgressBarGadget,
+  GADGET_KIND.ScintillaGadget,
+  GADGET_KIND.ScrollAreaGadget,
+  GADGET_KIND.ScrollBarGadget,
+  GADGET_KIND.SpinGadget,
+  GADGET_KIND.SplitterGadget,
+  GADGET_KIND.StringGadget,
+  GADGET_KIND.TextGadget,
+  GADGET_KIND.TrackBarGadget,
+  GADGET_KIND.TreeGadget,
+  GADGET_KIND.WebGadget,
+  GADGET_KIND.WebViewGadget
+].sort();
 
 test("marks only persistent caption/callback constructor paths as caption-editable", () => {
   assert.equal(canEditGadgetText("StringGadget"), true);
@@ -142,6 +188,190 @@ test("keeps gadget SelectProc visible for original FD_SelectGadget-visible gadge
   assert.equal(canInspectGadgetSelectProc(undefined), false);
 });
 
+test("keeps gadget SelectProc field editable and preserves the original grid string semantics", () => {
+  const buttonConfig = getGadgetSelectProcFieldConfig(GADGET_KIND.ButtonGadget);
+  const customConfig = getGadgetSelectProcFieldConfig(GADGET_KIND.CustomGadget);
+
+  assert.equal(buttonConfig?.valueEditable, true);
+  assert.equal(buttonConfig?.preservesGridString, true);
+  assert.equal(customConfig?.valueEditable, true);
+  assert.equal(customConfig?.preservesGridString, true);
+  assert.equal(getGadgetSelectProcFieldConfig(GADGET_KIND.MDIGadget), undefined);
+  assert.equal(getGadgetSelectProcFieldConfig(GADGET_KIND.Unknown), undefined);
+});
+
+test("documents CustomGadget SelectGadget as visible but not persisted by the original event grid path", () => {
+  assert.deepEqual(getCustomGadgetSelectPresetFieldConfig(GADGET_KIND.CustomGadget), {
+    valueEditable: true,
+    persisted: false,
+    title: "Shows the original CustomGadget preset combobox row. In the available PureBasic source, changing this row does not rewrite InitCode or CreateCode automatically."
+  });
+  assert.equal(getCustomGadgetSelectPresetFieldConfig(GADGET_KIND.ButtonGadget), undefined);
+  assert.equal(getCustomGadgetSelectPresetFieldConfig(undefined), undefined);
+});
+
+test("keeps gadget tooltip rows visible for the original FD_SelectGadget gadget matrix", () => {
+  const expectedTooltipKinds = [
+    GADGET_KIND.ButtonGadget,
+    GADGET_KIND.ButtonImageGadget,
+    GADGET_KIND.CalendarGadget,
+    GADGET_KIND.CanvasGadget,
+    GADGET_KIND.CheckBoxGadget,
+    GADGET_KIND.ComboBoxGadget,
+    GADGET_KIND.ContainerGadget,
+    GADGET_KIND.CustomGadget,
+    GADGET_KIND.DateGadget,
+    GADGET_KIND.EditorGadget,
+    GADGET_KIND.ExplorerComboGadget,
+    GADGET_KIND.ExplorerListGadget,
+    GADGET_KIND.ExplorerTreeGadget,
+    GADGET_KIND.FrameGadget,
+    GADGET_KIND.HyperLinkGadget,
+    GADGET_KIND.ImageGadget,
+    GADGET_KIND.IPAddressGadget,
+    GADGET_KIND.ListIconGadget,
+    GADGET_KIND.ListViewGadget,
+    GADGET_KIND.OpenGLGadget,
+    GADGET_KIND.OptionGadget,
+    GADGET_KIND.PanelGadget,
+    GADGET_KIND.ProgressBarGadget,
+    GADGET_KIND.ScintillaGadget,
+    GADGET_KIND.ScrollAreaGadget,
+    GADGET_KIND.ScrollBarGadget,
+    GADGET_KIND.SpinGadget,
+    GADGET_KIND.SplitterGadget,
+    GADGET_KIND.StringGadget,
+    GADGET_KIND.TextGadget,
+    GADGET_KIND.TrackBarGadget,
+    GADGET_KIND.TreeGadget,
+    GADGET_KIND.WebGadget,
+    GADGET_KIND.WebViewGadget
+  ].sort();
+
+  const actualTooltipKinds = [...GADGET_KIND_SET]
+    .filter(kind => canInspectGadgetTooltipRows(kind))
+    .sort();
+
+  assert.deepEqual(actualTooltipKinds, expectedTooltipKinds);
+  assert.equal(canInspectGadgetTooltipRows(GADGET_KIND.MDIGadget), false);
+  assert.equal(canInspectGadgetTooltipRows(GADGET_KIND.Unknown), false);
+  assert.equal(canInspectGadgetTooltipRows(undefined), false);
+});
+
+test("keeps gadget tooltip fields editable for all original tooltip rows", () => {
+  const actualEditableTooltipKinds = [...GADGET_KIND_SET]
+    .filter(kind => getGadgetTooltipFieldConfig(kind)?.valueEditable === true)
+    .sort();
+  const actualVariableTooltipKinds = [...GADGET_KIND_SET]
+    .filter(kind => getGadgetTooltipFieldConfig(kind)?.variableToggleEditable === true)
+    .sort();
+
+  assert.deepEqual(actualEditableTooltipKinds, actualVariableTooltipKinds);
+  assert.equal(getGadgetTooltipFieldConfig(GADGET_KIND.ButtonGadget)?.valueEditable, true);
+  assert.equal(getGadgetTooltipFieldConfig(GADGET_KIND.CustomGadget)?.variableToggleEditable, true);
+  assert.equal(getGadgetTooltipFieldConfig(GADGET_KIND.Unknown), undefined);
+});
+
+
+test("keeps original FD_SelectGadget base rows visible for all regular gadget kinds", () => {
+  const actualBaseRowKinds = [...GADGET_KIND_SET]
+    .filter(kind => canInspectGadgetBaseRows(kind))
+    .sort();
+
+  assert.deepEqual(actualBaseRowKinds, ORIGINAL_FD_SELECT_GADGET_BASE_ROW_KINDS);
+  assert.equal(canInspectGadgetBaseRows(GADGET_KIND.MDIGadget), false);
+  assert.equal(canInspectGadgetBaseRows(GADGET_KIND.Unknown), false);
+  assert.equal(canInspectGadgetBaseRows(undefined), false);
+});
+
+test("documents original parent row visibility without replacing the reparent dialog policy", () => {
+  assert.deepEqual(getGadgetParentFieldConfig(GADGET_KIND.ButtonGadget, false), {
+    visible: true,
+    valueEditable: false,
+    selectTargetAvailable: false,
+    changeDialogAvailable: true,
+    title: "Original FD_SelectGadget parent row. The value is selected through the reparent dialog, not edited as free text."
+  });
+  assert.equal(getGadgetParentFieldConfig(GADGET_KIND.ButtonGadget, true)?.selectTargetAvailable, true);
+  assert.equal(getGadgetParentFieldConfig(GADGET_KIND.MDIGadget, false), undefined);
+});
+
+test("documents original lock rows while preserving safe ResizeGadget patch policy", () => {
+  const actualLockKinds = [...GADGET_KIND_SET]
+    .filter(kind => getGadgetResizeLockFieldConfig(kind)?.visible === true)
+    .sort();
+
+  assert.deepEqual(actualLockKinds, ORIGINAL_FD_SELECT_GADGET_BASE_ROW_KINDS);
+  assert.equal(getGadgetResizeLockFieldConfig(GADGET_KIND.ButtonGadget)?.valueEditablePolicy, "safe-resize-patch-only");
+  assert.equal(getGadgetResizeLockFieldConfig(GADGET_KIND.Unknown), undefined);
+});
+
+test("keeps original font row visible and records current raw-font editing policy", () => {
+  const actualFontKinds = [...GADGET_KIND_SET]
+    .filter(kind => getGadgetFontFieldConfig(kind)?.visible === true)
+    .sort();
+
+  assert.deepEqual(actualFontKinds, ORIGINAL_FD_SELECT_GADGET_BASE_ROW_KINDS);
+  assert.equal(getGadgetFontFieldConfig(GADGET_KIND.StringGadget)?.rawEditable, true);
+  assert.equal(getGadgetFontFieldConfig(GADGET_KIND.Unknown), undefined);
+});
+
+test("keeps original constants node visible while known flags stay in declare.pb order", () => {
+  const actualConstantsKinds = [...GADGET_KIND_SET]
+    .filter(kind => getGadgetConstantsFieldConfig(kind)?.visible === true)
+    .sort();
+
+  assert.deepEqual(actualConstantsKinds, ORIGINAL_FD_SELECT_GADGET_BASE_ROW_KINDS);
+  assert.deepEqual(getGadgetConstantsFieldConfig(GADGET_KIND.ImageGadget)?.knownFlags, ["#PB_Image_Border", "#PB_Image_Raised"]);
+  assert.deepEqual(getGadgetConstantsFieldConfig(GADGET_KIND.OptionGadget)?.knownFlags, []);
+  assert.equal(getGadgetConstantsFieldConfig(GADGET_KIND.Unknown), undefined);
+});
+
+
+test("documents complete FD_SelectGadget row coverage after the FD-011 audit", () => {
+  const baseKind = GADGET_KIND.ButtonGadget;
+
+  assert.deepEqual([
+    "#PB_Any",
+    "Variable",
+    "X",
+    "Y",
+    "Width",
+    "Height",
+    "Hidden",
+    "Disabled"
+  ], [
+    "#PB_Any",
+    "Variable",
+    "X",
+    "Y",
+    "Width",
+    "Height",
+    "Hidden",
+    "Disabled"
+  ]);
+
+  assert.deepEqual(getGadgetCaptionFieldConfig(baseKind), {
+    label: "Caption",
+    textEditable: true,
+    variableToggleEditable: true
+  });
+  assert.deepEqual(getGadgetTooltipFieldConfig(baseKind), {
+    valueEditable: true,
+    variableToggleEditable: true
+  });
+  assert.equal(getGadgetParentFieldConfig(baseKind, false)?.visible, true);
+  assert.equal(getGadgetResizeLockFieldConfig(baseKind)?.visible, true);
+  assert.equal(getGadgetFontFieldConfig(baseKind)?.visible, true);
+  assert.equal(getGadgetSelectProcFieldConfig(baseKind)?.valueEditable, true);
+  assert.equal(getGadgetConstantsFieldConfig(baseKind)?.visible, true);
+
+  assert.equal(getGadgetCtorRangeFieldLabels(GADGET_KIND.ProgressBarGadget)?.minLabel, "Min");
+  assert.equal(canInspectGadgetImageRows(GADGET_KIND.ImageGadget), true);
+  assert.equal(canEditGadgetCheckedState(GADGET_KIND.CheckBoxGadget), true);
+  assert.equal(canInspectGadgetSplitterPosition(GADGET_KIND.SplitterGadget), true);
+  assert.equal(canInspectCustomGadgetCodeRows(GADGET_KIND.CustomGadget), true);
+});
 test("marks only original item-editor gadget kinds for inspector item sections", () => {
   assert.equal(canInspectGadgetItems("PanelGadget"), true);
   assert.equal(canInspectGadgetItems("ListIconGadget"), true);

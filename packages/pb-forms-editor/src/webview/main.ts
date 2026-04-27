@@ -137,9 +137,15 @@ import {
   canInspectCustomGadgetCodeRows,
   canInspectGadgetImageRows,
   canInspectGadgetItems,
-  canInspectGadgetSelectProc,
   canInspectGadgetSplitterPosition,
   getCustomGadgetHelpDisplay,
+  getCustomGadgetSelectPresetFieldConfig,
+  getGadgetConstantsFieldConfig,
+  getGadgetFontFieldConfig,
+  getGadgetParentFieldConfig,
+  getGadgetResizeLockFieldConfig,
+  getGadgetSelectProcFieldConfig,
+  getGadgetTooltipFieldConfig,
   getGadgetCaptionFieldConfig,
   getGadgetCurrentImageDisplay,
   getGadgetCtorRangeFieldLabels,
@@ -11260,6 +11266,10 @@ function renderProps() {
   const captionField = getGadgetCaptionFieldConfig(g.kind);
   const canEditColors = canEditGadgetColors(g.kind);
   const canEditChecked = canEditGadgetCheckedState(g.kind);
+  const parentField = getGadgetParentFieldConfig(g.kind, Boolean(g.parentId));
+  const resizeLockField = getGadgetResizeLockFieldConfig(g.kind);
+  const fontField = getGadgetFontFieldConfig(g.kind);
+  const constantsField = getGadgetConstantsFieldConfig(g.kind);
   const hasExpressionVisibility = (Boolean(g.hiddenRaw) && g.hidden === undefined) || (Boolean(g.disabledRaw) && g.disabled === undefined);
   const hasExpressionChecked = canEditChecked && Boolean(g.stateRaw) && g.state === undefined;
 
@@ -11300,26 +11310,39 @@ function renderProps() {
     );
   }
 
-  propsEl.appendChild(
-    row(
-      "Tooltip Is Variable",
-      checkboxInput(Boolean(g.tooltipVariable), v => {
-        applyLocalGadgetTooltipUpdate(g, getGadgetTooltipInspectorValue(g), v);
-      })
-    )
-  );
-  propsEl.appendChild(
-    row(
-      "Tooltip",
-      textInput(
-        getGadgetTooltipInspectorValue(g),
-        v => {
-          applyLocalGadgetTooltipUpdate(g, v, Boolean(g.tooltipVariable));
-        },
-        { title: "Tooltip shown for this gadget. Enable 'Tooltip Is Variable' if this value is a variable name or expression." }
+  const tooltipField = getGadgetTooltipFieldConfig(g.kind);
+  if (tooltipField) {
+    propsEl.appendChild(
+      row(
+        "Tooltip Is Variable",
+        checkboxInput(Boolean(g.tooltipVariable), v => {
+          applyLocalGadgetTooltipUpdate(g, getGadgetTooltipInspectorValue(g), v);
+        }, {
+          disabled: !tooltipField.variableToggleEditable,
+          title: tooltipField.variableToggleEditable
+            ? "Treat this tooltip as a variable or expression instead of a string literal."
+            : "This gadget keeps the original readonly tooltip-variable field behavior."
+        })
       )
-    )
-  );
+    );
+    propsEl.appendChild(
+      row(
+        "Tooltip",
+        textInput(
+          getGadgetTooltipInspectorValue(g),
+          v => {
+            applyLocalGadgetTooltipUpdate(g, v, Boolean(g.tooltipVariable));
+          },
+          {
+            disabled: !tooltipField.valueEditable,
+            title: tooltipField.valueEditable
+              ? "Tooltip shown for this gadget. Enable 'Tooltip Is Variable' if this value is a variable name or expression."
+              : "This gadget keeps the original readonly tooltip field behavior."
+          }
+        )
+      )
+    );
+  }
 
   propsEl.appendChild(section("Layout"));
   propsEl.appendChild(row("X", numberInput(g.x, v => { updateGadgetDisplayField(g, "x", asInt(v)); postGadgetRect(g); render(); renderProps(); })));
@@ -11367,8 +11390,9 @@ function renderProps() {
       })
     )
   );
-  const resizeCtx = getWindowResizeLockContext(g);
-  const currentLockLeft = g.lockLeft !== false;
+  if (resizeLockField) {
+    const resizeCtx = getWindowResizeLockContext(g);
+    const currentLockLeft = g.lockLeft !== false;
   const currentLockRight = g.lockRight === true;
   const currentLockTop = g.lockTop !== false;
   const currentLockBottom = g.lockBottom === true;
@@ -11418,28 +11442,31 @@ function renderProps() {
     ? "These lock options create, update or remove the gadget's ResizeGadget(...) line as needed."
     : "Lock editing is available only when the current layout can be converted to a safe ResizeGadget(...) update."
   ));
+  }
   if (hasExpressionVisibility) {
     propsEl.appendChild(mutedNote("Custom Hidden/Disabled expressions stay unchanged until you edit them here. Editing replaces them with 1 or 0."));
   }
 
-  propsEl.appendChild(
-    row(
-      "Font Raw",
-      textInput(
-        g.gadgetFontRaw ?? "",
-        v => {
-          const trimmed = v.trim();
-          g.gadgetFontRaw = trimmed || undefined;
-          postGadgetProperties(g.id, { gadgetFontRaw: trimmed || undefined });
-          renderProps();
-        },
-        { title: "Edit the font expression used for this gadget." }
+  if (fontField) {
+    propsEl.appendChild(
+      row(
+        "Font Raw",
+        textInput(
+          g.gadgetFontRaw ?? "",
+          v => {
+            const trimmed = v.trim();
+            g.gadgetFontRaw = trimmed || undefined;
+            postGadgetProperties(g.id, { gadgetFontRaw: trimmed || undefined });
+            renderProps();
+          },
+          { disabled: !fontField.rawEditable, title: fontField.title }
+        )
       )
-    )
-  );
-  const gadgetFontSummary = getGadgetFontDisplaySummary(g);
-  if (gadgetFontSummary) {
-    propsEl.appendChild(mutedNote(`Current font: ${gadgetFontSummary}`));
+    );
+    const gadgetFontSummary = getGadgetFontDisplaySummary(g);
+    if (gadgetFontSummary) {
+      propsEl.appendChild(mutedNote(`Current font: ${gadgetFontSummary}`));
+    }
   }
 
   if (canEditColors) {
@@ -11578,6 +11605,7 @@ function renderProps() {
   }
 
   if (canInspectCustomGadgetCodeRows(g.kind)) {
+    const customSelectPresetField = getCustomGadgetSelectPresetFieldConfig(g.kind);
     propsEl.appendChild(
       row(
         "SelectGadget",
@@ -11589,7 +11617,8 @@ function renderProps() {
             renderProps();
           },
           {
-            title: "Shows the original CustomGadget combobox row. In the current PureBasic source, changing this row does not rewrite InitCode or CreateCode automatically."
+            disabled: !customSelectPresetField?.valueEditable,
+            title: customSelectPresetField?.title ?? "Shows the original CustomGadget combobox row."
           }
         )
       )
@@ -11642,9 +11671,10 @@ function renderProps() {
     propsEl.appendChild(mutedNote("SelectGadget follows the original combobox row. In the available PureBasic source, preset changes there are not written back automatically; InitCode and CreateCode remain the effective saved values."));
   }
 
-  if (g.parentId) {
+  if (parentField?.selectTargetAvailable && g.parentId) {
     const btn = document.createElement("button");
     btn.textContent = "Select Parent";
+    btn.title = parentField.title;
     btn.onclick = () => {
       selection = { kind: "gadget", id: g.parentId! };
       render();
@@ -11654,18 +11684,20 @@ function renderProps() {
     propsEl.appendChild(row("", btn));
   }
 
-  const changeParentBtn = document.createElement("button");
-  const canChangeParent = canOpenGadgetReparentDialog(g);
-  changeParentBtn.textContent = "Change Parent";
-  changeParentBtn.disabled = !canChangeParent;
-  changeParentBtn.title = canChangeParent
-    ? "Open the original-style Select Parent dialog for this gadget."
-    : "This first reparenting cut currently supports normal gadgets, but not SplitterGadget or CustomGadget.";
-  changeParentBtn.onclick = () => {
-    if (!canChangeParent) return;
-    openSelectParentDialog(g);
-  };
-  propsEl.appendChild(row("", changeParentBtn));
+  if (parentField) {
+    const changeParentBtn = document.createElement("button");
+    const canChangeParent = parentField.changeDialogAvailable && canOpenGadgetReparentDialog(g);
+    changeParentBtn.textContent = "Change Parent";
+    changeParentBtn.disabled = !canChangeParent;
+    changeParentBtn.title = canChangeParent
+      ? "Open the original-style Select Parent dialog for this gadget."
+      : "This first reparenting cut currently supports normal gadgets, but not SplitterGadget or CustomGadget.";
+    changeParentBtn.onclick = () => {
+      if (!canChangeParent) return;
+      openSelectParentDialog(g);
+    };
+    propsEl.appendChild(row("", changeParentBtn));
+  }
 
   if (canInspectGadgetSplitterPosition(g.kind)) {
     propsEl.appendChild(
@@ -11750,7 +11782,8 @@ function renderProps() {
     if (pendingEl) propsEl.appendChild(pendingEl);
   }
 
-  if (canInspectGadgetSelectProc(g.kind)) {
+  const gadgetSelectProcField = getGadgetSelectProcFieldConfig(g.kind);
+  if (gadgetSelectProcField) {
     propsEl.appendChild(
       row(
         "SelectProc",
@@ -11767,44 +11800,47 @@ function renderProps() {
             renderProps();
           },
           {
-            title: "Choose an existing procedure or type a procedure name.",
-            placeholder: "Type or pick a procedure"
+            disabled: !gadgetSelectProcField.valueEditable,
+            title: gadgetSelectProcField.title,
+            placeholder: gadgetSelectProcField.placeholder
           }
         )
       )
     );
   }
 
-  const gadgetKnownFlags = getGadgetKnownFlags(g.kind);
-  const enabledGadgetFlags = new Set(
-    (g.flagsExpr ?? "")
-      .split("|")
-      .map(part => part.trim())
-      .filter(Boolean)
-  );
+  if (constantsField) {
+    const gadgetKnownFlags = constantsField.knownFlags;
+    const enabledGadgetFlags = new Set(
+      (g.flagsExpr ?? "")
+        .split("|")
+        .map(part => part.trim())
+        .filter(Boolean)
+    );
 
-  propsEl.appendChild(section("Constants"));
-  for (const flag of gadgetKnownFlags) {
-    propsEl.appendChild(row(
-      flag,
-      checkboxInput(enabledGadgetFlags.has(flag), checked => {
-        const nextEnabled = new Set(
-          (g.flagsExpr ?? "")
-            .split("|")
-            .map(part => part.trim())
-            .filter(Boolean)
-            .filter(part => gadgetKnownFlags.includes(part))
-        );
-        if (checked) nextEnabled.add(flag);
-        else nextEnabled.delete(flag);
-        const nextKnown = gadgetKnownFlags.filter(entry => nextEnabled.has(entry));
-        const nextExpr = buildGadgetFlagsExpr(g.kind, nextKnown, g.flagsExpr);
-        g.flagsExpr = nextExpr;
-        postGadgetOpenArgs(g.id, { flagsExpr: nextExpr ?? "" });
-        render();
-        renderProps();
-      })
-    ));
+    propsEl.appendChild(section("Constants"));
+    for (const flag of gadgetKnownFlags) {
+      propsEl.appendChild(row(
+        flag,
+        checkboxInput(enabledGadgetFlags.has(flag), checked => {
+          const nextEnabled = new Set(
+            (g.flagsExpr ?? "")
+              .split("|")
+              .map(part => part.trim())
+              .filter(Boolean)
+              .filter(part => gadgetKnownFlags.includes(part))
+          );
+          if (checked) nextEnabled.add(flag);
+          else nextEnabled.delete(flag);
+          const nextKnown = gadgetKnownFlags.filter(entry => nextEnabled.has(entry));
+          const nextExpr = buildGadgetFlagsExpr(g.kind, nextKnown, g.flagsExpr);
+          g.flagsExpr = nextExpr;
+          postGadgetOpenArgs(g.id, { flagsExpr: nextExpr ?? "" });
+          render();
+          renderProps();
+        }, { title: constantsField.title })
+      ));
+    }
   }
 
   // Items editor (minimal UI)
