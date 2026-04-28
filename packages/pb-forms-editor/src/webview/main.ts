@@ -223,8 +223,16 @@ import {
 } from "../core/model";
 import {
   buildWindowFlagsExpr,
+  getWindowBaseRowsFieldConfig,
   getWindowBooleanInspectorState,
+  getWindowColorFieldConfig,
+  getWindowConstantsFieldConfig,
+  getWindowGenerateEventProcFieldConfig,
+  getWindowGenerateEventProcEditState,
+  getWindowHiddenFieldConfig,
+  getWindowDisabledFieldConfig,
   getWindowParentAsRawExpressionWithOverride,
+  getWindowParentFieldConfig,
   getWindowParentInspectorValue,
   getWindowPositionInspectorValue,
   getWindowPreviewTitleBarHeight,
@@ -239,6 +247,7 @@ import {
   getWindowPreviewTitleButtonSize,
   getWindowPreviewTitleTextLayout,
   getWindowPreviewTitleIconSize,
+  getWindowSelectProcFieldConfig,
   getWindowPreviewToolBarDecoration,
   getWindowPreviewStatusBarDecoration,
   getWindowPreviewStatusBarProgressDecoration,
@@ -9263,8 +9272,23 @@ function renderProps() {
     const enumSymbol = variableName ? `#${variableName.trim()}` : "#Window_0";
     const knownFlags = new Set(win.knownFlags ?? []);
     const customFlagsValue = (win.customFlags ?? []).join(" | ");
+    const windowBaseRowsField = getWindowBaseRowsFieldConfig();
+    const windowParentField = getWindowParentFieldConfig();
+    const windowColorField = getWindowColorFieldConfig();
+    const windowGenerateEventProcField = getWindowGenerateEventProcFieldConfig();
+    const windowGenerateEventProcEditState = getWindowGenerateEventProcEditState(
+      Boolean(win.generateEventLoop),
+      Boolean(win.hasEventMenuBlock),
+      Boolean(win.hasEventGadgetCaseBranches)
+    );
+    const windowHiddenField = getWindowHiddenFieldConfig();
+    const windowDisabledField = getWindowDisabledFieldConfig();
+    const windowSelectProcField = getWindowSelectProcFieldConfig();
+    const windowConstantsField = getWindowConstantsFieldConfig();
 
-    propsEl.appendChild(section("Properties"));
+    if (windowBaseRowsField.visible) {
+      propsEl.appendChild(section("Properties"));
+    }
     propsEl.appendChild(row(PB_ANY, checkboxInput(win.pbAny, v => {
       vscode.postMessage({
         type: WEBVIEW_TO_EXT_MSG_TYPE.toggleWindowPbAny,
@@ -9357,20 +9381,24 @@ function renderProps() {
     if (shouldShowReadonlyUnscaledLayoutRows()) {
       propsEl.appendChild(row("Height (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(win.hRaw, win.h), "Readonly code value written to OpenWindow(...).")));
     }
-    propsEl.appendChild(row("Hidden", checkboxInput(getWindowBooleanInspectorState(win.hiddenRaw, win.hidden), checked => {
-      if (!model.window) return;
-      win.hidden = checked;
-      win.hiddenRaw = checked ? "1" : "";
-      postWindowProperties(win, { hiddenRaw: checked ? "1" : "" });
-      renderProps();
-    })));
-    propsEl.appendChild(row("Disabled", checkboxInput(getWindowBooleanInspectorState(win.disabledRaw, win.disabled), checked => {
-      if (!model.window) return;
-      win.disabled = checked;
-      win.disabledRaw = checked ? "1" : "";
-      postWindowProperties(win, { disabledRaw: checked ? "1" : "" });
-      renderProps();
-    })));
+    if (windowHiddenField.visible) {
+      propsEl.appendChild(row("Hidden", checkboxInput(getWindowBooleanInspectorState(win.hiddenRaw, win.hidden), checked => {
+        if (!model.window) return;
+        win.hidden = checked;
+        win.hiddenRaw = checked ? windowHiddenField.checkedValue : windowHiddenField.uncheckedValue;
+        postWindowProperties(win, { hiddenRaw: win.hiddenRaw });
+        renderProps();
+      }, { title: windowHiddenField.title })));
+    }
+    if (windowDisabledField.visible) {
+      propsEl.appendChild(row("Disabled", checkboxInput(getWindowBooleanInspectorState(win.disabledRaw, win.disabled), checked => {
+        if (!model.window) return;
+        win.disabled = checked;
+        win.disabledRaw = checked ? windowDisabledField.checkedValue : windowDisabledField.uncheckedValue;
+        postWindowProperties(win, { disabledRaw: win.disabledRaw });
+        renderProps();
+      }, { title: windowDisabledField.title })));
+    }
     const parentAsRawExpression = getWindowParentAsRawExpressionWithOverride(
       win.parentRaw,
       win.parent,
@@ -9385,7 +9413,8 @@ function renderProps() {
         : undefined;
       postWindowOpenArgs(win, { parentRaw: parsed.raw });
     });
-    parentInput.title = "Enter the parent window expression. Disable the checkbox to emit WindowID(...); enable it to write the expression raw.";
+    parentInput.disabled = !windowParentField.valueEditable;
+    parentInput.title = windowParentField.title;
     const parentAsRawExpressionCheckbox = checkboxInput(parentAsRawExpression, checked => {
       if (!model.window) return;
       windowParentAsRawExpressionOverrides.set(win.id, checked);
@@ -9399,11 +9428,14 @@ function renderProps() {
       }
       renderProps();
     });
-    parentAsRawExpressionCheckbox.title = "When enabled, the parent is written directly as the last OpenWindow(...) argument. When disabled, the editor emits WindowID(...), matching the original default path.";
-    propsEl.appendChild(row("Parent", parentInput));
-    propsEl.appendChild(row("Parent as raw expression", parentAsRawExpressionCheckbox));
+    parentAsRawExpressionCheckbox.disabled = !windowParentField.rawExpressionToggleAvailable;
+    parentAsRawExpressionCheckbox.title = windowParentField.rawExpressionTitle;
+    if (windowParentField.visible) {
+      propsEl.appendChild(row("Parent", parentInput));
+      propsEl.appendChild(row("Parent as raw expression", parentAsRawExpressionCheckbox));
+    }
     const windowColorInput = readonlyInput(getWindowColorInspectorDisplay(win.colorRaw));
-    windowColorInput.title = "Use the color picker to choose a window color, or Remove to clear it.";
+    windowColorInput.title = windowColorField.title;
     const windowColorPicker = document.createElement("input");
     windowColorPicker.type = "color";
     windowColorPicker.value = pbColorNumberToCssHex(win.color) ?? "#000000";
@@ -9438,19 +9470,27 @@ function renderProps() {
       postWindowProperties(win, { colorRaw: "" });
       renderProps();
     };
-    propsEl.appendChild(row("Color", inputWithActions(windowColorInput, windowColorPicker, clearWindowColorBtn)));
-    propsEl.appendChild(mutedNote("Use the picker to set the window color. Remove clears the current color."));
-    propsEl.appendChild(row(
-      "Generate events procedure?",
-      checkboxInput(Boolean(win.generateEventLoop), v => {
+    if (windowColorField.visible) {
+      propsEl.appendChild(row("Color", inputWithActions(windowColorInput, windowColorPicker, clearWindowColorBtn)));
+      propsEl.appendChild(mutedNote("Use the picker to set the window color. Remove clears the current color."));
+    }
+    if (windowGenerateEventProcField.visible) {
+      propsEl.appendChild(row(
+        "Generate events procedure?",
+        checkboxInput(Boolean(win.generateEventLoop), v => {
         if (!model.window) return;
         win.generateEventLoop = v;
         post({ type: WEBVIEW_TO_EXT_MSG_TYPE.setWindowGenerateEventLoop, windowKey: win.id, enabled: v });
         renderProps();
+      }, {
+        title: windowGenerateEventProcEditState.title,
+        disabled: !windowGenerateEventProcField.valueEditable || !windowGenerateEventProcEditState.valueEditable
       })
-    ));
-    propsEl.appendChild(row(
-      "SelectProc",
+      ));
+    }
+    if (windowSelectProcField.visible) {
+      propsEl.appendChild(row(
+        "SelectProc",
       editableComboInput(
         win.eventProc ?? "",
         getProcedureSuggestions(),
@@ -9462,11 +9502,13 @@ function renderProps() {
           renderProps();
         },
         {
-          title: "Choose an existing procedure or type a procedure name.",
-          placeholder: "Type or pick a procedure"
+          disabled: !windowSelectProcField.valueEditable,
+          title: windowSelectProcField.title,
+          placeholder: windowSelectProcField.placeholder
         }
       )
-    ));
+      ));
+    }
     propsEl.appendChild(createSubSection("Event File"));
     const eventFileInput = textInput(
       win.eventFile ?? "",
@@ -9497,8 +9539,10 @@ function renderProps() {
     propsEl.appendChild(row("File", inputWithActions(eventFileInput, removeEventFileBtn)));
     propsEl.appendChild(mutedNote("Use this field to keep an event include file linked to the window. Remove clears it."));
 
-    propsEl.appendChild(section("Constants"));
-    for (const flag of PBFD_SYMBOLS.windowKnownFlags ?? []) {
+    if (windowConstantsField.visible) {
+      propsEl.appendChild(section("Constants"));
+    }
+    for (const flag of windowConstantsField.knownFlags) {
       propsEl.appendChild(row(
         flag,
         checkboxInput(knownFlags.has(flag), checked => {
@@ -9506,7 +9550,7 @@ function renderProps() {
           const nextKnown = new Set(model.window.knownFlags ?? []);
           if (checked) nextKnown.add(flag);
           else nextKnown.delete(flag);
-          model.window.knownFlags = (PBFD_SYMBOLS.windowKnownFlags ?? []).filter(entry => nextKnown.has(entry));
+          model.window.knownFlags = windowConstantsField.knownFlags.filter(entry => nextKnown.has(entry));
           const nextExpr = buildWindowFlagsExpr(model.window.knownFlags, (model.window.customFlags ?? []).join(" | "));
           model.window.flagsExpr = nextExpr;
           postWindowOpenArgs(model.window, { flagsExpr: nextExpr ?? "" });
@@ -9514,16 +9558,18 @@ function renderProps() {
         })
       ));
     }
-    propsEl.appendChild(row(
-      "Custom Flags",
-      textInput(customFlagsValue, v => {
+    if (windowConstantsField.customFlagsEditable) {
+      propsEl.appendChild(row(
+        "Custom Flags",
+        textInput(customFlagsValue, v => {
         if (!model.window) return;
         model.window.customFlags = parseWindowCustomFlagsInput(v);
         const nextExpr = buildWindowFlagsExpr(model.window.knownFlags ?? [], v);
         model.window.flagsExpr = nextExpr;
         postWindowOpenArgs(model.window, { flagsExpr: nextExpr ?? "" });
-      }, { placeholder: "#PB_Window_CustomFlagA | #PB_Window_CustomFlagB" })
-    ));
+      }, { placeholder: "#PB_Window_CustomFlagA | #PB_Window_CustomFlagB", title: windowConstantsField.title })
+      ));
+    }
     return;
   }
 

@@ -249,6 +249,160 @@ export type ParsedWindowParentInput = {
   storedValue: string | undefined;
 };
 
+export type WindowBaseRowsFieldConfig = {
+  visible: boolean;
+  valueEditable: boolean;
+  title: string;
+};
+
+export type WindowParentFieldConfig = {
+  visible: boolean;
+  valueEditable: boolean;
+  rawExpressionToggleAvailable: boolean;
+  title: string;
+  rawExpressionTitle: string;
+};
+
+export type WindowColorFieldConfig = {
+  visible: boolean;
+  valueEditablePolicy: "color-picker-with-remove";
+  rawDisplayEditable: boolean;
+  title: string;
+};
+
+export type WindowGenerateEventProcFieldConfig = {
+  visible: boolean;
+  valueEditable: boolean;
+  title: string;
+};
+
+export type WindowGenerateEventProcEditState = {
+  valueEditable: boolean;
+  title: string;
+};
+
+export type WindowBooleanFieldConfig = {
+  visible: boolean;
+  checkedValue: "1";
+  uncheckedValue: "";
+  zeroLinePolicy: "remove-managed-line";
+  title: string;
+};
+
+export type WindowSelectProcFieldConfig = {
+  visible: boolean;
+  valueEditable: boolean;
+  preservesGridString: boolean;
+  title: string;
+  placeholder: string;
+};
+
+export type WindowConstantsFieldConfig = {
+  visible: boolean;
+  knownFlags: readonly string[];
+  customFlagsEditable: boolean;
+  title: string;
+};
+
+export function getWindowBaseRowsFieldConfig(): WindowBaseRowsFieldConfig {
+  return {
+    visible: true,
+    valueEditable: true,
+    title: "Original FD_InitBasicPropGridRows() window rows are always visible for windows.",
+  };
+}
+
+export function getWindowParentFieldConfig(): WindowParentFieldConfig {
+  return {
+    visible: true,
+    valueEditable: true,
+    rawExpressionToggleAvailable: true,
+    title: "Enter the parent window expression. Disable the checkbox to emit WindowID(...); enable it to write the expression raw.",
+    rawExpressionTitle: "When enabled, the parent is written directly as the last OpenWindow(...) argument. When disabled, the editor emits WindowID(...), matching the original default path.",
+  };
+}
+
+export function getWindowColorFieldConfig(): WindowColorFieldConfig {
+  return {
+    visible: true,
+    valueEditablePolicy: "color-picker-with-remove",
+    rawDisplayEditable: false,
+    title: "Use the color picker to choose a window color, or Remove to clear it.",
+  };
+}
+
+export function getWindowGenerateEventProcFieldConfig(): WindowGenerateEventProcFieldConfig {
+  return {
+    visible: true,
+    valueEditable: true,
+    title: "Controls whether the generated window event procedure is emitted for this window.",
+  };
+}
+
+export function getWindowGenerateEventProcEditState(
+  generateEventLoop: boolean,
+  hasEventMenuBlock: boolean,
+  hasEventGadgetCaseBranches: boolean
+): WindowGenerateEventProcEditState {
+  if (generateEventLoop && hasEventMenuBlock) {
+    return {
+      valueEditable: false,
+      title: "Cannot disable while a parsed Select EventMenu() block exists. Remove menu/toolbar event bindings first.",
+    };
+  }
+
+  if (generateEventLoop && hasEventGadgetCaseBranches) {
+    return {
+      valueEditable: false,
+      title: "Cannot disable while Select EventGadget() contains Case branches.",
+    };
+  }
+
+  return {
+    valueEditable: true,
+    title: "Controls whether the generated window event procedure is emitted for this window.",
+  };
+}
+
+export function getWindowHiddenFieldConfig(): WindowBooleanFieldConfig {
+  return {
+    visible: true,
+    checkedValue: "1",
+    uncheckedValue: "",
+    zeroLinePolicy: "remove-managed-line",
+    title: "HideWindow(...) is emitted only when checked; unchecked removes the managed line.",
+  };
+}
+
+export function getWindowDisabledFieldConfig(): WindowBooleanFieldConfig {
+  return {
+    visible: true,
+    checkedValue: "1",
+    uncheckedValue: "",
+    zeroLinePolicy: "remove-managed-line",
+    title: "DisableWindow(...) is emitted only when checked; unchecked removes the managed line.",
+  };
+}
+
+export function getWindowSelectProcFieldConfig(): WindowSelectProcFieldConfig {
+  return {
+    visible: true,
+    valueEditable: true,
+    preservesGridString: true,
+    title: "Choose an existing procedure or type a procedure name.",
+    placeholder: "Type or pick a procedure",
+  };
+}
+
+export function getWindowConstantsFieldConfig(): WindowConstantsFieldConfig {
+  return {
+    visible: true,
+    knownFlags: WINDOW_KNOWN_FLAGS,
+    customFlagsEditable: true,
+    title: "Window flags are written through the OpenWindow(...) flags argument in original declaration order.",
+  };
+}
+
 function unwrapWindowIdParent(raw: string): string | undefined {
   return parsePbWindowReference(raw)?.innerRaw;
 }

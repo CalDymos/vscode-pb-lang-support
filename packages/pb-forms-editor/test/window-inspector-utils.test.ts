@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL, WINDOW_PREVIEW_PAGE_PADDING, buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewAddIconMetrics, getWindowPreviewBodyDecoration, getWindowPreviewCanvasOrigin, getWindowPreviewChromeTopPadding, getWindowPreviewClientBottomPadding, getWindowPreviewClientSidePadding, getWindowPreviewFrameDecoration, getWindowPreviewFrameStrokeRect, getWindowPreviewMenuBarDecoration, getWindowPreviewMenuFlyoutDecoration, getWindowPreviewMenuRootEntryRect, getWindowPreviewMenuSubmenuIconMetrics, getWindowPreviewStatusBarDecoration, getWindowPreviewStatusBarProgressDecoration, getWindowPreviewTitleBarDecoration, getWindowPreviewTitleBarHeight, getWindowPreviewTitleBarMetrics, getWindowPreviewTitleButtonAssetKind, getWindowPreviewTitleButtonLayout, getWindowPreviewTitleButtonSize, getWindowPreviewTitleButtons, getWindowPreviewTitleButtonSlots, getWindowPreviewTitleIconSize, getWindowPreviewTitleTextLayout, getWindowPreviewToolBarDecoration, usesWindowPreviewExternalMenuBar, getWindowVariableInspectorValue, hasWindowPreviewResizeGrip, hasWindowPreviewTitleBar, hasWindowPreviewTitleIcon, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput } from '../src/core/window/inspector';
+import { WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL, WINDOW_PREVIEW_PAGE_PADDING, buildWindowFlagsExpr, getWindowBaseRowsFieldConfig, getWindowBooleanInspectorState, getWindowColorFieldConfig, getWindowConstantsFieldConfig, getWindowGenerateEventProcFieldConfig, getWindowGenerateEventProcEditState, getWindowHiddenFieldConfig, getWindowDisabledFieldConfig, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentFieldConfig, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewAddIconMetrics, getWindowPreviewBodyDecoration, getWindowPreviewCanvasOrigin, getWindowPreviewChromeTopPadding, getWindowPreviewClientBottomPadding, getWindowPreviewClientSidePadding, getWindowPreviewFrameDecoration, getWindowPreviewFrameStrokeRect, getWindowPreviewMenuBarDecoration, getWindowPreviewMenuFlyoutDecoration, getWindowPreviewMenuRootEntryRect, getWindowPreviewMenuSubmenuIconMetrics, getWindowPreviewStatusBarDecoration, getWindowPreviewStatusBarProgressDecoration, getWindowPreviewTitleBarDecoration, getWindowPreviewTitleBarHeight, getWindowPreviewTitleBarMetrics, getWindowPreviewTitleButtonAssetKind, getWindowPreviewTitleButtonLayout, getWindowPreviewTitleButtonSize, getWindowPreviewTitleButtons, getWindowPreviewTitleButtonSlots, getWindowPreviewTitleIconSize, getWindowPreviewTitleTextLayout, getWindowPreviewToolBarDecoration, usesWindowPreviewExternalMenuBar, getWindowSelectProcFieldConfig, getWindowVariableInspectorValue, hasWindowPreviewResizeGrip, hasWindowPreviewTitleBar, hasWindowPreviewTitleIcon, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput } from '../src/core/window/inspector';
 import { parsePbWindowReference } from '../src/core/parser/pb-window-reference';
 
 test('buildWindowFlagsExpr keeps original known window flag order and appends custom flags', () => {
@@ -41,6 +41,66 @@ test('window known flags list matches original PureBasic declaration order', () 
   ]);
 });
 
+
+test('window inspector field policies match the original FD_SelectWindow row groups', () => {
+  assert.deepEqual(getWindowBaseRowsFieldConfig(), {
+    visible: true,
+    valueEditable: true,
+    title: 'Original FD_InitBasicPropGridRows() window rows are always visible for windows.',
+  });
+
+  assert.deepEqual(getWindowParentFieldConfig(), {
+    visible: true,
+    valueEditable: true,
+    rawExpressionToggleAvailable: true,
+    title: 'Enter the parent window expression. Disable the checkbox to emit WindowID(...); enable it to write the expression raw.',
+    rawExpressionTitle: 'When enabled, the parent is written directly as the last OpenWindow(...) argument. When disabled, the editor emits WindowID(...), matching the original default path.',
+  });
+
+  assert.deepEqual(getWindowColorFieldConfig(), {
+    visible: true,
+    valueEditablePolicy: 'color-picker-with-remove',
+    rawDisplayEditable: false,
+    title: 'Use the color picker to choose a window color, or Remove to clear it.',
+  });
+
+  assert.deepEqual(getWindowGenerateEventProcFieldConfig(), {
+    visible: true,
+    valueEditable: true,
+    title: 'Controls whether the generated window event procedure is emitted for this window.',
+  });
+
+  assert.deepEqual(getWindowHiddenFieldConfig(), {
+    visible: true,
+    checkedValue: '1',
+    uncheckedValue: '',
+    zeroLinePolicy: 'remove-managed-line',
+    title: 'HideWindow(...) is emitted only when checked; unchecked removes the managed line.',
+  });
+
+  assert.deepEqual(getWindowDisabledFieldConfig(), {
+    visible: true,
+    checkedValue: '1',
+    uncheckedValue: '',
+    zeroLinePolicy: 'remove-managed-line',
+    title: 'DisableWindow(...) is emitted only when checked; unchecked removes the managed line.',
+  });
+
+  assert.deepEqual(getWindowSelectProcFieldConfig(), {
+    visible: true,
+    valueEditable: true,
+    preservesGridString: true,
+    title: 'Choose an existing procedure or type a procedure name.',
+    placeholder: 'Type or pick a procedure',
+  });
+
+  assert.deepEqual(getWindowConstantsFieldConfig(), {
+    visible: true,
+    knownFlags: WINDOW_KNOWN_FLAGS,
+    customFlagsEditable: true,
+    title: 'Window flags are written through the OpenWindow(...) flags argument in original declaration order.',
+  });
+});
 
 test('window X/Y inspector values prefer #PB_Ignore over the internal sentinel', () => {
   assert.equal(getWindowPositionInspectorValue('#PB_Ignore', 0), WINDOW_POSITION_IGNORE_LITERAL);
@@ -92,6 +152,28 @@ test('window variable inspector input restores the current value when cleared', 
   });
 });
 
+
+test('window generate event proc edit state keeps the safe patch boundary visible', () => {
+  assert.deepEqual(getWindowGenerateEventProcEditState(false, false, false), {
+    valueEditable: true,
+    title: 'Controls whether the generated window event procedure is emitted for this window.',
+  });
+
+  assert.deepEqual(getWindowGenerateEventProcEditState(true, false, false), {
+    valueEditable: true,
+    title: 'Controls whether the generated window event procedure is emitted for this window.',
+  });
+
+  assert.deepEqual(getWindowGenerateEventProcEditState(true, true, false), {
+    valueEditable: false,
+    title: 'Cannot disable while a parsed Select EventMenu() block exists. Remove menu/toolbar event bindings first.',
+  });
+
+  assert.deepEqual(getWindowGenerateEventProcEditState(true, false, true), {
+    valueEditable: false,
+    title: 'Cannot disable while Select EventGadget() contains Case branches.',
+  });
+});
 
 test('window hidden/disabled inspector state prefers parsed booleans and treats raw 0 as unchecked', () => {
   assert.equal(getWindowBooleanInspectorState('0', undefined), false);
