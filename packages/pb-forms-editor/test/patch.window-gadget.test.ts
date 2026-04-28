@@ -1352,6 +1352,27 @@ test("roundtrips combined window event bootstrap updates from a plain window fix
 });
 
 
+test("preserves window SelectProc grid string while patching the generated default branch", () => {
+  const text = loadFixture("fixtures/smoke/01-window-basic.pbf");
+
+  let patchedText = text;
+  let document = new FakeTextDocument(patchedText);
+  let edit = applyWindowGenerateEventLoopUpdate(document.asTextDocument(), "#FrmMain", true);
+  assert.ok(edit, "Expected generateEventLoop edit.");
+  patchedText = applyWorkspaceEditToText(patchedText, edit!);
+
+  document = new FakeTextDocument(patchedText);
+  edit = applyWindowEventProcUpdate(document.asTextDocument(), "#FrmMain", "  HandleFrmMain  ");
+  assert.ok(edit, "Expected window SelectProc edit.");
+  patchedText = applyWorkspaceEditToText(patchedText, edit!);
+
+  assert.match(patchedText, /Default\s+HandleFrmMain  \(event, #FrmMain\)/s);
+
+  const parsed = parseFormDocument(patchedText);
+  assert.equal(parsed.window?.eventProc, "HandleFrmMain");
+});
+
+
 test("roundtrips gadget event proc update inside existing EventGadget block", () => {
   const text = loadFixture("fixtures/smoke/15-object-event-bindings.pbf");
 

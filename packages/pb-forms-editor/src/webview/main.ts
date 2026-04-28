@@ -9408,9 +9408,7 @@ function renderProps() {
       if (!model.window) return;
       const parsed = parseWindowParentInspectorInput(v, parentAsRawExpressionCheckbox.checked);
       win.parentRaw = parsed.raw || undefined;
-      win.parent = parsed.storedValue
-        ? (parentAsRawExpressionCheckbox.checked ? `=${parsed.storedValue}` : parsed.storedValue)
-        : undefined;
+      win.parent = parsed.storedValue;
       postWindowOpenArgs(win, { parentRaw: parsed.raw });
     });
     parentInput.disabled = !windowParentField.valueEditable;
@@ -9420,9 +9418,7 @@ function renderProps() {
       windowParentAsRawExpressionOverrides.set(win.id, checked);
       const parsed = parseWindowParentInspectorInput(parentInput.value, checked);
       win.parentRaw = parsed.raw || undefined;
-      win.parent = parsed.storedValue
-        ? (checked ? `=${parsed.storedValue}` : parsed.storedValue)
-        : undefined;
+      win.parent = parsed.storedValue;
       if (parsed.raw.length > 0) {
         postWindowOpenArgs(win, { parentRaw: parsed.raw });
       }

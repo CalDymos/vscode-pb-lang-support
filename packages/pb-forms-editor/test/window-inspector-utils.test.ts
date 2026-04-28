@@ -219,7 +219,7 @@ test('window parent inspector input preserves the user expression and only toggl
 
   assert.deepEqual(parseWindowParentInspectorInput('ParentWindow', true), {
     raw: 'ParentWindow',
-    storedValue: 'ParentWindow'
+    storedValue: '=ParentWindow'
   });
 
   assert.deepEqual(parseWindowParentInspectorInput('', true), {

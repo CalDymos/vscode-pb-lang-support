@@ -458,7 +458,7 @@ export function parseWindowParentInspectorInput(raw: string, parentAsRawExpressi
 
   return {
     raw: parentAsRawExpression ? raw : `WindowID(${raw})`,
-    storedValue: raw,
+    storedValue: parentAsRawExpression ? `=${raw}` : raw,
   };
 }
 
