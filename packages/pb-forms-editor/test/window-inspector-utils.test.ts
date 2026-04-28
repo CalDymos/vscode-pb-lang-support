@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL, WINDOW_PREVIEW_PAGE_PADDING, buildWindowFlagsExpr, getWindowBaseRowsFieldConfig, getWindowBooleanInspectorState, getWindowColorFieldConfig, getWindowConstantsFieldConfig, getWindowGenerateEventProcFieldConfig, getWindowGenerateEventProcEditState, getWindowHiddenFieldConfig, getWindowDisabledFieldConfig, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentFieldConfig, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewAddIconMetrics, getWindowPreviewBodyDecoration, getWindowPreviewCanvasOrigin, getWindowPreviewChromeTopPadding, getWindowPreviewClientBottomPadding, getWindowPreviewClientSidePadding, getWindowPreviewFrameDecoration, getWindowPreviewFrameStrokeRect, getWindowPreviewMenuBarDecoration, getWindowPreviewMenuFlyoutDecoration, getWindowPreviewMenuRootEntryRect, getWindowPreviewMenuSubmenuIconMetrics, getWindowPreviewStatusBarDecoration, getWindowPreviewStatusBarProgressDecoration, getWindowPreviewTitleBarDecoration, getWindowPreviewTitleBarHeight, getWindowPreviewTitleBarMetrics, getWindowPreviewTitleButtonAssetKind, getWindowPreviewTitleButtonLayout, getWindowPreviewTitleButtonSize, getWindowPreviewTitleButtons, getWindowPreviewTitleButtonSlots, getWindowPreviewTitleIconSize, getWindowPreviewTitleTextLayout, getWindowPreviewToolBarDecoration, usesWindowPreviewExternalMenuBar, getWindowSelectProcFieldConfig, getWindowVariableInspectorValue, hasWindowPreviewResizeGrip, hasWindowPreviewTitleBar, hasWindowPreviewTitleIcon, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput } from '../src/core/window/inspector';
+import { WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL, WINDOW_PREVIEW_PAGE_PADDING, buildWindowFlagsExpr, getWindowBaseRowsFieldConfig, getWindowBooleanInspectorState, getWindowColorFieldConfig, getWindowConstantsFieldConfig, getWindowGenerateEventProcFieldConfig, getWindowGenerateEventProcEditState, getWindowHiddenFieldConfig, getWindowDisabledFieldConfig, getWindowEnumValueFieldConfig, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentFieldConfig, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewAddIconMetrics, getWindowPreviewBodyDecoration, getWindowPreviewCanvasOrigin, getWindowPreviewChromeTopPadding, getWindowPreviewClientBottomPadding, getWindowPreviewClientSidePadding, getWindowPreviewFrameDecoration, getWindowPreviewFrameStrokeRect, getWindowPreviewMenuBarDecoration, getWindowPreviewMenuFlyoutDecoration, getWindowPreviewMenuRootEntryRect, getWindowPreviewMenuSubmenuIconMetrics, getWindowPreviewStatusBarDecoration, getWindowPreviewStatusBarProgressDecoration, getWindowPreviewTitleBarDecoration, getWindowPreviewTitleBarHeight, getWindowPreviewTitleBarMetrics, getWindowPreviewTitleButtonAssetKind, getWindowPreviewTitleButtonLayout, getWindowPreviewTitleButtonSize, getWindowPreviewTitleButtons, getWindowPreviewTitleButtonSlots, getWindowPreviewTitleIconSize, getWindowPreviewTitleTextLayout, getWindowPreviewToolBarDecoration, usesWindowPreviewExternalMenuBar, getWindowSelectProcFieldConfig, getWindowVariableInspectorValue, hasWindowPreviewResizeGrip, hasWindowPreviewTitleBar, hasWindowPreviewTitleIcon, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput } from '../src/core/window/inspector';
 import { parsePbWindowReference } from '../src/core/parser/pb-window-reference';
 
 test('buildWindowFlagsExpr keeps original known window flag order and appends custom flags', () => {
@@ -64,6 +64,20 @@ test('window inspector field policies match the original FD_SelectWindow row gro
     rawExpressionPolicy: 'preserve-readonly',
     pickerRawFormat: 'RGB_LITERAL',
     title: 'Use the color picker to choose a window color, or Remove to clear it.',
+  });
+
+  assert.deepEqual(getWindowEnumValueFieldConfig(false), {
+    visible: true,
+    valueEditable: true,
+    originalStoragePolicy: 'split-explicit-id-from-variable-cell',
+    title: 'Edits the explicit numeric ID that the original inspector stores in the Variable row as Name=ID.',
+  });
+
+  assert.deepEqual(getWindowEnumValueFieldConfig(true), {
+    visible: false,
+    valueEditable: true,
+    originalStoragePolicy: 'split-explicit-id-from-variable-cell',
+    title: 'Edits the explicit numeric ID that the original inspector stores in the Variable row as Name=ID.',
   });
 
   assert.deepEqual(getWindowGenerateEventProcFieldConfig(), {

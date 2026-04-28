@@ -231,6 +231,7 @@ import {
   getWindowGenerateEventProcEditState,
   getWindowHiddenFieldConfig,
   getWindowDisabledFieldConfig,
+  getWindowEnumValueFieldConfig,
   getWindowParentAsRawExpressionWithOverride,
   getWindowParentFieldConfig,
   getWindowParentInspectorValue,
@@ -9283,6 +9284,7 @@ function renderProps() {
     );
     const windowHiddenField = getWindowHiddenFieldConfig();
     const windowDisabledField = getWindowDisabledFieldConfig();
+    const windowEnumValueField = getWindowEnumValueFieldConfig(Boolean(win.pbAny));
     const windowSelectProcField = getWindowSelectProcFieldConfig();
     const windowConstantsField = getWindowConstantsFieldConfig();
 
@@ -9348,14 +9350,16 @@ function renderProps() {
       })
     ));
 
-    if (!win.pbAny) {
-      propsEl.appendChild(row("Enum Value", textInput(win.enumValueRaw ?? "", v => {
+    if (windowEnumValueField.visible) {
+      const enumValueInput = textInput(win.enumValueRaw ?? "", v => {
         vscode.postMessage({
           type: WEBVIEW_TO_EXT_MSG_TYPE.setWindowEnumValue,
           enumSymbol,
           enumValueRaw: v.trim().length ? v.trim() : undefined
         });
-      })));
+      }, { title: windowEnumValueField.title });
+      enumValueInput.disabled = !windowEnumValueField.valueEditable;
+      propsEl.appendChild(row("Enum Value", enumValueInput));
     }
 
     propsEl.appendChild(section("Layout"));

@@ -263,6 +263,13 @@ export type WindowParentFieldConfig = {
   rawExpressionTitle: string;
 };
 
+export type WindowEnumValueFieldConfig = {
+  visible: boolean;
+  valueEditable: boolean;
+  originalStoragePolicy: "split-explicit-id-from-variable-cell";
+  title: string;
+};
+
 export type WindowColorFieldConfig = {
   visible: boolean;
   valueEditablePolicy: "color-picker-with-remove";
@@ -324,6 +331,15 @@ export function getWindowParentFieldConfig(): WindowParentFieldConfig {
     rawExpressionToggleAvailable: true,
     title: "Enter the parent window expression. Disable the checkbox to emit WindowID(...); enable it to write the expression raw.",
     rawExpressionTitle: "When enabled, the parent is written directly as the last OpenWindow(...) argument. When disabled, the editor emits WindowID(...), matching the original default path.",
+  };
+}
+
+export function getWindowEnumValueFieldConfig(pbAny: boolean): WindowEnumValueFieldConfig {
+  return {
+    visible: !pbAny,
+    valueEditable: true,
+    originalStoragePolicy: "split-explicit-id-from-variable-cell",
+    title: "Edits the explicit numeric ID that the original inspector stores in the Variable row as Name=ID.",
   };
 }
 
