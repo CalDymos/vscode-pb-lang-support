@@ -61,6 +61,8 @@ test('window inspector field policies match the original FD_SelectWindow row gro
     visible: true,
     valueEditablePolicy: 'color-picker-with-remove',
     rawDisplayEditable: false,
+    rawExpressionPolicy: 'preserve-readonly',
+    pickerRawFormat: 'RGB_LITERAL',
     title: 'Use the color picker to choose a window color, or Remove to clear it.',
   });
 
@@ -98,6 +100,9 @@ test('window inspector field policies match the original FD_SelectWindow row gro
     visible: true,
     knownFlags: WINDOW_KNOWN_FLAGS,
     customFlagsEditable: true,
+    customFlagsKnownFlagPolicy: 'drop-known-flags',
+    customFlagsDuplicatePolicy: 'drop-duplicates',
+    customFlagsSeparator: ' | ',
     title: 'Window flags are written through the OpenWindow(...) flags argument in original declaration order.',
   });
 });

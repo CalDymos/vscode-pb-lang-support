@@ -1359,9 +1359,9 @@ function postWindowProperties(win: FormWindow, updates: { hiddenRaw?: string; di
   post({
     type: WEBVIEW_TO_EXT_MSG_TYPE.setWindowProperties,
     windowKey: win.id,
-    hiddenRaw: Object.prototype.hasOwnProperty.call(updates, "hiddenRaw") ? updates.hiddenRaw : (win.hiddenRaw ?? ""),
-    disabledRaw: Object.prototype.hasOwnProperty.call(updates, "disabledRaw") ? updates.disabledRaw : (win.disabledRaw ?? ""),
-    colorRaw: Object.prototype.hasOwnProperty.call(updates, "colorRaw") ? updates.colorRaw : (win.colorRaw ?? "")
+    ...(Object.prototype.hasOwnProperty.call(updates, "hiddenRaw") ? { hiddenRaw: updates.hiddenRaw } : {}),
+    ...(Object.prototype.hasOwnProperty.call(updates, "disabledRaw") ? { disabledRaw: updates.disabledRaw } : {}),
+    ...(Object.prototype.hasOwnProperty.call(updates, "colorRaw") ? { colorRaw: updates.colorRaw } : {})
   });
 }
 

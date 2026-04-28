@@ -267,6 +267,8 @@ export type WindowColorFieldConfig = {
   visible: boolean;
   valueEditablePolicy: "color-picker-with-remove";
   rawDisplayEditable: boolean;
+  rawExpressionPolicy: "preserve-readonly";
+  pickerRawFormat: "RGB_LITERAL";
   title: string;
 };
 
@@ -301,6 +303,9 @@ export type WindowConstantsFieldConfig = {
   visible: boolean;
   knownFlags: readonly string[];
   customFlagsEditable: boolean;
+  customFlagsKnownFlagPolicy: "drop-known-flags";
+  customFlagsDuplicatePolicy: "drop-duplicates";
+  customFlagsSeparator: " | ";
   title: string;
 };
 
@@ -327,6 +332,8 @@ export function getWindowColorFieldConfig(): WindowColorFieldConfig {
     visible: true,
     valueEditablePolicy: "color-picker-with-remove",
     rawDisplayEditable: false,
+    rawExpressionPolicy: "preserve-readonly",
+    pickerRawFormat: "RGB_LITERAL",
     title: "Use the color picker to choose a window color, or Remove to clear it.",
   };
 }
@@ -399,6 +406,9 @@ export function getWindowConstantsFieldConfig(): WindowConstantsFieldConfig {
     visible: true,
     knownFlags: WINDOW_KNOWN_FLAGS,
     customFlagsEditable: true,
+    customFlagsKnownFlagPolicy: "drop-known-flags",
+    customFlagsDuplicatePolicy: "drop-duplicates",
+    customFlagsSeparator: " | ",
     title: "Window flags are written through the OpenWindow(...) flags argument in original declaration order.",
   };
 }
