@@ -14,8 +14,8 @@
   "include": [
     "src/webview/**/*.ts",
     "src/core/preview/chrome.ts",
-    "src/core/statusbar-preview-utils.ts",
-    "src/core/top-level-preview-utils.ts",
-    "src/core/gadget-inspector-utils.ts"
+    "src/core/statusbar/preview.ts",
+    "src/core/toplevel/preview.ts",
+    "src/core/gadget/inspector.ts"
   ]
 }
