@@ -13,6 +13,7 @@
   },
   "include": [
     "src/webview/**/*.ts",
+    "src/shared/**/*.ts",
     "src/core/preview/chrome.ts",
     "src/core/statusbar/preview.ts",
     "src/core/toplevel/preview.ts",
