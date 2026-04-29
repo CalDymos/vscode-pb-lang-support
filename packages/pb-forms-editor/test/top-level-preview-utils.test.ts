@@ -35,6 +35,7 @@ import {
   getMenuVisibleEntries,
   getStatusBarFieldWidths,
   getStatusBarPreviewInsertArgs,
+  getSelectedMenuEntryInspectorFieldConfig,
   getSelectedStatusBarInspectorFieldConfig,
   getTopLevelSelectProcEditState,
   resolveMenuFooterHit,
@@ -297,6 +298,49 @@ test("builds default toolbar insert ids and preview insert args", () => {
   });
   assert.deepEqual(getToolBarPreviewInsertArgs(toolBar, "separator"), {
     kind: "ToolBarSeparator"
+  });
+});
+
+test("selected menu inspector follows the original row set with parser-safe editability", () => {
+  assert.deepEqual(getSelectedMenuEntryInspectorFieldConfig({ kind: "MenuItem", idRaw: "#Menu_Open" }, true), {
+    constantEditable: true,
+    nameEditable: true,
+    shortcutEditable: true,
+    imageEditable: true,
+    separatorChecked: false,
+    separatorEditable: false,
+  });
+  assert.deepEqual(getSelectedMenuEntryInspectorFieldConfig({ kind: "MenuTitle" }, true), {
+    constantEditable: false,
+    nameEditable: true,
+    shortcutEditable: false,
+    imageEditable: false,
+    separatorChecked: false,
+    separatorEditable: false,
+  });
+  assert.deepEqual(getSelectedMenuEntryInspectorFieldConfig({ kind: "OpenSubMenu" }, true), {
+    constantEditable: false,
+    nameEditable: true,
+    shortcutEditable: false,
+    imageEditable: false,
+    separatorChecked: false,
+    separatorEditable: false,
+  });
+  assert.deepEqual(getSelectedMenuEntryInspectorFieldConfig({ kind: "MenuBar" }, true), {
+    constantEditable: false,
+    nameEditable: false,
+    shortcutEditable: false,
+    imageEditable: false,
+    separatorChecked: true,
+    separatorEditable: false,
+  });
+  assert.deepEqual(getSelectedMenuEntryInspectorFieldConfig({ kind: "MenuItem", idRaw: "#Menu_Open" }, false), {
+    constantEditable: false,
+    nameEditable: false,
+    shortcutEditable: false,
+    imageEditable: false,
+    separatorChecked: false,
+    separatorEditable: false,
   });
 });
 

@@ -102,6 +102,7 @@ import {
   getPredictedMenuEntryMoveIndex,
   getStatusBarFieldWidths,
   getStatusBarPreviewInsertArgs,
+  getSelectedMenuEntryInspectorFieldConfig,
   getSelectedStatusBarInspectorFieldConfig,
   getSelectedToolBarInspectorFieldConfig,
   getTopLevelSelectProcEditState,
@@ -9601,10 +9602,11 @@ function renderProps() {
       : undefined;
     if (selectedEntry) {
       const selectedCanPatch = typeof selectedEntry.source?.line === "number";
-      const selectedCanEditId = selectedCanPatch && selectedEntry.kind === "MenuItem";
-      const selectedCanEditName = selectedCanPatch && (selectedEntry.kind === "MenuItem" || selectedEntry.kind === "MenuTitle" || selectedEntry.kind === "OpenSubMenu");
-      const selectedCanEditShortcut = selectedCanPatch && selectedEntry.kind === "MenuItem";
-      const selectedCanEditImage = selectedCanPatch && selectedEntry.kind === "MenuItem";
+      const selectedFieldConfig = getSelectedMenuEntryInspectorFieldConfig(selectedEntry, selectedCanPatch);
+      const selectedCanEditId = selectedFieldConfig.constantEditable;
+      const selectedCanEditName = selectedFieldConfig.nameEditable;
+      const selectedCanEditShortcut = selectedFieldConfig.shortcutEditable;
+      const selectedCanEditImage = selectedFieldConfig.imageEditable;
       const selectedEventEditState = getTopLevelSelectProcEditState(hasEventMenuBlock, selectedEntry.idRaw, "menu");
       const selectedCanEditEvent = selectedEventEditState.canEdit;
       const selectedImage = findImageEntryById(selectedEntry.iconId);
@@ -9708,9 +9710,9 @@ function renderProps() {
       propsEl.appendChild(row(
         "Separator",
         checkboxInput(
-          selectedEntry.kind === "MenuBar",
+          selectedFieldConfig.separatorChecked,
           () => {},
-          { disabled: true, title: "Menu separators are represented structurally as MenuBar entries in the parsed model." }
+          { disabled: !selectedFieldConfig.separatorEditable, title: "Menu separators are represented structurally as MenuBar entries in the parsed model." }
         )
       ));
       propsEl.appendChild(row(

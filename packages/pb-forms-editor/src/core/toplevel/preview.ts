@@ -449,6 +449,29 @@ export function hasStatusBarPreviewAssignedImage(field: StatusBarFieldLike): boo
 }
 
 
+export interface SelectedMenuEntryInspectorFieldConfig {
+  constantEditable: boolean;
+  nameEditable: boolean;
+  shortcutEditable: boolean;
+  imageEditable: boolean;
+  separatorChecked: boolean;
+  separatorEditable: boolean;
+}
+
+export function getSelectedMenuEntryInspectorFieldConfig(
+  entry: MenuEntryLike,
+  canPatch: boolean
+): SelectedMenuEntryInspectorFieldConfig {
+  return {
+    constantEditable: canPatch && entry.kind === "MenuItem",
+    nameEditable: canPatch && (entry.kind === "MenuItem" || entry.kind === "MenuTitle" || entry.kind === "OpenSubMenu"),
+    shortcutEditable: canPatch && entry.kind === "MenuItem",
+    imageEditable: canPatch && entry.kind === "MenuItem",
+    separatorChecked: entry.kind === "MenuBar",
+    separatorEditable: false,
+  };
+}
+
 export interface SelectedToolBarInspectorFieldConfig {
   captionLabel: string;
   showTextField: boolean;
