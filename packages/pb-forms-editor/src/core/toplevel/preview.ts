@@ -30,6 +30,7 @@ export type ToolBarEntryLike = {
   idRaw?: string;
   iconRaw?: string;
   iconId?: string;
+  toggle?: boolean;
 };
 
 export type ToolBarModelLike = {
@@ -473,7 +474,16 @@ export function getSelectedMenuEntryInspectorFieldConfig(
 }
 
 export interface SelectedToolBarInspectorFieldConfig {
+  variableEditable: boolean;
   captionLabel: string;
+  captionEditable: boolean;
+  imageEditable: boolean;
+  toggleChecked: boolean;
+  toggleEditable: boolean;
+  separatorChecked: boolean;
+  separatorEditable: boolean;
+  selectProcParticipates: boolean;
+  selectProcDisabledTitle: string;
   showTextField: boolean;
   showIconRawField: boolean;
 }
@@ -509,9 +519,27 @@ export function getTopLevelSelectProcEditState(
   };
 }
 
-export function getSelectedToolBarInspectorFieldConfig(): SelectedToolBarInspectorFieldConfig {
+export function getSelectedToolBarInspectorFieldConfig(
+  entry: ToolBarEntryLike,
+  canPatch: boolean
+): SelectedToolBarInspectorFieldConfig {
+  const isImageButton = entry.kind === "ToolBarImageButton";
+  const isSeparator = entry.kind === "ToolBarSeparator";
+  const isToolTip = entry.kind === "ToolBarToolTip";
+
   return {
+    variableEditable: canPatch && !isSeparator,
     captionLabel: "Caption",
+    captionEditable: canPatch && canEditToolBarTooltip(entry),
+    imageEditable: canPatch && isImageButton,
+    toggleChecked: Boolean(entry.toggle),
+    toggleEditable: canPatch && isImageButton,
+    separatorChecked: isSeparator,
+    separatorEditable: false,
+    selectProcParticipates: !isSeparator && !isToolTip,
+    selectProcDisabledTitle: isToolTip
+      ? "This entry type does not participate in Select EventMenu() cases."
+      : "Toolbar separators are structural entries and do not participate in Select EventMenu() cases.",
     showTextField: false,
     showIconRawField: false,
   };

@@ -351,12 +351,51 @@ test("exposes editable tooltip rows only for real toolbar command entries", () =
   assert.equal(canEditToolBarTooltip({ kind: "ToolBarImageButton", idRaw: "   " }), false);
 });
 
-test("selected toolbar inspector follows the original caption/current-image row set", () => {
-  const config = getSelectedToolBarInspectorFieldConfig();
-
-  assert.equal(config.captionLabel, "Caption");
-  assert.equal(config.showTextField, false);
-  assert.equal(config.showIconRawField, false);
+test("selected toolbar inspector follows the original row set with parser-safe editability", () => {
+  assert.deepEqual(getSelectedToolBarInspectorFieldConfig({ kind: "ToolBarImageButton", idRaw: "#TbOpen", toggle: true }, true), {
+    variableEditable: true,
+    captionLabel: "Caption",
+    captionEditable: true,
+    imageEditable: true,
+    toggleChecked: true,
+    toggleEditable: true,
+    separatorChecked: false,
+    separatorEditable: false,
+    selectProcParticipates: true,
+    selectProcDisabledTitle: "Toolbar separators are structural entries and do not participate in Select EventMenu() cases.",
+    showTextField: false,
+    showIconRawField: false,
+  });
+  assert.deepEqual(getSelectedToolBarInspectorFieldConfig({ kind: "ToolBarSeparator" }, true), {
+    variableEditable: false,
+    captionLabel: "Caption",
+    captionEditable: false,
+    imageEditable: false,
+    toggleChecked: false,
+    toggleEditable: false,
+    separatorChecked: true,
+    separatorEditable: false,
+    selectProcParticipates: false,
+    selectProcDisabledTitle: "Toolbar separators are structural entries and do not participate in Select EventMenu() cases.",
+    showTextField: false,
+    showIconRawField: false,
+  });
+  assert.deepEqual(getSelectedToolBarInspectorFieldConfig({ kind: "ToolBarToolTip", idRaw: "#TbOpen" }, true), {
+    variableEditable: true,
+    captionLabel: "Caption",
+    captionEditable: false,
+    imageEditable: false,
+    toggleChecked: false,
+    toggleEditable: false,
+    separatorChecked: false,
+    separatorEditable: false,
+    selectProcParticipates: false,
+    selectProcDisabledTitle: "This entry type does not participate in Select EventMenu() cases.",
+    showTextField: false,
+    showIconRawField: false,
+  });
+  assert.equal(getSelectedToolBarInspectorFieldConfig({ kind: "ToolBarImageButton", idRaw: "#TbOpen" }, false).variableEditable, false);
+  assert.equal(getSelectedToolBarInspectorFieldConfig({ kind: "ToolBarImageButton", idRaw: "#TbOpen" }, false).imageEditable, false);
 });
 
 test("selected statusbar inspector omits the non-original ProgressValue helper row", () => {

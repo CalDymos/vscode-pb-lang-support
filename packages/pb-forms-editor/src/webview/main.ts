@@ -9991,15 +9991,15 @@ function renderProps() {
       const selectedCanPatch = typeof selectedEntry.source?.line === "number";
       const selectedImage = findImageEntryById(selectedEntry.iconId);
       const selectedImageInspectorConfig = getTopLevelSelectedImageInspectorConfig("toolBarEntry");
-      const selectedFieldConfig = getSelectedToolBarInspectorFieldConfig();
-      const canEditSelectedTooltip = selectedCanPatch && canEditToolBarTooltip(selectedEntry) && Boolean(selectedEntry.idRaw);
-      const canEditSelectedToggle = selectedCanPatch && selectedEntry.kind === "ToolBarImageButton";
-      const selectedEventEditState = selectedEntry.kind === "ToolBarToolTip"
-        ? { canEdit: false, title: "This entry type does not participate in Select EventMenu() cases." }
-        : getTopLevelSelectProcEditState(hasEventMenuBlock, selectedEntry.idRaw, "toolbar");
+      const selectedFieldConfig = getSelectedToolBarInspectorFieldConfig(selectedEntry, selectedCanPatch);
+      const canEditSelectedTooltip = selectedFieldConfig.captionEditable;
+      const canEditSelectedToggle = selectedFieldConfig.toggleEditable;
+      const selectedEventEditState = selectedFieldConfig.selectProcParticipates
+        ? getTopLevelSelectProcEditState(hasEventMenuBlock, selectedEntry.idRaw, "toolbar")
+        : { canEdit: false, title: selectedFieldConfig.selectProcDisabledTitle };
       const canEditSelectedEvent = selectedEventEditState.canEdit;
 
-      const canEditSelectedImage = selectedCanPatch && selectedEntry.kind === "ToolBarImageButton";
+      const canEditSelectedImage = selectedFieldConfig.imageEditable;
       const selectedImagePath = selectedImage?.image ?? selectedImage?.imageRaw ?? ((selectedEntry.iconRaw ?? "") === "0" ? "" : (selectedEntry.iconRaw ?? ""));
       const selectedImageUsageCount = selectedEntry.iconId ? countImageUsages(selectedEntry.iconId) : 0;
       const selectedImageEditState = getStatusBarCurrentImageEditState(selectedImage, selectedImageUsageCount);
@@ -10035,7 +10035,7 @@ function renderProps() {
           toggle: patch.toggle ?? selectedEntry.toggle,
         });
       };
-      const canEditSelectedId = selectedCanPatch && selectedEntry.kind !== "ToolBarSeparator";
+      const canEditSelectedId = selectedFieldConfig.variableEditable;
 
       propsEl.appendChild(section("Selected Entry"));
       propsEl.appendChild(row(
@@ -10227,7 +10227,7 @@ function renderProps() {
       propsEl.appendChild(row(
         "ToggleButton",
         checkboxInput(
-          Boolean(selectedEntry.toggle),
+          selectedFieldConfig.toggleChecked,
           v => {
             if (selectedEntry.kind !== "ToolBarImageButton" || typeof selectedEntry.source?.line !== "number") return;
             post({
@@ -10251,9 +10251,9 @@ function renderProps() {
       propsEl.appendChild(row(
         "Separator",
         checkboxInput(
-          selectedEntry.kind === "ToolBarSeparator",
+          selectedFieldConfig.separatorChecked,
           () => {},
-          { disabled: true, title: "Separators are structural entries and cannot be edited here." }
+          { disabled: !selectedFieldConfig.separatorEditable, title: "Separators are structural entries and cannot be edited here." }
         )
       ));
       propsEl.appendChild(row(
