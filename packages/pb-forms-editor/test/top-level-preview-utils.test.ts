@@ -422,6 +422,46 @@ test("selected statusbar inspector follows the original row set with parser-safe
   });
 });
 
+test("selected top-level inspector policies cover the original menu toolbar and statusbar row matrices", () => {
+  const menuItem = getSelectedMenuEntryInspectorFieldConfig({ kind: "MenuItem", idRaw: "#Menu_Open" }, true);
+  assert.deepEqual(Object.keys(menuItem), [
+    "constantEditable",
+    "nameEditable",
+    "shortcutEditable",
+    "imageEditable",
+    "separatorChecked",
+    "separatorEditable"
+  ]);
+
+  const toolBarButton = getSelectedToolBarInspectorFieldConfig({ kind: "ToolBarImageButton", idRaw: "#TbOpen" }, true);
+  assert.deepEqual(Object.keys(toolBarButton), [
+    "variableEditable",
+    "captionLabel",
+    "captionEditable",
+    "imageEditable",
+    "toggleChecked",
+    "toggleEditable",
+    "separatorChecked",
+    "separatorEditable",
+    "selectProcParticipates",
+    "selectProcDisabledTitle",
+    "showTextField",
+    "showIconRawField"
+  ]);
+
+  const statusBarField = getSelectedStatusBarInspectorFieldConfig(true);
+  assert.deepEqual(Object.keys(statusBarField), [
+    "widthEditable",
+    "textEditable",
+    "currentImageEditable",
+    "changeImageEditable",
+    "progressBarEditable",
+    "flagsEditable",
+    "deleteEditable",
+    "showProgressValueField"
+  ]);
+});
+
 test("top-level SelectProc remains editable without an EventMenu block when an id exists", () => {
   assert.deepEqual(getTopLevelSelectProcEditState(false, "#MenuItem_Open", "menu"), {
     canEdit: true,
