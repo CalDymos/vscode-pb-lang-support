@@ -525,3 +525,59 @@ test("keeps a single blank line before FormFont when deleting the last image blo
     'Enumeration FormFont',
   ].join("\n")));
 });
+
+test("re-indexes remaining image references when deleting an unused earlier image", () => {
+  const text = `; Form Designer for PureBasic - 6.40
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #ImgView
+EndEnumeration
+
+Enumeration FormMenu
+  #MenuSave
+  #TbSave
+EndEnumeration
+
+Enumeration FormImage
+  #Img_FrmMain_0
+  #Img_FrmMain_1
+EndEnumeration
+
+UsePNGImageDecoder()
+
+LoadImage(#Img_FrmMain_0,"unused.png")
+LoadImage(#Img_FrmMain_1,"used.png")
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
+  OpenWindow(#FrmMain, x, y, width, height, "Images")
+  ImageGadget(#ImgView, 10, 10, 64, 64, ImageID(#Img_FrmMain_1))
+  CreateImageMenu(0, WindowID(#FrmMain))
+  MenuItem(#MenuSave, "Save", ImageID(#Img_FrmMain_1))
+  CreateToolBar(0, WindowID(#FrmMain))
+  ToolBarImageButton(#TbSave, ImageID(#Img_FrmMain_1))
+  CreateStatusBar(0, WindowID(#FrmMain))
+  AddStatusBarField(100)
+  StatusBarImage(0, 0, ImageID(#Img_FrmMain_1))
+EndProcedure
+`;
+
+  const parsed = parseFormDocument(text);
+  const sourceLine = parsed.images.find((entry) => entry.id === "#Img_FrmMain_0")?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected unused image source line.");
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) => applyImageDelete(document, sourceLine!));
+
+  assert.equal(updated.images.length, 1);
+  assert.equal(updated.images[0]?.id, "#Img_FrmMain_0");
+  assert.equal(updated.images[0]?.imageRaw, '"used.png"');
+  assert.match(patchedText, /LoadImage\(#Img_FrmMain_0,"used\.png"\)/);
+  assert.doesNotMatch(patchedText, /#Img_FrmMain_1/);
+  assert.match(patchedText, /ImageGadget\(#ImgView, 10, 10, 64, 64, ImageID\(#Img_FrmMain_0\)\)/);
+  assert.match(patchedText, /MenuItem\(#MenuSave, "Save", ImageID\(#Img_FrmMain_0\)\)/);
+  assert.match(patchedText, /ToolBarImageButton\(#TbSave, ImageID\(#Img_FrmMain_0\)\)/);
+  assert.match(patchedText, /StatusBarImage\(0, 0, ImageID\(#Img_FrmMain_0\)\)/);
+});

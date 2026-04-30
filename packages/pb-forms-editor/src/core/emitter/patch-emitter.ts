@@ -5220,6 +5220,19 @@ function applyImageIdRenames(
   }
 }
 
+function formImageHasParsedReference(parsed: ReturnType<typeof parseFormDocument>, imageId: string): boolean {
+  return parsed.gadgets.some(gadget => gadget.imageId === imageId || gadget.items?.some(item => item.imageId === imageId))
+    || parsed.menus.some(menu => menu.entries.some(entry => entry.iconId === imageId))
+    || parsed.toolbars.some(toolBar => toolBar.entries.some(entry => entry.iconId === imageId))
+    || parsed.statusbars.some(statusBar => statusBar.fields.some(field => field.imageId === imageId));
+}
+
+function getWindowImageBaseName(parsed: ReturnType<typeof parseFormDocument>): string {
+  return parsed.window?.variable
+    ?? parsed.window?.id?.replace(/^#/, "")
+    ?? ENUM_NAMES.windows;
+}
+
 function applyImageMutation(
   document: vscode.TextDocument,
   mutate: (images: FormImage[]) => boolean,
@@ -6285,10 +6298,7 @@ export function applyImageUpdate(
         // Mirrors FD_ProcessEventGridStatusbar case 2 → AddImage("") +
         // CleanImageList() + FD_SelectCode re-numbering in codeviewer.pb.
         const parsed2 = parseFormDocument(document.getText());
-        const windowVar =
-          parsed2.window?.variable ??
-          parsed2.window?.id?.replace(/^#/, "") ??
-          ENUM_NAMES.windows;
+        const windowVar = getWindowImageBaseName(parsed2);
 
         const [entry] = images.splice(index, 1);
         const trimmedImageRaw = args.imageRaw.trim();
@@ -6318,15 +6328,26 @@ export function applyImageDelete(
   sourceLine: number,
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
+  let pendingRenames: ImageRename[] = [];
+
   return applyImageMutation(
     document,
     images => {
+      const parsed = parseFormDocument(document.getText());
       const index = images.findIndex(image => image.source?.line === sourceLine);
       if (index < 0) return false;
+
+      const deletedImageId = images[index].id;
+      const canReindexReferences = !formImageHasParsedReference(parsed, deletedImageId);
       images.splice(index, 1);
+
+      if (canReindexReferences) {
+        pendingRenames = reindexImages(images, getWindowImageBaseName(parsed));
+      }
       return true;
     },
-    scanRange
+    scanRange,
+    (edit) => applyImageIdRenames(edit, document, pendingRenames)
   );
 }
 
