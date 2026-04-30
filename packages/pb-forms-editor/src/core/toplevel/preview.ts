@@ -489,6 +489,13 @@ export interface SelectedToolBarInspectorFieldConfig {
 }
 
 export interface SelectedStatusBarInspectorFieldConfig {
+  widthEditable: boolean;
+  textEditable: boolean;
+  currentImageEditable: boolean;
+  changeImageEditable: boolean;
+  progressBarEditable: boolean;
+  flagsEditable: boolean;
+  deleteEditable: boolean;
   showProgressValueField: boolean;
 }
 
@@ -545,8 +552,15 @@ export function getSelectedToolBarInspectorFieldConfig(
   };
 }
 
-export function getSelectedStatusBarInspectorFieldConfig(): SelectedStatusBarInspectorFieldConfig {
+export function getSelectedStatusBarInspectorFieldConfig(canPatch = true): SelectedStatusBarInspectorFieldConfig {
   return {
+    widthEditable: canPatch,
+    textEditable: canPatch,
+    currentImageEditable: canPatch,
+    changeImageEditable: canPatch,
+    progressBarEditable: canPatch,
+    flagsEditable: canPatch,
+    deleteEditable: canPatch,
     showProgressValueField: false,
   };
 }

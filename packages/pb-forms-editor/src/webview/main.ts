@@ -10594,7 +10594,7 @@ function renderProps() {
     if (selectedField) {
       const selectedUi = getStatusBarFieldUi(selectedField);
       const selectedImageInspectorConfig = getTopLevelSelectedImageInspectorConfig("statusBarField");
-      const selectedFieldConfig = getSelectedStatusBarInspectorFieldConfig();
+      const selectedFieldConfig = getSelectedStatusBarInspectorFieldConfig(selectedUi.canPatch);
       const selectedImagePath = selectedUi.statusImage?.image ?? selectedUi.statusImage?.imageRaw ?? selectedField.imageRaw ?? "";
       const selectedImageUsageCount = selectedField.imageId ? countImageUsages(selectedField.imageId) : 0;
       const selectedImageEditState = getStatusBarCurrentImageEditState(selectedUi.statusImage, selectedImageUsageCount);
@@ -10605,11 +10605,11 @@ function renderProps() {
         textInput(
           selectedField.widthRaw ?? "",
           v => {
-            if (!selectedUi.canPatch) return;
+            if (!selectedFieldConfig.widthEditable) return;
             selectedUi.postFieldUpdate({ widthRaw: v.trim() || selectedField.widthRaw });
           },
           {
-            disabled: !selectedUi.canPatch,
+            disabled: !selectedFieldConfig.widthEditable,
             title: "Width of the selected status bar field. Use #PB_Ignore to let the size adjust automatically."
           }
         )
@@ -10619,13 +10619,13 @@ function renderProps() {
         textInput(
           selectedField.text ?? "",
           v => {
-            if (!selectedUi.canPatch) return;
+            if (!selectedFieldConfig.textEditable) return;
             selectedUi.postFieldUpdate({
               textRaw: buildOptionalInspectorLiteralRaw(v)
             });
           },
           {
-            disabled: !selectedUi.canPatch,
+            disabled: !selectedFieldConfig.textEditable,
             title: "Text shown in the selected status bar field."
           }
         )
@@ -10639,6 +10639,8 @@ function renderProps() {
       const currentImageControl = textInput(
         selectedImagePath,
         value => {
+          if (!selectedFieldConfig.currentImageEditable) return;
+
           if (selectedImageEditState.canDirectEdit && selectedUi.statusImage && typeof selectedUi.statusImage.source?.line === "number") {
             clearInfoError();
             post({
@@ -10714,7 +10716,8 @@ function renderProps() {
           title: selectedImageEditState.canDirectEdit
             ? selectedImageEditState.reason
             : "Enter an existing parsed image path or data label to rebind this field, or a quoted/path-like file string to auto-create a new LoadImage entry. Use Create New for inline labels or custom image ids.",
-          placeholder: selectedUi.statusImage?.inline ? "ImgInlineLabel" : "image.png"
+          placeholder: selectedUi.statusImage?.inline ? "ImgInlineLabel" : "image.png",
+          disabled: !selectedFieldConfig.currentImageEditable
         }
       );
       currentImageControl.title = selectedImageEditState.canDirectEdit
@@ -10725,7 +10728,7 @@ function renderProps() {
         propsEl.appendChild(mutedNote("For shared or CatchImage references, you can rebind to an existing image here. For file paths, a new LoadImage entry can be created automatically. Use Create New for inline labels or custom image ids."));
       }
       if (selectedUi.statusImage && typeof selectedUi.statusImage.source?.line === "number") {
-        const canToggle = selectedUi.canPatch && canToggleImagePbAny(selectedUi.statusImage);
+        const canToggle = selectedFieldConfig.currentImageEditable && canToggleImagePbAny(selectedUi.statusImage);
         propsEl.appendChild(row(PB_ANY, checkboxInput(
           Boolean(selectedUi.statusImage.pbAny),
           () => {
@@ -10748,9 +10751,12 @@ function renderProps() {
       selectedImageActions.className = "row-actions";
       const chooseFileBtn = document.createElement("button");
       chooseFileBtn.textContent = selectedImageInspectorConfig.changeImageButtonLabel;
-      chooseFileBtn.disabled = !selectedUi.statusChooseFileImageFn;
+      chooseFileBtn.disabled = !selectedFieldConfig.changeImageEditable || !selectedUi.statusChooseFileImageFn;
       chooseFileBtn.title = selectedImageInspectorConfig.changeImageButtonTitle;
-      chooseFileBtn.onclick = () => selectedUi.statusChooseFileImageFn?.();
+      chooseFileBtn.onclick = () => {
+        if (!selectedFieldConfig.changeImageEditable) return;
+        selectedUi.statusChooseFileImageFn?.();
+      };
       selectedImageActions.appendChild(chooseFileBtn);
       propsEl.appendChild(row("ChangeImage", selectedImageActions));
       if (isImageReferencePickerOpenFor({ kind: "statusBarField", statusBarId: sb.id, fieldIndex: selectedFieldIndex! })) {
@@ -10766,14 +10772,14 @@ function renderProps() {
         checkboxInput(
           Boolean(selectedField.progressBar),
           checked => {
-            if (!selectedUi.canPatch) return;
+            if (!selectedFieldConfig.progressBarEditable) return;
             selectedUi.postFieldUpdate({
               progressBar: checked,
               progressRaw: checked ? (selectedField.progressRaw?.trim() || "0") : ""
             });
           },
           {
-            disabled: !selectedUi.canPatch,
+            disabled: !selectedFieldConfig.progressBarEditable,
             title: "Show this field as a progress bar. The preview value stays at 0 here."
           }
         )
@@ -10786,9 +10792,9 @@ function renderProps() {
         const boxInput = document.createElement("input");
         boxInput.type = "checkbox";
         boxInput.checked = hasPbFlag(selectedField.flagsRaw, flag);
-        boxInput.disabled = !selectedUi.canPatch;
+        boxInput.disabled = !selectedFieldConfig.flagsEditable;
         boxInput.onchange = () => {
-          if (!selectedUi.canPatch) return;
+          if (!selectedFieldConfig.flagsEditable) return;
           selectedUi.postFieldUpdate({ flagsRaw: buildStatusBarFlagsRaw(selectedField.flagsRaw, { [flag]: boxInput.checked }) ?? "" });
         };
         const caption = document.createElement("span");
@@ -10801,11 +10807,14 @@ function renderProps() {
 
       const selectedDeleteStatusFieldBtn = document.createElement("button");
       selectedDeleteStatusFieldBtn.textContent = "Delete Field";
-      selectedDeleteStatusFieldBtn.disabled = !selectedUi.delFn;
+      selectedDeleteStatusFieldBtn.disabled = !selectedFieldConfig.deleteEditable || !selectedUi.delFn;
       selectedDeleteStatusFieldBtn.title = selectedDeleteStatusFieldBtn.disabled
         ? "Only parsed statusbar fields with a source line can be deleted."
         : "Delete the currently selected statusbar field.";
-      selectedDeleteStatusFieldBtn.onclick = () => selectedUi.delFn?.();
+      selectedDeleteStatusFieldBtn.onclick = () => {
+        if (!selectedFieldConfig.deleteEditable) return;
+        selectedUi.delFn?.();
+      };
       propsEl.appendChild(row("Delete", selectedDeleteStatusFieldBtn));
     }
 

@@ -398,10 +398,28 @@ test("selected toolbar inspector follows the original row set with parser-safe e
   assert.equal(getSelectedToolBarInspectorFieldConfig({ kind: "ToolBarImageButton", idRaw: "#TbOpen" }, false).imageEditable, false);
 });
 
-test("selected statusbar inspector omits the non-original ProgressValue helper row", () => {
-  const config = getSelectedStatusBarInspectorFieldConfig();
+test("selected statusbar inspector follows the original row set with parser-safe editability", () => {
+  assert.deepEqual(getSelectedStatusBarInspectorFieldConfig(true), {
+    widthEditable: true,
+    textEditable: true,
+    currentImageEditable: true,
+    changeImageEditable: true,
+    progressBarEditable: true,
+    flagsEditable: true,
+    deleteEditable: true,
+    showProgressValueField: false,
+  });
 
-  assert.equal(config.showProgressValueField, false);
+  assert.deepEqual(getSelectedStatusBarInspectorFieldConfig(false), {
+    widthEditable: false,
+    textEditable: false,
+    currentImageEditable: false,
+    changeImageEditable: false,
+    progressBarEditable: false,
+    flagsEditable: false,
+    deleteEditable: false,
+    showProgressValueField: false,
+  });
 });
 
 test("top-level SelectProc remains editable without an EventMenu block when an id exists", () => {
