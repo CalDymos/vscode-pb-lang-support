@@ -222,13 +222,20 @@ import {
   type FormImage,
 } from "../core/model";
 import {
+  buildCreatedFormImageReference,
   buildFormImageEditorDraft,
   buildFormImageLineLabel,
   canChooseFileForFormImageEntry,
   canRelativizeFormImageEntry,
   canToggleFormImagePbAny,
+  collectFormImageUsages,
+  countFormImageUsages,
+  findFormImageEntryById,
+  getDefaultFormImageReferenceSelection,
   getFormImageCallName,
+  getFormImageReferenceHint as getCoreFormImageReferenceHint,
   requiresFormImageAssignedVar,
+  type FormImageUsage,
 } from "../core/image/model";
 import {
   buildWindowFlagsExpr,
@@ -1447,10 +1454,7 @@ function postWindowPositionRaw(win: FormWindow, axis: "x" | "y", rawValue: strin
   renderProps();
 }
 
-type ImageUsage = {
-  label: string;
-  select: DesignerSelection;
-};
+type ImageUsage = FormImageUsage;
 
 function getSelectionParentId(sel: DesignerSelection): string | undefined {
   if (!sel) return undefined;
@@ -1645,72 +1649,15 @@ function isStatusBarFieldSelection(sel: DesignerSelection, statusBarId: string, 
 }
 
 function collectImageUsages(imageId: string): ImageUsage[] {
-  const usages: ImageUsage[] = [];
-
-  for (const g of model.gadgets ?? []) {
-    if (g.imageId === imageId) {
-      usages.push({
-        label: `Gadget ${g.id} (${g.kind})`,
-        select: { kind: "gadget", id: g.id }
-      });
-    }
-
-    (g.items ?? []).forEach((it, idx) => {
-      if (it.imageId === imageId) {
-        const itemName = it.text ?? it.textRaw ?? `item ${idx}`;
-        usages.push({
-          label: `Gadget ${g.id} (${g.kind}) :: Item ${idx} ${itemName}`,
-          select: { kind: "gadget", id: g.id }
-        });
-      }
-    });
-  }
-
-  for (const m of model.menus ?? []) {
-    (m.entries ?? []).forEach((e, idx) => {
-      if (e.iconId === imageId) {
-        const entryName = e.idRaw ?? e.text ?? e.textRaw ?? `entry ${idx}`;
-        usages.push({
-          label: `Menu ${m.id} :: ${e.kind} ${entryName}`,
-          select: { kind: "menuEntry", menuId: m.id, entryIndex: idx }
-        });
-      }
-    });
-  }
-
-  for (const t of model.toolbars ?? []) {
-    (t.entries ?? []).forEach((e, idx) => {
-      if (e.iconId === imageId) {
-        const entryName = e.idRaw ?? e.text ?? e.textRaw ?? `entry ${idx}`;
-        usages.push({
-          label: `ToolBar ${t.id} :: ${e.kind} ${entryName}`,
-          select: { kind: "toolBarEntry", toolBarId: t.id, entryIndex: idx }
-        });
-      }
-    });
-  }
-
-  for (const sb of model.statusbars ?? []) {
-    (sb.fields ?? []).forEach((f, idx) => {
-      if (f.imageId === imageId) {
-        usages.push({
-          label: `StatusBar ${sb.id} :: Field ${idx}`,
-          select: { kind: "statusBarField", statusBarId: sb.id, fieldIndex: idx }
-        });
-      }
-    });
-  }
-
-  return usages;
+  return collectFormImageUsages(model, imageId);
 }
 
 function countImageUsages(imageId: string): number {
-  return collectImageUsages(imageId).length;
+  return countFormImageUsages(model, imageId);
 }
 
 function findImageEntryById(imageId?: string): FormImage | undefined {
-  if (!imageId) return undefined;
-  return (model.images ?? []).find(entry => entry.id === imageId);
+  return findFormImageEntryById(model.images, imageId);
 }
 
 function selectImageById(imageId: string): void {
@@ -1759,50 +1706,15 @@ function canToggleImagePbAny(entry?: FormImage): boolean {
 }
 
 function getImageReferenceHint(imageId?: string, label: "gadget" | "menu" | "toolbar" | "statusbar" = "gadget"): string {
-  if (!imageId) {
-    switch (label) {
-      case "menu":
-      case "toolbar":
-        return "This entry has no parsed image reference.";
-      case "statusbar":
-        return "This field has no parsed image reference.";
-      default:
-        return "This gadget has no parsed image reference.";
-    }
-  }
-
-  if (!findImageEntryById(imageId)) {
-    return `Referenced image '${imageId}' is not loaded in this form.`;
-  }
-
-  return "";
+  return getCoreFormImageReferenceHint(model.images, imageId, label);
 }
 
 function getDefaultImageReferenceSelection(currentImageId?: string): string {
-  const images = model.images ?? [];
-  if (!images.length) return "";
-  return currentImageId && findImageEntryById(currentImageId)
-    ? currentImageId
-    : (images[0]?.id ?? "");
+  return getDefaultFormImageReferenceSelection(model.images, currentImageId);
 }
 
 function buildCreatedImageReference(idRaw: string, assignedVar?: string): { imageId: string; imageRaw: string } | undefined {
-  const trimmedId = idRaw.trim();
-  if (!trimmedId.length) return undefined;
-
-  if (trimmedId.toLowerCase() === "#pb_any") {
-    const variableName = assignedVar?.trim();
-    if (!variableName) return undefined;
-    return {
-      imageId: variableName,
-      imageRaw: `ImageID(${variableName})`
-    };
-  }
-
-  return {
-    imageId: trimmedId,
-    imageRaw: `ImageID(${trimmedId})`
-  };
+  return buildCreatedFormImageReference(idRaw, assignedVar);
 }
 
 function toPbString(v: string): string {
