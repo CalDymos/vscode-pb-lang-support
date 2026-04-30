@@ -622,13 +622,13 @@ function applyMenuCreateModePatch(
   menuId: string,
   hasIcons: boolean
 ): void {
-  if (!hasIcons) return;
-
   const create = findCreateCallById(calls, PB_CALL.createMenu, menuId);
   if (!create) return;
-  if (create.name === "CreateImageMenu") return;
 
-  appendWorkspaceEdit(edit, replaceCallLinePreserveSuffix(document, create, buildMenuCreateLine(document, create, true)));
+  const expectedName = hasIcons ? PB_CALL.createImageMenu : PB_CALL.createMenu;
+  if (create.name.toLowerCase() === expectedName) return;
+
+  appendWorkspaceEdit(edit, replaceCallLinePreserveSuffix(document, create, buildMenuCreateLine(document, create, hasIcons)));
 }
 
 function buildToolBarImageButtonLine(args: ToolBarEntryArgs): string {

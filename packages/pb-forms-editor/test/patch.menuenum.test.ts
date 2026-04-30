@@ -233,3 +233,46 @@ test("inserts FormMenu before image decoder lines when no enum anchor exists yet
   assert.match(patchedText, /MenuItem\(#MenuSave, "Save"\)/);
   assert.ok(parsed.menus[0]?.entries.some((entry) => entry.idRaw === "#MenuSave"));
 });
+
+test("downgrades CreateImageMenu to CreateMenu when the last menu icon is removed", () => {
+  const text = `; Form Designer for PureBasic - 6.40
+Enumeration FormMenu
+  #MenuSave
+EndEnumeration
+
+Enumeration FormImage
+  #ImgSave
+EndEnumeration
+
+UsePNGImageDecoder()
+
+LoadImage(#ImgSave,"save.png")
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
+  OpenWindow(#FrmMain, x, y, width, height, "Menu")
+  CreateImageMenu(0, WindowID(#FrmMain))
+  MenuTitle("File")
+  MenuItem(#MenuSave, "Save", ImageID(#ImgSave))
+EndProcedure
+`;
+
+  const parsed = parseFormDocument(text);
+  const target = parsed.menus[0]?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem && entry.idRaw === "#MenuSave");
+  const sourceLine = target?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected source line for menu item.");
+
+  const { patchedText, parsed: updated } = patchAndReparse(text, (document) =>
+    applyMenuEntryUpdate(document, "0", sourceLine!, {
+      kind: MENU_ENTRY_KIND.MenuItem,
+      idRaw: "#MenuSave",
+      textRaw: '"Save"',
+    })
+  );
+
+  const updatedTarget = updated.menus[0]?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem && entry.idRaw === "#MenuSave");
+  assert.match(patchedText, /CreateMenu\(0, WindowID\(#FrmMain\)\)/);
+  assert.doesNotMatch(patchedText, /CreateImageMenu\(/);
+  assert.match(patchedText, /MenuItem\(#MenuSave, "Save"\)/);
+  assert.equal(updatedTarget?.iconRaw, undefined);
+  assert.equal(updatedTarget?.iconId, undefined);
+});

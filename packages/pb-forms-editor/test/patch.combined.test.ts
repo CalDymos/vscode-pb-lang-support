@@ -594,7 +594,7 @@ test("roundtrips menu entry update with preserved shortcut and icon", () => {
 });
 
 
-test("patches menu entries inside CreateImageMenu sections", () => {
+test("patches menu entries inside CreateImageMenu sections and downgrades when no icons remain", () => {
   const text = [
     'Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)',
     '  OpenWindow(#FrmMain, x, y, width, height, "Menu")',
@@ -615,10 +615,11 @@ test("patches menu entries inside CreateImageMenu sections", () => {
   );
 
   const menu = parsed.menus.find((m) => m.id === '0');
-  assert.ok(menu, 'Expected CreateImageMenu section after insert.');
+  assert.ok(menu, 'Expected menu section after insert.');
   assert.equal(menu!.entries.at(-1)?.idRaw, '#MenuSave');
   assert.equal(menu!.entries.at(-1)?.shortcut, 'Ctrl+S');
-  assert.match(patchedText, /CreateImageMenu\(0, WindowID\(#FrmMain\)\)[\s\S]*MenuItem\(#MenuSave, "Save" \+ Chr\(9\) \+ "Ctrl\+S"\)/);
+  assert.match(patchedText, /CreateMenu\(0, WindowID\(#FrmMain\)\)[\s\S]*MenuItem\(#MenuSave, "Save" \+ Chr\(9\) \+ "Ctrl\+S"\)/);
+  assert.doesNotMatch(patchedText, /CreateImageMenu\(/);
 });
 
 test("roundtrips menu subtree move before sibling entry", () => {
