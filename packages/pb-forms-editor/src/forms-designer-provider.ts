@@ -65,6 +65,7 @@ import { getToolboxPanelCategories } from "./core/toolbox/panel";
 import { relativizeImagePath, toPbFilePathLiteral } from "./core/image/path";
 import { buildImageReferenceFromEntry, resolveExistingLoadImageByFilePath } from "./core/image/assignment";
 import { readImageDimensions } from "./core/image/dimension";
+import { countFormImageUsages } from "./core/image/model";
 import {
   resolveFixedProcedureSourcePaths,
   readProcedureSourceTextAsync,
@@ -585,6 +586,10 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         const ok = await vscode.workspace.applyEdit(mergeWorkspaceEdits(mergeWorkspaceEdits(firstEdit, secondEdit), thirdEdit));
         if (!ok) { postError(firstErrorMessage); return false; }
         return true;
+      };
+
+      const countCurrentImageUsages = (imageId: string | undefined): number => {
+        return imageId && lastModel ? countFormImageUsages(lastModel, imageId) : 0;
       };
 
       const pickImageFile = async (): Promise<{ fsPath: string; imageRaw: string } | undefined> => {
@@ -1461,7 +1466,6 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             return;
           }
 
-          const model = lastModel;
           const assignEdit = applyToolBarEntryUpdate(
             document,
             msg.toolBarId,
@@ -1470,14 +1474,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             sr
           );
           const insertEdit = applyImageInsert(document, { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar }, sr);
-          const oldImageUsageCount = msg.oldImageId
-            ? [
-                ...(model?.gadgets ?? []).filter((entry) => entry.imageId === msg.oldImageId),
-                ...((model?.menus ?? []).flatMap((menu) => menu.entries.filter((entry) => entry.iconId === msg.oldImageId))),
-                ...((model?.toolbars ?? []).flatMap((toolBar) => toolBar.entries.filter((entry) => entry.iconId === msg.oldImageId))),
-                ...((model?.statusbars ?? []).flatMap((statusBar) => statusBar.fields.filter((field) => field.imageId === msg.oldImageId))),
-              ].length
-            : 0;
+          const oldImageUsageCount = countCurrentImageUsages(msg.oldImageId);
           const cleanupEdit = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
             ? applyImageDelete(document, msg.oldImageSourceLine, sr)
             : undefined;
@@ -1505,17 +1502,9 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             return;
           }
 
-          const model = lastModel;
           const assignEdit = applyStatusBarFieldUpdate(document, msg.statusBarId, msg.sourceLine, { widthRaw: msg.widthRaw, imageRaw: imageRef }, sr);
           const insertEdit = applyImageInsert(document, { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar }, sr);
-          const oldImageUsageCount = msg.oldImageId
-            ? [
-                ...(model?.gadgets ?? []).filter((entry) => entry.imageId === msg.oldImageId),
-                ...((model?.menus ?? []).flatMap((menu) => menu.entries.filter((entry) => entry.iconId === msg.oldImageId))),
-                ...((model?.toolbars ?? []).flatMap((toolBar) => toolBar.entries.filter((entry) => entry.iconId === msg.oldImageId))),
-                ...((model?.statusbars ?? []).flatMap((statusBar) => statusBar.fields.filter((field) => field.imageId === msg.oldImageId))),
-              ].length
-            : 0;
+          const oldImageUsageCount = countCurrentImageUsages(msg.oldImageId);
           const cleanupEdit = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
             ? applyImageDelete(document, msg.oldImageSourceLine, sr)
             : undefined;
@@ -1536,16 +1525,8 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           return;
         }
         case WEBVIEW_TO_EXT_MSG_TYPE.rebindStatusBarFieldImage: {
-          const model = lastModel;
           const assignEdit = applyStatusBarFieldUpdate(document, msg.statusBarId, msg.sourceLine, { widthRaw: msg.widthRaw, imageRaw: msg.imageRaw }, sr);
-          const oldImageUsageCount = msg.oldImageId
-            ? [
-                ...(model?.gadgets ?? []).filter((entry) => entry.imageId === msg.oldImageId),
-                ...((model?.menus ?? []).flatMap((menu) => menu.entries.filter((entry) => entry.iconId === msg.oldImageId))),
-                ...((model?.toolbars ?? []).flatMap((toolBar) => toolBar.entries.filter((entry) => entry.iconId === msg.oldImageId))),
-                ...((model?.statusbars ?? []).flatMap((statusBar) => statusBar.fields.filter((field) => field.imageId === msg.oldImageId))),
-              ].length
-            : 0;
+          const oldImageUsageCount = countCurrentImageUsages(msg.oldImageId);
           const cleanupEdit = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
             ? applyImageDelete(document, msg.oldImageSourceLine, sr)
             : undefined;
@@ -1623,7 +1604,6 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
 
         case WEBVIEW_TO_EXT_MSG_TYPE.rebindToolBarEntryImage: {
           if (!ensureToolBarEntryKind(msg.kind)) return;
-          const model = lastModel;
           const assignEdit = applyToolBarEntryUpdate(
             document,
             msg.toolBarId,
@@ -1631,14 +1611,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             { kind: msg.kind as any, idRaw: msg.idRaw, iconRaw: msg.iconRaw, toggle: msg.toggle },
             sr
           );
-          const oldImageUsageCount = msg.oldImageId
-            ? [
-                ...(model?.gadgets ?? []).filter((entry) => entry.imageId === msg.oldImageId),
-                ...((model?.menus ?? []).flatMap((menu) => menu.entries.filter((entry) => entry.iconId === msg.oldImageId))),
-                ...((model?.toolbars ?? []).flatMap((toolBar) => toolBar.entries.filter((entry) => entry.iconId === msg.oldImageId))),
-                ...((model?.statusbars ?? []).flatMap((statusBar) => statusBar.fields.filter((field) => field.imageId === msg.oldImageId))),
-              ].length
-            : 0;
+          const oldImageUsageCount = countCurrentImageUsages(msg.oldImageId);
           const cleanupEdit = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
             ? applyImageDelete(document, msg.oldImageSourceLine, sr)
             : undefined;
