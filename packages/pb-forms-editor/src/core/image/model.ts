@@ -251,3 +251,11 @@ export function collectFormImageUsages(document: FormImageUsageDocumentLike, ima
 export function countFormImageUsages(document: FormImageUsageDocumentLike, imageId: string): number {
   return collectFormImageUsages(document, imageId).length;
 }
+
+export {
+  parseFormImageReference,
+  parseFormImageIdReference,
+  isFormImageIdReference,
+  isEmptyFormImageReference,
+  type ParsedFormImageReference
+} from "./reference";
