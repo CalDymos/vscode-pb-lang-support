@@ -206,7 +206,6 @@ import {
 } from "../core/toolbox/panel";
 import { buildOriginalGadgetDeletePlan } from "../core/gadget/delete";
 import { quotePbString } from "../core/parser/tokenizer";
-import { isPbStringLiteral } from "../core/parser/pb-string";
 import {
   GADGET_KIND,
   type SourceRange,
@@ -222,6 +221,15 @@ import {
   type FormStatusBar,
   type FormImage,
 } from "../core/model";
+import {
+  buildFormImageEditorDraft,
+  buildFormImageLineLabel,
+  canChooseFileForFormImageEntry,
+  canRelativizeFormImageEntry,
+  canToggleFormImagePbAny,
+  getFormImageCallName,
+  requiresFormImageAssignedVar,
+} from "../core/image/model";
 import {
   buildWindowFlagsExpr,
   getWindowBaseRowsFieldConfig,
@@ -1739,19 +1747,15 @@ function drawResolvedPreviewImage(
 
 
 function canRelativizeImageEntry(entry?: FormImage): boolean {
-  return Boolean(entry && !entry.inline && isPbStringLiteral(entry.imageRaw));
+  return canRelativizeFormImageEntry(entry);
 }
 
 function canChooseFileImageEntry(entry?: FormImage): boolean {
-  return Boolean(entry && !entry.inline);
+  return canChooseFileForFormImageEntry(entry);
 }
 
 function canToggleImagePbAny(entry?: FormImage): boolean {
-  if (!entry) return false;
-  if (entry.pbAny) {
-    return Boolean((entry.variable ?? entry.id ?? "").trim().length);
-  }
-  return Boolean(entry.firstParam.trim().length);
+  return canToggleFormImagePbAny(entry);
 }
 
 function getImageReferenceHint(imageId?: string, label: "gadget" | "menu" | "toolbar" | "statusbar" = "gadget"): string {
@@ -6746,13 +6750,7 @@ function saveGadgetColumnEditor(gadget: Gadget) {
 
 function openImageEditor(entry: FormImage) {
   if (typeof entry.source?.line !== "number") return;
-  pendingImageEditor = {
-    sourceLine: entry.source.line,
-    inline: entry.inline,
-    idRaw: entry.firstParam,
-    imageRaw: entry.imageRaw,
-    assignedVar: entry.variable ?? entry.id ?? "imgNew"
-  };
+  pendingImageEditor = buildFormImageEditorDraft(entry);
 }
 
 function closeImageEditor(sourceLine?: number) {
@@ -6771,13 +6769,7 @@ function getImageEditorDraft(entry: FormImage): PendingImageEditor {
     return pendingImageEditor;
   }
 
-  return {
-    sourceLine: entry.source?.line ?? -1,
-    inline: entry.inline,
-    idRaw: entry.firstParam,
-    imageRaw: entry.imageRaw,
-    assignedVar: entry.variable ?? entry.id ?? "imgNew"
-  };
+  return buildFormImageEditorDraft(entry);
 }
 
 function updateImageEditorDraft(patch: Partial<PendingImageEditor>) {
@@ -6794,7 +6786,7 @@ function saveImageEditor(entry: FormImage) {
   if (!idRaw.length || !imageRaw.length) return;
 
   let assignedVar: string | undefined;
-  if (idRaw.toLowerCase() === "#pb_any") {
+  if (requiresFormImageAssignedVar(idRaw)) {
     const trimmedAssigned = draft.assignedVar.trim();
     if (!trimmedAssigned.length) {
       alert(`${PB_ANY} requires an assigned variable name.`);
@@ -6865,7 +6857,7 @@ function saveImageInsertDraft() {
   if (!idRaw.length || !imageRaw.length) return;
 
   let assignedVar: string | undefined;
-  if (idRaw.toLowerCase() === "#pb_any") {
+  if (requiresFormImageAssignedVar(idRaw)) {
     const trimmedAssigned = pendingImageInsertDraft.assignedVar.trim();
     if (!trimmedAssigned.length) {
       alert(`${PB_ANY} requires an assigned variable name.`);
@@ -7040,7 +7032,7 @@ function saveImageAssignmentDraft() {
   if (!idRaw.length) return;
 
   let assignedVar: string | undefined;
-  if (idRaw.toLowerCase() === "#pb_any") {
+  if (requiresFormImageAssignedVar(idRaw)) {
     const trimmedAssigned = draft.assignedVar.trim();
     if (!trimmedAssigned.length) {
       alert(`${PB_ANY} requires an assigned variable name.`);
@@ -8995,7 +8987,7 @@ function renderList() {
     children: (model.images ?? []).map((img) => ({
       kind: "image" as const,
       id: img.id,
-      label: `${img.pbAny && img.variable ? `${img.variable} = ` : ""}${img.inline ? "CatchImage" : "LoadImage"}  ${img.firstParam}  ${img.imageRaw}  refs:${countImageUsages(img.id)}`,
+      label: `${buildFormImageLineLabel(img)}  refs:${countImageUsages(img.id)}`,
       selectable: true,
       children: []
     }))
@@ -10917,7 +10909,7 @@ function renderProps() {
     const imageDraft = getImageEditorDraft(img);
 
     propsEl.appendChild(row("Id", readonlyInput(img.id)));
-    propsEl.appendChild(row("Kind", readonlyInput(imageEditorOpen ? (imageDraft.inline ? "CatchImage" : "LoadImage") : (img.inline ? "CatchImage" : "LoadImage"))));
+    propsEl.appendChild(row("Kind", readonlyInput(imageEditorOpen ? getFormImageCallName(imageDraft) : getFormImageCallName(img))));
     propsEl.appendChild(row(
       "First Param",
       imageEditorOpen
@@ -11088,7 +11080,7 @@ function renderProps() {
 
     const box = miniList();
     for (const img of model.images ?? []) {
-      const label = `${img.pbAny && img.variable ? `${img.variable} = ` : ""}${img.inline ? "CatchImage" : "LoadImage"}(${img.firstParam}, ${img.imageRaw})`;
+      const label = buildFormImageLineLabel(img);
       const canPatch = typeof img.source?.line === "number";
 
       const rowEl = miniRow(
@@ -12106,7 +12098,7 @@ function createPendingImageReferencePickerEl() {
       pendingImageReferencePicker.selectedImageId,
       (model.images ?? []).map(img => ({
         value: img.id,
-        label: `${img.id} — ${img.inline ? "CatchImage" : "LoadImage"}(${img.firstParam}, ${img.imageRaw})`
+        label: `${img.id} — ${buildFormImageLineLabel(img)}`
       })),
       value => updateImageReferencePicker({ selectedImageId: value })
     )
