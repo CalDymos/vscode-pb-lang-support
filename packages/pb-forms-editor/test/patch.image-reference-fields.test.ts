@@ -1,23 +1,21 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import type { TextDocument } from "vscode";
+import type { TextDocument, WorkspaceEdit } from "vscode";
 
 import {
   applyGadgetOpenArgsUpdate,
+  applyMenuEntryUpdate,
   applyStatusBarFieldUpdate,
   applyToolBarEntryUpdate,
 } from "../src/core/emitter/patch-emitter";
-import { GADGET_KIND, TOOLBAR_ENTRY_KIND } from "../src/core/model";
+import { GADGET_KIND, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND } from "../src/core/model";
 import { parseFormDocument } from "../src/core/parser/form-parser";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 
 function patchAndReparse(
   text: string,
-  editFactory: (document: TextDocument) =>
-    | ReturnType<typeof applyGadgetOpenArgsUpdate>
-    | ReturnType<typeof applyToolBarEntryUpdate>
-    | ReturnType<typeof applyStatusBarFieldUpdate>
+  editFactory: (document: TextDocument) => WorkspaceEdit | undefined
 ) {
   const document = new FakeTextDocument(text);
   const edit = editFactory(document.asTextDocument());
@@ -87,6 +85,33 @@ test("patches ButtonImageGadget and ImageGadget image references directly", () =
   assert.equal(imageGadget?.kind, GADGET_KIND.ImageGadget);
   assert.equal(imageGadget?.imageId, "#Img_FrmMain_1");
   assert.match(imageText, /ImageGadget\(#ImgPreview, 10, 40, 64, 64, ImageID\(#Img_FrmMain_1\)\)/);
+});
+
+
+test("patches menu item icon references directly and upgrades menu creation mode", () => {
+  const text = buildReferenceFixture().replace(
+    '  CreateToolBar(0, WindowID(#FrmMain))',
+    '  CreateMenu(0, WindowID(#FrmMain))\n  MenuTitle("File")\n  MenuItem(#TbSave, "Save")\n  CreateToolBar(0, WindowID(#FrmMain))'
+  );
+  const parsed = parseFormDocument(text);
+  const menuItem = parsed.menus[0]?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem);
+  assert.equal(typeof menuItem?.source?.line, "number", "Expected menu item source line.");
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
+    applyMenuEntryUpdate(document, "0", menuItem!.source!.line, {
+      kind: MENU_ENTRY_KIND.MenuItem,
+      idRaw: menuItem!.idRaw,
+      textRaw: menuItem!.textRaw,
+      iconRaw: "ImageID(#Img_FrmMain_1)",
+    })
+  );
+
+  const updatedItem = updated.menus[0]?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem);
+  assert.equal(updatedItem?.iconId, "#Img_FrmMain_1");
+  assert.match(patchedText, /CreateImageMenu\(0, WindowID\(#FrmMain\)\)/);
+  assert.doesNotMatch(patchedText, /CreateMenu\(0, WindowID\(#FrmMain\)\)/);
+  assert.match(patchedText, /MenuItem\(#TbSave, "Save", ImageID\(#Img_FrmMain_1\)\)/);
+  assert.match(patchedText, /LoadImage\(#Img_FrmMain_1,"new\.png"\)/);
 });
 
 test("patches toolbar image button icon references directly", () => {
