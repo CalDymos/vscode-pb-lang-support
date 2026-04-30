@@ -1273,7 +1273,7 @@ EndProcedure
   const button = third.parsed.gadgets.find((g) => g.id === "#BtnSave");
   assert.ok(button, "Expected patched button image gadget.");
   assert.equal(button?.imageRaw, "0");
-  assert.equal(button?.imageId, "0");
+  assert.equal(button?.imageId, undefined);
   assert.equal(button?.flagsExpr, "#PB_Button_Default");
 });
 
