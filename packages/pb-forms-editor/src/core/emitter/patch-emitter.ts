@@ -6310,11 +6310,16 @@ export function applyImageUpdate(
 
         pendingRenames = reindexImages(images, windowVar);
       } else {
-        images[index] = {
+        const oldId = images[index].id;
+        const nextImage = {
           ...images[index],
           ...mapImageArgsToImage(args),
           source: images[index].source,
         };
+        images[index] = nextImage;
+        if (oldId !== nextImage.id) {
+          pendingRenames = [{ oldId, newId: nextImage.id }];
+        }
       }
       return true;
     },

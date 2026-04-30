@@ -581,3 +581,60 @@ EndProcedure
   assert.match(patchedText, /ToolBarImageButton\(#TbSave, ImageID\(#Img_FrmMain_0\)\)/);
   assert.match(patchedText, /StatusBarImage\(0, 0, ImageID\(#Img_FrmMain_0\)\)/);
 });
+
+test("updates existing image references when toggling a pbAny image back to enum mode", () => {
+  const text = `; Form Designer for PureBasic - 6.40
+
+Global Img_FrmMain_0
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #BtnImage
+  #ImgView
+EndEnumeration
+
+Enumeration FormMenu
+  #MenuSave
+  #TbSave
+EndEnumeration
+
+Img_FrmMain_0 = LoadImage(#PB_Any,"used.png")
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
+  OpenWindow(#FrmMain, x, y, width, height, "Images")
+  ButtonImageGadget(#BtnImage, 10, 10, 80, 24, ImageID(Img_FrmMain_0))
+  ImageGadget(#ImgView, 10, 40, 64, 64, ImageID(Img_FrmMain_0))
+  CreateImageMenu(0, WindowID(#FrmMain))
+  MenuItem(#MenuSave, "Save", ImageID(Img_FrmMain_0))
+  CreateToolBar(0, WindowID(#FrmMain))
+  ToolBarImageButton(#TbSave, ImageID(Img_FrmMain_0))
+  CreateStatusBar(0, WindowID(#FrmMain))
+  AddStatusBarField(100)
+  StatusBarImage(0, 0, ImageID(Img_FrmMain_0))
+EndProcedure
+`;
+
+  const parsed = parseFormDocument(text);
+  const sourceLine = parsed.images.find((entry) => entry.id === "Img_FrmMain_0")?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected pbAny image source line.");
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) => applyImageUpdate(document, sourceLine!, {
+    inline: false,
+    idRaw: "#Img_FrmMain_0",
+    imageRaw: '"used.png"',
+  }));
+
+  assert.equal(updated.images[0]?.id, "#Img_FrmMain_0");
+  assert.match(patchedText, /Enumeration FormImage\r?\n  #Img_FrmMain_0\r?\nEndEnumeration/);
+  assert.match(patchedText, /LoadImage\(#Img_FrmMain_0,"used\.png"\)/);
+  assert.doesNotMatch(patchedText, /^Global Img_FrmMain_0$/m);
+  assert.doesNotMatch(patchedText, /ImageID\(Img_FrmMain_0\)/);
+  assert.match(patchedText, /ButtonImageGadget\(#BtnImage, 10, 10, 80, 24, ImageID\(#Img_FrmMain_0\)\)/);
+  assert.match(patchedText, /ImageGadget\(#ImgView, 10, 40, 64, 64, ImageID\(#Img_FrmMain_0\)\)/);
+  assert.match(patchedText, /MenuItem\(#MenuSave, "Save", ImageID\(#Img_FrmMain_0\)\)/);
+  assert.match(patchedText, /ToolBarImageButton\(#TbSave, ImageID\(#Img_FrmMain_0\)\)/);
+  assert.match(patchedText, /StatusBarImage\(0, 0, ImageID\(#Img_FrmMain_0\)\)/);
+});
