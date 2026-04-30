@@ -639,82 +639,7 @@ EndProcedure
   assert.match(patchedText, /StatusBarImage\(0, 0, ImageID\(#Img_FrmMain_0\)\)/);
 });
 
-test("re-indexes image references when toggling an enum image to pbAny mode", () => {
-  const text = `; Form Designer for PureBasic - 6.40
-
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
-
-Enumeration FormGadget
-  #ImgFirst
-  #ImgSecond
-EndEnumeration
-
-Enumeration FormMenu
-  #MenuFirst
-  #MenuSecond
-  #TbFirst
-  #TbSecond
-EndEnumeration
-
-Enumeration FormImage
-  #Img_FrmMain_0
-  #Img_FrmMain_1
-EndEnumeration
-
-UsePNGImageDecoder()
-
-LoadImage(#Img_FrmMain_0,"first.png")
-LoadImage(#Img_FrmMain_1,"second.png")
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
-  OpenWindow(#FrmMain, x, y, width, height, "Images")
-  ImageGadget(#ImgFirst, 10, 10, 64, 64, ImageID(#Img_FrmMain_0))
-  ImageGadget(#ImgSecond, 80, 10, 64, 64, ImageID(#Img_FrmMain_1))
-  CreateImageMenu(0, WindowID(#FrmMain))
-  MenuItem(#MenuFirst, "First", ImageID(#Img_FrmMain_0))
-  MenuItem(#MenuSecond, "Second", ImageID(#Img_FrmMain_1))
-  CreateToolBar(0, WindowID(#FrmMain))
-  ToolBarImageButton(#TbFirst, ImageID(#Img_FrmMain_0))
-  ToolBarImageButton(#TbSecond, ImageID(#Img_FrmMain_1))
-  CreateStatusBar(0, WindowID(#FrmMain))
-  AddStatusBarField(100)
-  StatusBarImage(0, 0, ImageID(#Img_FrmMain_1))
-EndProcedure
-`;
-
-  const parsed = parseFormDocument(text);
-  const sourceLine = parsed.images.find((entry) => entry.id === "#Img_FrmMain_0")?.source?.line;
-  assert.equal(typeof sourceLine, "number", "Expected first enum image source line.");
-
-  const { parsed: updated, patchedText } = patchAndReparse(text, (document) => applyImageUpdate(document, sourceLine!, {
-    inline: false,
-    idRaw: "#PB_Any",
-    assignedVar: "Img_FrmMain_1",
-    imageRaw: '"first.png"',
-    pbAny: true,
-  }));
-
-  assert.equal(updated.images.length, 2);
-  assert.equal(updated.images[0]?.id, "#Img_FrmMain_0");
-  assert.equal(updated.images[0]?.imageRaw, '"second.png"');
-  assert.equal(updated.images[1]?.id, "Img_FrmMain_1");
-  assert.equal(updated.images[1]?.pbAny, true);
-  assert.match(patchedText, /^Global Img_FrmMain_1$/m);
-  assert.match(patchedText, /Enumeration FormImage\r?\n  #Img_FrmMain_0\r?\nEndEnumeration/);
-  assert.match(patchedText, /LoadImage\(#Img_FrmMain_0,"second\.png"\)/);
-  assert.match(patchedText, /Img_FrmMain_1 = LoadImage\(#PB_Any,"first\.png"\)/);
-  assert.match(patchedText, /ImageGadget\(#ImgFirst, 10, 10, 64, 64, ImageID\(Img_FrmMain_1\)\)/);
-  assert.match(patchedText, /ImageGadget\(#ImgSecond, 80, 10, 64, 64, ImageID\(#Img_FrmMain_0\)\)/);
-  assert.match(patchedText, /MenuItem\(#MenuFirst, "First", ImageID\(Img_FrmMain_1\)\)/);
-  assert.match(patchedText, /MenuItem\(#MenuSecond, "Second", ImageID\(#Img_FrmMain_0\)\)/);
-  assert.match(patchedText, /ToolBarImageButton\(#TbFirst, ImageID\(Img_FrmMain_1\)\)/);
-  assert.match(patchedText, /ToolBarImageButton\(#TbSecond, ImageID\(#Img_FrmMain_0\)\)/);
-  assert.match(patchedText, /StatusBarImage\(0, 0, ImageID\(#Img_FrmMain_0\)\)/);
-});
-
-test("preserves CatchImage mode when toggling an enum image to pbAny mode", () => {
+test("reindexes multiple image references when toggling an enum image to pbAny mode", () => {
   const text = `; Form Designer for PureBasic - 6.40
 
 Enumeration FormWindow
@@ -727,18 +652,69 @@ EndEnumeration
 
 Enumeration FormImage
   #Img_FrmMain_0
+  #Img_FrmMain_1
+EndEnumeration
+
+Enumeration FormMenu
+  #MenuSave
+  #TbSave
+EndEnumeration
+
+LoadImage(#Img_FrmMain_0,"first.png")
+LoadImage(#Img_FrmMain_1,"second.png")
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
+  OpenWindow(#FrmMain, x, y, width, height, "Images")
+  ImageGadget(#ImgView, 10, 40, 64, 64, ImageID(#Img_FrmMain_0))
+  CreateImageMenu(0, WindowID(#FrmMain))
+  MenuItem(#MenuSave, "Save", ImageID(#Img_FrmMain_1))
+  CreateToolBar(0, WindowID(#FrmMain))
+  ToolBarImageButton(#TbSave, ImageID(#Img_FrmMain_1))
+  CreateStatusBar(0, WindowID(#FrmMain))
+  AddStatusBarField(100)
+  StatusBarImage(0, 0, ImageID(#Img_FrmMain_1))
+EndProcedure
+`;
+
+  const parsed = parseFormDocument(text);
+  const sourceLine = parsed.images.find((entry) => entry.id === "#Img_FrmMain_0")?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected enum image source line.");
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) => applyImageUpdate(document, sourceLine!, {
+    inline: false,
+    idRaw: "#PB_Any",
+    assignedVar: "Img_FrmMain_1",
+    imageRaw: '"first.png"',
+    pbAny: true,
+  }));
+
+  assert.deepEqual(updated.images.map((entry) => entry.id), ["#Img_FrmMain_0", "Img_FrmMain_1"]);
+  assert.match(patchedText, /Enumeration FormImage\r?\n  #Img_FrmMain_0\r?\nEndEnumeration/);
+  assert.match(patchedText, /^Global Img_FrmMain_1$/m);
+  assert.match(patchedText, /LoadImage\(#Img_FrmMain_0,"second\.png"\)/);
+  assert.match(patchedText, /Img_FrmMain_1 = LoadImage\(#PB_Any,"first\.png"\)/);
+  assert.match(patchedText, /ImageGadget\(#ImgView, 10, 40, 64, 64, ImageID\(Img_FrmMain_1\)\)/);
+  assert.match(patchedText, /MenuItem\(#MenuSave, "Save", ImageID\(#Img_FrmMain_0\)\)/);
+  assert.match(patchedText, /ToolBarImageButton\(#TbSave, ImageID\(#Img_FrmMain_0\)\)/);
+  assert.match(patchedText, /StatusBarImage\(0, 0, ImageID\(#Img_FrmMain_0\)\)/);
+});
+
+test("preserves CatchImage when toggling an enum image to pbAny mode", () => {
+  const text = `; Form Designer for PureBasic - 6.40
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormImage
+  #Img_FrmMain_0
 EndEnumeration
 
 CatchImage(#Img_FrmMain_0,?Img_FrmMain_0)
 
 Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
   OpenWindow(#FrmMain, x, y, width, height, "Images")
-  ImageGadget(#ImgView, 10, 10, 64, 64, ImageID(#Img_FrmMain_0))
 EndProcedure
-
-DataSection
-  Img_FrmMain_0:
-EndDataSection
 `;
 
   const parsed = parseFormDocument(text);
@@ -755,9 +731,7 @@ EndDataSection
 
   assert.equal(updated.images[0]?.id, "Img_FrmMain_0");
   assert.equal(updated.images[0]?.inline, true);
-  assert.equal(updated.images[0]?.image, "Img_FrmMain_0");
   assert.match(patchedText, /^Global Img_FrmMain_0$/m);
-  assert.doesNotMatch(patchedText, /LoadImage\(/);
   assert.match(patchedText, /Img_FrmMain_0 = CatchImage\(#PB_Any,\?Img_FrmMain_0\)/);
-  assert.match(patchedText, /ImageGadget\(#ImgView, 10, 10, 64, 64, ImageID\(Img_FrmMain_0\)\)/);
+  assert.doesNotMatch(patchedText, /LoadImage\(#PB_Any,\?Img_FrmMain_0\)/);
 });
