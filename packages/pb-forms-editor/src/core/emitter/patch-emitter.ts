@@ -6305,7 +6305,8 @@ export function applyImageUpdate(
         entry.pbAny = true;
         entry.firstParam = PB_ANY;
         entry.imageRaw = trimmedImageRaw;
-        entry.image = normalizePbImageValue(trimmedImageRaw, false);
+        entry.image = normalizePbImageValue(trimmedImageRaw, args.inline);
+        entry.inline = args.inline;
         images.push(entry);
 
         pendingRenames = reindexImages(images, windowVar);
