@@ -230,6 +230,9 @@ function buildAddGadgetItemArgs(gadgetKey: string, args: GadgetItemArgs): string
   out.push(args.posRaw);
   out.push(args.textRaw);
 
+  // The original Form Designer ignores AddGadgetItem image arguments on load
+  // and does not emit them. The port preserves existing item image arguments
+  // for roundtrip/editing until an explicit compatibility decision changes it.
   if (args.imageRaw !== undefined || args.flagsRaw !== undefined) {
     out.push((args.imageRaw ?? "0").trim().length ? args.imageRaw! : "0");
   }

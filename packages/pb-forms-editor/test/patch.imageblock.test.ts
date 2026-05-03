@@ -735,3 +735,45 @@ EndProcedure
   assert.match(patchedText, /Img_FrmMain_0 = CatchImage\(#PB_Any,\?Img_FrmMain_0\)/);
   assert.doesNotMatch(patchedText, /LoadImage\(#PB_Any,\?Img_FrmMain_0\)/);
 });
+
+test("reindexes preserved AddGadgetItem image references when deleting an earlier unreferenced image", () => {
+  const text = `; Form Designer for PureBasic - 6.40
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #TreeMain
+EndEnumeration
+
+Enumeration FormImage
+  #Img_FrmMain_0
+  #Img_FrmMain_1
+EndEnumeration
+
+LoadImage(#Img_FrmMain_0,"unused.png")
+LoadImage(#Img_FrmMain_1,"node.png")
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
+  OpenWindow(#FrmMain, x, y, width, height, "Images")
+  TreeGadget(#TreeMain, 10, 10, 200, 120, 0)
+  AddGadgetItem(#TreeMain, -1, "Root", ImageID(#Img_FrmMain_1), 0)
+EndProcedure
+`;
+
+  const parsed = parseFormDocument(text);
+  const sourceLine = parsed.images.find((entry) => entry.id === "#Img_FrmMain_0")?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected enum image source line.");
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) => applyImageDelete(document, sourceLine!));
+  const tree = updated.gadgets.find((entry) => entry.id === "#TreeMain");
+
+  assert.deepEqual(updated.images.map((entry) => entry.id), ["#Img_FrmMain_0"]);
+  assert.equal(updated.images[0]?.imageRaw, '"node.png"');
+  assert.equal(tree?.items?.[0]?.imageId, "#Img_FrmMain_0");
+  assert.equal(tree?.items?.[0]?.flagsRaw, "0");
+  assert.match(patchedText, /LoadImage\(#Img_FrmMain_0,"node\.png"\)/);
+  assert.match(patchedText, /AddGadgetItem\(#TreeMain, -1, "Root", ImageID\(#Img_FrmMain_0\), 0\)/);
+  assert.doesNotMatch(patchedText, /#Img_FrmMain_1/);
+});
