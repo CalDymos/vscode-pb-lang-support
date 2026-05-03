@@ -1422,24 +1422,25 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         case WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignMenuEntryImage: {
           if (!ensureMenuEntryKind(msg.kind)) return;
 
-          const imageRef = buildImageIdReference(msg.newImageIdRaw, msg.newAssignedVar);
-          if (!imageRef) {
-            postError(`Could not create image entry for menu '${msg.menuId}'. ${PB_ANY} requires an assigned variable name${rangeInfo}.`);
-            return;
-          }
+          const oldImageUsageCount = countCurrentImageUsages(msg.oldImageId);
+          const cleanupSourceLine = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
+            ? msg.oldImageSourceLine
+            : undefined;
 
-          const assignEdit = applyMenuEntryUpdate(
+          const edit = applyImageInsertAndReferenceUpdate(
             document,
-            msg.menuId,
-            msg.sourceLine,
-            { kind: msg.kind as any, idRaw: msg.idRaw, textRaw: msg.textRaw, shortcut: msg.shortcut, iconRaw: imageRef },
+            { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar },
+            imageRef => applyMenuEntryUpdate(
+              document,
+              msg.menuId,
+              msg.sourceLine,
+              { kind: msg.kind as any, idRaw: msg.idRaw, textRaw: msg.textRaw, shortcut: msg.shortcut, iconRaw: imageRef },
+              sr
+            ),
+            cleanupSourceLine,
             sr
           );
-          const insertEdit = applyImageInsert(document, { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar }, sr);
-          await applyPairedEditsOrError(
-            assignEdit, `Could not patch image argument for menu entry in menu '${msg.menuId}'. No matching call found${rangeInfo}.`,
-            insertEdit, `Could not insert image entry for menu '${msg.menuId}'. No suitable insertion point found${rangeInfo}.`,
-          );
+          await applyEditOrError(edit, `Could not create and assign image entry for menu '${msg.menuId}'${rangeInfo}.`);
           return;
         }
 
@@ -1528,9 +1529,51 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             return;
           }
 
-          const imageRef = buildImageIdReference(msg.newImageIdRaw, msg.newAssignedVar);
-          if (!imageRef) {
-            postError(`Could not create image entry for menu '${msg.menuId}'. ${PB_ANY} requires an assigned variable name${rangeInfo}.`);
+          const oldImageUsageCount = countCurrentImageUsages(msg.oldImageId);
+          const cleanupSourceLine = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
+            ? msg.oldImageSourceLine
+            : undefined;
+
+          const edit = applyImageInsertAndReferenceUpdate(
+            document,
+            { inline: false, idRaw: msg.newImageIdRaw, imageRaw: pickedImageRaw, assignedVar: msg.newAssignedVar },
+            imageRef => applyMenuEntryUpdate(
+              document,
+              msg.menuId,
+              msg.sourceLine,
+              { kind: msg.kind as any, idRaw: msg.idRaw, textRaw: msg.textRaw, shortcut: msg.shortcut, iconRaw: imageRef },
+              sr
+            ),
+            cleanupSourceLine,
+            sr
+          );
+          await applyEditOrError(edit, `Could not choose and assign image entry for menu '${msg.menuId}'${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.rebindMenuEntryImage: {
+          if (!ensureMenuEntryKind(msg.kind)) return;
+
+          const oldImageUsageCount = countCurrentImageUsages(msg.oldImageId);
+          const cleanupSourceLine = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
+            ? msg.oldImageSourceLine
+            : undefined;
+
+          if (typeof cleanupSourceLine === "number") {
+            const edit = applyImageReferenceUpdateWithCleanup(
+              document,
+              msg.iconRaw,
+              imageRef => applyMenuEntryUpdate(
+                document,
+                msg.menuId,
+                msg.sourceLine,
+                { kind: msg.kind as any, idRaw: msg.idRaw, textRaw: msg.textRaw, shortcut: msg.shortcut, iconRaw: imageRef },
+                sr
+              ),
+              cleanupSourceLine,
+              sr
+            );
+            await applyEditOrError(edit, `Could not rebind image argument and clean the previous image entry for menu '${msg.menuId}'${rangeInfo}.`);
             return;
           }
 
@@ -1538,14 +1581,10 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             document,
             msg.menuId,
             msg.sourceLine,
-            { kind: msg.kind as any, idRaw: msg.idRaw, textRaw: msg.textRaw, shortcut: msg.shortcut, iconRaw: imageRef },
+            { kind: msg.kind as any, idRaw: msg.idRaw, textRaw: msg.textRaw, shortcut: msg.shortcut, iconRaw: msg.iconRaw },
             sr
           );
-          const insertEdit = applyImageInsert(document, { inline: false, idRaw: msg.newImageIdRaw, imageRaw: pickedImageRaw, assignedVar: msg.newAssignedVar }, sr);
-          await applyPairedEditsOrError(
-            assignEdit, `Could not patch image argument for menu entry in menu '${msg.menuId}'. No matching call found${rangeInfo}.`,
-            insertEdit, `Could not insert image entry for menu '${msg.menuId}'. No suitable insertion point found${rangeInfo}.`,
-          );
+          await applyEditOrError(assignEdit, `Could not rebind image argument for menu '${msg.menuId}'. No matching menu item call found${rangeInfo}.`);
           return;
         }
 
@@ -1557,24 +1596,25 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             return;
           }
 
-          const imageRef = buildImageIdReference(msg.newImageIdRaw, msg.newAssignedVar);
-          if (!imageRef) {
-            postError(`Could not create image entry for toolbar '${msg.toolBarId}'. ${PB_ANY} requires an assigned variable name${rangeInfo}.`);
-            return;
-          }
+          const oldImageUsageCount = countCurrentImageUsages(msg.oldImageId);
+          const cleanupSourceLine = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
+            ? msg.oldImageSourceLine
+            : undefined;
 
-          const assignEdit = applyToolBarEntryUpdate(
+          const edit = applyImageInsertAndReferenceUpdate(
             document,
-            msg.toolBarId,
-            msg.sourceLine,
-            { kind: msg.kind as any, idRaw: msg.idRaw, iconRaw: imageRef, toggle: msg.toggle },
+            { inline: false, idRaw: msg.newImageIdRaw, imageRaw: pickedImageRaw, assignedVar: msg.newAssignedVar },
+            imageRef => applyToolBarEntryUpdate(
+              document,
+              msg.toolBarId,
+              msg.sourceLine,
+              { kind: msg.kind as any, idRaw: msg.idRaw, iconRaw: imageRef, toggle: msg.toggle },
+              sr
+            ),
+            cleanupSourceLine,
             sr
           );
-          const insertEdit = applyImageInsert(document, { inline: false, idRaw: msg.newImageIdRaw, imageRaw: pickedImageRaw, assignedVar: msg.newAssignedVar }, sr);
-          await applyPairedEditsOrError(
-            assignEdit, `Could not patch image argument for toolbar entry in toolbar '${msg.toolBarId}'. No matching call found${rangeInfo}.`,
-            insertEdit, `Could not insert image entry for toolbar '${msg.toolBarId}'. No suitable insertion point found${rangeInfo}.`,
-          );
+          await applyEditOrError(edit, `Could not choose and assign image entry for toolbar '${msg.toolBarId}'${rangeInfo}.`);
           return;
         }
 
@@ -1621,18 +1661,25 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             return;
           }
 
-          const imageRef = buildImageIdReference(msg.newImageIdRaw, msg.newAssignedVar);
-          if (!imageRef) {
-            postError(`Could not create image entry for statusbar '${msg.statusBarId}'. ${PB_ANY} requires an assigned variable name${rangeInfo}.`);
-            return;
-          }
+          const oldImageUsageCount = countCurrentImageUsages(msg.oldImageId);
+          const cleanupSourceLine = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
+            ? msg.oldImageSourceLine
+            : undefined;
 
-          const assignEdit = applyStatusBarFieldUpdate(document, msg.statusBarId, msg.sourceLine, { widthRaw: msg.widthRaw, imageRaw: imageRef }, sr);
-          const insertEdit = applyImageInsert(document, { inline: false, idRaw: msg.newImageIdRaw, imageRaw: pickedImageRaw, assignedVar: msg.newAssignedVar }, sr);
-          await applyPairedEditsOrError(
-            assignEdit, `Could not patch image argument for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`,
-            insertEdit, `Could not insert image entry for statusbar '${msg.statusBarId}'. No suitable insertion point found${rangeInfo}.`,
+          const edit = applyImageInsertAndReferenceUpdate(
+            document,
+            { inline: false, idRaw: msg.newImageIdRaw, imageRaw: pickedImageRaw, assignedVar: msg.newAssignedVar },
+            imageRef => applyStatusBarFieldUpdate(
+              document,
+              msg.statusBarId,
+              msg.sourceLine,
+              { widthRaw: msg.widthRaw, imageRaw: imageRef },
+              sr
+            ),
+            cleanupSourceLine,
+            sr
           );
+          await applyEditOrError(edit, `Could not choose and assign image entry for statusbar '${msg.statusBarId}'${rangeInfo}.`);
           return;
         }
 

@@ -1660,6 +1660,17 @@ function findImageEntryById(imageId?: string): FormImage | undefined {
   return findFormImageEntryById(model.images, imageId);
 }
 
+function getCleanupSourceLineForImageReference(oldImageId: string | undefined, nextImageId: string | undefined): number | undefined {
+  const oldImage = findImageEntryById(oldImageId);
+  const oldUsageCount = oldImageId ? countImageUsages(oldImageId) : 0;
+  return shouldCleanupStatusBarReboundImage(
+    oldImageId,
+    oldUsageCount,
+    oldImage?.source?.line,
+    nextImageId
+  ) ? oldImage?.source?.line : undefined;
+}
+
 function selectImageById(imageId: string): void {
   setSelectionAndRefresh({ kind: "image", id: imageId });
 }
@@ -6881,14 +6892,16 @@ function saveImageReferencePicker() {
       const entry = menu?.entries?.[target.entryIndex];
       if (!menu || !entry || typeof entry.source?.line !== "number" || entry.kind !== "MenuItem") return;
       post({
-        type: WEBVIEW_TO_EXT_MSG_TYPE.updateMenuEntry,
+        type: WEBVIEW_TO_EXT_MSG_TYPE.rebindMenuEntryImage,
         menuId: menu.id,
         sourceLine: entry.source.line,
         kind: entry.kind,
         idRaw: entry.idRaw,
         textRaw: entry.textRaw ?? (entry.text !== undefined ? toPbString(entry.text) : undefined),
         shortcut: entry.shortcut,
-        iconRaw: imageRaw
+        iconRaw: imageRaw,
+        oldImageId: entry.iconId,
+        oldImageSourceLine: getCleanupSourceLineForImageReference(entry.iconId, selected.id)
       });
       break;
     }
@@ -6897,13 +6910,15 @@ function saveImageReferencePicker() {
       const entry = toolBar?.entries?.[target.entryIndex];
       if (!toolBar || !entry || typeof entry.source?.line !== "number" || entry.kind !== "ToolBarImageButton") return;
       post({
-        type: WEBVIEW_TO_EXT_MSG_TYPE.updateToolBarEntry,
+        type: WEBVIEW_TO_EXT_MSG_TYPE.rebindToolBarEntryImage,
         toolBarId: toolBar.id,
         sourceLine: entry.source.line,
         kind: entry.kind,
         idRaw: entry.idRaw,
         iconRaw: imageRaw,
-        toggle: entry.toggle
+        toggle: entry.toggle,
+        oldImageId: entry.iconId,
+        oldImageSourceLine: getCleanupSourceLineForImageReference(entry.iconId, selected.id)
       });
       break;
     }
@@ -6912,11 +6927,13 @@ function saveImageReferencePicker() {
       const field = statusBar?.fields?.[target.fieldIndex];
       if (!statusBar || !field || typeof field.source?.line !== "number") return;
       post({
-        type: WEBVIEW_TO_EXT_MSG_TYPE.updateStatusBarField,
+        type: WEBVIEW_TO_EXT_MSG_TYPE.rebindStatusBarFieldImage,
         statusBarId: statusBar.id,
         sourceLine: field.source.line,
         widthRaw: field.widthRaw,
         imageRaw,
+        oldImageId: field.imageId,
+        oldImageSourceLine: getCleanupSourceLineForImageReference(field.imageId, selected.id)
       });
       break;
     }
@@ -6971,6 +6988,7 @@ function saveImageAssignmentDraft() {
       const menu = model.menus?.find(candidate => candidate.id === target.menuId);
       const entry = menu?.entries?.[target.entryIndex];
       if (!menu || !entry || typeof entry.source?.line !== "number" || entry.kind !== "MenuItem") return;
+      const oldImageSourceLine = getCleanupSourceLineForImageReference(entry.iconId, reference.imageId);
       if (draft.mode === "create") {
         post({
           type: WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignMenuEntryImage,
@@ -6984,6 +7002,8 @@ function saveImageAssignmentDraft() {
           newImageIdRaw: idRaw,
           newImageRaw: imageRaw,
           newAssignedVar: assignedVar,
+          oldImageId: entry.iconId,
+          oldImageSourceLine,
         });
       }
       else {
@@ -6997,6 +7017,8 @@ function saveImageAssignmentDraft() {
           shortcut: entry.shortcut,
           newImageIdRaw: idRaw,
           newAssignedVar: assignedVar,
+          oldImageId: entry.iconId,
+          oldImageSourceLine,
         });
       }
       break;
@@ -7005,6 +7027,7 @@ function saveImageAssignmentDraft() {
       const toolBar = model.toolbars?.find(candidate => candidate.id === target.toolBarId);
       const entry = toolBar?.entries?.[target.entryIndex];
       if (!toolBar || !entry || typeof entry.source?.line !== "number" || entry.kind !== "ToolBarImageButton") return;
+      const oldImageSourceLine = getCleanupSourceLineForImageReference(entry.iconId, reference.imageId);
       if (draft.mode === "create") {
         post({
           type: WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignToolBarEntryImage,
@@ -7018,7 +7041,7 @@ function saveImageAssignmentDraft() {
           newImageRaw: imageRaw,
           newAssignedVar: assignedVar,
           oldImageId: entry.iconId,
-          oldImageSourceLine: entry.iconId ? findImageEntryById(entry.iconId)?.source?.line : undefined,
+          oldImageSourceLine,
         });
       }
       else {
@@ -7031,6 +7054,8 @@ function saveImageAssignmentDraft() {
           toggle: entry.toggle,
           newImageIdRaw: idRaw,
           newAssignedVar: assignedVar,
+          oldImageId: entry.iconId,
+          oldImageSourceLine,
         });
       }
       break;
@@ -7039,6 +7064,7 @@ function saveImageAssignmentDraft() {
       const statusBar = model.statusbars?.find(candidate => candidate.id === target.statusBarId);
       const field = statusBar?.fields?.[target.fieldIndex];
       if (!statusBar || !field || typeof field.source?.line !== "number") return;
+      const oldImageSourceLine = getCleanupSourceLineForImageReference(field.imageId, reference.imageId);
       if (draft.mode === "create") {
         post({
           type: WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignStatusBarFieldImage,
@@ -7049,6 +7075,8 @@ function saveImageAssignmentDraft() {
           newImageIdRaw: idRaw,
           newImageRaw: imageRaw,
           newAssignedVar: assignedVar,
+          oldImageId: field.imageId,
+          oldImageSourceLine,
         });
       }
       else {
@@ -7059,6 +7087,8 @@ function saveImageAssignmentDraft() {
           widthRaw: field.widthRaw,
           newImageIdRaw: idRaw,
           newAssignedVar: assignedVar,
+          oldImageId: field.imageId,
+          oldImageSourceLine,
         });
       }
       break;

@@ -315,3 +315,112 @@ test("rebinds statusbar image references with cleanup as one reindexed image mut
   assert.match(patchedText, /ToolBarImageButton\(#TbOpen, ImageID\(#Img_FrmMain_0\)\)/);
   assert.match(patchedText, /StatusBarImage\(0, 0, ImageID\(#Img_FrmMain_0\)\)/);
 });
+
+function buildMenuImageCleanupFixture(): string {
+  return `; Form Designer for PureBasic - 6.40
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormImage
+  #Img_FrmMain_0
+  #Img_FrmMain_1
+EndEnumeration
+
+Enumeration FormMenu
+  #MenuOpen
+EndEnumeration
+
+Enumeration FormToolBar
+  #TbShared
+EndEnumeration
+
+LoadImage(#Img_FrmMain_0,"old.png")
+LoadImage(#Img_FrmMain_1,"shared.png")
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
+  OpenWindow(#FrmMain, x, y, width, height, "Images")
+  CreateImageMenu(0, WindowID(#FrmMain))
+  MenuTitle("File")
+  MenuItem(#MenuOpen, "Open", ImageID(#Img_FrmMain_0))
+  CreateToolBar(0, WindowID(#FrmMain))
+  ToolBarImageButton(#TbShared, ImageID(#Img_FrmMain_1))
+  CreateStatusBar(0, WindowID(#FrmMain))
+  AddStatusBarField(100)
+  StatusBarImage(0, 0, ImageID(#Img_FrmMain_1))
+EndProcedure
+`;
+}
+
+test("creates and assigns menu images with cleanup as one reindexed image mutation", () => {
+  const text = buildMenuImageCleanupFixture();
+  const parsed = parseFormDocument(text);
+  const menuItem = parsed.menus[0]?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem);
+  const oldImage = parsed.images.find((entry) => entry.id === "#Img_FrmMain_0");
+  assert.equal(typeof menuItem?.source?.line, "number", "Expected menu item source line.");
+  assert.equal(typeof oldImage?.source?.line, "number", "Expected old image source line.");
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
+    applyImageInsertAndReferenceUpdate(
+      document,
+      { inline: false, idRaw: "#Img_FrmMain_2", imageRaw: '"new.png"' },
+      imageRef => applyMenuEntryUpdate(document, "0", menuItem!.source!.line, {
+        kind: MENU_ENTRY_KIND.MenuItem,
+        idRaw: menuItem!.idRaw,
+        textRaw: menuItem!.textRaw,
+        shortcut: menuItem!.shortcut,
+        iconRaw: imageRef,
+      }),
+      oldImage!.source!.line
+    )
+  );
+
+  const updatedItem = updated.menus[0]?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem);
+  assert.deepEqual(updated.images.map((entry) => entry.id), ["#Img_FrmMain_0", "#Img_FrmMain_1"]);
+  assert.equal(updated.images[0]?.imageRaw, '"shared.png"');
+  assert.equal(updated.images[1]?.imageRaw, '"new.png"');
+  assert.equal(updatedItem?.iconId, "#Img_FrmMain_1");
+  assert.equal(updated.toolbars[0]?.entries[0]?.iconId, "#Img_FrmMain_0");
+  assert.equal(updated.statusbars[0]?.fields[0]?.imageId, "#Img_FrmMain_0");
+  assert.doesNotMatch(patchedText, /old\.png/);
+  assert.match(patchedText, /CreateImageMenu\(0, WindowID\(#FrmMain\)\)/);
+  assert.match(patchedText, /MenuItem\(#MenuOpen, "Open", ImageID\(#Img_FrmMain_1\)\)/);
+  assert.match(patchedText, /ToolBarImageButton\(#TbShared, ImageID\(#Img_FrmMain_0\)\)/);
+  assert.match(patchedText, /StatusBarImage\(0, 0, ImageID\(#Img_FrmMain_0\)\)/);
+});
+
+test("rebinds menu image references with cleanup as one reindexed image mutation", () => {
+  const text = buildMenuImageCleanupFixture();
+  const parsed = parseFormDocument(text);
+  const menuItem = parsed.menus[0]?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem);
+  const oldImage = parsed.images.find((entry) => entry.id === "#Img_FrmMain_0");
+  assert.equal(typeof menuItem?.source?.line, "number", "Expected menu item source line.");
+  assert.equal(typeof oldImage?.source?.line, "number", "Expected old image source line.");
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
+    applyImageReferenceUpdateWithCleanup(
+      document,
+      "ImageID(#Img_FrmMain_1)",
+      imageRef => applyMenuEntryUpdate(document, "0", menuItem!.source!.line, {
+        kind: MENU_ENTRY_KIND.MenuItem,
+        idRaw: menuItem!.idRaw,
+        textRaw: menuItem!.textRaw,
+        shortcut: menuItem!.shortcut,
+        iconRaw: imageRef,
+      }),
+      oldImage!.source!.line
+    )
+  );
+
+  const updatedItem = updated.menus[0]?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem);
+  assert.deepEqual(updated.images.map((entry) => entry.id), ["#Img_FrmMain_0"]);
+  assert.equal(updated.images[0]?.imageRaw, '"shared.png"');
+  assert.equal(updatedItem?.iconId, "#Img_FrmMain_0");
+  assert.equal(updated.toolbars[0]?.entries[0]?.iconId, "#Img_FrmMain_0");
+  assert.equal(updated.statusbars[0]?.fields[0]?.imageId, "#Img_FrmMain_0");
+  assert.doesNotMatch(patchedText, /old\.png/);
+  assert.doesNotMatch(patchedText, /ImageID\(#Img_FrmMain_1\)/);
+  assert.match(patchedText, /CreateImageMenu\(0, WindowID\(#FrmMain\)\)/);
+  assert.match(patchedText, /MenuItem\(#MenuOpen, "Open", ImageID\(#Img_FrmMain_0\)\)/);
+});
