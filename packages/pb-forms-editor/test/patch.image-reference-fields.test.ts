@@ -5,6 +5,7 @@ import type { TextDocument, WorkspaceEdit } from "vscode";
 import {
   applyGadgetOpenArgsUpdate,
   applyImageInsertAndReferenceUpdate,
+  applyImageReferenceUpdateWithCleanup,
   applyMenuEntryUpdate,
   applyStatusBarFieldUpdate,
   applyToolBarEntryUpdate,
@@ -245,3 +246,72 @@ test("creates and assigns statusbar images with cleanup as one non-overlapping i
   assert.match(patchedText, /StatusBarImage\(0, 0, ImageID\(#Img_FrmMain_1\)\)/);
 });
 
+
+
+test("rebinds toolbar image references with cleanup as one reindexed image mutation", () => {
+  const text = buildCreateAssignCleanupFixture();
+  const parsed = parseFormDocument(text);
+  const toolBarEntry = parsed.toolbars[0]?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton);
+  const oldImage = parsed.images.find((entry) => entry.id === "#Img_FrmMain_0");
+  assert.equal(typeof toolBarEntry?.source?.line, "number", "Expected toolbar entry source line.");
+  assert.equal(typeof oldImage?.source?.line, "number", "Expected old image source line.");
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
+    applyImageReferenceUpdateWithCleanup(
+      document,
+      "ImageID(#Img_FrmMain_1)",
+      imageRef => applyToolBarEntryUpdate(document, "0", toolBarEntry!.source!.line, {
+        kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton,
+        idRaw: toolBarEntry!.idRaw,
+        iconRaw: imageRef,
+        toggle: toolBarEntry!.toggle,
+      }),
+      oldImage!.source!.line
+    )
+  );
+
+  assert.deepEqual(updated.images.map((entry) => entry.id), ["#Img_FrmMain_0"]);
+  assert.equal(updated.images[0]?.imageRaw, '"shared.png"');
+  assert.equal(updated.toolbars[0]?.entries[0]?.iconId, "#Img_FrmMain_0");
+  assert.equal(updated.statusbars[0]?.fields[0]?.imageId, "#Img_FrmMain_0");
+  assert.doesNotMatch(patchedText, /old\.png/);
+  assert.doesNotMatch(patchedText, /ImageID\(#Img_FrmMain_1\)/);
+  assert.match(patchedText, /ToolBarImageButton\(#TbOpen, ImageID\(#Img_FrmMain_0\)\)/);
+  assert.match(patchedText, /StatusBarImage\(0, 0, ImageID\(#Img_FrmMain_0\)\)/);
+});
+
+test("rebinds statusbar image references with cleanup as one reindexed image mutation", () => {
+  const text = buildCreateAssignCleanupFixture().replace(
+    "ToolBarImageButton(#TbOpen, ImageID(#Img_FrmMain_0))",
+    "ToolBarImageButton(#TbOpen, ImageID(#Img_FrmMain_1))"
+  ).replace(
+    "StatusBarImage(0, 0, ImageID(#Img_FrmMain_1))",
+    "StatusBarImage(0, 0, ImageID(#Img_FrmMain_0))"
+  );
+  const parsed = parseFormDocument(text);
+  const statusField = parsed.statusbars[0]?.fields.find((field) => field.imageId === "#Img_FrmMain_0");
+  const oldImage = parsed.images.find((entry) => entry.id === "#Img_FrmMain_0");
+  assert.equal(typeof statusField?.source?.line, "number", "Expected statusbar image source line.");
+  assert.equal(typeof oldImage?.source?.line, "number", "Expected old image source line.");
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
+    applyImageReferenceUpdateWithCleanup(
+      document,
+      "ImageID(#Img_FrmMain_1)",
+      imageRef => applyStatusBarFieldUpdate(document, "0", statusField!.source!.line, {
+        widthRaw: statusField!.widthRaw,
+        imageRaw: imageRef,
+      }),
+      oldImage!.source!.line
+    )
+  );
+
+  assert.deepEqual(updated.images.map((entry) => entry.id), ["#Img_FrmMain_0"]);
+  assert.equal(updated.images[0]?.imageRaw, '"shared.png"');
+  assert.equal(updated.toolbars[0]?.entries[0]?.iconId, "#Img_FrmMain_0");
+  assert.equal(updated.statusbars[0]?.fields[0]?.imageId, "#Img_FrmMain_0");
+  assert.doesNotMatch(patchedText, /old\.png/);
+  assert.doesNotMatch(patchedText, /ImageID\(#Img_FrmMain_1\)/);
+  assert.match(patchedText, /ToolBarImageButton\(#TbOpen, ImageID\(#Img_FrmMain_0\)\)/);
+  assert.match(patchedText, /StatusBarImage\(0, 0, ImageID\(#Img_FrmMain_0\)\)/);
+});

@@ -16,6 +16,7 @@ import {
   applyImageDelete,
   applyImageInsert,
   applyImageInsertAndReferenceUpdate,
+  applyImageReferenceUpdateWithCleanup,
   applyImageUpdate,
   applyGadgetEventProcUpdate,
   applyGadgetItemDelete,
@@ -1490,20 +1491,30 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           return;
         }
         case WEBVIEW_TO_EXT_MSG_TYPE.rebindStatusBarFieldImage: {
-          const assignEdit = applyStatusBarFieldUpdate(document, msg.statusBarId, msg.sourceLine, { widthRaw: msg.widthRaw, imageRaw: msg.imageRaw }, sr);
           const oldImageUsageCount = countCurrentImageUsages(msg.oldImageId);
-          const cleanupEdit = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
-            ? applyImageDelete(document, msg.oldImageSourceLine, sr)
+          const cleanupSourceLine = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
+            ? msg.oldImageSourceLine
             : undefined;
 
-          if (cleanupEdit) {
-            await applyPairedEditsOrError(
-              assignEdit, `Could not rebind image argument for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`,
-              cleanupEdit, `Could not clean the previous image entry for statusbar '${msg.statusBarId}'. No matching LoadImage/CatchImage call found${rangeInfo}.`,
+          if (typeof cleanupSourceLine === "number") {
+            const edit = applyImageReferenceUpdateWithCleanup(
+              document,
+              msg.imageRaw,
+              imageRef => applyStatusBarFieldUpdate(
+                document,
+                msg.statusBarId,
+                msg.sourceLine,
+                { widthRaw: msg.widthRaw, imageRaw: imageRef },
+                sr
+              ),
+              cleanupSourceLine,
+              sr
             );
+            await applyEditOrError(edit, `Could not rebind image argument and clean the previous image entry for statusbar '${msg.statusBarId}'${rangeInfo}.`);
             return;
           }
 
+          const assignEdit = applyStatusBarFieldUpdate(document, msg.statusBarId, msg.sourceLine, { widthRaw: msg.widthRaw, imageRaw: msg.imageRaw }, sr);
           await applyEditOrError(assignEdit, `Could not rebind image argument for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`);
           return;
         }
@@ -1569,6 +1580,30 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
 
         case WEBVIEW_TO_EXT_MSG_TYPE.rebindToolBarEntryImage: {
           if (!ensureToolBarEntryKind(msg.kind)) return;
+
+          const oldImageUsageCount = countCurrentImageUsages(msg.oldImageId);
+          const cleanupSourceLine = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
+            ? msg.oldImageSourceLine
+            : undefined;
+
+          if (typeof cleanupSourceLine === "number") {
+            const edit = applyImageReferenceUpdateWithCleanup(
+              document,
+              msg.iconRaw,
+              imageRef => applyToolBarEntryUpdate(
+                document,
+                msg.toolBarId,
+                msg.sourceLine,
+                { kind: msg.kind as any, idRaw: msg.idRaw, iconRaw: imageRef, toggle: msg.toggle },
+                sr
+              ),
+              cleanupSourceLine,
+              sr
+            );
+            await applyEditOrError(edit, `Could not rebind image argument and clean the previous image entry for toolbar '${msg.toolBarId}'${rangeInfo}.`);
+            return;
+          }
+
           const assignEdit = applyToolBarEntryUpdate(
             document,
             msg.toolBarId,
@@ -1576,19 +1611,6 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             { kind: msg.kind as any, idRaw: msg.idRaw, iconRaw: msg.iconRaw, toggle: msg.toggle },
             sr
           );
-          const oldImageUsageCount = countCurrentImageUsages(msg.oldImageId);
-          const cleanupEdit = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
-            ? applyImageDelete(document, msg.oldImageSourceLine, sr)
-            : undefined;
-
-          if (cleanupEdit) {
-            await applyPairedEditsOrError(
-              assignEdit, `Could not rebind image argument for toolbar '${msg.toolBarId}'. No matching toolbar image button call found${rangeInfo}.`,
-              cleanupEdit, `Could not clean the previous image entry for toolbar '${msg.toolBarId}'. No matching LoadImage/CatchImage call found${rangeInfo}.`,
-            );
-            return;
-          }
-
           await applyEditOrError(assignEdit, `Could not rebind image argument for toolbar '${msg.toolBarId}'. No matching toolbar image button call found${rangeInfo}.`);
           return;
         }

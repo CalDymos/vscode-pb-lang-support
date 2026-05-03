@@ -5194,9 +5194,22 @@ function reindexImages(images: FormImage[], windowVar: string): ImageRename[] {
   return renames;
 }
 
+function getImageIdFromReference(raw: string): string | undefined {
+  const match = /^\s*ImageID\s*\(([^)]+)\)\s*$/i.exec(raw);
+  const imageId = match?.[1]?.trim();
+  return imageId?.length ? imageId : undefined;
+}
+
+function remapImageReference(raw: string, renames: ImageRename[]): string {
+  const imageId = getImageIdFromReference(raw);
+  if (!imageId) return raw;
+  const newId = renames.find(rename => rename.oldId === imageId)?.newId;
+  return newId ? `ImageID(${newId})` : raw;
+}
+
 /**
  * Applies ImageID(oldId) → ImageID(newId) substitutions across the
- * whole document.  Only lines containing the `ImageID(` pattern are
+ * whole document. Only lines containing the `ImageID(` pattern are
  * touched, so the substitution never overlaps with the image-block
  * replacement (which uses LoadImage/CatchImage, not ImageID).
  */
@@ -6320,6 +6333,51 @@ export function applyImageInsertAndReferenceUpdate(
   );
 }
 
+/**
+ * Rebuilds the image block, optionally removes an old image entry, reindexes
+ * remaining image IDs, and updates one target ImageID(...) reference to its
+ * final ID after reindexing.
+ */
+export function applyImageReferenceUpdateWithCleanup(
+  document: vscode.TextDocument,
+  imageRaw: string,
+  buildReferenceEdit: (imageRef: string) => vscode.WorkspaceEdit | undefined,
+  cleanupSourceLine: number,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const targetImageId = getImageIdFromReference(imageRaw);
+  let finalImageRaw = imageRaw;
+  let pendingRenames: ImageRename[] = [];
+
+  return applyImageMutation(
+    document,
+    images => {
+      const cleanupIndex = images.findIndex(image => image.source?.line === cleanupSourceLine);
+      if (cleanupIndex < 0) return false;
+
+      if (targetImageId) {
+        const targetIndex = images.findIndex(image => image.id === targetImageId);
+        if (targetIndex < 0 || targetIndex === cleanupIndex) return false;
+      }
+
+      images.splice(cleanupIndex, 1);
+
+      const parsed = parseFormDocument(document.getText());
+      pendingRenames = reindexImages(images, getWindowImageBaseName(parsed));
+      finalImageRaw = remapImageReference(imageRaw, pendingRenames);
+      return true;
+    },
+    scanRange,
+    edit => {
+      applyImageIdRenames(edit, document, pendingRenames);
+      const referenceEdit = buildReferenceEdit(finalImageRaw);
+      if (!referenceEdit) return false;
+      appendWorkspaceEdit(edit, referenceEdit);
+      return true;
+    }
+  );
+}
+
 export function applyImageUpdate(
   document: vscode.TextDocument,
   sourceLine: number,
@@ -6346,9 +6404,9 @@ export function applyImageUpdate(
         const trimmedImageRaw = args.imageRaw.trim();
         entry.pbAny = true;
         entry.firstParam = PB_ANY;
+        entry.inline = args.inline;
         entry.imageRaw = trimmedImageRaw;
         entry.image = normalizePbImageValue(trimmedImageRaw, args.inline);
-        entry.inline = args.inline;
         images.push(entry);
 
         pendingRenames = reindexImages(images, windowVar);
