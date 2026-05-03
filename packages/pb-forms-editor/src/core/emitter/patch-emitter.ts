@@ -5237,7 +5237,7 @@ function applyImageMutation(
   document: vscode.TextDocument,
   mutate: (images: FormImage[]) => boolean,
   scanRange?: ScanRange,
-  afterBuild?: (edit: vscode.WorkspaceEdit) => void
+  afterBuild?: (edit: vscode.WorkspaceEdit, nextImages: FormImage[]) => boolean | void
 ): vscode.WorkspaceEdit | undefined {
   const parsed = parseFormDocument(document.getText());
   const nextImages = parsed.images.map(cloneFormImage);
@@ -5310,7 +5310,7 @@ function applyImageMutation(
       new vscode.Range(new vscode.Position(firstLine, 0), getHeadBlockReplaceEnd(document, lastLine)),
       rebuilt
     );
-    afterBuild?.(edit);
+    if (afterBuild?.(edit, nextImages) === false) return undefined;
     return edit;
   }
 
@@ -5318,12 +5318,12 @@ function applyImageMutation(
 
   if (combineFreshEnumAndImageInsert) {
     edit.insert(document.uri, new vscode.Position(imageEnumInsertLine, 0), `${rebuiltEnumBlock}${rebuilt}`);
-    afterBuild?.(edit);
+    if (afterBuild?.(edit, nextImages) === false) return undefined;
     return edit;
   }
 
   edit.insert(document.uri, new vscode.Position(imageBlockInsertLine, 0), rebuilt);
-  afterBuild?.(edit);
+  if (afterBuild?.(edit, nextImages) === false) return undefined;
   return edit;
 }
 
@@ -6275,6 +6275,48 @@ export function applyImageInsert(
       return true;
     },
     scanRange
+  );
+}
+
+export function applyImageInsertAndReferenceUpdate(
+  document: vscode.TextDocument,
+  args: ImageArgs,
+  buildReferenceEdit: (imageRef: string) => vscode.WorkspaceEdit | undefined,
+  cleanupSourceLine?: number,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  let insertedImage: FormImage | undefined;
+  let pendingRenames: ImageRename[] = [];
+
+  return applyImageMutation(
+    document,
+    images => {
+      if (typeof cleanupSourceLine === "number") {
+        const cleanupIndex = images.findIndex(image => image.source?.line === cleanupSourceLine);
+        if (cleanupIndex < 0) return false;
+        images.splice(cleanupIndex, 1);
+      }
+
+      insertedImage = mapImageArgsToImage(args);
+      images.push(insertedImage);
+
+      if (typeof cleanupSourceLine === "number") {
+        const parsed = parseFormDocument(document.getText());
+        pendingRenames = reindexImages(images, getWindowImageBaseName(parsed));
+      }
+
+      return true;
+    },
+    scanRange,
+    edit => {
+      applyImageIdRenames(edit, document, pendingRenames);
+      const imageRef = insertedImage ? buildImageIdReference(insertedImage.id) : undefined;
+      if (!imageRef) return false;
+      const referenceEdit = buildReferenceEdit(imageRef);
+      if (!referenceEdit) return false;
+      appendWorkspaceEdit(edit, referenceEdit);
+      return true;
+    }
   );
 }
 

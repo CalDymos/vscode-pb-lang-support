@@ -4,6 +4,7 @@ import type { TextDocument, WorkspaceEdit } from "vscode";
 
 import {
   applyGadgetOpenArgsUpdate,
+  applyImageInsertAndReferenceUpdate,
   applyMenuEntryUpdate,
   applyStatusBarFieldUpdate,
   applyToolBarEntryUpdate,
@@ -151,3 +152,96 @@ test("patches statusbar image field references directly", () => {
   assert.equal(updatedField?.imageId, "#Img_FrmMain_1");
   assert.match(patchedText, /StatusBarImage\(0, 0, ImageID\(#Img_FrmMain_1\)\)/);
 });
+
+function buildCreateAssignCleanupFixture(): string {
+  return `; Form Designer for PureBasic - 6.40
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormImage
+  #Img_FrmMain_0
+  #Img_FrmMain_1
+EndEnumeration
+
+Enumeration FormMenu
+  #TbOpen
+EndEnumeration
+
+LoadImage(#Img_FrmMain_0,"old.png")
+LoadImage(#Img_FrmMain_1,"shared.png")
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
+  OpenWindow(#FrmMain, x, y, width, height, "Images")
+  CreateToolBar(0, WindowID(#FrmMain))
+  ToolBarImageButton(#TbOpen, ImageID(#Img_FrmMain_0))
+  CreateStatusBar(0, WindowID(#FrmMain))
+  AddStatusBarField(100)
+  StatusBarImage(0, 0, ImageID(#Img_FrmMain_1))
+EndProcedure
+`;
+}
+
+test("creates and assigns toolbar images with cleanup as one non-overlapping image mutation", () => {
+  const text = buildCreateAssignCleanupFixture();
+  const parsed = parseFormDocument(text);
+  const toolBarEntry = parsed.toolbars[0]?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton);
+  const oldImage = parsed.images.find((entry) => entry.id === "#Img_FrmMain_0");
+  assert.equal(typeof toolBarEntry?.source?.line, "number", "Expected toolbar entry source line.");
+  assert.equal(typeof oldImage?.source?.line, "number", "Expected old image source line.");
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
+    applyImageInsertAndReferenceUpdate(
+      document,
+      { inline: false, idRaw: "#Img_FrmMain_2", imageRaw: '"new.png"' },
+      imageRef => applyToolBarEntryUpdate(document, "0", toolBarEntry!.source!.line, {
+        kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton,
+        idRaw: toolBarEntry!.idRaw,
+        iconRaw: imageRef,
+        toggle: toolBarEntry!.toggle,
+      }),
+      oldImage!.source!.line
+    )
+  );
+
+  assert.deepEqual(updated.images.map((entry) => entry.id), ["#Img_FrmMain_0", "#Img_FrmMain_1"]);
+  assert.equal(updated.images[0]?.imageRaw, '"shared.png"');
+  assert.equal(updated.images[1]?.imageRaw, '"new.png"');
+  assert.equal(updated.toolbars[0]?.entries[0]?.iconId, "#Img_FrmMain_1");
+  assert.equal(updated.statusbars[0]?.fields[0]?.imageId, "#Img_FrmMain_0");
+  assert.doesNotMatch(patchedText, /old\.png/);
+  assert.match(patchedText, /ToolBarImageButton\(#TbOpen, ImageID\(#Img_FrmMain_1\)\)/);
+  assert.match(patchedText, /StatusBarImage\(0, 0, ImageID\(#Img_FrmMain_0\)\)/);
+});
+
+test("creates and assigns statusbar images with cleanup as one non-overlapping image mutation", () => {
+  const text = buildCreateAssignCleanupFixture();
+  const parsed = parseFormDocument(text);
+  const statusField = parsed.statusbars[0]?.fields.find((field) => field.imageId === "#Img_FrmMain_1");
+  const oldImage = parsed.images.find((entry) => entry.id === "#Img_FrmMain_1");
+  assert.equal(typeof statusField?.source?.line, "number", "Expected statusbar image source line.");
+  assert.equal(typeof oldImage?.source?.line, "number", "Expected old image source line.");
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
+    applyImageInsertAndReferenceUpdate(
+      document,
+      { inline: false, idRaw: "#Img_FrmMain_2", imageRaw: '"new.png"' },
+      imageRef => applyStatusBarFieldUpdate(document, "0", statusField!.source!.line, {
+        widthRaw: statusField!.widthRaw,
+        imageRaw: imageRef,
+      }),
+      oldImage!.source!.line
+    )
+  );
+
+  assert.deepEqual(updated.images.map((entry) => entry.id), ["#Img_FrmMain_0", "#Img_FrmMain_1"]);
+  assert.equal(updated.images[0]?.imageRaw, '"old.png"');
+  assert.equal(updated.images[1]?.imageRaw, '"new.png"');
+  assert.equal(updated.toolbars[0]?.entries[0]?.iconId, "#Img_FrmMain_0");
+  assert.equal(updated.statusbars[0]?.fields[0]?.imageId, "#Img_FrmMain_1");
+  assert.doesNotMatch(patchedText, /shared\.png/);
+  assert.match(patchedText, /ToolBarImageButton\(#TbOpen, ImageID\(#Img_FrmMain_0\)\)/);
+  assert.match(patchedText, /StatusBarImage\(0, 0, ImageID\(#Img_FrmMain_1\)\)/);
+});
+

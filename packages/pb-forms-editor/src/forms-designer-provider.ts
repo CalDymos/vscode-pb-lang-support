@@ -15,6 +15,7 @@ import {
   applyGadgetPropertyUpdate,
   applyImageDelete,
   applyImageInsert,
+  applyImageInsertAndReferenceUpdate,
   applyImageUpdate,
   applyGadgetEventProcUpdate,
   applyGadgetItemDelete,
@@ -571,22 +572,6 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         return true;
       };
 
-
-      const applyTripleEditsOrError = async (
-        firstEdit: vscode.WorkspaceEdit | undefined,
-        firstErrorMessage: string,
-        secondEdit: vscode.WorkspaceEdit | undefined,
-        secondErrorMessage: string,
-        thirdEdit: vscode.WorkspaceEdit | undefined,
-        thirdErrorMessage: string,
-      ): Promise<boolean> => {
-        if (!firstEdit) { postError(firstErrorMessage); return false; }
-        if (!secondEdit) { postError(secondErrorMessage); return false; }
-        if (!thirdEdit) { postError(thirdErrorMessage); return false; }
-        const ok = await vscode.workspace.applyEdit(mergeWorkspaceEdits(mergeWorkspaceEdits(firstEdit, secondEdit), thirdEdit));
-        if (!ok) { postError(firstErrorMessage); return false; }
-        return true;
-      };
 
       const countCurrentImageUsages = (imageId: string | undefined): number => {
         return imageId && lastModel ? countFormImageUsages(lastModel, imageId) : 0;
@@ -1460,68 +1445,48 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         case WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignToolBarEntryImage: {
           if (!ensureToolBarEntryKind(msg.kind)) return;
 
-          const imageRef = buildImageIdReference(msg.newImageIdRaw, msg.newAssignedVar);
-          if (!imageRef) {
-            postError(`Could not create image entry for toolbar '${msg.toolBarId}'. ${PB_ANY} requires an assigned variable name${rangeInfo}.`);
-            return;
-          }
-
-          const assignEdit = applyToolBarEntryUpdate(
-            document,
-            msg.toolBarId,
-            msg.sourceLine,
-            { kind: msg.kind as any, idRaw: msg.idRaw, iconRaw: imageRef, toggle: msg.toggle },
-            sr
-          );
-          const insertEdit = applyImageInsert(document, { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar }, sr);
           const oldImageUsageCount = countCurrentImageUsages(msg.oldImageId);
-          const cleanupEdit = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
-            ? applyImageDelete(document, msg.oldImageSourceLine, sr)
+          const cleanupSourceLine = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
+            ? msg.oldImageSourceLine
             : undefined;
 
-          if (cleanupEdit) {
-            await applyTripleEditsOrError(
-              assignEdit, `Could not patch image argument for toolbar entry in toolbar '${msg.toolBarId}'. No matching call found${rangeInfo}.`,
-              insertEdit, `Could not insert image entry for toolbar '${msg.toolBarId}'. No suitable insertion point found${rangeInfo}.`,
-              cleanupEdit, `Could not clean the previous image entry for toolbar '${msg.toolBarId}'. No matching LoadImage/CatchImage call found${rangeInfo}.`,
-            );
-            return;
-          }
-
-          await applyPairedEditsOrError(
-            assignEdit, `Could not patch image argument for toolbar entry in toolbar '${msg.toolBarId}'. No matching call found${rangeInfo}.`,
-            insertEdit, `Could not insert image entry for toolbar '${msg.toolBarId}'. No suitable insertion point found${rangeInfo}.`,
+          const edit = applyImageInsertAndReferenceUpdate(
+            document,
+            { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar },
+            imageRef => applyToolBarEntryUpdate(
+              document,
+              msg.toolBarId,
+              msg.sourceLine,
+              { kind: msg.kind as any, idRaw: msg.idRaw, iconRaw: imageRef, toggle: msg.toggle },
+              sr
+            ),
+            cleanupSourceLine,
+            sr
           );
+          await applyEditOrError(edit, `Could not create and assign image entry for toolbar '${msg.toolBarId}'${rangeInfo}.`);
           return;
         }
 
         case WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignStatusBarFieldImage: {
-          const imageRef = buildImageIdReference(msg.newImageIdRaw, msg.newAssignedVar);
-          if (!imageRef) {
-            postError(`Could not create image entry for statusbar '${msg.statusBarId}'. ${PB_ANY} requires an assigned variable name${rangeInfo}.`);
-            return;
-          }
-
-          const assignEdit = applyStatusBarFieldUpdate(document, msg.statusBarId, msg.sourceLine, { widthRaw: msg.widthRaw, imageRaw: imageRef }, sr);
-          const insertEdit = applyImageInsert(document, { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar }, sr);
           const oldImageUsageCount = countCurrentImageUsages(msg.oldImageId);
-          const cleanupEdit = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
-            ? applyImageDelete(document, msg.oldImageSourceLine, sr)
+          const cleanupSourceLine = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
+            ? msg.oldImageSourceLine
             : undefined;
 
-          if (cleanupEdit) {
-            await applyTripleEditsOrError(
-              assignEdit, `Could not patch image argument for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`,
-              insertEdit, `Could not insert image entry for statusbar '${msg.statusBarId}'. No suitable insertion point found${rangeInfo}.`,
-              cleanupEdit, `Could not clean the previous image entry for statusbar '${msg.statusBarId}'. No matching LoadImage/CatchImage call found${rangeInfo}.`,
-            );
-            return;
-          }
-
-          await applyPairedEditsOrError(
-            assignEdit, `Could not patch image argument for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`,
-            insertEdit, `Could not insert image entry for statusbar '${msg.statusBarId}'. No suitable insertion point found${rangeInfo}.`,
+          const edit = applyImageInsertAndReferenceUpdate(
+            document,
+            { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar },
+            imageRef => applyStatusBarFieldUpdate(
+              document,
+              msg.statusBarId,
+              msg.sourceLine,
+              { widthRaw: msg.widthRaw, imageRaw: imageRef },
+              sr
+            ),
+            cleanupSourceLine,
+            sr
           );
+          await applyEditOrError(edit, `Could not create and assign image entry for statusbar '${msg.statusBarId}'${rangeInfo}.`);
           return;
         }
         case WEBVIEW_TO_EXT_MSG_TYPE.rebindStatusBarFieldImage: {
