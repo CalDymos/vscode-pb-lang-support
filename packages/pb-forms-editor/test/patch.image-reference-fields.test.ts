@@ -424,3 +424,91 @@ test("rebinds menu image references with cleanup as one reindexed image mutation
   assert.match(patchedText, /CreateImageMenu\(0, WindowID\(#FrmMain\)\)/);
   assert.match(patchedText, /MenuItem\(#MenuOpen, "Open", ImageID\(#Img_FrmMain_0\)\)/);
 });
+
+function buildGadgetImageCleanupFixture(): string {
+  return `; Form Designer for PureBasic - 6.40
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #BtnImage
+EndEnumeration
+
+Enumeration FormImage
+  #Img_FrmMain_0
+  #Img_FrmMain_1
+EndEnumeration
+
+Enumeration FormToolBar
+  #TbShared
+EndEnumeration
+
+LoadImage(#Img_FrmMain_0,"old.png")
+LoadImage(#Img_FrmMain_1,"shared.png")
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
+  OpenWindow(#FrmMain, x, y, width, height, "Images")
+  ButtonImageGadget(#BtnImage, 10, 10, 80, 24, ImageID(#Img_FrmMain_0))
+  CreateToolBar(0, WindowID(#FrmMain))
+  ToolBarImageButton(#TbShared, ImageID(#Img_FrmMain_1))
+EndProcedure
+`;
+}
+
+test("creates and assigns gadget images with cleanup as one reindexed image mutation", () => {
+  const text = buildGadgetImageCleanupFixture();
+  const parsed = parseFormDocument(text);
+  const gadget = parsed.gadgets.find((entry) => entry.id === "#BtnImage");
+  const oldImage = parsed.images.find((entry) => entry.id === "#Img_FrmMain_0");
+  assert.equal(gadget?.kind, GADGET_KIND.ButtonImageGadget);
+  assert.equal(typeof oldImage?.source?.line, "number", "Expected old image source line.");
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
+    applyImageInsertAndReferenceUpdate(
+      document,
+      { inline: false, idRaw: "#Img_FrmMain_2", imageRaw: '"new.png"' },
+      imageRef => applyGadgetOpenArgsUpdate(document, "#BtnImage", { imageRaw: imageRef }),
+      oldImage!.source!.line
+    )
+  );
+
+  const updatedGadget = updated.gadgets.find((entry) => entry.id === "#BtnImage");
+  assert.deepEqual(updated.images.map((entry) => entry.id), ["#Img_FrmMain_0", "#Img_FrmMain_1"]);
+  assert.equal(updated.images[0]?.imageRaw, '"shared.png"');
+  assert.equal(updated.images[1]?.imageRaw, '"new.png"');
+  assert.equal(updatedGadget?.imageId, "#Img_FrmMain_1");
+  assert.equal(updated.toolbars[0]?.entries[0]?.iconId, "#Img_FrmMain_0");
+  assert.doesNotMatch(patchedText, /old\.png/);
+  assert.match(patchedText, /ButtonImageGadget\(#BtnImage, 10, 10, 80, 24, ImageID\(#Img_FrmMain_1\)\)/);
+  assert.match(patchedText, /ToolBarImageButton\(#TbShared, ImageID\(#Img_FrmMain_0\)\)/);
+});
+
+test("rebinds gadget image references with cleanup as one reindexed image mutation", () => {
+  const text = buildGadgetImageCleanupFixture();
+  const parsed = parseFormDocument(text);
+  const gadget = parsed.gadgets.find((entry) => entry.id === "#BtnImage");
+  const oldImage = parsed.images.find((entry) => entry.id === "#Img_FrmMain_0");
+  assert.equal(gadget?.kind, GADGET_KIND.ButtonImageGadget);
+  assert.equal(typeof oldImage?.source?.line, "number", "Expected old image source line.");
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
+    applyImageReferenceUpdateWithCleanup(
+      document,
+      "ImageID(#Img_FrmMain_1)",
+      imageRef => applyGadgetOpenArgsUpdate(document, "#BtnImage", { imageRaw: imageRef }),
+      oldImage!.source!.line
+    )
+  );
+
+  const updatedGadget = updated.gadgets.find((entry) => entry.id === "#BtnImage");
+  assert.deepEqual(updated.images.map((entry) => entry.id), ["#Img_FrmMain_0"]);
+  assert.equal(updated.images[0]?.imageRaw, '"shared.png"');
+  assert.equal(updatedGadget?.imageId, "#Img_FrmMain_0");
+  assert.equal(updated.toolbars[0]?.entries[0]?.iconId, "#Img_FrmMain_0");
+  assert.doesNotMatch(patchedText, /old\.png/);
+  assert.doesNotMatch(patchedText, /ImageID\(#Img_FrmMain_1\)/);
+  assert.match(patchedText, /ButtonImageGadget\(#BtnImage, 10, 10, 80, 24, ImageID\(#Img_FrmMain_0\)\)/);
+  assert.match(patchedText, /ToolBarImageButton\(#TbShared, ImageID\(#Img_FrmMain_0\)\)/);
+});

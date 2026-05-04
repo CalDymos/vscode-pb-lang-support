@@ -6940,12 +6940,16 @@ function saveImageReferencePicker() {
     case "gadget": {
       const gadget = model.gadgets.find(candidate => candidate.id === target.gadgetId);
       if (!gadget) return;
+      const oldImageId = gadget.imageId;
+      const oldImageSourceLine = getCleanupSourceLineForImageReference(oldImageId, selected.id);
       gadget.imageRaw = imageRaw;
       gadget.imageId = selected.id;
       post({
         type: WEBVIEW_TO_EXT_MSG_TYPE.setGadgetImageRaw,
         id: gadget.id,
-        imageRaw
+        imageRaw,
+        oldImageId,
+        oldImageSourceLine
       });
       break;
     }
@@ -7096,6 +7100,8 @@ function saveImageAssignmentDraft() {
     case "gadget": {
       const gadget = model.gadgets.find(candidate => candidate.id === target.gadgetId);
       if (!gadget) return;
+      const oldImageId = gadget.imageId;
+      const oldImageSourceLine = getCleanupSourceLineForImageReference(oldImageId, reference.imageId);
       gadget.imageRaw = reference.imageRaw;
       gadget.imageId = reference.imageId;
       if (draft.mode === "create") {
@@ -7106,6 +7112,8 @@ function saveImageAssignmentDraft() {
           newImageIdRaw: idRaw,
           newImageRaw: imageRaw,
           newAssignedVar: assignedVar,
+          oldImageId,
+          oldImageSourceLine,
         });
       }
       else {
@@ -7117,6 +7125,8 @@ function saveImageAssignmentDraft() {
           resizeToImage: draft.resizeToImage,
           newImageIdRaw: idRaw,
           newAssignedVar: assignedVar,
+          oldImageId,
+          oldImageSourceLine,
         });
       }
       break;

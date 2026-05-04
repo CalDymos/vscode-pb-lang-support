@@ -826,6 +826,23 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           return;
         }
         case WEBVIEW_TO_EXT_MSG_TYPE.setGadgetImageRaw: {
+          const oldImageUsageCount = countCurrentImageUsages(msg.oldImageId);
+          const cleanupSourceLine = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
+            ? msg.oldImageSourceLine
+            : undefined;
+
+          if (typeof cleanupSourceLine === "number") {
+            const edit = applyImageReferenceUpdateWithCleanup(
+              document,
+              msg.imageRaw,
+              imageRef => applyGadgetOpenArgsUpdate(document, msg.id, { imageRaw: imageRef }, sr),
+              cleanupSourceLine,
+              sr
+            );
+            await applyEditOrError(edit, `Could not rebind image argument and clean the previous image entry for gadget '${msg.id}'${rangeInfo}.`);
+            return;
+          }
+
           const edit = applyGadgetOpenArgsUpdate(document, msg.id, { imageRaw: msg.imageRaw }, sr);
           await applyEditOrError(edit, `Could not patch image argument for gadget '${msg.id}'. No matching image-capable gadget constructor found${rangeInfo}.`);
           return;
@@ -1357,18 +1374,19 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         }
 
         case WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignGadgetImage: {
-          const imageRef = buildImageIdReference(msg.newImageIdRaw, msg.newAssignedVar);
-          if (!imageRef) {
-            postError(`Could not create image entry for gadget '${msg.id}'. ${PB_ANY} requires an assigned variable name${rangeInfo}.`);
-            return;
-          }
+          const oldImageUsageCount = countCurrentImageUsages(msg.oldImageId);
+          const cleanupSourceLine = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
+            ? msg.oldImageSourceLine
+            : undefined;
 
-          const assignEdit = applyGadgetOpenArgsUpdate(document, msg.id, { imageRaw: imageRef }, sr);
-          const insertEdit = applyImageInsert(document, { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar }, sr);
-          await applyPairedEditsOrError(
-            assignEdit, `Could not patch image argument for gadget '${msg.id}'. No matching image-capable gadget constructor found${rangeInfo}.`,
-            insertEdit, `Could not insert image entry for gadget '${msg.id}'. No suitable insertion point found${rangeInfo}.`,
+          const edit = applyImageInsertAndReferenceUpdate(
+            document,
+            { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar },
+            imageRef => applyGadgetOpenArgsUpdate(document, msg.id, { imageRaw: imageRef }, sr),
+            cleanupSourceLine,
+            sr
           );
+          await applyEditOrError(edit, `Could not create and assign image entry for gadget '${msg.id}'${rangeInfo}.`);
           return;
         }
 
@@ -1386,17 +1404,36 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             return;
           }
 
-          const assignEdit = applyGadgetOpenArgsUpdate(document, msg.id, { imageRaw: imageRef }, sr);
+          const oldImageUsageCount = countCurrentImageUsages(msg.oldImageId);
+          const cleanupSourceLine = msg.oldImageId
+            && msg.oldImageId !== existingImage?.id
+            && oldImageUsageCount === 1
+            && typeof msg.oldImageSourceLine === "number"
+            ? msg.oldImageSourceLine
+            : undefined;
+
           if (existingImage) {
-            if (!await applyEditOrError(assignEdit, `Could not patch image argument for gadget '${msg.id}'. No matching image-capable gadget constructor found${rangeInfo}.`)) {
+            const edit = typeof cleanupSourceLine === "number"
+              ? applyImageReferenceUpdateWithCleanup(
+                document,
+                imageRef,
+                nextImageRef => applyGadgetOpenArgsUpdate(document, msg.id, { imageRaw: nextImageRef }, sr),
+                cleanupSourceLine,
+                sr
+              )
+              : applyGadgetOpenArgsUpdate(document, msg.id, { imageRaw: imageRef }, sr);
+            if (!await applyEditOrError(edit, `Could not patch image argument for gadget '${msg.id}'. No matching image-capable gadget constructor found${rangeInfo}.`)) {
               return;
             }
           } else {
-            const insertEdit = applyImageInsert(document, { inline: false, idRaw: msg.newImageIdRaw, imageRaw: picked.imageRaw, assignedVar: msg.newAssignedVar }, sr);
-            if (!await applyPairedEditsOrError(
-              assignEdit, `Could not patch image argument for gadget '${msg.id}'. No matching image-capable gadget constructor found${rangeInfo}.`,
-              insertEdit, `Could not insert image entry for gadget '${msg.id}'. No suitable insertion point found${rangeInfo}.`,
-            )) {
+            const edit = applyImageInsertAndReferenceUpdate(
+              document,
+              { inline: false, idRaw: msg.newImageIdRaw, imageRaw: picked.imageRaw, assignedVar: msg.newAssignedVar },
+              nextImageRef => applyGadgetOpenArgsUpdate(document, msg.id, { imageRaw: nextImageRef }, sr),
+              cleanupSourceLine,
+              sr
+            );
+            if (!await applyEditOrError(edit, `Could not choose and assign image entry for gadget '${msg.id}'${rangeInfo}.`)) {
               return;
             }
           }
