@@ -2376,6 +2376,87 @@ export function applyGadgetDelete(
   return edit;
 }
 
+export function applyGadgetDeleteWithImageCleanup(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const target = parsed.gadgets.find(gadget => gadget.id === gadgetKey);
+  if (!target?.source) return undefined;
+
+  const deletePlan = buildOriginalGadgetDeletePlan(parsed.gadgets, gadgetKey);
+  const cleanupSourceLines = new Set<number>();
+
+  for (const image of parsed.images) {
+    if (typeof image.source?.line !== "number") continue;
+    if (isImageUsedOnlyByDeletedGadgets(parsed, image.id, deletePlan.deletedIds)) {
+      cleanupSourceLines.add(image.source.line);
+    }
+  }
+
+  if (!cleanupSourceLines.size) {
+    return applyGadgetDelete(document, gadgetKey, scanRange);
+  }
+
+  let pendingRenames: ImageRename[] = [];
+
+  return applyImageMutation(
+    document,
+    images => {
+      const nextImages = images.filter(image => !cleanupSourceLines.has(image.source?.line ?? -1));
+      if (nextImages.length === images.length) return false;
+
+      images.splice(0, images.length, ...nextImages);
+      pendingRenames = reindexImages(images, getWindowImageBaseName(parsed));
+      return true;
+    },
+    scanRange,
+    edit => {
+      const deleteEdit = applyGadgetDelete(document, gadgetKey, scanRange);
+      if (!deleteEdit) return false;
+
+      const skipLines = collectWorkspaceEditTouchedLines(deleteEdit);
+      applyImageIdRenames(edit, document, pendingRenames, skipLines);
+      appendWorkspaceEdit(edit, deleteEdit);
+      return true;
+    }
+  );
+}
+
+function isImageUsedOnlyByDeletedGadgets(
+  parsed: ReturnType<typeof parseFormDocument>,
+  imageId: string,
+  deletedIds: ReadonlySet<string>
+): boolean {
+  let foundDeletedUsage = false;
+
+  for (const gadget of parsed.gadgets) {
+    const hasImageUsage = gadget.imageId === imageId || gadget.items?.some(item => item.imageId === imageId);
+    if (!hasImageUsage) continue;
+
+    if (!deletedIds.has(gadget.id)) {
+      return false;
+    }
+
+    foundDeletedUsage = true;
+  }
+
+  if (parsed.menus.some(menu => menu.entries.some(entry => entry.iconId === imageId))) {
+    return false;
+  }
+
+  if (parsed.toolbars.some(toolBar => toolBar.entries.some(entry => entry.iconId === imageId))) {
+    return false;
+  }
+
+  if (parsed.statusbars.some(statusBar => statusBar.fields.some(field => field.imageId === imageId))) {
+    return false;
+  }
+
+  return foundDeletedUsage;
+}
+
 function buildCustomGadgetIdRaw(gadget: Gadget): string {
   if (gadget.pbAny) {
     return gadget.variable?.trim() || gadget.id;

@@ -7,7 +7,7 @@ import {
   applyGadgetColumnDelete,
   applyGadgetColumnInsert,
   applyGadgetColumnUpdate,
-  applyGadgetDelete,
+  applyGadgetDeleteWithImageCleanup,
   applyGadgetInsert,
   applyGadgetReparent,
   applyGadgetOpenArgsUpdate,
@@ -975,7 +975,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         }
 
         case WEBVIEW_TO_EXT_MSG_TYPE.deleteGadget: {
-          const edit = applyGadgetDelete(document, msg.id, sr);
+          const edit = applyGadgetDeleteWithImageCleanup(document, msg.id, sr);
           await applyEditOrError(edit, `Could not delete gadget '${msg.id}'. No safe delete path found${rangeInfo}.`);
           return;
         }
