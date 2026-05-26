@@ -202,6 +202,36 @@ function appendWorkspaceEdit(target: vscode.WorkspaceEdit, source: vscode.Worksp
   }
 }
 
+function collectWorkspaceEditTouchedLines(source: vscode.WorkspaceEdit | undefined): ReadonlySet<number> {
+  const touched = new Set<number>();
+  if (!source) return touched;
+
+  const operations = buildWorkspaceEditOperations(source);
+  if (!operations) {
+    throw new Error("Unsupported WorkspaceEdit shape: no replayable operations or entries available.");
+  }
+
+  for (const operation of operations) {
+    if (operation.position) {
+      touched.add(operation.position.line);
+      continue;
+    }
+
+    const range = operation.range;
+    if (!range) continue;
+
+    const endLine = range.end.character === 0
+      ? Math.max(range.start.line, range.end.line - 1)
+      : range.end.line;
+
+    for (let line = range.start.line; line <= endLine; line++) {
+      touched.add(line);
+    }
+  }
+
+  return touched;
+}
+
 function findCallByStableKey(
   calls: PbCall[],
   key: string,
@@ -5219,11 +5249,13 @@ function remapImageReference(raw: string, renames: ImageRename[]): string {
 function applyImageIdRenames(
   edit: vscode.WorkspaceEdit,
   document: vscode.TextDocument,
-  renames: ImageRename[]
+  renames: ImageRename[],
+  skipLines: ReadonlySet<number> = new Set()
 ): void {
   if (!renames.length) return;
   const renameMap = new Map(renames.map(r => [r.oldId, r.newId]));
   for (let i = 0; i < document.lineCount; i++) {
+    if (skipLines.has(i)) continue;
     const line = document.lineAt(i).text;
     if (!/ImageID\s*\(/i.test(line)) continue;
     const updated = line.replace(/\bImageID\s*\(([^)]+)\)/gi, (match, inner) => {
@@ -5718,7 +5750,8 @@ function applyStatusBarFieldMutation(
   document: vscode.TextDocument,
   statusBarId: string,
   mutate: (fields: FormStatusBarField[]) => boolean,
-  scanRange?: ScanRange
+  scanRange?: ScanRange,
+  imageRenames: ImageRename[] = []
 ): vscode.WorkspaceEdit | undefined {
   const parsed = parseFormDocument(document.getText());
   const statusBar = parsed.statusbars.find(sb => sb.id === statusBarId);
@@ -5726,6 +5759,15 @@ function applyStatusBarFieldMutation(
 
   const nextFields = statusBar.fields.map(cloneStatusBarField);
   if (!mutate(nextFields)) return undefined;
+
+  if (imageRenames.length) {
+    for (const field of nextFields) {
+      if (!field.imageRaw) continue;
+      const nextImageRaw = remapImageReference(field.imageRaw, imageRenames);
+      field.imageRaw = nextImageRaw;
+      field.imageId = getImageIdFromReference(nextImageRaw);
+    }
+  }
 
   const calls = scanDocumentCalls(document, scanRange);
   const create = findCreateCallById(calls, PB_CALL.createStatusBar, statusBarId);
@@ -5757,6 +5799,30 @@ function applyStatusBarFieldMutation(
 
   edit.insert(document.uri, new vscode.Position(Math.min(document.lineCount, create.range.line + 1), 0), rebuilt);
   return edit;
+}
+
+function collectStatusBarFieldMutationLines(
+  document: vscode.TextDocument,
+  statusBarId: string,
+  scanRange?: ScanRange
+): ReadonlySet<number> {
+  const calls = scanDocumentCalls(document, scanRange);
+  const create = findCreateCallById(calls, PB_CALL.createStatusBar, statusBarId);
+  if (!create) return new Set();
+
+  const startIdx = calls.indexOf(create);
+  const endIdx = findSectionEndIndex(calls, startIdx);
+  const endLineExclusive = endIdx < calls.length ? calls[endIdx].range.line : Number.POSITIVE_INFINITY;
+  const statusCalls = calls.filter(c => c.range.line > create.range.line && c.range.line < endLineExclusive && STATUSBAR_FIELD_NAMES.has(c.name.toLowerCase()));
+  if (!statusCalls.length) return new Set();
+
+  const firstLine = statusCalls[0].range.line;
+  const lastLine = statusCalls[statusCalls.length - 1].range.line;
+  const lines = new Set<number>();
+  for (let line = firstLine; line <= lastLine; line += 1) {
+    lines.add(line);
+  }
+  return lines;
 }
 
 export function applyMenuEntryInsert(
@@ -6221,6 +6287,84 @@ export function applyStatusBarFieldDelete(
       return true;
     },
     scanRange
+  );
+}
+
+export function applyStatusBarFieldDeleteWithImageCleanup(
+  document: vscode.TextDocument,
+  statusBarId: string,
+  sourceLine: number,
+  cleanupSourceLine: number,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  let pendingRenames: ImageRename[] = [];
+
+  return applyImageMutation(
+    document,
+    images => {
+      const cleanupIndex = images.findIndex(image => image.source?.line === cleanupSourceLine);
+      if (cleanupIndex < 0) return false;
+
+      images.splice(cleanupIndex, 1);
+
+      const parsed = parseFormDocument(document.getText());
+      pendingRenames = reindexImages(images, getWindowImageBaseName(parsed));
+      return true;
+    },
+    scanRange,
+    edit => {
+      const statusBarLines = collectStatusBarFieldMutationLines(document, statusBarId, scanRange);
+      applyImageIdRenames(edit, document, pendingRenames, statusBarLines);
+
+      const statusEdit = applyStatusBarFieldMutation(
+        document,
+        statusBarId,
+        fields => {
+          const index = fields.findIndex(field => field.source?.line === sourceLine);
+          if (index < 0) return false;
+          fields.splice(index, 1);
+          return true;
+        },
+        scanRange,
+        pendingRenames
+      );
+      if (!statusEdit) return false;
+      appendWorkspaceEdit(edit, statusEdit);
+      return true;
+    }
+  );
+}
+
+export function applyImageCleanupAfterSingleLineReferenceDelete(
+  document: vscode.TextDocument,
+  cleanupSourceLine: number,
+  buildDeleteEdit: () => vscode.WorkspaceEdit | undefined,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  let pendingRenames: ImageRename[] = [];
+
+  return applyImageMutation(
+    document,
+    images => {
+      const cleanupIndex = images.findIndex(image => image.source?.line === cleanupSourceLine);
+      if (cleanupIndex < 0) return false;
+
+      images.splice(cleanupIndex, 1);
+
+      const parsed = parseFormDocument(document.getText());
+      pendingRenames = reindexImages(images, getWindowImageBaseName(parsed));
+      return true;
+    },
+    scanRange,
+    edit => {
+      const deleteEdit = buildDeleteEdit();
+      if (!deleteEdit) return false;
+
+      const skipLines = collectWorkspaceEditTouchedLines(deleteEdit);
+      applyImageIdRenames(edit, document, pendingRenames, skipLines);
+      appendWorkspaceEdit(edit, deleteEdit);
+      return true;
+    }
   );
 }
 

@@ -16,6 +16,7 @@ import {
   applyImageDelete,
   applyImageInsert,
   applyImageInsertAndReferenceUpdate,
+  applyImageCleanupAfterSingleLineReferenceDelete,
   applyImageReferenceUpdateWithCleanup,
   applyImageUpdate,
   applyGadgetEventProcUpdate,
@@ -33,6 +34,7 @@ import {
   applyResizeGadgetMutation,
   applyStatusBarDelete,
   applyStatusBarFieldDelete,
+  applyStatusBarFieldDeleteWithImageCleanup,
   applyStatusBarFieldInsert,
   applyStatusBarFieldUpdate,
   applyToolBarDelete,
@@ -1073,7 +1075,20 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
 
         case WEBVIEW_TO_EXT_MSG_TYPE.deleteMenuEntry: {
           if (!ensureMenuEntryKind(msg.kind)) return;
-          const edit = applyMenuEntryDelete(document, msg.menuId, msg.sourceLine, msg.kind as any, sr);
+          const currentModel = parseFormDocument(document.getText());
+          const menuEntry = currentModel.menus
+            .find((entry) => entry.id === msg.menuId)
+            ?.entries.find((entry) => entry.source?.line === msg.sourceLine && entry.kind.toLowerCase() === msg.kind.toLowerCase());
+          const oldImage = currentModel.images.find((entry) => entry.id === menuEntry?.iconId);
+          const cleanupSourceLine = menuEntry?.iconId
+            && countFormImageUsages(currentModel, menuEntry.iconId) === 1
+            && typeof oldImage?.source?.line === "number"
+            ? oldImage.source.line
+            : undefined;
+          const buildDeleteEdit = () => applyMenuEntryDelete(document, msg.menuId, msg.sourceLine, msg.kind as any, sr);
+          const edit = typeof cleanupSourceLine === "number"
+            ? applyImageCleanupAfterSingleLineReferenceDelete(document, cleanupSourceLine, buildDeleteEdit, sr)
+            : buildDeleteEdit();
           await applyEditOrError(edit, `Could not delete menu entry for menu '${msg.menuId}'. No matching call found${rangeInfo}.`);
           return;
         }
@@ -1111,7 +1126,20 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
 
         case WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBarEntry: {
           if (!ensureToolBarEntryKind(msg.kind)) return;
-          const edit = applyToolBarEntryDelete(document, msg.toolBarId, msg.sourceLine, msg.kind as any, sr);
+          const currentModel = parseFormDocument(document.getText());
+          const toolBarEntry = currentModel.toolbars
+            .find((entry) => entry.id === msg.toolBarId)
+            ?.entries.find((entry) => entry.source?.line === msg.sourceLine && entry.kind.toLowerCase() === msg.kind.toLowerCase());
+          const oldImage = currentModel.images.find((entry) => entry.id === toolBarEntry?.iconId);
+          const cleanupSourceLine = toolBarEntry?.iconId
+            && countFormImageUsages(currentModel, toolBarEntry.iconId) === 1
+            && typeof oldImage?.source?.line === "number"
+            ? oldImage.source.line
+            : undefined;
+          const buildDeleteEdit = () => applyToolBarEntryDelete(document, msg.toolBarId, msg.sourceLine, msg.kind as any, sr);
+          const edit = typeof cleanupSourceLine === "number"
+            ? applyImageCleanupAfterSingleLineReferenceDelete(document, cleanupSourceLine, buildDeleteEdit, sr)
+            : buildDeleteEdit();
           await applyEditOrError(edit, `Could not delete toolbar entry for toolbar '${msg.toolBarId}'. No matching call found${rangeInfo}.`);
           return;
         }
@@ -1162,10 +1190,22 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         }
 
         case WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBarField: {
-          const edit = applyStatusBarFieldDelete(document, msg.statusBarId, msg.sourceLine, sr);
+          const statusBar = lastModel?.statusbars.find(entry => entry.id === msg.statusBarId);
+          const field = statusBar?.fields.find(entry => entry.source?.line === msg.sourceLine);
+          const oldImageUsageCount = countCurrentImageUsages(field?.imageId);
+          const oldImageSourceLine = lastModel?.images.find(entry => entry.id === field?.imageId)?.source?.line;
+          const cleanupSourceLine = field?.imageId && oldImageUsageCount === 1 && typeof oldImageSourceLine === "number"
+            ? oldImageSourceLine
+            : undefined;
+
+          const edit = typeof cleanupSourceLine === "number"
+            ? applyStatusBarFieldDeleteWithImageCleanup(document, msg.statusBarId, msg.sourceLine, cleanupSourceLine, sr)
+            : applyStatusBarFieldDelete(document, msg.statusBarId, msg.sourceLine, sr);
           await applyEditOrError(
             edit,
-            `Could not delete statusbar field for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`
+            typeof cleanupSourceLine === "number"
+              ? `Could not delete statusbar field and clean the previous image entry for statusbar '${msg.statusBarId}'${rangeInfo}.`
+              : `Could not delete statusbar field for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`
           );
           return;
         }
