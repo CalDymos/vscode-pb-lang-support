@@ -679,8 +679,6 @@ function buildToolBarToolTipLine(toolBarId: string | undefined, args: ToolBarEnt
 
 function buildToolBarEntryLines(args: ToolBarEntryArgs, toolBarId?: string): string[] {
   switch (args.kind) {
-    case TOOLBAR_ENTRY_KIND.ToolBarStandardButton:
-      return [buildToolBarImageButtonLine({ ...args, kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton })];
     case TOOLBAR_ENTRY_KIND.ToolBarButton: {
       const lines = [buildToolBarImageButtonLine({ ...args, kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton, toggle: false })];
       const text = args.textRaw;
@@ -715,9 +713,14 @@ function buildToolBarEntryLine(args: ToolBarEntryArgs, toolBarId?: string): stri
 }
 
 function isToolBarButtonKind(kind: ToolBarEntryKind): boolean {
-  return kind === TOOLBAR_ENTRY_KIND.ToolBarStandardButton
-    || kind === TOOLBAR_ENTRY_KIND.ToolBarButton
+  return kind === TOOLBAR_ENTRY_KIND.ToolBarButton
     || kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton;
+}
+
+function isToolBarEntryCallNameForKind(callName: string, kind: ToolBarEntryKind): boolean {
+  const normalizedCallName = callName.toLowerCase();
+  if (normalizedCallName === kind.toLowerCase()) return true;
+  return kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && normalizedCallName === TOOLBAR_ENTRY_KIND.ToolBarStandardButton.toLowerCase();
 }
 
 function getToolBarEntryIdFromCall(call: PbCall): string | undefined {
@@ -6156,7 +6159,7 @@ export function applyToolBarEntryUpdate(
   if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
 
   const calls = scanDocumentCalls(document, scanRange);
-  const call = calls.find(c => c.range.line === sourceLine && c.name.toLowerCase() === args.kind.toLowerCase());
+  const call = calls.find(c => c.range.line === sourceLine && isToolBarEntryCallNameForKind(c.name, args.kind));
   if (!call) return undefined;
   if (!isLineInCreateSection(calls, sourceLine, PB_CALL.createToolBar, toolBarId)) return undefined;
 
@@ -6210,7 +6213,7 @@ export function applyToolBarEntryDelete(
   const calls = scanDocumentCalls(document, scanRange);
   if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
 
-  const call = calls.find(c => c.range.line === sourceLine && c.name.toLowerCase() === kind.toLowerCase());
+  const call = calls.find(c => c.range.line === sourceLine && isToolBarEntryCallNameForKind(c.name, kind));
   if (!call) return undefined;
   if (!isLineInCreateSection(calls, sourceLine, PB_CALL.createToolBar, toolBarId)) return undefined;
 

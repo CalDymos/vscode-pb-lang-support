@@ -295,7 +295,7 @@ export function parseFormDocument(text: string): FormDocument {
       case TOOLBAR_ENTRY_KIND.ToolBarStandardButton: {
         if (!curToolBar) break;
         const p = splitParams(c.args);
-        addToolBarEntry({ kind: TOOLBAR_ENTRY_KIND.ToolBarStandardButton, idRaw: p[0]?.trim(), iconRaw: p[1]?.trim(), source: c.range });
+        addToolBarEntry({ kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton, idRaw: p[0]?.trim(), iconRaw: p[1]?.trim(), source: c.range });
         break;
       }
 

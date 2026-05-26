@@ -3,11 +3,14 @@ import assert from "node:assert/strict";
 import type { TextDocument, WorkspaceEdit } from "vscode";
 
 import {
+  applyGadgetDeleteWithImageCleanup,
   applyGadgetOpenArgsUpdate,
   applyImageCleanupAfterSingleLineReferenceDelete,
   applyImageInsertAndReferenceUpdate,
   applyImageReferenceUpdateWithCleanup,
   applyMenuEntryDelete,
+  applyMenuEntryInsert,
+  applyMenuEntryMove,
   applyMenuEntryUpdate,
   applyStatusBarFieldDeleteWithImageCleanup,
   applyStatusBarFieldUpdate,
@@ -15,6 +18,7 @@ import {
   applyToolBarEntryUpdate,
 } from "../src/core/emitter/patch-emitter";
 import { GADGET_KIND, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND } from "../src/core/model";
+import { MenuEntryMovePlacement } from "../src/shared/menu";
 import { parseFormDocument } from "../src/core/parser/form-parser";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
@@ -673,4 +677,194 @@ test("deletes toolbar entries with cleanup as one reindexed image mutation", () 
   assert.doesNotMatch(patchedText, /ToolBarImageButton\(#TbShared/);
   assert.match(patchedText, /MenuItem\(#MenuOpen, "Open", ImageID\(#Img_FrmMain_0\)\)/);
   assert.match(patchedText, /StatusBarImage\(0, 0, ImageID\(#Img_FrmMain_0\)\)/);
+});
+
+
+function buildGadgetDeleteImageCleanupFixture(): string {
+  return `; Form Designer for PureBasic - 6.40
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #Container_0
+  #BtnImage
+  #TxtKeep
+EndEnumeration
+
+Enumeration FormImage
+  #Img_FrmMain_0
+  #Img_FrmMain_1
+EndEnumeration
+
+Enumeration FormMenu
+  #TbShared
+EndEnumeration
+
+LoadImage(#Img_FrmMain_0,"old.png")
+LoadImage(#Img_FrmMain_1,"shared.png")
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Images")
+  ContainerGadget(#Container_0, 10, 10, 200, 120)
+  ButtonImageGadget(#BtnImage, 8, 8, 80, 24, ImageID(#Img_FrmMain_0))
+  CloseGadgetList()
+  TextGadget(#TxtKeep, 10, 150, 80, 20, "Keep")
+  CreateToolBar(0, WindowID(#FrmMain))
+  ToolBarImageButton(#TbShared, ImageID(#Img_FrmMain_1))
+EndProcedure
+`;
+}
+
+test("deletes nested gadget image references with cleanup as one reindexed image mutation", () => {
+  const text = buildGadgetDeleteImageCleanupFixture();
+  const parsed = parseFormDocument(text);
+  const oldImage = parsed.images.find((entry) => entry.id === "#Img_FrmMain_0");
+  assert.equal(typeof oldImage?.source?.line, "number", "Expected old image source line.");
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
+    applyGadgetDeleteWithImageCleanup(document, "#Container_0")
+  );
+
+  assert.deepEqual(updated.images.map((entry) => entry.id), ["#Img_FrmMain_0"]);
+  assert.equal(updated.images[0]?.imageRaw, '"shared.png"');
+  assert.equal(updated.gadgets.find((entry) => entry.id === "#Container_0"), undefined);
+  assert.equal(updated.gadgets.find((entry) => entry.id === "#BtnImage"), undefined);
+  assert.equal(updated.gadgets.find((entry) => entry.id === "#TxtKeep")?.id, "#TxtKeep");
+  assert.equal(updated.toolbars[0]?.entries[0]?.iconId, "#Img_FrmMain_0");
+  assert.doesNotMatch(patchedText, /old\.png/);
+  assert.doesNotMatch(patchedText, /ButtonImageGadget\(#BtnImage/);
+  assert.match(patchedText, /ToolBarImageButton\(#TbShared, ImageID\(#Img_FrmMain_0\)\)/);
+});
+
+function buildSharedGadgetMenuImageFixture(): string {
+  return `; Form Designer for PureBasic - 6.40
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #BtnImage
+EndEnumeration
+
+Enumeration FormImage
+  #Img_FrmMain_0
+EndEnumeration
+
+Enumeration FormMenu
+  #MenuOpen
+EndEnumeration
+
+LoadImage(#Img_FrmMain_0,"shared.png")
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Images")
+  ButtonImageGadget(#BtnImage, 10, 10, 80, 24, ImageID(#Img_FrmMain_0))
+  CreateImageMenu(0, WindowID(#FrmMain))
+  MenuTitle("File")
+  MenuItem(#MenuOpen, "Open", ImageID(#Img_FrmMain_0))
+EndProcedure
+`;
+}
+
+test("keeps a shared image entry when deleting one gadget reference", () => {
+  const text = buildSharedGadgetMenuImageFixture();
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
+    applyGadgetDeleteWithImageCleanup(document, "#BtnImage")
+  );
+
+  assert.deepEqual(updated.images.map((entry) => entry.id), ["#Img_FrmMain_0"]);
+  assert.equal(updated.images[0]?.imageRaw, '"shared.png"');
+  assert.equal(updated.gadgets.find((entry) => entry.id === "#BtnImage"), undefined);
+  assert.equal(updated.menus[0]?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem)?.iconId, "#Img_FrmMain_0");
+  assert.match(patchedText, /LoadImage\(#Img_FrmMain_0,"shared\.png"\)/);
+  assert.match(patchedText, /MenuItem\(#MenuOpen, "Open", ImageID\(#Img_FrmMain_0\)\)/);
+});
+
+function buildMenuInsertMoveImageFixture(): string {
+  return `; Form Designer for PureBasic - 6.40
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormImage
+  #Img_FrmMain_0
+EndEnumeration
+
+Enumeration FormMenu
+  #MenuExisting
+EndEnumeration
+
+LoadImage(#Img_FrmMain_0,"existing.png")
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Images")
+  CreateMenu(0, WindowID(#FrmMain))
+  MenuTitle("File")
+  MenuItem(#MenuExisting, "Existing")
+EndProcedure
+`;
+}
+
+test("inserts menu image references by using an existing image entry", () => {
+  const text = buildMenuInsertMoveImageFixture();
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
+    applyMenuEntryInsert(document, "0", {
+      kind: MENU_ENTRY_KIND.MenuItem,
+      idRaw: "#MenuInserted",
+      textRaw: '"Inserted"',
+      iconRaw: "ImageID(#Img_FrmMain_0)",
+    })
+  );
+
+  const inserted = updated.menus[0]?.entries.find((entry) => entry.idRaw === "#MenuInserted");
+  assert.deepEqual(updated.images.map((entry) => entry.id), ["#Img_FrmMain_0"]);
+  assert.equal(updated.images[0]?.imageRaw, '"existing.png"');
+  assert.equal(inserted?.iconId, "#Img_FrmMain_0");
+  assert.match(patchedText, /CreateImageMenu\(0, WindowID\(#FrmMain\)\)/);
+  assert.doesNotMatch(patchedText, /CreateMenu\(0, WindowID\(#FrmMain\)\)/);
+  assert.match(patchedText, /MenuItem\(#MenuInserted, "Inserted", ImageID\(#Img_FrmMain_0\)\)/);
+  assert.match(patchedText, /LoadImage\(#Img_FrmMain_0,"existing\.png"\)/);
+});
+
+function buildMenuMoveImageFixture(): string {
+  return buildMenuInsertMoveImageFixture()
+    .replace("  #MenuExisting\n", "  #MenuIcon\n  #MenuExisting\n")
+    .replace("  CreateMenu(0, WindowID(#FrmMain))", "  CreateImageMenu(0, WindowID(#FrmMain))")
+    .replace(
+      '  MenuTitle("File")\n  MenuItem(#MenuExisting, "Existing")',
+      '  MenuTitle("File")\n  MenuItem(#MenuIcon, "Icon", ImageID(#Img_FrmMain_0))\n  MenuItem(#MenuExisting, "Existing")'
+    );
+}
+
+test("moves menu image references without changing the existing image entry", () => {
+  const text = buildMenuMoveImageFixture();
+  const parsed = parseFormDocument(text);
+  const iconEntry = parsed.menus[0]?.entries.find((entry) => entry.idRaw === "#MenuIcon");
+  const targetEntry = parsed.menus[0]?.entries.find((entry) => entry.idRaw === "#MenuExisting");
+  assert.equal(typeof iconEntry?.source?.line, "number", "Expected icon menu source line.");
+  assert.equal(typeof targetEntry?.source?.line, "number", "Expected target menu source line.");
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
+    applyMenuEntryMove(
+      document,
+      "0",
+      iconEntry!.source!.line,
+      MENU_ENTRY_KIND.MenuItem,
+      { targetSourceLine: targetEntry!.source!.line, placement: MenuEntryMovePlacement.After }
+    )
+  );
+
+  const updatedIconEntry = updated.menus[0]?.entries.find((entry) => entry.idRaw === "#MenuIcon");
+  const updatedExistingEntry = updated.menus[0]?.entries.find((entry) => entry.idRaw === "#MenuExisting");
+  assert.deepEqual(updated.images.map((entry) => entry.id), ["#Img_FrmMain_0"]);
+  assert.equal(updatedIconEntry?.iconId, "#Img_FrmMain_0");
+  assert.ok((updatedIconEntry?.source?.line ?? 0) > (updatedExistingEntry?.source?.line ?? Number.MAX_SAFE_INTEGER));
+  assert.match(patchedText, /LoadImage\(#Img_FrmMain_0,"existing\.png"\)/);
+  assert.match(patchedText, /MenuItem\(#MenuExisting, "Existing"\)\n  MenuItem\(#MenuIcon, "Icon", ImageID\(#Img_FrmMain_0\)\)/);
 });
