@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { parseFormDocument } from "../src/core/parser/form-parser";
-import { applyGadgetDelete, applyGadgetEventProcUpdate, applyGadgetInsert, applyGadgetItemUpdate, applyGadgetOpenArgsUpdate, applyGadgetPbAnyToggle, applyGadgetPropertyUpdate, applyGadgetReparent, applyMenuEntryEventUpdate, applyMovePatch, applyRectPatch, applyResizeGadgetDelete, applyResizeGadgetMutation, applyResizeGadgetRawUpdate, applyToolBarEntryEventUpdate, applyWindowEventProcUpdate, applyWindowEventUpdate, applyWindowGenerateEventLoopUpdate, applyWindowOpenArgsUpdate, applyWindowPbAnyToggle, applyWindowPropertyUpdate, applyWindowRectPatch, applyWindowVariableNamePatch } from "../src/core/emitter/patch-emitter";
+import { applyGadgetDelete, applyGadgetEventProcUpdate, applyGadgetInsert, applyGadgetItemDelete, applyGadgetItemUpdate, applyPanelGadgetItemMove, applyGadgetOpenArgsUpdate, applyGadgetPbAnyToggle, applyGadgetPropertyUpdate, applyGadgetReparent, applyMenuEntryEventUpdate, applyMovePatch, applyRectPatch, applyResizeGadgetDelete, applyResizeGadgetMutation, applyResizeGadgetRawUpdate, applyToolBarEntryEventUpdate, applyWindowEventProcUpdate, applyWindowEventUpdate, applyWindowGenerateEventLoopUpdate, applyWindowOpenArgsUpdate, applyWindowPbAnyToggle, applyWindowPropertyUpdate, applyWindowRectPatch, applyWindowVariableNamePatch } from "../src/core/emitter/patch-emitter";
 import { loadFixture } from "./helpers/loadFixture";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { stripBomAndToLf } from "./helpers/testUtils";
@@ -1305,6 +1305,97 @@ test("roundtrips gadget constructor arg updates for splitter references and flag
   assert.equal(right?.splitterId, "#SplitMain");
 });
 
+test("moves a newly linked splitter child before the splitter constructor", () => {
+  const text = [
+    "Enumeration FormWindow",
+    "  #FrmSplit",
+    "EndEnumeration",
+    "",
+    "Enumeration FormGadget",
+    "  #TxtLeft",
+    "  #TxtRight",
+    "  #BtnLate",
+    "  #SplitMain",
+    "EndEnumeration",
+    "",
+    "Procedure OpenFrmSplit()",
+    "  OpenWindow(#FrmSplit, 0, 0, 320, 220, \"Splitter\")",
+    "  StringGadget(#TxtLeft, 10, 40, 84, 120, \"Left\")",
+    "  SplitterGadget(#SplitMain, 10, 40, 250, 120, #TxtLeft, #TxtRight)",
+    "  SetGadgetState(#SplitMain, 112)",
+    "  StringGadget(#TxtRight, 101, 40, 159, 120, \"Right\")",
+    "  ButtonGadget(#BtnLate, 20, 170, 80, 24, \"Late\")",
+    "EndProcedure",
+    "",
+  ].join("\n");
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyGadgetOpenArgsUpdate(document, "#SplitMain", {
+      gadget2Raw: "#BtnLate",
+    })
+  );
+
+  const lateIndex = patchedText.indexOf("ButtonGadget(#BtnLate");
+  const splitterIndex = patchedText.indexOf("SplitterGadget(#SplitMain");
+  const oldRightIndex = patchedText.indexOf("StringGadget(#TxtRight");
+  assert.ok(lateIndex > -1 && splitterIndex > -1 && oldRightIndex > -1);
+  assert.ok(lateIndex < splitterIndex, "Expected the newly referenced child to be emitted before the splitter.");
+  assert.ok(splitterIndex < oldRightIndex, "Expected the old, no longer referenced child to remain after the splitter.");
+  assert.match(patchedText, /SplitterGadget\(#SplitMain, 10, 40, 250, 120, #TxtLeft, #BtnLate\)/);
+  assert.match(patchedText, /SetGadgetState\(#SplitMain, 112\)/);
+
+  const splitter = parsed.gadgets.find((g) => g.id === "#SplitMain");
+  const late = parsed.gadgets.find((g) => g.id === "#BtnLate");
+  const right = parsed.gadgets.find((g) => g.id === "#TxtRight");
+  assert.equal(splitter?.gadget2Id, "#BtnLate");
+  assert.equal(late?.splitterId, "#SplitMain");
+  assert.equal(right?.splitterId, undefined);
+});
+
+test("moves a newly linked splitter child out of its old parent block", () => {
+  const text = [
+    "Enumeration FormWindow",
+    "  #FrmSplit",
+    "EndEnumeration",
+    "",
+    "Enumeration FormGadget",
+    "  #Box",
+    "  #TxtInner",
+    "  #TxtLeft",
+    "  #TxtRight",
+    "  #SplitMain",
+    "EndEnumeration",
+    "",
+    "Procedure OpenFrmSplit()",
+    "  OpenWindow(#FrmSplit, 0, 0, 320, 220, \"Splitter\")",
+    "  ContainerGadget(#Box, 10, 10, 280, 70)",
+    "    StringGadget(#TxtInner, 8, 8, 120, 22, \"Inner\")",
+    "  CloseGadgetList()",
+    "  StringGadget(#TxtLeft, 10, 90, 84, 120, \"Left\")",
+    "  StringGadget(#TxtRight, 101, 90, 159, 120, \"Right\")",
+    "  SplitterGadget(#SplitMain, 10, 90, 250, 120, #TxtLeft, #TxtRight)",
+    "  SetGadgetState(#SplitMain, 112)",
+    "EndProcedure",
+    "",
+  ].join("\n");
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyGadgetOpenArgsUpdate(document, "#SplitMain", {
+      gadget2Raw: "#TxtInner",
+    })
+  );
+
+  assert.match(
+    patchedText,
+    /ContainerGadget\(#Box, 10, 10, 280, 70\)\n  CloseGadgetList\(\)[\s\S]*StringGadget\(#TxtInner, 8, 8, 120, 22, "Inner"\)[\s\S]*SplitterGadget\(#SplitMain, 10, 90, 250, 120, #TxtLeft, #TxtInner\)/
+  );
+
+  const inner = parsed.gadgets.find((g) => g.id === "#TxtInner");
+  const box = parsed.gadgets.find((g) => g.id === "#Box");
+  assert.equal(inner?.parentId, undefined);
+  assert.equal(inner?.splitterId, "#SplitMain");
+  assert.equal(box?.parentId, undefined);
+});
 
 
 test("roundtrips window event include insertion", () => {
@@ -1551,6 +1642,138 @@ test("roundtrips combined object event binding updates in fixture 15", () => {
   assert.equal(menuItem?.event, "HandleMenuOpenUpdated");
   assert.equal(toolBarButton?.event, "HandleToolbarRefreshUpdated");
   assert.equal(parsed.window?.generateEventLoop, true);
+});
+
+test("deletes panel tab children when deleting a PanelGadget item", () => {
+  const text = `; Form Designer for PureBasic - 6.40
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #PnlMain
+  #TxtGeneral
+  #StrSettings
+  #BtnSettings
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  PanelGadget(#PnlMain, 10, 10, 240, 150)
+  AddGadgetItem(#PnlMain, -1, "General")
+    TextGadget(#TxtGeneral, 8, 8, 80, 20, "General")
+  AddGadgetItem(#PnlMain, -1, "Settings")
+    StringGadget(#StrSettings, 12, 14, 120, 24, "Settings")
+    ButtonGadget(#BtnSettings, 12, 48, 90, 25, "Apply")
+  CloseGadgetList()
+EndProcedure
+
+Procedure FrmMain_Events(event)
+  Select event
+    Case #PB_Event_Gadget
+      Select EventGadget()
+        Case #StrSettings
+          HandleSettings(EventType())
+      EndSelect
+  EndSelect
+EndProcedure
+`;
+
+  const parsedBefore = parseFormDocument(text);
+  const secondTabLine = parsedBefore.gadgets.find((g) => g.id === "#PnlMain")?.items?.[1]?.source?.line;
+  assert.equal(typeof secondTabLine, "number", "Expected source line for second panel item.");
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyGadgetItemDelete(document, "#PnlMain", secondTabLine!)
+  );
+
+  assert.match(patchedText, /AddGadgetItem\(#PnlMain, -1, "General"\)/);
+  assert.doesNotMatch(patchedText, /AddGadgetItem\(#PnlMain, -1, "Settings"\)/);
+  assert.doesNotMatch(patchedText, /#StrSettings/);
+  assert.doesNotMatch(patchedText, /#BtnSettings/);
+  assert.doesNotMatch(patchedText, /HandleSettings/);
+
+  assert.equal(parsed.gadgets.find((g) => g.id === "#TxtGeneral")?.parentItem, 0);
+  assert.equal(parsed.gadgets.find((g) => g.id === "#StrSettings"), undefined);
+  assert.equal(parsed.gadgets.find((g) => g.id === "#BtnSettings"), undefined);
+});
+
+
+test("moves panel item down with its child gadget block", () => {
+  const text = `Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #PnlMain
+  #TxtGeneral
+  #StrSettings
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  PanelGadget(#PnlMain, 10, 10, 240, 150)
+  AddGadgetItem(#PnlMain, -1, "General")
+    TextGadget(#TxtGeneral, 8, 8, 80, 20, "General")
+  AddGadgetItem(#PnlMain, -1, "Settings")
+    StringGadget(#StrSettings, 12, 14, 120, 24, "Settings")
+  CloseGadgetList()
+EndProcedure
+`;
+
+  const parsedBefore = parseFormDocument(text);
+  const firstTabLine = parsedBefore.gadgets.find((g) => g.id === "#PnlMain")?.items?.[0]?.source?.line;
+  assert.equal(typeof firstTabLine, "number", "Expected source line for first panel item.");
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyPanelGadgetItemMove(document, "#PnlMain", firstTabLine!, "down")
+  );
+
+  assert.ok(patchedText.indexOf('AddGadgetItem(#PnlMain, -1, "Settings")') < patchedText.indexOf('AddGadgetItem(#PnlMain, -1, "General")'));
+  assert.ok(patchedText.indexOf('StringGadget(#StrSettings') < patchedText.indexOf('TextGadget(#TxtGeneral'));
+  assert.equal(parsed.gadgets.find((g) => g.id === "#StrSettings")?.parentItem, 0);
+  assert.equal(parsed.gadgets.find((g) => g.id === "#TxtGeneral")?.parentItem, 1);
+});
+
+test("moves panel item up with nested container child block", () => {
+  const text = `Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #PnlMain
+  #CtrSettings
+  #BtnSettings
+  #TxtGeneral
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 360, height = 240)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  PanelGadget(#PnlMain, 10, 10, 260, 170)
+  AddGadgetItem(#PnlMain, -1, "General")
+    TextGadget(#TxtGeneral, 8, 8, 80, 20, "General")
+  AddGadgetItem(#PnlMain, -1, "Settings")
+    ContainerGadget(#CtrSettings, 12, 14, 150, 80)
+      ButtonGadget(#BtnSettings, 8, 8, 90, 25, "Apply")
+    CloseGadgetList()
+  CloseGadgetList()
+EndProcedure
+`;
+
+  const parsedBefore = parseFormDocument(text);
+  const secondTabLine = parsedBefore.gadgets.find((g) => g.id === "#PnlMain")?.items?.[1]?.source?.line;
+  assert.equal(typeof secondTabLine, "number", "Expected source line for second panel item.");
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyPanelGadgetItemMove(document, "#PnlMain", secondTabLine!, "up")
+  );
+
+  assert.ok(patchedText.indexOf('AddGadgetItem(#PnlMain, -1, "Settings")') < patchedText.indexOf('AddGadgetItem(#PnlMain, -1, "General")'));
+  assert.ok(patchedText.indexOf('ContainerGadget(#CtrSettings') < patchedText.indexOf('TextGadget(#TxtGeneral'));
+  assert.match(patchedText, /CloseGadgetList\(\)\n  AddGadgetItem\(#PnlMain, -1, "General"\)/);
+  assert.equal(parsed.gadgets.find((g) => g.id === "#CtrSettings")?.parentItem, 0);
+  assert.equal(parsed.gadgets.find((g) => g.id === "#BtnSettings")?.parentId, "#CtrSettings");
+  assert.equal(parsed.gadgets.find((g) => g.id === "#TxtGeneral")?.parentItem, 1);
 });
 
 test("roundtrips combined panel container updates in fixture 05", () => {

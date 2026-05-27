@@ -2120,6 +2120,41 @@ function collectDeletedGadgetLineNumbers(
   return lines;
 }
 
+function collectOriginalGadgetDeleteIdsForRoots(gadgets: readonly Gadget[], rootIds: Iterable<string>): Set<string> {
+  const requestedIds = new Set<string>();
+
+  for (const rootId of rootIds) {
+    for (const requestedId of collectRequestedGadgetDeleteIds(gadgets, rootId)) {
+      requestedIds.add(requestedId);
+    }
+  }
+
+  const requestedSplitterIds = new Set(
+    gadgets
+      .filter(gadget => requestedIds.has(gadget.id) && gadget.kind === GADGET_KIND.SplitterGadget)
+      .map(gadget => gadget.id)
+  );
+
+  const splitterOwners = new Map<string, string>();
+  for (const gadget of gadgets) {
+    if (gadget.splitterId) {
+      splitterOwners.set(gadget.id, gadget.splitterId);
+    }
+  }
+
+  const deletedIds = new Set<string>();
+  for (const gadget of gadgets) {
+    if (!requestedIds.has(gadget.id)) continue;
+
+    const ownerId = splitterOwners.get(gadget.id);
+    if (ownerId && !requestedSplitterIds.has(ownerId)) continue;
+
+    deletedIds.add(gadget.id);
+  }
+
+  return deletedIds;
+}
+
 function collectDeletedCustomGadgetLineNumbers(
   document: vscode.TextDocument,
   deletedGadgets: readonly Gadget[]
@@ -2235,6 +2270,82 @@ function buildReparentedRootGadgetLine(call: PbCall): string | undefined {
   params[1] = "0";
   params[2] = "0";
   return buildUpdatedCallText(call, params);
+}
+
+function findGadgetByRawReference(gadgets: readonly Gadget[], rawRef: string | undefined): Gadget | undefined {
+  const ref = normalizeOptionalRaw(rawRef);
+  if (!ref) return undefined;
+
+  const normalizedRef = ref.startsWith("#") ? ref.slice(1) : ref;
+  return gadgets.find(gadget =>
+    gadget.id === ref
+    || gadget.id === normalizedRef
+    || gadget.id === `#${normalizedRef}`
+    || gadget.variable === normalizedRef
+  );
+}
+
+function hasSameSourceParent(left: Gadget, right: Gadget): boolean {
+  return (left.parentId ?? undefined) === (right.parentId ?? undefined)
+    && (left.parentItem ?? undefined) === (right.parentItem ?? undefined);
+}
+
+function shouldMoveSplitterChildBeforeOwner(splitter: Gadget, child: Gadget, splitterLine: number): boolean {
+  if (!hasSameSourceParent(splitter, child)) return true;
+  return typeof child.source?.line === "number" && child.source.line > splitterLine;
+}
+
+function appendSplitterLinkStructureEdit(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  parsed: ReturnType<typeof parseFormDocument>,
+  calls: PbCall[],
+  splitter: Gadget,
+  splitterCall: PbCall,
+  gadget1Raw: string | undefined,
+  gadget2Raw: string | undefined
+): boolean {
+  const gadget1 = findGadgetByRawReference(parsed.gadgets, gadget1Raw);
+  const gadget2 = findGadgetByRawReference(parsed.gadgets, gadget2Raw);
+  if (!gadget1 || !gadget2 || gadget1.id === gadget2.id) return false;
+
+  const moveRoots: Gadget[] = [];
+  for (const child of [gadget1, gadget2]) {
+    if (child.id === splitter.id) return false;
+    if (child.splitterId && child.splitterId !== splitter.id) return false;
+
+    const childSubtreeIds = collectRequestedGadgetDeleteIds(parsed.gadgets, child.id);
+    if (childSubtreeIds.has(splitter.id)) return false;
+
+    if (shouldMoveSplitterChildBeforeOwner(splitter, child, splitterCall.range.line)
+      && !moveRoots.some(entry => entry.id === child.id)) {
+      moveRoots.push(child);
+    }
+  }
+
+  if (!moveRoots.length) return true;
+
+  const gadgetListParentIds = buildGadgetListParentIds(parsed.gadgets);
+  const movedBlocks: string[] = [];
+  const deletedLines = new Set<number>();
+
+  for (const child of moveRoots) {
+    const movedIds = collectRequestedGadgetDeleteIds(parsed.gadgets, child.id);
+    const movedLines = collectMovedGadgetLineNumbers(calls, movedIds, gadgetListParentIds);
+    if (!movedLines.size || movedLines.has(splitterCall.range.line)) return false;
+
+    movedBlocks.push(buildLineBlock(document, movedLines));
+    for (const line of movedLines) {
+      deletedLines.add(line);
+    }
+  }
+
+  edit.insert(document.uri, new vscode.Position(splitterCall.range.line, 0), movedBlocks.join(""));
+  for (const line of [...deletedLines].sort((a, b) => b - a)) {
+    edit.delete(document.uri, document.lineAt(line).rangeIncludingLineBreak);
+  }
+
+  return true;
 }
 
 export function applyGadgetReparent(
@@ -2595,6 +2706,25 @@ export function applyGadgetOpenArgsUpdate(
   }
 
   const edit = replaceCallArgsEdit(document, call, params);
+
+  if (call.name === GADGET_KIND.SplitterGadget
+    && (args.gadget1Raw !== undefined || args.gadget2Raw !== undefined)) {
+    const splitter = parsed.gadgets.find(entry => entry.id === gadgetKey);
+    if (!splitter) return undefined;
+
+    const structureOk = appendSplitterLinkStructureEdit(
+      edit,
+      document,
+      parsed,
+      calls,
+      splitter,
+      call,
+      params[layout.gadget1Index ?? 5],
+      params[layout.gadget2Index ?? 6]
+    );
+    if (!structureOk) return undefined;
+  }
+
   applyGadgetHeadPatch(edit, document);
   return edit;
 }
@@ -3431,14 +3561,159 @@ export function applyGadgetItemDelete(
 ): vscode.WorkspaceEdit | undefined {
   if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
 
+  const parsed = parseFormDocument(document.getText());
+  const gadget = parsed.gadgets.find(entry => entry.id === gadgetKey);
   const calls = scanDocumentCalls(document, scanRange);
 
   const call = findGadgetEntryCallAtLine(calls, "addgadgetitem", gadgetKey, sourceLine);
   if (!call) return undefined;
 
   const edit = new vscode.WorkspaceEdit();
-  edit.delete(document.uri, document.lineAt(sourceLine).rangeIncludingLineBreak);
-  applyGadgetHeadPatch(edit, document);
+  const deletedIds = new Set<string>();
+
+  if (gadget?.kind === GADGET_KIND.PanelGadget) {
+    const itemIndex = gadget.items?.findIndex(item => item.source?.line === sourceLine) ?? -1;
+    const item = itemIndex >= 0 ? gadget.items?.[itemIndex] : undefined;
+    const panelItem = typeof item?.index === "number" ? item.index : itemIndex;
+
+    if (panelItem >= 0) {
+      const tabRootIds = parsed.gadgets
+        .filter(entry => entry.parentId === gadgetKey && entry.parentItem === panelItem)
+        .map(entry => entry.id);
+
+      for (const deletedId of collectOriginalGadgetDeleteIdsForRoots(parsed.gadgets, tabRootIds)) {
+        deletedIds.add(deletedId);
+      }
+    }
+  }
+
+  const gadgetListParentIds = buildGadgetListParentIds(parsed.gadgets);
+  const deletedGadgets = parsed.gadgets.filter(entry => deletedIds.has(entry.id));
+  const lineNumbers = collectDeletedGadgetLineNumbers(calls, deletedIds, gadgetListParentIds);
+
+  for (const line of collectDeletedCustomGadgetLineNumbers(document, deletedGadgets)) {
+    lineNumbers.add(line);
+  }
+  lineNumbers.add(sourceLine);
+
+  for (const line of [...lineNumbers].sort((a, b) => b - a)) {
+    edit.delete(document.uri, document.lineAt(line).rangeIncludingLineBreak);
+  }
+
+  for (const deletedGadget of deletedGadgets) {
+    if (!deletedGadget.eventProc) continue;
+    appendWorkspaceEdit(edit, applyGadgetEventProcUpdate(document, deletedGadget.id, undefined, scanRange));
+  }
+
+  const remainingGadgets = deletedIds.size
+    ? parsed.gadgets.filter(entry => !deletedIds.has(entry.id))
+    : parsed.gadgets;
+  applyGadgetHeadPatchForGadgets(edit, document, remainingGadgets);
+  return edit;
+}
+
+
+
+type PanelItemLineBlock = {
+  index: number;
+  startLine: number;
+  endLine: number;
+};
+
+function findPanelItemLineBlocks(
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  panel: Gadget,
+  gadgetListParentIds: ReadonlySet<string>
+): PanelItemLineBlock[] {
+  const panelCreate = findCallByStableKey(calls, panel.id, name => /gadget$/i.test(name));
+  if (!panelCreate) return [];
+
+  const proc = findProcedureBlock(document, panelCreate.range.line);
+  if (!proc) return [];
+
+  const blocks: PanelItemLineBlock[] = [];
+  let depth = 1;
+  let currentStart: number | undefined;
+  let currentIndex = -1;
+
+  for (const call of calls) {
+    if (call.range.line <= panelCreate.range.line) continue;
+    if (call.range.line > proc.endLine) break;
+
+    const nameLower = call.name.toLowerCase();
+
+    if (nameLower === "closegadgetlist") {
+      depth -= 1;
+      if (depth === 0) {
+        if (currentStart !== undefined) {
+          blocks.push({ index: currentIndex, startLine: currentStart, endLine: call.range.line - 1 });
+        }
+        break;
+      }
+      continue;
+    }
+
+    if (depth === 1 && nameLower === "addgadgetitem" && firstParamOfCall(call.args) === panel.id) {
+      if (currentStart !== undefined) {
+        blocks.push({ index: currentIndex, startLine: currentStart, endLine: call.range.line - 1 });
+      }
+      currentIndex += 1;
+      currentStart = call.range.line;
+      continue;
+    }
+
+    if (isImplicitGadgetListStarterCall(call, gadgetListParentIds)) {
+      depth += 1;
+    }
+  }
+
+  return blocks.filter(block => block.startLine <= block.endLine && block.endLine < document.lineCount);
+}
+
+function getDocumentLineBlockText(document: vscode.TextDocument, block: PanelItemLineBlock): string {
+  const text = document.getText();
+  const start = document.offsetAt(new vscode.Position(block.startLine, 0));
+  const endLine = document.lineAt(block.endLine);
+  const end = document.offsetAt(endLine.rangeIncludingLineBreak.end);
+  return text.slice(start, end);
+}
+
+export function applyPanelGadgetItemMove(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  sourceLine: number,
+  direction: "up" | "down",
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
+
+  const parsed = parseFormDocument(document.getText());
+  const panel = parsed.gadgets.find(entry => entry.id === gadgetKey);
+  if (panel?.kind !== GADGET_KIND.PanelGadget) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const gadgetListParentIds = buildGadgetListParentIds(parsed.gadgets);
+  const blocks = findPanelItemLineBlocks(document, calls, panel, gadgetListParentIds);
+  const sourceIndex = blocks.findIndex(block => block.startLine === sourceLine);
+  if (sourceIndex < 0) return undefined;
+
+  const targetIndex = direction === "up" ? sourceIndex - 1 : sourceIndex + 1;
+  if (targetIndex < 0 || targetIndex >= blocks.length) return undefined;
+
+  const firstIndex = Math.min(sourceIndex, targetIndex);
+  const secondIndex = Math.max(sourceIndex, targetIndex);
+  const first = blocks[firstIndex];
+  const second = blocks[secondIndex];
+  if (first.endLine + 1 !== second.startLine) return undefined;
+
+  const firstText = getDocumentLineBlockText(document, first);
+  const secondText = getDocumentLineBlockText(document, second);
+  const start = new vscode.Position(first.startLine, 0);
+  const end = document.lineAt(second.endLine).rangeIncludingLineBreak.end;
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.replace(document.uri, new vscode.Range(start, end), `${secondText}${firstText}`);
   return edit;
 }
 
