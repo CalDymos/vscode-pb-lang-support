@@ -592,11 +592,11 @@ export function getStatusBarPreviewInsertArgs(
 ): { widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string } {
   switch (action) {
     case "image":
-      return { widthRaw: "96", imageRaw: "0", flagsRaw: "#PB_StatusBar_Raised" };
+      return { widthRaw: "50" };
     case "label":
-      return { widthRaw: "120", textRaw: '"StatusBarField"' };
+      return { widthRaw: "50", textRaw: '"Label"' };
     case "progress":
-      return { widthRaw: "120", progressBar: true, progressRaw: "0" };
+      return { widthRaw: "50", progressBar: true, progressRaw: "0" };
   }
 }
 

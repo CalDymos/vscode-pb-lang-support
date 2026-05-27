@@ -480,16 +480,14 @@ test("top-level SelectProc remains editable without an EventMenu block when an i
 
 test("builds default statusbar preview insert args", () => {
   assert.deepEqual(getStatusBarPreviewInsertArgs("image"), {
-    widthRaw: "96",
-    imageRaw: "0",
-    flagsRaw: "#PB_StatusBar_Raised"
+    widthRaw: "50"
   });
   assert.deepEqual(getStatusBarPreviewInsertArgs("label"), {
-    widthRaw: "120",
-    textRaw: '"StatusBarField"'
+    widthRaw: "50",
+    textRaw: '"Label"'
   });
   assert.deepEqual(getStatusBarPreviewInsertArgs("progress"), {
-    widthRaw: "120",
+    widthRaw: "50",
     progressBar: true,
     progressRaw: "0"
   });
