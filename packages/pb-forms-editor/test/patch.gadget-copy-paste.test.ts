@@ -71,9 +71,137 @@ EndProcedure
   assert.match(patched, /ResizeGadget\(#BtnApply, 10, FormWindowHeight - 80, FormWindowWidth - 40, 24\)\s+  ResizeGadget\(#BtnApply_Copy1, 10, FormWindowHeight - 80, FormWindowWidth - 40, 24\)/s);
 });
 
-test("does not paste splitter-bound or structural gadgets in the first copy paste patch scope", () => {
-  const text = `; Form Designer for PureBasic - 6.40 LTS\n\nEnumeration FormWindow\n  #FrmMain\nEndEnumeration\n\nEnumeration FormGadget\n  #Container_0\n  #BtnChild\nEndEnumeration\n\nProcedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)\n  OpenWindow(#FrmMain, x, y, width, height, "Main")\n  ContainerGadget(#Container_0, 10, 10, 140, 80)\n    ButtonGadget(#BtnChild, 10, 20, 80, 24, "Child")\n  CloseGadgetList()\nEndProcedure\n`;
+test("does not paste splitter-bound gadgets in the first copy paste patch scope", () => {
+  const text = `; Form Designer for PureBasic - 6.40 LTS\n\nEnumeration FormWindow\n  #FrmMain\nEndEnumeration\n\nEnumeration FormGadget\n  #BtnLeft\n  #BtnRight\n  #SplitMain\nEndEnumeration\n\nProcedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)\n  OpenWindow(#FrmMain, x, y, width, height, "Main")\n  ButtonGadget(#BtnLeft, 10, 20, 70, 24, "Left")\n  ButtonGadget(#BtnRight, 90, 20, 70, 24, "Right")\n  SplitterGadget(#SplitMain, 10, 50, 150, 50, #BtnLeft, #BtnRight)\nEndProcedure\n`;
 
   const document = new FakeTextDocument(text);
-  assert.equal(applyGadgetCopyPaste(document.asTextDocument(), "#Container_0"), undefined);
+  assert.equal(applyGadgetCopyPaste(document.asTextDocument(), "#SplitMain"), undefined);
+});
+
+test("pastes a copied container subtree with renamed descendants", () => {
+  const text = `; Form Designer for PureBasic - 6.40 LTS
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #Container_0
+  #BtnChild
+  #StringChild
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 260, height = 180)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  ContainerGadget(#Container_0, 10, 10, 160, 100)
+    ButtonGadget(#BtnChild, 10, 12, 80, 24, "Child")
+    StringGadget(#StringChild, 10, 44, 100, 24, "Value")
+    GadgetToolTip(#StringChild, "Input")
+  CloseGadgetList()
+EndProcedure
+`;
+
+  const patched = patch(text, "#Container_0");
+  const parsed = parseFormDocument(patched);
+
+  assert.match(patched, /Enumeration FormGadget\s+  #Container_0\s+  #BtnChild\s+  #StringChild\s+  #Container_0_Copy1\s+  #BtnChild_Copy1\s+  #StringChild_Copy1\s+EndEnumeration/s);
+  assert.match(patched, /ContainerGadget\(#Container_0, 10, 10, 160, 100\)[\s\S]*CloseGadgetList\(\)\s+  ContainerGadget\(#Container_0_Copy1, 10, 10, 160, 100\)\s+    ButtonGadget\(#BtnChild_Copy1, 10, 12, 80, 24, "Child"\)\s+    StringGadget\(#StringChild_Copy1, 10, 44, 100, 24, "Value"\)\s+    GadgetToolTip\(#StringChild_Copy1, "Input"\)\s+  CloseGadgetList\(\)/s);
+
+  const copiedContainer = parsed.gadgets.find(gadget => gadget.id === "#Container_0_Copy1");
+  const copiedButton = parsed.gadgets.find(gadget => gadget.id === "#BtnChild_Copy1");
+  const copiedString = parsed.gadgets.find(gadget => gadget.id === "#StringChild_Copy1");
+  assert.equal(copiedButton?.parentId, copiedContainer?.id);
+  assert.equal(copiedString?.parentId, copiedContainer?.id);
+  assert.equal(copiedString?.tooltip, "Input");
+});
+
+test("keeps structural copy paste blocked for panel and splitter subtrees", () => {
+  const panelText = `; Form Designer for PureBasic - 6.40 LTS
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #Panel_0
+  #BtnChild
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 260, height = 180)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  PanelGadget(#Panel_0, 10, 10, 160, 100)
+    AddGadgetItem(#Panel_0, -1, "Tab")
+    ButtonGadget(#BtnChild, 10, 12, 80, 24, "Child")
+  CloseGadgetList()
+EndProcedure
+`;
+  assert.equal(applyGadgetCopyPaste(new FakeTextDocument(panelText).asTextDocument(), "#Panel_0"), undefined);
+
+  const splitterText = `; Form Designer for PureBasic - 6.40 LTS
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #Container_0
+  #BtnLeft
+  #BtnRight
+  #SplitMain
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 260, height = 180)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  ContainerGadget(#Container_0, 10, 10, 180, 120)
+    ButtonGadget(#BtnLeft, 10, 12, 70, 24, "Left")
+    ButtonGadget(#BtnRight, 90, 12, 70, 24, "Right")
+    SplitterGadget(#SplitMain, 10, 44, 150, 50, #BtnLeft, #BtnRight)
+  CloseGadgetList()
+EndProcedure
+`;
+  assert.equal(applyGadgetCopyPaste(new FakeTextDocument(splitterText).asTextDocument(), "#Container_0"), undefined);
+});
+
+test("pastes supported structural roots beyond plain ContainerGadget", () => {
+  const scrollText = `; Form Designer for PureBasic - 6.40 LTS
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #ScrMain
+  #BtnScroll
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 260, height = 180)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  ScrollAreaGadget(#ScrMain, 10, 10, 160, 100, 320, 240, 1)
+    ButtonGadget(#BtnScroll, 10, 12, 80, 24, "Scroll")
+  CloseGadgetList()
+EndProcedure
+`;
+  const patchedScroll = patch(scrollText, "#ScrMain");
+  assert.match(patchedScroll, /ScrollAreaGadget\(#ScrMain_Copy1, 10, 10, 160, 100, 320, 240, 1\)\s+    ButtonGadget\(#BtnScroll_Copy1, 10, 12, 80, 24, "Scroll"\)\s+  CloseGadgetList\(\)/s);
+
+  const frameText = `; Form Designer for PureBasic - 6.40 LTS
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #FrameHost
+  #BtnFrame
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 260, height = 180)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  FrameGadget(#FrameHost, 10, 10, 160, 100, "Group", #PB_Frame_Container)
+    ButtonGadget(#BtnFrame, 10, 12, 80, 24, "Frame")
+  CloseGadgetList()
+EndProcedure
+`;
+  const patchedFrame = patch(frameText, "#FrameHost");
+  assert.match(patchedFrame, /FrameGadget\(#FrameHost_Copy1, 10, 10, 160, 100, "Group", #PB_Frame_Container\)\s+    ButtonGadget\(#BtnFrame_Copy1, 10, 12, 80, 24, "Frame"\)\s+  CloseGadgetList\(\)/s);
 });

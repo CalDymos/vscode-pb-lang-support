@@ -68,7 +68,7 @@ function canDuplicatePersistedResizeLineFromContextMenu(gadget: GadgetContextMen
   return isIntegerLiteral(gadget.resizeYRaw) && isIntegerLiteral(gadget.resizeHRaw);
 }
 
-export function canCopyPasteGadgetFromContextMenu(gadget: GadgetContextMenuLike): boolean {
+function canCopyPasteSimpleGadgetFromContextMenu(gadget: GadgetContextMenuLike): boolean {
   return typeof gadget.kind === "string"
     && gadget.kind !== GADGET_KIND.CustomGadget
     && gadget.kind !== GADGET_KIND.SplitterGadget
@@ -76,8 +76,21 @@ export function canCopyPasteGadgetFromContextMenu(gadget: GadgetContextMenuLike)
     && !canHostInsertedGadgets({ kind: gadget.kind, flagsExpr: gadget.flagsExpr });
 }
 
+function canCopyPasteFirstScopeStructuralGadgetFromContextMenu(gadget: GadgetContextMenuLike): boolean {
+  return !gadget.resizeSource
+    && !gadget.splitterId
+    && (gadget.kind === GADGET_KIND.ContainerGadget
+      || gadget.kind === GADGET_KIND.ScrollAreaGadget
+      || (gadget.kind === GADGET_KIND.FrameGadget && canHostInsertedGadgets({ kind: gadget.kind, flagsExpr: gadget.flagsExpr })));
+}
+
+export function canCopyPasteGadgetFromContextMenu(gadget: GadgetContextMenuLike): boolean {
+  return canCopyPasteSimpleGadgetFromContextMenu(gadget)
+    || canCopyPasteFirstScopeStructuralGadgetFromContextMenu(gadget);
+}
+
 export function canDuplicateGadgetFromContextMenu(gadget: GadgetContextMenuLike): boolean {
-  return canCopyPasteGadgetFromContextMenu(gadget)
+  return canCopyPasteSimpleGadgetFromContextMenu(gadget)
     && canDuplicatePersistedResizeLineFromContextMenu(gadget);
 }
 

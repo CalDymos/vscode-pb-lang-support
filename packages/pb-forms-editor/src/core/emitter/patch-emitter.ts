@@ -2148,10 +2148,22 @@ function buildDuplicatedGadgetIdentity(gadget: Gadget, gadgets: readonly Gadget[
   return buildGadgetIdentityFromName(gadget, `${prefix}${nextIndex}`);
 }
 
-function buildCopiedPastedGadgetIdentity(gadget: Gadget, gadgets: readonly Gadget[]): ReturnType<typeof buildInsertedGadgetIdentity> {
-  const existing = collectExistingGadgetIdentityNames(gadgets);
+function buildCopiedPastedGadgetIdentityFromExisting(
+  gadget: Gadget,
+  existing: Set<string>
+): ReturnType<typeof buildInsertedGadgetIdentity> {
   const sourceName = stripPureBasicHash(gadget.variable || gadget.firstParam || gadget.id);
-  if (!sourceName) return buildDuplicatedGadgetIdentity(gadget, gadgets);
+  if (!sourceName) {
+    const sourceFallback = stripPureBasicHash(gadget.id) || "Gadget";
+    const fallbackPrefix = `${getDuplicateVariablePrefix(sourceFallback)}Copy`;
+    let fallbackIndex = 1;
+    while (existing.has(`${fallbackPrefix}${fallbackIndex}`)) {
+      fallbackIndex += 1;
+    }
+    const fallbackName = `${fallbackPrefix}${fallbackIndex}`;
+    existing.add(fallbackName);
+    return buildGadgetIdentityFromName(gadget, fallbackName);
+  }
 
   const prefix = `${sourceName}_Copy`;
   let nextIndex = 1;
@@ -2159,7 +2171,13 @@ function buildCopiedPastedGadgetIdentity(gadget: Gadget, gadgets: readonly Gadge
     nextIndex += 1;
   }
 
-  return buildGadgetIdentityFromName(gadget, `${prefix}${nextIndex}`);
+  const name = `${prefix}${nextIndex}`;
+  existing.add(name);
+  return buildGadgetIdentityFromName(gadget, name);
+}
+
+function buildCopiedPastedGadgetIdentity(gadget: Gadget, gadgets: readonly Gadget[]): ReturnType<typeof buildInsertedGadgetIdentity> {
+  return buildCopiedPastedGadgetIdentityFromExisting(gadget, collectExistingGadgetIdentityNames(gadgets));
 }
 
 function canDuplicatePersistedResizeLine(gadget: Gadget): boolean {
@@ -2248,6 +2266,132 @@ function buildCopiedPastedCallLine(
 }
 
 
+function isFirstScopeStructuralCopyPasteRoot(gadget: Gadget): boolean {
+  return gadget.kind === GADGET_KIND.ContainerGadget
+    || gadget.kind === GADGET_KIND.ScrollAreaGadget
+    || (gadget.kind === GADGET_KIND.FrameGadget && canHostInsertedGadgets(gadget));
+}
+
+function canPatchStructuralGadgetCopyPaste(gadget: Gadget, gadgets: readonly Gadget[]): boolean {
+  if (!isFirstScopeStructuralCopyPasteRoot(gadget)) return false;
+
+  const subtreeIds = collectRequestedGadgetDeleteIds(gadgets, gadget.id);
+  if (subtreeIds.size <= 1) return false;
+
+  for (const entry of gadgets) {
+    if (!subtreeIds.has(entry.id)) continue;
+    if (!isInsertableGadgetKind(entry.kind)) return false;
+    if (entry.kind === GADGET_KIND.SplitterGadget
+      || entry.kind === GADGET_KIND.PanelGadget
+      || entry.splitterId
+      || entry.resizeSource) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function canPatchGadgetCopyPaste(gadget: Gadget, gadgets: readonly Gadget[]): boolean {
+  return canPatchSimpleGadgetCopyPaste(gadget) || canPatchStructuralGadgetCopyPaste(gadget, gadgets);
+}
+
+function findCopiedPastedIdentityForReference(
+  gadgets: readonly Gadget[],
+  identityById: ReadonlyMap<string, ReturnType<typeof buildInsertedGadgetIdentity>>,
+  rawRef: string | undefined
+): ReturnType<typeof buildInsertedGadgetIdentity> | undefined {
+  const source = findGadgetByRawReference(gadgets, rawRef);
+  return source ? identityById.get(source.id) : undefined;
+}
+
+function buildCopiedPastedSubtreeCallLine(
+  document: vscode.TextDocument,
+  call: PbCall,
+  gadgets: readonly Gadget[],
+  identityById: ReadonlyMap<string, ReturnType<typeof buildInsertedGadgetIdentity>>
+): string | undefined {
+  const params = splitParams(call.args);
+  const nameLower = call.name.toLowerCase();
+  const indent = getLineIndent(document, call.range.line);
+
+  if (/gadget$/i.test(call.name)) {
+    const sourceId = stableKey(call.assignedVar, params);
+    const identity = sourceId ? identityById.get(sourceId) : undefined;
+    if (!identity || params.length < 1) return undefined;
+
+    params[0] = identity.idRaw;
+    const prefix = identity.assignedVar ? `${indent}${identity.assignedVar} = ` : indent;
+    return `${prefix}${call.name}(${params.join(", ")})`;
+  }
+
+  if (nameLower === "addgadgetitem"
+    || nameLower === "addgadgetcolumn"
+    || nameLower === "opengadgetlist"
+    || GADGET_PROPERTY_NAMES.has(nameLower)) {
+    const identity = findCopiedPastedIdentityForReference(gadgets, identityById, firstParamOfCall(call.args));
+    if (!identity || params.length < 1) return undefined;
+    params[0] = identity.id;
+    const prefix = call.assignedVar ? `${indent}${call.assignedVar} = ` : indent;
+    return `${prefix}${call.name}(${params.join(", ")})`;
+  }
+
+  return undefined;
+}
+
+function applyStructuralGadgetCopyPaste(
+  document: vscode.TextDocument,
+  parsed: ReturnType<typeof parseFormDocument>,
+  sourceGadget: Gadget,
+  calls: PbCall[]
+): vscode.WorkspaceEdit | undefined {
+  if (!canPatchStructuralGadgetCopyPaste(sourceGadget, parsed.gadgets)) return undefined;
+
+  const subtreeIds = collectRequestedGadgetDeleteIds(parsed.gadgets, sourceGadget.id);
+  const subtreeGadgets = parsed.gadgets
+    .filter(entry => subtreeIds.has(entry.id))
+    .sort((a, b) => (a.source?.line ?? Number.MAX_SAFE_INTEGER) - (b.source?.line ?? Number.MAX_SAFE_INTEGER));
+  if (!subtreeGadgets.length) return undefined;
+
+  const gadgetListParentIds = buildGadgetListParentIds(parsed.gadgets);
+  const copiedLines = collectMovedGadgetLineNumbers(calls, subtreeIds, gadgetListParentIds);
+  if (!copiedLines.size) return undefined;
+
+  const existingNames = collectExistingGadgetIdentityNames(parsed.gadgets);
+  const identityById = new Map<string, ReturnType<typeof buildInsertedGadgetIdentity>>();
+  for (const gadget of subtreeGadgets) {
+    identityById.set(gadget.id, buildCopiedPastedGadgetIdentityFromExisting(gadget, existingNames));
+  }
+
+  const replacements = new Map<number, string>();
+  for (const call of calls) {
+    if (!copiedLines.has(call.range.line)) continue;
+    const replacement = buildCopiedPastedSubtreeCallLine(document, call, parsed.gadgets, identityById);
+    if (replacement !== undefined) replacements.set(call.range.line, replacement);
+  }
+
+  const requiredCallLines = [...copiedLines].filter(line => {
+    const call = calls.find(entry => entry.range.line === line);
+    if (!call) return false;
+    return call.name.toLowerCase() !== "closegadgetlist";
+  });
+  if (requiredCallLines.some(line => !replacements.has(line))) return undefined;
+
+  const block = buildLineBlockWithReplacements(document, copiedLines, replacements);
+  if (!block.trim()) return undefined;
+
+  const insertLine = Math.max(...copiedLines) + 1;
+  const edit = new vscode.WorkspaceEdit();
+  edit.insert(document.uri, new vscode.Position(insertLine, 0), block);
+  const insertedStubs = subtreeGadgets.map(gadget => buildInsertedGadgetStub(
+    gadget.kind as InsertableGadgetKind,
+    identityById.get(gadget.id)!
+  ));
+  applyGadgetHeadPatchForGadgets(edit, document, [...parsed.gadgets, ...insertedStubs]);
+  return edit;
+}
+
+
 export function applyGadgetDuplicate(
   document: vscode.TextDocument,
   gadgetKey: string,
@@ -2312,9 +2456,13 @@ export function applyGadgetCopyPaste(
 ): vscode.WorkspaceEdit | undefined {
   const parsed = parseFormDocument(document.getText());
   const sourceGadget = parsed.gadgets.find(entry => entry.id === gadgetKey);
-  if (!sourceGadget || !canPatchSimpleGadgetCopyPaste(sourceGadget)) return undefined;
+  if (!sourceGadget || !canPatchGadgetCopyPaste(sourceGadget, parsed.gadgets)) return undefined;
 
   const calls = scanDocumentCalls(document, scanRange);
+  if (!canPatchSimpleGadgetCopyPaste(sourceGadget)) {
+    return applyStructuralGadgetCopyPaste(document, parsed, sourceGadget, calls);
+  }
+
   const createCall = findCallByStableKey(calls, gadgetKey, name => /gadget$/i.test(name));
   if (!createCall) return undefined;
 
