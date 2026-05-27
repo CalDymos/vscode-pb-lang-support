@@ -311,6 +311,7 @@ import {
 } from "../core/statusbar/image-inspector";
 import { getTopLevelSelectedImageInspectorConfig } from "../core/toplevel/image-inspector";
 import { resolveTopLevelCanvasContextMenuActions } from "../core/toplevel/context-menu";
+import { resolveGadgetCanvasContextMenuActions, type GadgetCanvasContextMenuAction } from "../core/gadget/context-menu";
 import type { DesignerTopLevelSelection, TopLevelCanvasContextMenuSelection } from "../core/toplevel/selection";
 
 import {
@@ -554,15 +555,6 @@ let splitterInsertDialogBackdropEl: HTMLDivElement | null = null;
 let selectParentDialogBackdropEl: HTMLDivElement | null = null;
 
 type PendingCanvasContextMenuActions = ReturnType<typeof resolveTopLevelCanvasContextMenuActions>;
-type GadgetCanvasContextMenuAction = {
-  kind: "deleteGadget";
-  label: "Delete Gadget…";
-  title: string;
-  enabled: boolean;
-  gadgetId: string;
-  confirmLabel: "Delete Gadget";
-  message: string;
-};
 type CanvasContextMenuAction = NonNullable<PendingCanvasContextMenuActions>[number] | GadgetCanvasContextMenuAction;
 type CanvasContextMenuSelection = DesignerTopLevelSelection | { kind: "gadget"; id: string };
 type CanvasContextMenuTarget = TopLevelCanvasContextMenuSelection | { kind: "gadget"; id: string };
@@ -3340,6 +3332,25 @@ function renderCanvasContextMenu(): void {
             confirmLabel: action.confirmLabel
           }, current.selection);
           return;
+        case "editGadgetItems": {
+          const gadget = model.gadgets.find(entry => entry.id === action.gadgetId);
+          if (!gadget) return;
+          const firstItem = (gadget.items ?? []).find(item => typeof item.source?.line === "number");
+          openGadgetItemEditor(gadget, firstItem);
+          selection = { kind: "gadget", id: gadget.id };
+          renderSelectionUiWithoutParentSelector();
+          return;
+        }
+        case "editGadgetColumns": {
+          const gadget = model.gadgets.find(entry => entry.id === action.gadgetId);
+          if (!gadget) return;
+          const columnIndex = (gadget.columns ?? []).findIndex(column => typeof column.source?.line === "number");
+          const firstColumn = columnIndex >= 0 ? gadget.columns?.[columnIndex] : undefined;
+          openGadgetColumnEditor(gadget, firstColumn, columnIndex >= 0 ? columnIndex : undefined);
+          selection = { kind: "gadget", id: gadget.id };
+          renderSelectionUiWithoutParentSelector();
+          return;
+        }
         case "deleteMenu":
           openDestructiveDialog({
             kind: "deleteMenu",
@@ -3464,17 +3475,10 @@ function resolveCanvasContextMenuActions(
     const gadget = model.gadgets.find(entry => entry.id === target.id);
     if (!gadget) return null;
 
-    const blockedReason = getGadgetDeleteBlockedReason(gadget);
-    const action = buildGadgetDeleteAction(gadget);
-    return [{
-      kind: "deleteGadget",
-      label: "Delete Gadget…",
-      title: blockedReason ?? "Delete the currently selected gadget.",
-      enabled: !blockedReason,
-      gadgetId: gadget.id,
-      confirmLabel: "Delete Gadget",
-      message: action?.message ?? `Delete gadget '${gadget.id}'?`
-    }];
+    return resolveGadgetCanvasContextMenuActions({
+      gadget,
+      deleteBlockedReason: getGadgetDeleteBlockedReason(gadget)
+    });
   }
 
   return resolveTopLevelCanvasContextMenuActions({
