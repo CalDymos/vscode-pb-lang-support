@@ -468,6 +468,61 @@ EndProcedure
   assert.equal(gadget?.y, 0);
 });
 
+test("reparents a normal gadget into a container-enabled FrameGadget", () => {
+  const text = `; Form Designer for PureBasic - 6.40
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #FrameHost
+  #BtnApply
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  FrameGadget(#FrameHost, 10, 10, 200, 120, "Group", #PB_Frame_Container)
+  CloseGadgetList()
+  ButtonGadget(#BtnApply, 24, 36, 90, 25, "Apply")
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyGadgetReparent(document, "#BtnApply", "#FrameHost")
+  );
+
+  assert.match(patchedText, /FrameGadget\(#FrameHost, 10, 10, 200, 120, "Group", #PB_Frame_Container\)[\s\S]*ButtonGadget\(#BtnApply, 0, 0, 90, 25, "Apply"\)[\s\S]*CloseGadgetList\(\)/);
+  const gadget = parsed.gadgets.find((g) => g.id === "#BtnApply");
+  assert.equal(gadget?.parentId, "#FrameHost");
+  assert.equal(gadget?.x, 0);
+  assert.equal(gadget?.y, 0);
+});
+
+test("rejects reparenting into a plain FrameGadget without #PB_Frame_Container", () => {
+  const text = `; Form Designer for PureBasic - 6.40
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #FramePlain
+  #BtnApply
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  FrameGadget(#FramePlain, 10, 10, 200, 120, "Group")
+  ButtonGadget(#BtnApply, 24, 36, 90, 25, "Apply")
+EndProcedure
+`;
+
+  const document = new FakeTextDocument(text).asTextDocument();
+  const edit = applyGadgetReparent(document, "#BtnApply", "#FramePlain");
+
+  assert.equal(edit, undefined);
+});
+
+
 test("reparents a gadget subtree into a panel tab", () => {
   const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
@@ -1395,6 +1450,109 @@ test("moves a newly linked splitter child out of its old parent block", () => {
   assert.equal(inner?.parentId, undefined);
   assert.equal(inner?.splitterId, "#SplitMain");
   assert.equal(box?.parentId, undefined);
+});
+
+
+test("rejects splitter reference updates with duplicate or self links", () => {
+  const text = [
+    "Enumeration FormWindow",
+    "  #FrmSplit",
+    "EndEnumeration",
+    "",
+    "Enumeration FormGadget",
+    "  #TxtLeft",
+    "  #TxtRight",
+    "  #SplitMain",
+    "EndEnumeration",
+    "",
+    "Procedure OpenFrmSplit()",
+    "  OpenWindow(#FrmSplit, 0, 0, 320, 220, \"Splitter\")",
+    "  StringGadget(#TxtLeft, 10, 40, 84, 120, \"Left\")",
+    "  StringGadget(#TxtRight, 101, 40, 159, 120, \"Right\")",
+    "  SplitterGadget(#SplitMain, 10, 40, 250, 120, #TxtLeft, #TxtRight)",
+    "EndProcedure",
+    "",
+  ].join("\n");
+
+  let document = new FakeTextDocument(text).asTextDocument();
+  let edit = applyGadgetOpenArgsUpdate(document, "#SplitMain", {
+    gadget2Raw: "#TxtLeft",
+  });
+  assert.equal(edit, undefined);
+
+  document = new FakeTextDocument(text).asTextDocument();
+  edit = applyGadgetOpenArgsUpdate(document, "#SplitMain", {
+    gadget1Raw: "#SplitMain",
+  });
+  assert.equal(edit, undefined);
+});
+
+test("rejects splitter reference updates with a child owned by another splitter", () => {
+  const text = [
+    "Enumeration FormWindow",
+    "  #FrmSplit",
+    "EndEnumeration",
+    "",
+    "Enumeration FormGadget",
+    "  #TxtLeft",
+    "  #TxtRight",
+    "  #TxtOwned",
+    "  #TxtOther",
+    "  #SplitOther",
+    "  #SplitMain",
+    "EndEnumeration",
+    "",
+    "Procedure OpenFrmSplit()",
+    "  OpenWindow(#FrmSplit, 0, 0, 420, 220, \"Splitter\")",
+    "  StringGadget(#TxtLeft, 10, 40, 84, 120, \"Left\")",
+    "  StringGadget(#TxtRight, 101, 40, 159, 120, \"Right\")",
+    "  StringGadget(#TxtOwned, 10, 170, 80, 24, \"Owned\")",
+    "  StringGadget(#TxtOther, 100, 170, 80, 24, \"Other\")",
+    "  SplitterGadget(#SplitOther, 10, 170, 180, 24, #TxtOwned, #TxtOther)",
+    "  SplitterGadget(#SplitMain, 10, 40, 250, 120, #TxtLeft, #TxtRight)",
+    "EndProcedure",
+    "",
+  ].join("\n");
+
+  const document = new FakeTextDocument(text).asTextDocument();
+  const edit = applyGadgetOpenArgsUpdate(document, "#SplitMain", {
+    gadget2Raw: "#TxtOwned",
+  });
+  assert.equal(edit, undefined);
+});
+
+test("rejects splitter reference updates when one child contains the other", () => {
+  const text = [
+    "Enumeration FormWindow",
+    "  #FrmSplit",
+    "EndEnumeration",
+    "",
+    "Enumeration FormGadget",
+    "  #Box",
+    "  #TxtInner",
+    "  #TxtLeft",
+    "  #TxtRight",
+    "  #SplitMain",
+    "EndEnumeration",
+    "",
+    "Procedure OpenFrmSplit()",
+    "  OpenWindow(#FrmSplit, 0, 0, 320, 220, \"Splitter\")",
+    "  ContainerGadget(#Box, 10, 10, 280, 70)",
+    "    StringGadget(#TxtInner, 8, 8, 120, 22, \"Inner\")",
+    "  CloseGadgetList()",
+    "  StringGadget(#TxtLeft, 10, 90, 84, 120, \"Left\")",
+    "  StringGadget(#TxtRight, 101, 90, 159, 120, \"Right\")",
+    "  SplitterGadget(#SplitMain, 10, 90, 250, 120, #TxtLeft, #TxtRight)",
+    "EndProcedure",
+    "",
+  ].join("\n");
+
+  const document = new FakeTextDocument(text).asTextDocument();
+  const edit = applyGadgetOpenArgsUpdate(document, "#SplitMain", {
+    gadget1Raw: "#Box",
+    gadget2Raw: "#TxtInner",
+  });
+  assert.equal(edit, undefined);
 });
 
 

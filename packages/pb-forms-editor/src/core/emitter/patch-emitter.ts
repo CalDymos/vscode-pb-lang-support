@@ -2309,13 +2309,14 @@ function appendSplitterLinkStructureEdit(
   const gadget2 = findGadgetByRawReference(parsed.gadgets, gadget2Raw);
   if (!gadget1 || !gadget2 || gadget1.id === gadget2.id) return false;
 
+  const childPairs: [Gadget, Gadget][] = [[gadget1, gadget2], [gadget2, gadget1]];
   const moveRoots: Gadget[] = [];
-  for (const child of [gadget1, gadget2]) {
+  for (const [child, otherChild] of childPairs) {
     if (child.id === splitter.id) return false;
     if (child.splitterId && child.splitterId !== splitter.id) return false;
 
     const childSubtreeIds = collectRequestedGadgetDeleteIds(parsed.gadgets, child.id);
-    if (childSubtreeIds.has(splitter.id)) return false;
+    if (childSubtreeIds.has(splitter.id) || childSubtreeIds.has(otherChild.id)) return false;
 
     if (shouldMoveSplitterChildBeforeOwner(splitter, child, splitterCall.range.line)
       && !moveRoots.some(entry => entry.id === child.id)) {

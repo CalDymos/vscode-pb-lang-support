@@ -11692,7 +11692,7 @@ function renderProps() {
     changeParentBtn.disabled = !canChangeParent;
     changeParentBtn.title = canChangeParent
       ? "Open the original-style Select Parent dialog for this gadget."
-      : "This first reparenting cut currently supports normal gadgets, but not SplitterGadget or CustomGadget.";
+      : "CustomGadget reparenting is blocked until an additional original-source proof exists.";
     changeParentBtn.onclick = () => {
       if (!canChangeParent) return;
       openSelectParentDialog(g);
