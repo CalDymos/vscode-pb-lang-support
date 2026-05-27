@@ -39,6 +39,75 @@ test("duplicates a simple #PB_Any gadget with a new assigned variable", () => {
   assert.equal(duplicated?.variable, "BtnApply_1");
 });
 
+
+test("duplicates a gadget with a safe horizontal ResizeGadget line", () => {
+  const text = `; Form Designer for PureBasic - 6.40 LTS
+
+Declare ResizeGadgetsFrmMain()
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #BtnApply
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  ButtonGadget(#BtnApply, 10, 20, 80, 24, "Apply")
+EndProcedure
+
+Procedure ResizeGadgetsFrmMain()
+  Protected FormWindowWidth, FormWindowHeight
+  FormWindowWidth = WindowWidth(#FrmMain)
+  FormWindowHeight = WindowHeight(#FrmMain)
+  ResizeGadget(#BtnApply, 10, 20, FormWindowWidth - 40, 24)
+EndProcedure
+`;
+
+  const patched = patch(text, "#BtnApply");
+  const parsed = parseFormDocument(patched);
+
+  assert.match(patched, /Enumeration FormGadget\s+  #BtnApply\s+  #BtnApply_1\s+EndEnumeration/s);
+  assert.match(patched, /ButtonGadget\(#BtnApply, 10, 20, 80, 24, "Apply"\)\s+  ButtonGadget\(#BtnApply_1, 10, 44, 80, 24, "Apply"\)/s);
+  assert.match(patched, /ResizeGadget\(#BtnApply, 10, 20, FormWindowWidth - 40, 24\)\s+  ResizeGadget\(#BtnApply_1, 10, 44, FormWindowWidth - 40, 24\)/s);
+
+  const duplicated = parsed.gadgets.find(gadget => gadget.id === "#BtnApply_1");
+  assert.equal(duplicated?.resizeYRaw, "44");
+  assert.equal(duplicated?.resizeWRaw, "FormWindowWidth - 40");
+});
+
+test("keeps Duplicate blocked for ResizeGadget lines with vertical formulas", () => {
+  const text = `; Form Designer for PureBasic - 6.40 LTS
+
+Declare ResizeGadgetsFrmMain()
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #BtnApply
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  ButtonGadget(#BtnApply, 10, 20, 80, 24, "Apply")
+EndProcedure
+
+Procedure ResizeGadgetsFrmMain()
+  Protected FormWindowWidth, FormWindowHeight
+  FormWindowWidth = WindowWidth(#FrmMain)
+  FormWindowHeight = WindowHeight(#FrmMain)
+  ResizeGadget(#BtnApply, 10, FormWindowHeight - 80, 80, 24)
+EndProcedure
+`;
+
+  const document = new FakeTextDocument(text);
+  assert.equal(applyGadgetDuplicate(document.asTextDocument(), "#BtnApply"), undefined);
+});
+
 test("does not duplicate splitter-bound or structural gadgets in the first Duplicate patch scope", () => {
   const text = `; Form Designer for PureBasic - 6.40 LTS\n\nEnumeration FormWindow\n  #FrmMain\nEndEnumeration\n\nEnumeration FormGadget\n  #Container_0\n  #BtnChild\nEndEnumeration\n\nProcedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)\n  OpenWindow(#FrmMain, x, y, width, height, \"Main\")\n  ContainerGadget(#Container_0, 10, 10, 140, 80)\n    ButtonGadget(#BtnChild, 10, 20, 80, 24, \"Child\")\n  CloseGadgetList()\nEndProcedure\n`;
 

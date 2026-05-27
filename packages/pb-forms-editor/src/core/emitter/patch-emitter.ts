@@ -2141,12 +2141,37 @@ function buildDuplicatedGadgetIdentity(gadget: Gadget, gadgets: readonly Gadget[
   };
 }
 
+function canDuplicatePersistedResizeLine(gadget: Gadget): boolean {
+  if (!gadget.resizeSource) return true;
+
+  // Horizontal resize persistence can be copied safely when the vertical position and height are literals.
+  return asNumber(gadget.resizeYRaw ?? "") !== undefined
+    && asNumber(gadget.resizeHRaw ?? "") !== undefined;
+}
+
 function canPatchSimpleGadgetDuplicate(gadget: Gadget): boolean {
   return isInsertableGadgetKind(gadget.kind)
     && gadget.kind !== GADGET_KIND.SplitterGadget
     && !gadget.splitterId
-    && !gadget.resizeSource
+    && canDuplicatePersistedResizeLine(gadget)
     && !canHostInsertedGadgets(gadget);
+}
+
+function buildDuplicatedResizeCallLine(
+  document: vscode.TextDocument,
+  call: PbCall,
+  sourceGadget: Gadget,
+  identity: ReturnType<typeof buildInsertedGadgetIdentity>
+): string | undefined {
+  const params = splitParams(call.args);
+  if (params.length < 5) return undefined;
+
+  const nextY = Math.trunc(sourceGadget.y + sourceGadget.h);
+  params[0] = identity.id;
+  params[2] = String(nextY);
+  params[4] = String(Math.trunc(sourceGadget.h));
+
+  return `${getLineIndent(document, call.range.line)}${call.name}(${params.join(", ")})`;
 }
 
 function buildDuplicatedCallLine(
@@ -2214,9 +2239,20 @@ export function applyGadgetDuplicate(
   }
   if (!duplicatedLines.length) return undefined;
 
+  const resizeCall = sourceGadget.resizeSource
+    ? findCallByStableKey(calls, gadgetKey, name => name === "ResizeGadget")
+    : undefined;
+  const duplicatedResizeLine = resizeCall
+    ? buildDuplicatedResizeCallLine(document, resizeCall, sourceGadget, identity)
+    : undefined;
+  if (sourceGadget.resizeSource && (!resizeCall || !duplicatedResizeLine)) return undefined;
+
   const insertLine = Math.max(...relatedCalls.map(call => call.range.line)) + 1;
   const edit = new vscode.WorkspaceEdit();
   edit.insert(document.uri, new vscode.Position(insertLine, 0), `${duplicatedLines.join("\n")}\n`);
+  if (resizeCall && duplicatedResizeLine) {
+    edit.insert(document.uri, new vscode.Position(resizeCall.range.line + 1, 0), `${duplicatedResizeLine}\n`);
+  }
   applyGadgetHeadPatchForGadgets(edit, document, [...parsed.gadgets, buildInsertedGadgetStub(sourceGadget.kind as InsertableGadgetKind, identity)]);
   return edit;
 }

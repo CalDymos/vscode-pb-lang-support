@@ -8,6 +8,8 @@ export type GadgetContextMenuLike = {
   flagsExpr?: string;
   splitterId?: string;
   resizeSource?: unknown;
+  resizeYRaw?: string;
+  resizeHRaw?: string;
 };
 
 export type GadgetCanvasContextMenuUnsupportedOriginalActionKind =
@@ -58,12 +60,22 @@ export type GadgetCanvasContextMenuAction =
       gadgetId: string;
     };
 
+function isIntegerLiteral(raw: string | undefined): boolean {
+  return typeof raw === "string" && /^-?\d+$/.test(raw.trim());
+}
+
+function canDuplicatePersistedResizeLineFromContextMenu(gadget: GadgetContextMenuLike): boolean {
+  if (!gadget.resizeSource) return true;
+
+  return isIntegerLiteral(gadget.resizeYRaw) && isIntegerLiteral(gadget.resizeHRaw);
+}
+
 export function canDuplicateGadgetFromContextMenu(gadget: GadgetContextMenuLike): boolean {
   return typeof gadget.kind === "string"
     && gadget.kind !== GADGET_KIND.CustomGadget
     && gadget.kind !== GADGET_KIND.SplitterGadget
     && !gadget.splitterId
-    && !gadget.resizeSource
+    && canDuplicatePersistedResizeLineFromContextMenu(gadget)
     && !canHostInsertedGadgets({ kind: gadget.kind, flagsExpr: gadget.flagsExpr });
 }
 

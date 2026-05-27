@@ -87,6 +87,7 @@ test("gadget context menu keeps Duplicate blocked for structural gadget kinds ou
     { id: "#SplitMain", kind: "SplitterGadget" },
     { id: "#PanelMain", kind: "PanelGadget" },
     { id: "#Child", kind: "ButtonGadget", splitterId: "#SplitMain" },
+    { id: "#BottomLocked", kind: "ButtonGadget", resizeSource: { line: 12 }, resizeYRaw: "FormWindowHeight - 80", resizeHRaw: "24" },
   ]) {
     const actions = resolveGadgetCanvasContextMenuActions({ gadget });
     const duplicateAction = actions.find(action => action.kind === "duplicateGadget");
@@ -94,4 +95,20 @@ test("gadget context menu keeps Duplicate blocked for structural gadget kinds ou
     assert.equal(duplicateAction.enabled, false);
     assert.match(duplicateAction.title, /not implemented for this gadget structure yet/i);
   }
+});
+
+test("gadget context menu enables Duplicate for safe horizontal ResizeGadget persistence", () => {
+  const actions = resolveGadgetCanvasContextMenuActions({
+    gadget: {
+      id: "#StretchWidth",
+      kind: "ButtonGadget",
+      resizeSource: { line: 12 },
+      resizeYRaw: "20",
+      resizeHRaw: "24",
+    }
+  });
+
+  const duplicateAction = actions.find(action => action.kind === "duplicateGadget");
+  if (!duplicateAction) throw new Error("Expected Duplicate to stay visible.");
+  assert.equal(duplicateAction.enabled, true);
 });
