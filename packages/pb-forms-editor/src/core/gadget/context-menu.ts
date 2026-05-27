@@ -14,8 +14,6 @@ export type GadgetContextMenuLike = {
 
 export type GadgetCanvasContextMenuUnsupportedOriginalActionKind =
   | "cutGadget"
-  | "copyGadget"
-  | "pasteGadget"
   | "alignGadgetLeft"
   | "alignGadgetTop"
   | "alignGadgetWidth"
@@ -32,8 +30,8 @@ export type GadgetCanvasContextMenuAction =
       message: string;
     }
   | {
-      kind: "duplicateGadget";
-      label: "Duplicate";
+      kind: "copyGadget" | "pasteGadget" | "duplicateGadget";
+      label: "Copy" | "Paste" | "Duplicate";
       title: string;
       enabled: boolean;
       gadgetId: string;
@@ -70,21 +68,55 @@ function canDuplicatePersistedResizeLineFromContextMenu(gadget: GadgetContextMen
   return isIntegerLiteral(gadget.resizeYRaw) && isIntegerLiteral(gadget.resizeHRaw);
 }
 
-export function canDuplicateGadgetFromContextMenu(gadget: GadgetContextMenuLike): boolean {
+export function canCopyPasteGadgetFromContextMenu(gadget: GadgetContextMenuLike): boolean {
   return typeof gadget.kind === "string"
     && gadget.kind !== GADGET_KIND.CustomGadget
     && gadget.kind !== GADGET_KIND.SplitterGadget
     && !gadget.splitterId
-    && canDuplicatePersistedResizeLineFromContextMenu(gadget)
     && !canHostInsertedGadgets({ kind: gadget.kind, flagsExpr: gadget.flagsExpr });
+}
+
+export function canDuplicateGadgetFromContextMenu(gadget: GadgetContextMenuLike): boolean {
+  return canCopyPasteGadgetFromContextMenu(gadget)
+    && canDuplicatePersistedResizeLineFromContextMenu(gadget);
+}
+
+function buildClipboardOriginalActions(args: {
+  gadget: GadgetContextMenuLike;
+  copiedGadgetId?: string;
+  canPasteCopiedGadget?: boolean;
+}): GadgetCanvasContextMenuAction[] {
+  const { gadget, copiedGadgetId } = args;
+  const copyEnabled = canCopyPasteGadgetFromContextMenu(gadget);
+  const pasteEnabled = Boolean(copiedGadgetId && args.canPasteCopiedGadget);
+  return [
+    {
+      kind: "copyGadget",
+      label: "Copy",
+      title: copyEnabled
+        ? "Copy the currently selected gadget for a later Paste command."
+        : "This original Form Designer popup command is visible, but its patch path is not implemented for this gadget structure yet.",
+      enabled: copyEnabled,
+      gadgetId: gadget.id,
+    },
+    {
+      kind: "pasteGadget",
+      label: "Paste",
+      title: pasteEnabled
+        ? "Paste the copied gadget into the current form."
+        : copiedGadgetId
+          ? "The copied gadget can no longer be pasted with the current safe patch scope."
+          : "Copy a supported gadget before using Paste.",
+      enabled: pasteEnabled,
+      gadgetId: copiedGadgetId ?? gadget.id,
+    },
+  ];
 }
 
 function buildUnsupportedOriginalActions(gadgetId: string): GadgetCanvasContextMenuAction[] {
   const title = "This original Form Designer popup command is visible, but its patch path is not implemented yet.";
   return [
     { kind: "cutGadget", label: "Cut", title, enabled: false, gadgetId },
-    { kind: "copyGadget", label: "Copy", title, enabled: false, gadgetId },
-    { kind: "pasteGadget", label: "Paste", title, enabled: false, gadgetId },
     { kind: "alignGadgetLeft", label: "Align Left", title, enabled: false, gadgetId },
     { kind: "alignGadgetTop", label: "Align Top", title, enabled: false, gadgetId },
     { kind: "alignGadgetWidth", label: "Align Width", title, enabled: false, gadgetId },
@@ -108,6 +140,8 @@ function buildDuplicateAction(gadget: GadgetContextMenuLike): GadgetCanvasContex
 export function resolveGadgetCanvasContextMenuActions(args: {
   gadget: GadgetContextMenuLike;
   deleteBlockedReason?: string;
+  copiedGadgetId?: string;
+  canPasteCopiedGadget?: boolean;
 }): GadgetCanvasContextMenuAction[] {
   const { gadget } = args;
   const actions: GadgetCanvasContextMenuAction[] = [
@@ -122,6 +156,11 @@ export function resolveGadgetCanvasContextMenuActions(args: {
     }
   ];
 
+  actions.push(...buildClipboardOriginalActions({
+    gadget,
+    copiedGadgetId: args.copiedGadgetId,
+    canPasteCopiedGadget: args.canPasteCopiedGadget,
+  }));
   actions.push(...buildUnsupportedOriginalActions(gadget.id));
   actions.push(buildDuplicateAction(gadget));
 

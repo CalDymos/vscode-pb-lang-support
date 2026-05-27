@@ -2101,7 +2101,7 @@ function getDuplicateVariablePrefix(name: string): string {
   return clean.slice(0, clean.lastIndexOf("_") + 1);
 }
 
-function buildDuplicatedGadgetIdentity(gadget: Gadget, gadgets: readonly Gadget[]): ReturnType<typeof buildInsertedGadgetIdentity> {
+function collectExistingGadgetIdentityNames(gadgets: readonly Gadget[]): Set<string> {
   const existing = new Set<string>();
   for (const entry of gadgets) {
     for (const candidate of [entry.variable, entry.firstParam, entry.id]) {
@@ -2109,15 +2109,10 @@ function buildDuplicatedGadgetIdentity(gadget: Gadget, gadgets: readonly Gadget[
       if (clean.length) existing.add(clean);
     }
   }
+  return existing;
+}
 
-  const sourceName = gadget.variable || gadget.firstParam || gadget.id;
-  const prefix = getDuplicateVariablePrefix(sourceName);
-  let nextIndex = 1;
-  while (existing.has(`${prefix}${nextIndex}`)) {
-    nextIndex += 1;
-  }
-
-  const name = `${prefix}${nextIndex}`;
+function buildGadgetIdentityFromName(gadget: Gadget, name: string): ReturnType<typeof buildInsertedGadgetIdentity> {
   if (gadget.pbAny) {
     return {
       name,
@@ -2141,6 +2136,32 @@ function buildDuplicatedGadgetIdentity(gadget: Gadget, gadgets: readonly Gadget[
   };
 }
 
+function buildDuplicatedGadgetIdentity(gadget: Gadget, gadgets: readonly Gadget[]): ReturnType<typeof buildInsertedGadgetIdentity> {
+  const existing = collectExistingGadgetIdentityNames(gadgets);
+  const sourceName = gadget.variable || gadget.firstParam || gadget.id;
+  const prefix = getDuplicateVariablePrefix(sourceName);
+  let nextIndex = 1;
+  while (existing.has(`${prefix}${nextIndex}`)) {
+    nextIndex += 1;
+  }
+
+  return buildGadgetIdentityFromName(gadget, `${prefix}${nextIndex}`);
+}
+
+function buildCopiedPastedGadgetIdentity(gadget: Gadget, gadgets: readonly Gadget[]): ReturnType<typeof buildInsertedGadgetIdentity> {
+  const existing = collectExistingGadgetIdentityNames(gadgets);
+  const sourceName = stripPureBasicHash(gadget.variable || gadget.firstParam || gadget.id);
+  if (!sourceName) return buildDuplicatedGadgetIdentity(gadget, gadgets);
+
+  const prefix = `${sourceName}_Copy`;
+  let nextIndex = 1;
+  while (existing.has(`${prefix}${nextIndex}`)) {
+    nextIndex += 1;
+  }
+
+  return buildGadgetIdentityFromName(gadget, `${prefix}${nextIndex}`);
+}
+
 function canDuplicatePersistedResizeLine(gadget: Gadget): boolean {
   if (!gadget.resizeSource) return true;
 
@@ -2154,6 +2175,13 @@ function canPatchSimpleGadgetDuplicate(gadget: Gadget): boolean {
     && gadget.kind !== GADGET_KIND.SplitterGadget
     && !gadget.splitterId
     && canDuplicatePersistedResizeLine(gadget)
+    && !canHostInsertedGadgets(gadget);
+}
+
+function canPatchSimpleGadgetCopyPaste(gadget: Gadget): boolean {
+  return isInsertableGadgetKind(gadget.kind)
+    && gadget.kind !== GADGET_KIND.SplitterGadget
+    && !gadget.splitterId
     && !canHostInsertedGadgets(gadget);
 }
 
@@ -2199,6 +2227,26 @@ function buildDuplicatedCallLine(
   params[0] = identity.id;
   return `${indent}${call.name}(${params.join(", ")})`;
 }
+function buildCopiedPastedCallLine(
+  document: vscode.TextDocument,
+  call: PbCall,
+  identity: ReturnType<typeof buildInsertedGadgetIdentity>,
+  isCreateCall: boolean
+): string | undefined {
+  const params = splitParams(call.args);
+  if (!params.length) return undefined;
+
+  const indent = getLineIndent(document, call.range.line);
+  if (isCreateCall) {
+    params[0] = identity.idRaw;
+    const prefix = identity.assignedVar ? `${indent}${identity.assignedVar} = ` : indent;
+    return `${prefix}${call.name}(${params.join(", ")})`;
+  }
+
+  params[0] = identity.id;
+  return `${indent}${call.name}(${params.join(", ")})`;
+}
+
 
 export function applyGadgetDuplicate(
   document: vscode.TextDocument,
@@ -2252,6 +2300,63 @@ export function applyGadgetDuplicate(
   edit.insert(document.uri, new vscode.Position(insertLine, 0), `${duplicatedLines.join("\n")}\n`);
   if (resizeCall && duplicatedResizeLine) {
     edit.insert(document.uri, new vscode.Position(resizeCall.range.line + 1, 0), `${duplicatedResizeLine}\n`);
+  }
+  applyGadgetHeadPatchForGadgets(edit, document, [...parsed.gadgets, buildInsertedGadgetStub(sourceGadget.kind as InsertableGadgetKind, identity)]);
+  return edit;
+}
+
+export function applyGadgetCopyPaste(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const sourceGadget = parsed.gadgets.find(entry => entry.id === gadgetKey);
+  if (!sourceGadget || !canPatchSimpleGadgetCopyPaste(sourceGadget)) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const createCall = findCallByStableKey(calls, gadgetKey, name => /gadget$/i.test(name));
+  if (!createCall) return undefined;
+
+  const proc = findProcedureBlock(document, createCall.range.line);
+  if (!proc) return undefined;
+
+  const identity = buildCopiedPastedGadgetIdentity(sourceGadget, parsed.gadgets);
+  const relatedCalls = calls
+    .filter(call => call.range.line >= proc.startLine && call.range.line <= proc.endLine)
+    .filter(call => {
+      if (call.range.line === createCall.range.line) return true;
+      const nameLower = call.name.toLowerCase();
+      if (nameLower !== "addgadgetitem"
+        && nameLower !== "addgadgetcolumn"
+        && !GADGET_PROPERTY_NAMES.has(nameLower)) {
+        return false;
+      }
+      return firstParamOfCall(call.args) === sourceGadget.id;
+    })
+    .sort((a, b) => a.range.line - b.range.line);
+
+  const copiedLines: string[] = [];
+  for (const call of relatedCalls) {
+    const line = buildCopiedPastedCallLine(document, call, identity, call.range.line === createCall.range.line);
+    if (!line) return undefined;
+    copiedLines.push(line);
+  }
+  if (!copiedLines.length) return undefined;
+
+  const resizeCall = sourceGadget.resizeSource
+    ? findCallByStableKey(calls, gadgetKey, name => name === "ResizeGadget")
+    : undefined;
+  const copiedResizeLine = resizeCall
+    ? buildCopiedPastedCallLine(document, resizeCall, identity, false)
+    : undefined;
+  if (sourceGadget.resizeSource && (!resizeCall || !copiedResizeLine)) return undefined;
+
+  const insertLine = Math.max(...relatedCalls.map(call => call.range.line)) + 1;
+  const edit = new vscode.WorkspaceEdit();
+  edit.insert(document.uri, new vscode.Position(insertLine, 0), `${copiedLines.join("\n")}\n`);
+  if (resizeCall && copiedResizeLine) {
+    edit.insert(document.uri, new vscode.Position(resizeCall.range.line + 1, 0), `${copiedResizeLine}\n`);
   }
   applyGadgetHeadPatchForGadgets(edit, document, [...parsed.gadgets, buildInsertedGadgetStub(sourceGadget.kind as InsertableGadgetKind, identity)]);
   return edit;

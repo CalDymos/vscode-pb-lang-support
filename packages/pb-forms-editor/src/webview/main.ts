@@ -571,6 +571,7 @@ let canvasContextMenuEl: HTMLDivElement | null = null;
 let canvasContextMenuIgnoreMouseDownTimeStamp: number | null = null;
 
 const expanded = new Map<string, boolean>();
+let copiedGadgetId: string | null = null;
 const panelActiveItems = new Map<string, number>();
 const scrollAreaOffsets = new Map<string, { x: number; y: number }>();
 
@@ -3332,6 +3333,16 @@ function renderCanvasContextMenu(): void {
             confirmLabel: action.confirmLabel
           }, current.selection);
           return;
+        case "copyGadget":
+          copiedGadgetId = action.gadgetId;
+          selection = { kind: "gadget", id: action.gadgetId };
+          renderSelectionUiWithoutParentSelector();
+          return;
+        case "pasteGadget":
+          post({ type: WEBVIEW_TO_EXT_MSG_TYPE.pasteCopiedGadget, id: action.gadgetId });
+          selection = { kind: "gadget", id: action.gadgetId };
+          renderSelectionUiWithoutParentSelector();
+          return;
         case "duplicateGadget":
           post({ type: WEBVIEW_TO_EXT_MSG_TYPE.duplicateGadget, id: action.gadgetId });
           selection = { kind: "gadget", id: action.gadgetId };
@@ -3480,9 +3491,12 @@ function resolveCanvasContextMenuActions(
     const gadget = model.gadgets.find(entry => entry.id === target.id);
     if (!gadget) return null;
 
+    const copiedGadget = copiedGadgetId ? model.gadgets.find(entry => entry.id === copiedGadgetId) : undefined;
     return resolveGadgetCanvasContextMenuActions({
       gadget,
-      deleteBlockedReason: getGadgetDeleteBlockedReason(gadget)
+      deleteBlockedReason: getGadgetDeleteBlockedReason(gadget),
+      copiedGadgetId: copiedGadget?.id,
+      canPasteCopiedGadget: Boolean(copiedGadget),
     });
   }
 

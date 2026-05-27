@@ -9,6 +9,7 @@ import {
   applyGadgetColumnUpdate,
   applyGadgetDeleteWithImageCleanup,
   applyGadgetDuplicate,
+  applyGadgetCopyPaste,
   applyGadgetInsert,
   applyGadgetReparent,
   applyGadgetOpenArgsUpdate,
@@ -989,6 +990,12 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         case WEBVIEW_TO_EXT_MSG_TYPE.duplicateGadget: {
           const edit = applyGadgetDuplicate(document, msg.id, sr);
           await applyEditOrError(edit, `Could not duplicate gadget '${msg.id}'. No safe duplicate path found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.pasteCopiedGadget: {
+          const edit = applyGadgetCopyPaste(document, msg.id, sr);
+          await applyEditOrError(edit, `Could not paste copied gadget '${msg.id}'. No safe paste path found${rangeInfo}.`);
           return;
         }
 

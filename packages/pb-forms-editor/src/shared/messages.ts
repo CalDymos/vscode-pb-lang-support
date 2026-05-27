@@ -46,6 +46,7 @@ export const WEBVIEW_TO_EXT_MSG_TYPE = {
   reparentGadget: "reparentGadget",
   deleteGadget: "deleteGadget",
   duplicateGadget: "duplicateGadget",
+  pasteCopiedGadget: "pasteCopiedGadget",
   insertGadgetItem: "insertGadgetItem",
   updateGadgetItem: "updateGadgetItem",
   deleteGadgetItem: "deleteGadgetItem",
@@ -151,6 +152,7 @@ export type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.reparentGadget; id: string; parentId?: string; parentItem?: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadget; id: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.duplicateGadget; id: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.pasteCopiedGadget; id: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadgetItem; id: string; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateGadgetItem; id: string; sourceLine: number; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadgetItem; id: string; sourceLine: number }
