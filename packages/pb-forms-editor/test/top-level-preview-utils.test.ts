@@ -27,6 +27,7 @@ import {
   getMenuFlyoutShortcutOpacity,
   getMenuEntrySourceLine,
   getMenuEntryMoveTarget,
+  getLinearTopLevelEntryMoveTarget,
   getMenuEntryRect,
   getMenuFlyoutPanelRect,
   getMenuFooterRect,
@@ -735,6 +736,78 @@ test("resolves menu move targets from visible flyout entries", () => {
   );
 });
 
+
+
+test("resolves linear top-level entry move targets at item edges", () => {
+  const rects = [
+    { ownerId: "tb-1", index: 0, x: 10, y: 20, w: 16, h: 16 },
+    { ownerId: "tb-1", index: 1, x: 32, y: 20, w: 16, h: 16 },
+    { ownerId: "tb-1", index: 2, x: 54, y: 20, w: 10, h: 16 },
+  ];
+  const sourceLines = [100, 101, 102];
+
+  assert.deepEqual(
+    getLinearTopLevelEntryMoveTarget({
+      sourceEntryIndex: 2,
+      x: 11,
+      y: 25,
+      entryRects: rects,
+      getSourceLine: index => sourceLines[index]
+    }),
+    {
+      targetSourceLine: 100,
+      placement: "before",
+      indicatorRect: { x: 9, y: 20, w: 2, h: 16 },
+      indicatorOrientation: "vertical"
+    }
+  );
+
+  assert.deepEqual(
+    getLinearTopLevelEntryMoveTarget({
+      sourceEntryIndex: 0,
+      x: 66,
+      y: 25,
+      entryRects: rects,
+      getSourceLine: index => sourceLines[index]
+    }),
+    {
+      targetSourceLine: 102,
+      placement: "after",
+      indicatorRect: { x: 64, y: 20, w: 2, h: 16 },
+      indicatorOrientation: "vertical"
+    }
+  );
+});
+
+test("ignores linear top-level moves onto the source edge", () => {
+  const rects = [
+    { ownerId: "sb-1", index: 0, x: 10, y: 50, w: 80, h: 18 },
+    { ownerId: "sb-1", index: 1, x: 90, y: 50, w: 120, h: 18 },
+  ];
+
+  assert.equal(
+    getLinearTopLevelEntryMoveTarget({
+      sourceEntryIndex: 0,
+      x: 11,
+      y: 55,
+      entryRects: rects,
+      getSourceLine: index => 200 + index
+    }),
+    null
+  );
+
+  assert.equal(
+    getLinearTopLevelEntryMoveTarget({
+      sourceEntryIndex: 0,
+      x: 91,
+      y: 55,
+      entryRects: rects,
+      getSourceLine: index => 200 + index,
+      isNoopMove: (targetIndex, placement) => targetIndex === 1 && placement === "before"
+    }),
+    null
+  );
+});
 
 test("treats toolbar image buttons with iconRaw 0 as empty preview buttons", () => {
   assert.equal(hasToolBarPreviewAssignedImage({ kind: "ToolBarImageButton", iconRaw: "0" }), false);

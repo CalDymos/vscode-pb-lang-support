@@ -36,11 +36,13 @@ import {
   applyStatusBarFieldDelete,
   applyStatusBarFieldDeleteWithImageCleanup,
   applyStatusBarFieldInsert,
+  applyStatusBarFieldMove,
   applyStatusBarFieldUpdate,
   applyToolBarDelete,
   applyToolBarEntryDelete,
   applyToolBarEntryEventUpdate,
   applyToolBarEntryInsert,
+  applyToolBarEntryMove,
   applyToolBarEntryTooltipSet,
   applyToolBarEntryUpdate,
   applyWindowEnumValuePatch,
@@ -1124,6 +1126,20 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           return;
         }
 
+        case WEBVIEW_TO_EXT_MSG_TYPE.moveToolBarEntry: {
+          if (!ensureToolBarEntryKind(msg.kind)) return;
+          const edit = applyToolBarEntryMove(
+            document,
+            msg.toolBarId,
+            msg.sourceLine,
+            msg.kind as any,
+            { targetSourceLine: msg.targetSourceLine, placement: msg.placement },
+            sr
+          );
+          await applyEditOrError(edit, `Could not move toolbar entry for toolbar '${msg.toolBarId}'. No matching structural move target found${rangeInfo}.`);
+          return;
+        }
+
         case WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBarEntry: {
           if (!ensureToolBarEntryKind(msg.kind)) return;
           const currentModel = parseFormDocument(document.getText());
@@ -1185,6 +1201,21 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           await applyEditOrError(
             edit,
             `Could not update statusbar field for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`
+          );
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.moveStatusBarField: {
+          const edit = applyStatusBarFieldMove(
+            document,
+            msg.statusBarId,
+            msg.sourceLine,
+            { targetSourceLine: msg.targetSourceLine, placement: msg.placement },
+            sr
+          );
+          await applyEditOrError(
+            edit,
+            `Could not move statusbar field for statusbar '${msg.statusBarId}'. No matching structural move target found${rangeInfo}.`
           );
           return;
         }

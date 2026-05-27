@@ -77,10 +77,12 @@ import {
 } from "../core/statusbar/inspector";
 import {
   type MenuEntryMoveTargetLike,
+  type LinearTopLevelEntryMoveTargetLike,
   canEditToolBarTooltip,
   deriveWindows7MenuBarPalette,
   getDefaultMenuItemInsertArgs,
   getMenuEntryMoveTarget,
+  getLinearTopLevelEntryMoveTarget,
   getMenuEntryRect,
   getMenuFlyoutAnchorRect,
   getMenuFlyoutPanelRect,
@@ -2535,6 +2537,27 @@ type DragState =
       moveTarget: MenuEntryMoveTargetLike | null;
     }
   | {
+      target: "toolBarEntry";
+      toolBarId: string;
+      entryIndex: number;
+      sourceLine: number;
+      kind: string;
+      startMx: number;
+      startMy: number;
+      moved: boolean;
+      moveTarget: LinearTopLevelEntryMoveTargetLike | null;
+    }
+  | {
+      target: "statusBarField";
+      statusBarId: string;
+      fieldIndex: number;
+      sourceLine: number;
+      startMx: number;
+      startMy: number;
+      moved: boolean;
+      moveTarget: LinearTopLevelEntryMoveTargetLike | null;
+    }
+  | {
       target: "scrollArea";
       axis: "x" | "y";
       id: string;
@@ -3681,6 +3704,51 @@ canvas.addEventListener("mousedown", (e) => {
       }
     }
 
+    if (topLevelChromeHit.selection.kind === "toolBarEntry") {
+      const toolBarSel = topLevelChromeHit.selection;
+      const toolBar = (model.toolbars ?? []).find(entry => entry.id === toolBarSel.toolBarId);
+      const entry = toolBar?.entries?.[toolBarSel.entryIndex];
+      const sourceLine = entry?.source?.line;
+      if (toolBar && entry && typeof sourceLine === "number") {
+        drag = {
+          target: "toolBarEntry",
+          toolBarId: toolBar.id,
+          entryIndex: toolBarSel.entryIndex,
+          sourceLine,
+          kind: entry.kind,
+          startMx: mx,
+          startMy: my,
+          moved: false,
+          moveTarget: null
+        };
+        canvas.style.cursor = "move";
+        renderSelectionUiWithoutParentSelector();
+        return;
+      }
+    }
+
+    if (topLevelChromeHit.selection.kind === "statusBarField") {
+      const statusBarSel = topLevelChromeHit.selection;
+      const statusBar = (model.statusbars ?? []).find(entry => entry.id === statusBarSel.statusBarId);
+      const field = statusBar?.fields?.[statusBarSel.fieldIndex];
+      const sourceLine = field?.source?.line;
+      if (statusBar && field && typeof sourceLine === "number") {
+        drag = {
+          target: "statusBarField",
+          statusBarId: statusBar.id,
+          fieldIndex: statusBarSel.fieldIndex,
+          sourceLine,
+          startMx: mx,
+          startMy: my,
+          moved: false,
+          moveTarget: null
+        };
+        canvas.style.cursor = "move";
+        renderSelectionUiWithoutParentSelector();
+        return;
+      }
+    }
+
     drag = null;
     canvas.style.cursor = "default";
     renderSelectionUiWithoutParentSelector();
@@ -3959,6 +4027,63 @@ window.addEventListener("mousemove", (e) => {
     return;
   }
 
+  if (d.target === "toolBarEntry") {
+    const moved = Math.abs(dx) > 3 || Math.abs(dy) > 3;
+    d.moved = moved;
+    if (moved) {
+      const toolBar = (model.toolbars ?? []).find(entry => entry.id === d.toolBarId);
+      const entryRects = toolBarEntryPreviewRects.filter(rect => rect.ownerId === d.toolBarId);
+      d.moveTarget = toolBar ? getLinearTopLevelEntryMoveTarget({
+        sourceEntryIndex: d.entryIndex,
+        x: mx,
+        y: my,
+        entryRects,
+        getSourceLine: index => toolBar.entries?.[index]?.source?.line,
+        isNoopMove: (targetIndex, placement) => {
+          const sourceEndIndex = getToolBarEntryMoveBlockEndIndex(toolBar, d.entryIndex);
+          const targetEndIndex = getToolBarEntryMoveBlockEndIndex(toolBar, targetIndex);
+          return getPredictedLinearMoveIndex(toolBar.entries?.length ?? 0, d.entryIndex, sourceEndIndex, targetIndex, targetEndIndex, placement) === null;
+        }
+      }) : null;
+    } else {
+      d.moveTarget = null;
+    }
+    canvas.style.cursor = moved ? "move" : "default";
+    render();
+    renderProps();
+    return;
+  }
+
+  if (d.target === "statusBarField") {
+    const moved = Math.abs(dx) > 3 || Math.abs(dy) > 3;
+    d.moved = moved;
+    if (moved) {
+      const statusBar = (model.statusbars ?? []).find(entry => entry.id === d.statusBarId);
+      const entryRects = statusBarFieldPreviewRects.filter(rect => rect.ownerId === d.statusBarId);
+      d.moveTarget = statusBar ? getLinearTopLevelEntryMoveTarget({
+        sourceEntryIndex: d.fieldIndex,
+        x: mx,
+        y: my,
+        entryRects,
+        getSourceLine: index => statusBar.fields?.[index]?.source?.line,
+        isNoopMove: (targetIndex, placement) => getPredictedLinearMoveIndex(
+          statusBar.fields?.length ?? 0,
+          d.fieldIndex,
+          d.fieldIndex,
+          targetIndex,
+          targetIndex,
+          placement
+        ) === null
+      }) : null;
+    } else {
+      d.moveTarget = null;
+    }
+    canvas.style.cursor = moved ? "move" : "default";
+    render();
+    renderProps();
+    return;
+  }
+
   if (d.target === "gadget") {
     const g = model.gadgets.find(it => it.id === d.id);
     if (!g) return;
@@ -4046,6 +4171,47 @@ window.addEventListener("mouseup", () => {
         menuId: d.menuId,
         sourceLine: d.sourceLine,
         kind: d.kind,
+        targetSourceLine: d.moveTarget.targetSourceLine,
+        placement: d.moveTarget.placement
+      });
+    }
+    drag = null;
+    canvas.style.cursor = "default";
+    renderSelectionUiWithoutParentSelector();
+    return;
+  }
+
+  if (d.target === "toolBarEntry") {
+    if (d.moved && d.moveTarget) {
+      const toolBar = (model.toolbars ?? []).find(entry => entry.id === d.toolBarId);
+      pendingToolBarEntrySelection = toolBar
+        ? buildPendingToolBarEntryMoveSelection(toolBar, d.entryIndex, d.moveTarget.targetSourceLine, d.moveTarget.placement)
+        : null;
+      post({
+        type: WEBVIEW_TO_EXT_MSG_TYPE.moveToolBarEntry,
+        toolBarId: d.toolBarId,
+        sourceLine: d.sourceLine,
+        kind: d.kind,
+        targetSourceLine: d.moveTarget.targetSourceLine,
+        placement: d.moveTarget.placement
+      });
+    }
+    drag = null;
+    canvas.style.cursor = "default";
+    renderSelectionUiWithoutParentSelector();
+    return;
+  }
+
+  if (d.target === "statusBarField") {
+    if (d.moved && d.moveTarget) {
+      const statusBar = (model.statusbars ?? []).find(entry => entry.id === d.statusBarId);
+      pendingStatusBarFieldSelection = statusBar
+        ? buildPendingStatusBarFieldMoveSelection(statusBar, d.fieldIndex, d.moveTarget.targetSourceLine, d.moveTarget.placement)
+        : null;
+      post({
+        type: WEBVIEW_TO_EXT_MSG_TYPE.moveStatusBarField,
+        statusBarId: d.statusBarId,
+        sourceLine: d.sourceLine,
         targetSourceLine: d.moveTarget.targetSourceLine,
         placement: d.moveTarget.placement
       });
@@ -7164,6 +7330,107 @@ function buildPendingMenuEntrySelection(
   };
 }
 
+
+function drawTopLevelMoveIndicator(ctx: CanvasRenderingContext2D, target: { indicatorRect: PreviewRect; indicatorOrientation: "horizontal" | "vertical" }): void {
+  const indicatorColor = getCssVar("--vscode-editorInfo-foreground") || "#0000ff";
+  const indicator = target.indicatorRect;
+  ctx.save();
+  ctx.strokeStyle = indicatorColor;
+  ctx.lineWidth = 2;
+  if (target.indicatorOrientation === "vertical") {
+    const x = indicator.x + Math.max(0, Math.trunc(indicator.w / 2));
+    ctx.beginPath();
+    ctx.moveTo(x + 0.5, indicator.y);
+    ctx.lineTo(x + 0.5, indicator.y + indicator.h);
+    ctx.stroke();
+  } else {
+    const y = indicator.y + Math.max(0, Math.trunc(indicator.h / 2));
+    ctx.beginPath();
+    ctx.moveTo(indicator.x, y + 0.5);
+    ctx.lineTo(indicator.x + indicator.w, y + 0.5);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function getToolBarEntryMoveBlockEndIndex(toolBar: FormToolBar, entryIndex: number): number {
+  const entry = toolBar.entries?.[entryIndex];
+  if (!entry || entry.kind === "ToolBarToolTip") return entryIndex;
+  const nextEntry = toolBar.entries?.[entryIndex + 1];
+  if (nextEntry?.kind === "ToolBarToolTip" && (nextEntry.idRaw?.trim() ?? "") === (entry.idRaw?.trim() ?? "")) {
+    return entryIndex + 1;
+  }
+  return entryIndex;
+}
+
+function getPredictedLinearMoveIndex(entryCount: number, sourceEntryIndex: number, sourceEndIndex: number, targetEntryIndex: number, targetEndIndex: number, placement: MenuEntryMovePlacement): number | null {
+  if (sourceEntryIndex < 0 || sourceEntryIndex >= entryCount) return null;
+  if (targetEntryIndex < 0 || targetEntryIndex >= entryCount) return null;
+
+  let insertIndex = placement === "before" ? targetEntryIndex : targetEndIndex + 1;
+  if (insertIndex >= sourceEntryIndex && insertIndex <= sourceEndIndex + 1) return null;
+
+  if (sourceEntryIndex < insertIndex) {
+    insertIndex -= sourceEndIndex - sourceEntryIndex + 1;
+  }
+  return Math.max(0, insertIndex);
+}
+
+function buildPendingToolBarEntryMoveSelection(
+  toolBar: FormToolBar,
+  sourceEntryIndex: number,
+  targetSourceLine: number,
+  placement: MenuEntryMovePlacement
+): PendingToolBarEntrySelection | null {
+  const sourceEntry = toolBar.entries?.[sourceEntryIndex];
+  if (!sourceEntry) return null;
+
+  const targetEntryIndex = (toolBar.entries ?? []).findIndex(entry => entry.source?.line === targetSourceLine);
+  if (targetEntryIndex < 0) return null;
+
+  const sourceEndIndex = getToolBarEntryMoveBlockEndIndex(toolBar, sourceEntryIndex);
+  const targetEndIndex = getToolBarEntryMoveBlockEndIndex(toolBar, targetEntryIndex);
+  const preferredIndex = getPredictedLinearMoveIndex(toolBar.entries?.length ?? 0, sourceEntryIndex, sourceEndIndex, targetEntryIndex, targetEndIndex, placement);
+  if (preferredIndex === null) return null;
+
+  return {
+    toolBarId: toolBar.id,
+    preferredIndex,
+    kind: sourceEntry.kind,
+    idRaw: sourceEntry.idRaw,
+    iconRaw: sourceEntry.iconRaw,
+    textRaw: sourceEntry.textRaw,
+    toggle: sourceEntry.toggle
+  };
+}
+
+function buildPendingStatusBarFieldMoveSelection(
+  statusBar: FormStatusBar,
+  sourceFieldIndex: number,
+  targetSourceLine: number,
+  placement: MenuEntryMovePlacement
+): PendingStatusBarFieldSelection | null {
+  const sourceField = statusBar.fields?.[sourceFieldIndex];
+  if (!sourceField) return null;
+
+  const targetFieldIndex = (statusBar.fields ?? []).findIndex(field => field.source?.line === targetSourceLine);
+  if (targetFieldIndex < 0) return null;
+
+  const preferredIndex = getPredictedLinearMoveIndex(statusBar.fields?.length ?? 0, sourceFieldIndex, sourceFieldIndex, targetFieldIndex, targetFieldIndex, placement);
+  if (preferredIndex === null) return null;
+
+  return {
+    statusBarId: statusBar.id,
+    preferredIndex,
+    widthRaw: sourceField.widthRaw,
+    textRaw: sourceField.textRaw,
+    imageRaw: sourceField.imageRaw,
+    flagsRaw: sourceField.flagsRaw,
+    progressBar: sourceField.progressBar,
+    progressRaw: sourceField.progressRaw
+  };
+}
+
 function drawMenuFlyoutPanelPreview(
   ctx: CanvasRenderingContext2D,
   menu: FormMenu,
@@ -8324,6 +8591,9 @@ function render() {
         ctx.restore();
       }
     }
+    if (drag?.target === "toolBarEntry" && drag.moved && drag.moveTarget) {
+      drawTopLevelMoveIndicator(ctx, drag.moveTarget);
+    }
   }
 
   if (statusBarRect) {
@@ -8345,6 +8615,9 @@ function render() {
         ctx.strokeRect(fieldRect.x + 0.5, fieldRect.y + 0.5, fieldRect.w - 1, fieldRect.h - 1);
         ctx.restore();
       }
+    }
+    if (drag?.target === "statusBarField" && drag.moved && drag.moveTarget) {
+      drawTopLevelMoveIndicator(ctx, drag.moveTarget);
     }
   }
 
