@@ -365,6 +365,11 @@ export interface MenuEntryMoveOptions {
   placement: MenuEntryMovePlacement;
 }
 
+export interface TopLevelEntryMoveOptions {
+  targetSourceLine: number;
+  placement: typeof MenuEntryMovePlacement.Before | typeof MenuEntryMovePlacement.After;
+}
+
 export interface ToolBarEntryArgs {
   kind: ToolBarEntryKind;
   idRaw?: string;
@@ -6516,6 +6521,101 @@ export function applyToolBarEntryDelete(
   return edit;
 }
 
+function getDocumentLineTextWithEol(document: vscode.TextDocument, line: number): string {
+  const textLine = document.lineAt(line);
+  const hasLineBreak = textLine.rangeIncludingLineBreak.end.line > textLine.range.end.line;
+  return `${textLine.text}${hasLineBreak ? getDocumentEol(document) : ""}`;
+}
+
+function getToolBarMoveBlockLines(
+  calls: PbCall[],
+  toolBarId: string,
+  sourceLine: number,
+  kind: ToolBarEntryKind
+): number[] | undefined {
+  const call = calls.find(c => c.range.line === sourceLine && isToolBarEntryCallNameForKind(c.name, kind));
+  if (!call) return undefined;
+  if (!isLineInCreateSection(calls, sourceLine, PB_CALL.createToolBar, toolBarId)) return undefined;
+
+  const lines = [sourceLine];
+  if (isToolBarButtonKind(kind)) {
+    const tipCall = findToolBarToolTipCall(calls, toolBarId, getToolBarEntryIdFromCall(call));
+    if (tipCall && tipCall.range.line !== sourceLine) {
+      lines.push(tipCall.range.line);
+    }
+  }
+
+  return [...new Set(lines)].sort((a, b) => a - b);
+}
+
+function getToolBarEntryKindFromCallName(callName: string): ToolBarEntryKind | undefined {
+  const normalized = callName.toLowerCase();
+  if (normalized === TOOLBAR_ENTRY_KIND.ToolBarStandardButton.toLowerCase()) return TOOLBAR_ENTRY_KIND.ToolBarImageButton;
+  if (normalized === TOOLBAR_ENTRY_KIND.ToolBarButton.toLowerCase()) return TOOLBAR_ENTRY_KIND.ToolBarButton;
+  if (normalized === TOOLBAR_ENTRY_KIND.ToolBarImageButton.toLowerCase()) return TOOLBAR_ENTRY_KIND.ToolBarImageButton;
+  if (normalized === TOOLBAR_ENTRY_KIND.ToolBarSeparator.toLowerCase()) return TOOLBAR_ENTRY_KIND.ToolBarSeparator;
+  if (normalized === TOOLBAR_ENTRY_KIND.ToolBarToolTip.toLowerCase()) return TOOLBAR_ENTRY_KIND.ToolBarToolTip;
+  return undefined;
+}
+
+function getToolBarMoveInsertLine(
+  calls: PbCall[],
+  toolBarId: string,
+  targetSourceLine: number,
+  placement: TopLevelEntryMoveOptions["placement"]
+): number | undefined {
+  const targetCall = calls.find(call => call.range.line === targetSourceLine && TOOLBAR_ENTRY_NAMES.has(call.name.toLowerCase()));
+  if (!targetCall) return undefined;
+  if (!isLineInCreateSection(calls, targetSourceLine, PB_CALL.createToolBar, toolBarId)) return undefined;
+
+  if (placement === MenuEntryMovePlacement.Before) return targetSourceLine;
+
+  let lastTargetLine = targetSourceLine;
+  const targetKind = getToolBarEntryKindFromCallName(targetCall.name);
+  if (targetKind && isToolBarButtonKind(targetKind)) {
+    const tipCall = findToolBarToolTipCall(calls, toolBarId, getToolBarEntryIdFromCall(targetCall));
+    if (tipCall && tipCall.range.line > lastTargetLine) {
+      lastTargetLine = tipCall.range.line;
+    }
+  }
+
+  return lastTargetLine + 1;
+}
+
+export function applyToolBarEntryMove(
+  document: vscode.TextDocument,
+  toolBarId: string,
+  sourceLine: number,
+  kind: ToolBarEntryKind,
+  options: TopLevelEntryMoveOptions,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
+  if (options.targetSourceLine < 0 || options.targetSourceLine >= document.lineCount) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const blockLines = getToolBarMoveBlockLines(calls, toolBarId, sourceLine, kind);
+  if (!blockLines?.length) return undefined;
+
+  const insertLine = getToolBarMoveInsertLine(calls, toolBarId, options.targetSourceLine, options.placement);
+  if (typeof insertLine !== "number") return undefined;
+
+  const minBlockLine = Math.min(...blockLines);
+  const maxBlockLine = Math.max(...blockLines);
+  if (insertLine >= minBlockLine && insertLine <= maxBlockLine + 1) return undefined;
+  if (blockLines.includes(options.targetSourceLine)) return undefined;
+
+  const blockText = blockLines.map(line => getDocumentLineTextWithEol(document, line)).join("");
+  if (!blockText.length) return undefined;
+
+  const edit = new vscode.WorkspaceEdit();
+  for (const line of blockLines) {
+    edit.delete(document.uri, document.lineAt(line).rangeIncludingLineBreak);
+  }
+  edit.insert(document.uri, new vscode.Position(Math.min(document.lineCount, insertLine), 0), blockText);
+  return edit;
+}
+
 export function applyToolBarEntryTooltipSet(
   document: vscode.TextDocument,
   toolBarId: string,
@@ -6644,6 +6744,33 @@ export function applyStatusBarFieldDelete(
       const index = fields.findIndex(field => field.source?.line === sourceLine);
       if (index < 0) return false;
       fields.splice(index, 1);
+      return true;
+    },
+    scanRange
+  );
+}
+
+export function applyStatusBarFieldMove(
+  document: vscode.TextDocument,
+  statusBarId: string,
+  sourceLine: number,
+  options: TopLevelEntryMoveOptions,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  return applyStatusBarFieldMutation(
+    document,
+    statusBarId,
+    fields => {
+      const sourceIndex = fields.findIndex(field => field.source?.line === sourceLine);
+      const targetIndex = fields.findIndex(field => field.source?.line === options.targetSourceLine);
+      if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return false;
+
+      const [field] = fields.splice(sourceIndex, 1);
+      let insertIndex = options.placement === MenuEntryMovePlacement.Before ? targetIndex : targetIndex + 1;
+      if (sourceIndex < insertIndex) insertIndex -= 1;
+      if (insertIndex === sourceIndex) return false;
+
+      fields.splice(insertIndex, 0, field);
       return true;
     },
     scanRange
