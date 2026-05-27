@@ -78,6 +78,8 @@ import {
 import {
   type MenuEntryMoveTargetLike,
   type LinearTopLevelEntryMoveTargetLike,
+  type StatusBarPreviewInsertAction,
+  type ToolBarPreviewInsertAction,
   canEditToolBarTooltip,
   deriveWindows7MenuBarPalette,
   getDefaultMenuItemInsertArgs,
@@ -1739,6 +1741,64 @@ function getMenuInsertLevel(menu: FormMenu, parentSourceLine?: number): number {
   const parentEntry = (menu.entries ?? []).find(entry => entry.source?.line === parentSourceLine);
   if (!parentEntry) return 0;
   return Math.max(0, getMenuEntryLevel(parentEntry) + 1);
+}
+
+function postCreateMenuRoot(): void {
+  const args = { kind: "MenuTitle" as FormMenuEntry["kind"], textRaw: toPbString("MenuTitle") };
+  pendingMenuEntrySelection = {
+    menuId: "0",
+    preferredIndex: 0,
+    kind: args.kind,
+    level: 0,
+    textRaw: args.textRaw,
+  };
+  vscode.postMessage({
+    type: WEBVIEW_TO_EXT_MSG_TYPE.createMenu,
+    kind: args.kind,
+    textRaw: args.textRaw,
+  });
+}
+
+function postCreateToolBarRoot(action: ToolBarPreviewInsertAction): void {
+  const args = getToolBarPreviewInsertArgs({ entries: [] }, action);
+  pendingToolBarEntrySelection = {
+    toolBarId: "0",
+    preferredIndex: 0,
+    kind: args.kind,
+    idRaw: args.idRaw,
+    iconRaw: args.iconRaw,
+    toggle: args.toggle,
+  };
+  vscode.postMessage({
+    type: WEBVIEW_TO_EXT_MSG_TYPE.createToolBar,
+    kind: args.kind,
+    idRaw: args.idRaw,
+    iconRaw: args.iconRaw,
+    toggle: args.toggle,
+  });
+}
+
+function postCreateStatusBarRoot(action: StatusBarPreviewInsertAction): void {
+  const args = getStatusBarPreviewInsertArgs(action);
+  pendingStatusBarFieldSelection = {
+    statusBarId: "0",
+    preferredIndex: 0,
+    widthRaw: args.widthRaw,
+    textRaw: args.textRaw,
+    imageRaw: args.imageRaw,
+    flagsRaw: args.flagsRaw,
+    progressBar: args.progressBar,
+    progressRaw: args.progressRaw,
+  };
+  vscode.postMessage({
+    type: WEBVIEW_TO_EXT_MSG_TYPE.createStatusBar,
+    widthRaw: args.widthRaw,
+    textRaw: args.textRaw,
+    imageRaw: args.imageRaw,
+    flagsRaw: args.flagsRaw,
+    progressBar: args.progressBar,
+    progressRaw: args.progressRaw,
+  });
 }
 
 function postInsertMenuEntry(menu: FormMenu, args: { kind: FormMenuEntry["kind"]; idRaw?: string; textRaw?: string }, parentSourceLine?: number): void {
@@ -9756,6 +9816,48 @@ function renderProps() {
     };
     propsEl.appendChild(row("File", inputWithActions(eventFileInput, removeEventFileBtn)));
     propsEl.appendChild(mutedNote("Use this field to keep an event include file linked to the window. Remove clears it."));
+
+    propsEl.appendChild(createSubSection("Top-Level Structures"));
+    const topLevelActions = document.createElement("div");
+    topLevelActions.className = "miniActions";
+
+    const createMenuBtn = document.createElement("button");
+    createMenuBtn.textContent = "Create Menu";
+    createMenuBtn.disabled = (model.menus?.length ?? 0) > 0;
+    createMenuBtn.title = createMenuBtn.disabled
+      ? "This form already contains a parsed menu root."
+      : "Create a menu root with the original default MenuTitle entry.";
+    createMenuBtn.onclick = () => {
+      if (createMenuBtn.disabled) return;
+      postCreateMenuRoot();
+    };
+    topLevelActions.appendChild(createMenuBtn);
+
+    const createToolBarButtonBtn = document.createElement("button");
+    createToolBarButtonBtn.textContent = "Create Toolbar Button";
+    createToolBarButtonBtn.disabled = (model.toolbars?.length ?? 0) > 0;
+    createToolBarButtonBtn.title = createToolBarButtonBtn.disabled
+      ? "This form already contains a parsed toolbar root."
+      : "Create a toolbar root with the original default button entry.";
+    createToolBarButtonBtn.onclick = () => {
+      if (createToolBarButtonBtn.disabled) return;
+      postCreateToolBarRoot("button");
+    };
+    topLevelActions.appendChild(createToolBarButtonBtn);
+
+    const createStatusBarLabelBtn = document.createElement("button");
+    createStatusBarLabelBtn.textContent = "Create StatusBar Label";
+    createStatusBarLabelBtn.disabled = (model.statusbars?.length ?? 0) > 0;
+    createStatusBarLabelBtn.title = createStatusBarLabelBtn.disabled
+      ? "This form already contains a parsed statusbar root."
+      : "Create a statusbar root with the original default label field.";
+    createStatusBarLabelBtn.onclick = () => {
+      if (createStatusBarLabelBtn.disabled) return;
+      postCreateStatusBarRoot("label");
+    };
+    topLevelActions.appendChild(createStatusBarLabelBtn);
+
+    propsEl.appendChild(topLevelActions);
 
     if (windowConstantsField.visible) {
       propsEl.appendChild(section("Constants"));

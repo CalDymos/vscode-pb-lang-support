@@ -23,6 +23,7 @@ import {
   applyGadgetItemDelete,
   applyGadgetItemInsert,
   applyGadgetItemUpdate,
+  applyMenuCreate,
   applyMenuDelete,
   applyMenuEntryDelete,
   applyMenuEntryEventUpdate,
@@ -32,12 +33,14 @@ import {
   applyMovePatch,
   applyRectPatch,
   applyResizeGadgetMutation,
+  applyStatusBarCreate,
   applyStatusBarDelete,
   applyStatusBarFieldDelete,
   applyStatusBarFieldDeleteWithImageCleanup,
   applyStatusBarFieldInsert,
   applyStatusBarFieldMove,
   applyStatusBarFieldUpdate,
+  applyToolBarCreate,
   applyToolBarDelete,
   applyToolBarEntryDelete,
   applyToolBarEntryEventUpdate,
@@ -1035,6 +1038,17 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           return;
         }
 
+        case WEBVIEW_TO_EXT_MSG_TYPE.createMenu: {
+          if (!ensureMenuEntryKind(msg.kind)) return;
+          const edit = applyMenuCreate(
+            document,
+            { kind: msg.kind as any, idRaw: msg.idRaw, textRaw: msg.textRaw },
+            sr
+          );
+          await applyEditOrError(edit, `Could not create a menu root. No suitable insertion point found${rangeInfo}.`);
+          return;
+        }
+
         case WEBVIEW_TO_EXT_MSG_TYPE.insertMenuEntry: {
           if (!ensureMenuEntryKind(msg.kind)) return;
           const edit = applyMenuEntryInsert(
@@ -1101,6 +1115,17 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           return;
         }
 
+        case WEBVIEW_TO_EXT_MSG_TYPE.createToolBar: {
+          if (!ensureToolBarEntryKind(msg.kind)) return;
+          const edit = applyToolBarCreate(
+            document,
+            { kind: msg.kind as any, idRaw: msg.idRaw, iconRaw: msg.iconRaw, textRaw: msg.textRaw, toggle: msg.toggle },
+            sr
+          );
+          await applyEditOrError(edit, `Could not create a toolbar root. No suitable insertion point found${rangeInfo}.`);
+          return;
+        }
+
         case WEBVIEW_TO_EXT_MSG_TYPE.insertToolBarEntry: {
           if (!ensureToolBarEntryKind(msg.kind)) return;
           const edit = applyToolBarEntryInsert(
@@ -1163,6 +1188,24 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         case WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBar: {
           const edit = applyToolBarDelete(document, msg.toolBarId, sr);
           await applyEditOrError(edit, `Could not delete toolbar '${msg.toolBarId}'. No matching CreateToolBar section found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.createStatusBar: {
+          const normalized = normalizeStatusBarFieldMessageArgs({
+            widthRaw: msg.widthRaw,
+            textRaw: msg.textRaw,
+            imageRaw: msg.imageRaw,
+            flagsRaw: msg.flagsRaw,
+            progressBar: msg.progressBar,
+            progressRaw: msg.progressRaw,
+          });
+          if (!normalized.ok) {
+            postError(normalized.error);
+            return;
+          }
+          const edit = applyStatusBarCreate(document, normalized.args, sr);
+          await applyEditOrError(edit, `Could not create a statusbar root. No suitable insertion point found${rangeInfo}.`);
           return;
         }
 

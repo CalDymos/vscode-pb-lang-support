@@ -53,6 +53,7 @@ export const WEBVIEW_TO_EXT_MSG_TYPE = {
   updateGadgetColumn: "updateGadgetColumn",
   deleteGadgetColumn: "deleteGadgetColumn",
 
+  createMenu: "createMenu",
   insertMenuEntry: "insertMenuEntry",
   moveMenuEntry: "moveMenuEntry",
   updateMenuEntry: "updateMenuEntry",
@@ -60,6 +61,7 @@ export const WEBVIEW_TO_EXT_MSG_TYPE = {
   deleteMenu: "deleteMenu",
   setMenuEntryEvent: "setMenuEntryEvent",
 
+  createToolBar: "createToolBar",
   insertToolBarEntry: "insertToolBarEntry",
   updateToolBarEntry: "updateToolBarEntry",
   moveToolBarEntry: "moveToolBarEntry",
@@ -68,6 +70,7 @@ export const WEBVIEW_TO_EXT_MSG_TYPE = {
   setToolBarEntryEvent: "setToolBarEntryEvent",
   setToolBarEntryTooltip: "setToolBarEntryTooltip",
 
+  createStatusBar: "createStatusBar",
   insertStatusBarField: "insertStatusBarField",
   updateStatusBarField: "updateStatusBarField",
   moveStatusBarField: "moveStatusBarField",
@@ -152,12 +155,14 @@ export type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadgetColumn; id: string; colRaw: string; titleRaw: string; widthRaw: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateGadgetColumn; id: string; sourceLine: number; colRaw: string; titleRaw: string; widthRaw: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadgetColumn; id: string; sourceLine: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createMenu; kind: string; idRaw?: string; textRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertMenuEntry; menuId: string; kind: string; idRaw?: string; textRaw?: string; parentSourceLine?: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveMenuEntry; menuId: string; sourceLine: number; kind: string; targetSourceLine: number; placement: MenuEntryMovePlacement }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateMenuEntry; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; iconRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteMenuEntry; menuId: string; sourceLine: number; kind: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteMenu; menuId: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setMenuEntryEvent; entryIdRaw: string; eventProc?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createToolBar; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string; toggle?: boolean }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertToolBarEntry; toolBarId: string; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateToolBarEntry; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string; toggle?: boolean }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveToolBarEntry; toolBarId: string; sourceLine: number; kind: string; targetSourceLine: number; placement: MenuEntryMovePlacement }
@@ -165,6 +170,7 @@ export type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBar; toolBarId: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setToolBarEntryEvent; entryIdRaw: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setToolBarEntryTooltip; toolBarId: string; sourceLine: number; entryIdRaw: string; textRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createStatusBar; widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertStatusBarField; statusBarId: string; widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateStatusBarField; statusBarId: string; sourceLine: number; widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveStatusBarField; statusBarId: string; sourceLine: number; targetSourceLine: number; placement: MenuEntryMovePlacement }

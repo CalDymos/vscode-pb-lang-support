@@ -669,6 +669,139 @@ function applyMenuCreateModePatch(
   appendWorkspaceEdit(edit, replaceCallLinePreserveSuffix(document, create, buildMenuCreateLine(document, create, hasIcons)));
 }
 
+const TOP_LEVEL_TOOLBAR_SECTION_NAMES = new Set<string>([
+  PB_CALL.createToolBar,
+  TOOLBAR_ENTRY_KIND.ToolBarButton.toLowerCase(),
+  TOOLBAR_ENTRY_KIND.ToolBarImageButton.toLowerCase(),
+  TOOLBAR_ENTRY_KIND.ToolBarSeparator.toLowerCase(),
+  TOOLBAR_ENTRY_KIND.ToolBarToolTip.toLowerCase(),
+  TOOLBAR_ENTRY_KIND.ToolBarStandardButton.toLowerCase(),
+]);
+
+const TOP_LEVEL_STATUSBAR_SECTION_NAMES = new Set<string>([
+  PB_CALL.createStatusBar,
+  "addstatusbarfield",
+  "statusbartext",
+  "statusbarimage",
+  "statusbarprogress",
+]);
+
+const TOP_LEVEL_MENU_SECTION_NAMES = new Set<string>([
+  PB_CALL.createMenu,
+  PB_CALL.createImageMenu,
+  MENU_ENTRY_KIND.MenuTitle.toLowerCase(),
+  MENU_ENTRY_KIND.MenuItem.toLowerCase(),
+  MENU_ENTRY_KIND.MenuBar.toLowerCase(),
+  MENU_ENTRY_KIND.OpenSubMenu.toLowerCase(),
+  MENU_ENTRY_KIND.CloseSubMenu.toLowerCase(),
+]);
+
+type TopLevelCreateSectionKind = "toolbar" | "statusbar" | "menu";
+
+function getTopLevelSectionOrder(nameLower: string): number | undefined {
+  if (TOP_LEVEL_TOOLBAR_SECTION_NAMES.has(nameLower)) return 0;
+  if (TOP_LEVEL_STATUSBAR_SECTION_NAMES.has(nameLower)) return 1;
+  if (TOP_LEVEL_MENU_SECTION_NAMES.has(nameLower)) return 2;
+  return undefined;
+}
+
+function getTopLevelCreateSectionOrder(kind: TopLevelCreateSectionKind): number {
+  switch (kind) {
+    case "toolbar": return 0;
+    case "statusbar": return 1;
+    case "menu": return 2;
+  }
+}
+
+function isWindowOpenPostambleCall(nameLower: string): boolean {
+  return nameLower === "hidewindow"
+    || nameLower === "disablewindow"
+    || nameLower === "setwindowcolor"
+    || nameLower === "addkeyboardshortcut";
+}
+
+function getWindowReferenceExpression(window: FormWindow): string {
+  if (window.pbAny) return window.variable?.trim() || window.id;
+  return window.firstParam?.trim() || window.id;
+}
+
+function getNextNumericTopLevelId(existingIds: Iterable<string>): string {
+  const used = new Set<string>();
+  for (const id of existingIds) {
+    const normalized = id.trim();
+    if (normalized.length) used.add(normalized);
+  }
+
+  for (let i = 0; i < 10000; i += 1) {
+    const candidate = String(i);
+    if (!used.has(candidate)) return candidate;
+  }
+
+  return String(used.size);
+}
+
+function findTopLevelCreateInsertAnchor(
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  openCall: PbCall,
+  proc: LineBlock,
+  kind: TopLevelCreateSectionKind
+): GadgetInsertAnchor {
+  const targetOrder = getTopLevelCreateSectionOrder(kind);
+  let insertAfterLine = openCall.range.line;
+
+  for (const call of calls) {
+    if (call.range.line <= openCall.range.line) continue;
+    if (call.range.line > proc.endLine) break;
+
+    const nameLower = call.name.toLowerCase();
+    const sectionOrder = getTopLevelSectionOrder(nameLower);
+    if (typeof sectionOrder === "number") {
+      if (sectionOrder > targetOrder) {
+        return { insertLine: call.range.line, indent: getLineIndent(document, call.range.line) };
+      }
+      insertAfterLine = call.range.line;
+      continue;
+    }
+
+    if (isGadgetSectionCallName(nameLower)) {
+      return { insertLine: call.range.line, indent: getLineIndent(document, call.range.line) };
+    }
+
+    if (isWindowOpenPostambleCall(nameLower)) {
+      insertAfterLine = call.range.line;
+    }
+  }
+
+  return { insertLine: insertAfterLine + 1, indent: getLineIndent(document, insertAfterLine) };
+}
+
+function buildTopLevelCreateSectionText(lines: string[], indent: string, eol: string): string {
+  return lines.map(line => `${indent}${line}`).join(eol) + eol;
+}
+
+function findWindowTopLevelCreateContext(
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  kind: TopLevelCreateSectionKind
+): { parsed: ReturnType<typeof parseFormDocument>; anchor: GadgetInsertAnchor; windowRef: string } | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const window = parsed.window;
+  if (!window) return undefined;
+
+  const openCall = findCallByStableKey(calls, window.id, name => name === "OpenWindow");
+  if (!openCall) return undefined;
+
+  const proc = findProcedureBlock(document, openCall.range.line);
+  if (!proc) return undefined;
+
+  return {
+    parsed,
+    anchor: findTopLevelCreateInsertAnchor(document, calls, openCall, proc, kind),
+    windowRef: getWindowReferenceExpression(window),
+  };
+}
+
 function buildToolBarImageButtonLine(args: ToolBarEntryArgs): string {
   const id = args.idRaw?.trim() || "0";
   const icon = args.iconRaw ?? "0";
@@ -6188,6 +6321,97 @@ function collectStatusBarFieldMutationLines(
     lines.add(line);
   }
   return lines;
+}
+
+export function applyMenuCreate(
+  document: vscode.TextDocument,
+  args: MenuEntryArgs = { kind: MENU_ENTRY_KIND.MenuTitle, textRaw: '"MenuTitle"' },
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const calls = scanDocumentCalls(document, scanRange);
+  const ctx = findWindowTopLevelCreateContext(document, calls, "menu");
+  if (!ctx) return undefined;
+
+  const menuId = getNextNumericTopLevelId(ctx.parsed.menus.map(entry => entry.id));
+  if (findCreateCallById(calls, PB_CALL.createMenu, menuId)) return undefined;
+
+  const lines = [
+    `CreateMenu(${menuId}, WindowID(${ctx.windowRef}))`,
+    buildMenuEntryLine(args),
+  ];
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.insert(
+    document.uri,
+    new vscode.Position(Math.min(document.lineCount, ctx.anchor.insertLine), 0),
+    buildTopLevelCreateSectionText(lines, ctx.anchor.indent, getDocumentEol(document))
+  );
+  return edit;
+}
+
+export function applyToolBarCreate(
+  document: vscode.TextDocument,
+  args: ToolBarEntryArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const calls = scanDocumentCalls(document, scanRange);
+  const ctx = findWindowTopLevelCreateContext(document, calls, "toolbar");
+  if (!ctx) return undefined;
+
+  const toolBarId = getNextNumericTopLevelId(ctx.parsed.toolbars.map(entry => entry.id));
+  if (findCreateCallById(calls, PB_CALL.createToolBar, toolBarId)) return undefined;
+
+  const lines = [
+    `CreateToolBar(${toolBarId}, WindowID(${ctx.windowRef}))`,
+    ...buildToolBarEntryLines(args, toolBarId),
+  ];
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.insert(
+    document.uri,
+    new vscode.Position(Math.min(document.lineCount, ctx.anchor.insertLine), 0),
+    buildTopLevelCreateSectionText(lines, ctx.anchor.indent, getDocumentEol(document))
+  );
+
+  const idRaw = args.idRaw?.trim();
+  if (idRaw?.startsWith("#")) {
+    const nextToolBars: FormToolBar[] = [
+      ...ctx.parsed.toolbars,
+      { id: toolBarId, entries: [{ kind: args.kind, idRaw: args.idRaw, iconRaw: args.iconRaw, textRaw: args.textRaw, toggle: args.toggle }] },
+    ];
+    applyMenuEnumPatch(edit, document, calls, collectMenuEnumSymbols(ctx.parsed.menus, nextToolBars));
+  }
+
+  return edit;
+}
+
+export function applyStatusBarCreate(
+  document: vscode.TextDocument,
+  args: StatusBarFieldArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const calls = scanDocumentCalls(document, scanRange);
+  const ctx = findWindowTopLevelCreateContext(document, calls, "statusbar");
+  if (!ctx) return undefined;
+
+  const statusBarId = getNextNumericTopLevelId(ctx.parsed.statusbars.map(entry => entry.id));
+  if (findCreateCallById(calls, PB_CALL.createStatusBar, statusBarId)) return undefined;
+
+  const field = mapStatusBarArgsToField(args);
+  const lines = [
+    `CreateStatusBar(${statusBarId}, WindowID(${ctx.windowRef}))`,
+    `AddStatusBarField(${field.widthRaw})`,
+  ];
+  const decoration = buildStatusBarDecorationLine(statusBarId, field, 0);
+  if (decoration) lines.push(decoration);
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.insert(
+    document.uri,
+    new vscode.Position(Math.min(document.lineCount, ctx.anchor.insertLine), 0),
+    buildTopLevelCreateSectionText(lines, ctx.anchor.indent, getDocumentEol(document))
+  );
+  return edit;
 }
 
 export function applyMenuEntryInsert(
