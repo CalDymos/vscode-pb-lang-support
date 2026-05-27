@@ -1,15 +1,19 @@
+import { canHostInsertedGadgets } from "./insert";
 import { canInspectGadgetColumns, canInspectGadgetItems } from "./inspector";
+import { GADGET_KIND } from "../model";
 
 export type GadgetContextMenuLike = {
   id: string;
   kind?: string;
+  flagsExpr?: string;
+  splitterId?: string;
+  resizeSource?: unknown;
 };
 
 export type GadgetCanvasContextMenuUnsupportedOriginalActionKind =
   | "cutGadget"
   | "copyGadget"
   | "pasteGadget"
-  | "duplicateGadget"
   | "alignGadgetLeft"
   | "alignGadgetTop"
   | "alignGadgetWidth"
@@ -24,6 +28,13 @@ export type GadgetCanvasContextMenuAction =
       gadgetId: string;
       confirmLabel: "Delete Gadget";
       message: string;
+    }
+  | {
+      kind: "duplicateGadget";
+      label: "Duplicate";
+      title: string;
+      enabled: boolean;
+      gadgetId: string;
     }
   | {
       kind: "editGadgetItems";
@@ -47,18 +58,39 @@ export type GadgetCanvasContextMenuAction =
       gadgetId: string;
     };
 
+export function canDuplicateGadgetFromContextMenu(gadget: GadgetContextMenuLike): boolean {
+  return typeof gadget.kind === "string"
+    && gadget.kind !== GADGET_KIND.CustomGadget
+    && gadget.kind !== GADGET_KIND.SplitterGadget
+    && !gadget.splitterId
+    && !gadget.resizeSource
+    && !canHostInsertedGadgets({ kind: gadget.kind, flagsExpr: gadget.flagsExpr });
+}
+
 function buildUnsupportedOriginalActions(gadgetId: string): GadgetCanvasContextMenuAction[] {
   const title = "This original Form Designer popup command is visible, but its patch path is not implemented yet.";
   return [
     { kind: "cutGadget", label: "Cut", title, enabled: false, gadgetId },
     { kind: "copyGadget", label: "Copy", title, enabled: false, gadgetId },
     { kind: "pasteGadget", label: "Paste", title, enabled: false, gadgetId },
-    { kind: "duplicateGadget", label: "Duplicate", title, enabled: false, gadgetId },
     { kind: "alignGadgetLeft", label: "Align Left", title, enabled: false, gadgetId },
     { kind: "alignGadgetTop", label: "Align Top", title, enabled: false, gadgetId },
     { kind: "alignGadgetWidth", label: "Align Width", title, enabled: false, gadgetId },
     { kind: "alignGadgetHeight", label: "Align Height", title, enabled: false, gadgetId },
   ];
+}
+
+function buildDuplicateAction(gadget: GadgetContextMenuLike): GadgetCanvasContextMenuAction {
+  const enabled = canDuplicateGadgetFromContextMenu(gadget);
+  return {
+    kind: "duplicateGadget",
+    label: "Duplicate",
+    title: enabled
+      ? "Duplicate the currently selected gadget."
+      : "This original Form Designer popup command is visible, but its patch path is not implemented for this gadget structure yet.",
+    enabled,
+    gadgetId: gadget.id
+  };
 }
 
 export function resolveGadgetCanvasContextMenuActions(args: {
@@ -79,6 +111,7 @@ export function resolveGadgetCanvasContextMenuActions(args: {
   ];
 
   actions.push(...buildUnsupportedOriginalActions(gadget.id));
+  actions.push(buildDuplicateAction(gadget));
 
   if (canInspectGadgetItems(gadget.kind)) {
     actions.push({

@@ -3332,6 +3332,11 @@ function renderCanvasContextMenu(): void {
             confirmLabel: action.confirmLabel
           }, current.selection);
           return;
+        case "duplicateGadget":
+          post({ type: WEBVIEW_TO_EXT_MSG_TYPE.duplicateGadget, id: action.gadgetId });
+          selection = { kind: "gadget", id: action.gadgetId };
+          renderSelectionUiWithoutParentSelector();
+          return;
         case "editGadgetItems": {
           const gadget = model.gadgets.find(entry => entry.id === action.gadgetId);
           if (!gadget) return;

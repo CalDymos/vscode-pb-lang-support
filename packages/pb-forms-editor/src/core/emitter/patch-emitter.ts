@@ -2090,6 +2090,137 @@ function findChildSectionInsertAnchor(
   return undefined;
 }
 
+
+function stripPureBasicHash(value: string | undefined): string {
+  return (value ?? "").trim().replace(/^#/, "");
+}
+
+function getDuplicateVariablePrefix(name: string): string {
+  const clean = stripPureBasicHash(name);
+  if (!clean.includes("_")) return `${clean}_`;
+  return clean.slice(0, clean.lastIndexOf("_") + 1);
+}
+
+function buildDuplicatedGadgetIdentity(gadget: Gadget, gadgets: readonly Gadget[]): ReturnType<typeof buildInsertedGadgetIdentity> {
+  const existing = new Set<string>();
+  for (const entry of gadgets) {
+    for (const candidate of [entry.variable, entry.firstParam, entry.id]) {
+      const clean = stripPureBasicHash(candidate);
+      if (clean.length) existing.add(clean);
+    }
+  }
+
+  const sourceName = gadget.variable || gadget.firstParam || gadget.id;
+  const prefix = getDuplicateVariablePrefix(sourceName);
+  let nextIndex = 1;
+  while (existing.has(`${prefix}${nextIndex}`)) {
+    nextIndex += 1;
+  }
+
+  const name = `${prefix}${nextIndex}`;
+  if (gadget.pbAny) {
+    return {
+      name,
+      id: name,
+      idRaw: PB_ANY,
+      firstParam: PB_ANY,
+      variable: name,
+      assignedVar: name,
+      pbAny: true,
+    };
+  }
+
+  const enumId = `#${name}`;
+  return {
+    name,
+    id: enumId,
+    idRaw: enumId,
+    firstParam: enumId,
+    variable: name,
+    pbAny: false,
+  };
+}
+
+function canPatchSimpleGadgetDuplicate(gadget: Gadget): boolean {
+  return isInsertableGadgetKind(gadget.kind)
+    && gadget.kind !== GADGET_KIND.SplitterGadget
+    && !gadget.splitterId
+    && !gadget.resizeSource
+    && !canHostInsertedGadgets(gadget);
+}
+
+function buildDuplicatedCallLine(
+  document: vscode.TextDocument,
+  call: PbCall,
+  sourceGadget: Gadget,
+  identity: ReturnType<typeof buildInsertedGadgetIdentity>,
+  isCreateCall: boolean
+): string | undefined {
+  const params = splitParams(call.args);
+  if (!params.length) return undefined;
+
+  const indent = getLineIndent(document, call.range.line);
+  if (isCreateCall) {
+    if (params.length < 5) return undefined;
+    params[0] = identity.idRaw;
+    params[1] = String(Math.trunc(sourceGadget.x));
+    params[2] = String(Math.trunc(sourceGadget.y + sourceGadget.h));
+    params[3] = String(Math.trunc(sourceGadget.w));
+    params[4] = String(Math.trunc(sourceGadget.h));
+    const prefix = identity.assignedVar ? `${indent}${identity.assignedVar} = ` : indent;
+    return `${prefix}${call.name}(${params.join(", ")})`;
+  }
+
+  params[0] = identity.id;
+  return `${indent}${call.name}(${params.join(", ")})`;
+}
+
+export function applyGadgetDuplicate(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const sourceGadget = parsed.gadgets.find(entry => entry.id === gadgetKey);
+  if (!sourceGadget || !canPatchSimpleGadgetDuplicate(sourceGadget)) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const createCall = findCallByStableKey(calls, gadgetKey, name => /gadget$/i.test(name));
+  if (!createCall) return undefined;
+
+  const proc = findProcedureBlock(document, createCall.range.line);
+  if (!proc) return undefined;
+
+  const identity = buildDuplicatedGadgetIdentity(sourceGadget, parsed.gadgets);
+  const relatedCalls = calls
+    .filter(call => call.range.line >= proc.startLine && call.range.line <= proc.endLine)
+    .filter(call => {
+      if (call.range.line === createCall.range.line) return true;
+      const nameLower = call.name.toLowerCase();
+      if (nameLower !== "addgadgetitem"
+        && nameLower !== "addgadgetcolumn"
+        && !GADGET_PROPERTY_NAMES.has(nameLower)) {
+        return false;
+      }
+      return firstParamOfCall(call.args) === sourceGadget.id;
+    })
+    .sort((a, b) => a.range.line - b.range.line);
+
+  const duplicatedLines: string[] = [];
+  for (const call of relatedCalls) {
+    const line = buildDuplicatedCallLine(document, call, sourceGadget, identity, call.range.line === createCall.range.line);
+    if (!line) return undefined;
+    duplicatedLines.push(line);
+  }
+  if (!duplicatedLines.length) return undefined;
+
+  const insertLine = Math.max(...relatedCalls.map(call => call.range.line)) + 1;
+  const edit = new vscode.WorkspaceEdit();
+  edit.insert(document.uri, new vscode.Position(insertLine, 0), `${duplicatedLines.join("\n")}\n`);
+  applyGadgetHeadPatchForGadgets(edit, document, [...parsed.gadgets, buildInsertedGadgetStub(sourceGadget.kind as InsertableGadgetKind, identity)]);
+  return edit;
+}
+
 export function applyGadgetInsert(
   document: vscode.TextDocument,
   kind: string,

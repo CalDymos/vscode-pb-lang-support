@@ -8,6 +8,7 @@ import {
   applyGadgetColumnInsert,
   applyGadgetColumnUpdate,
   applyGadgetDeleteWithImageCleanup,
+  applyGadgetDuplicate,
   applyGadgetInsert,
   applyGadgetReparent,
   applyGadgetOpenArgsUpdate,
@@ -982,6 +983,12 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         case WEBVIEW_TO_EXT_MSG_TYPE.deleteGadget: {
           const edit = applyGadgetDeleteWithImageCleanup(document, msg.id, sr);
           await applyEditOrError(edit, `Could not delete gadget '${msg.id}'. No safe delete path found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.duplicateGadget: {
+          const edit = applyGadgetDuplicate(document, msg.id, sr);
+          await applyEditOrError(edit, `Could not duplicate gadget '${msg.id}'. No safe duplicate path found${rangeInfo}.`);
           return;
         }
 
