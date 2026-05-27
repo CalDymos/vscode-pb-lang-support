@@ -108,7 +108,6 @@ test("gadget context menu enables Paste when a safe copied gadget is available",
 test("gadget context menu keeps Copy, Paste and Duplicate blocked for structural gadget kinds outside the first patch scope", () => {
   for (const gadget of [
     { id: "#SplitMain", kind: "SplitterGadget" },
-    { id: "#PanelMain", kind: "PanelGadget" },
     { id: "#Child", kind: "ButtonGadget", splitterId: "#SplitMain" },
     { id: "#BottomLocked", kind: "ButtonGadget", resizeSource: { line: 12 }, resizeYRaw: "FormWindowHeight - 80", resizeHRaw: "24" },
   ]) {
@@ -144,20 +143,25 @@ test("gadget context menu enables Duplicate for safe horizontal ResizeGadget per
   assert.equal(duplicateAction.enabled, true);
 });
 
-test("gadget context menu enables Copy and Paste scope for first structural container roots but keeps Duplicate blocked", () => {
-  const actions = resolveGadgetCanvasContextMenuActions({
-    gadget: { id: "#Container_0", kind: "ContainerGadget" },
-    copiedGadgetId: "#Container_0",
-    canPasteCopiedGadget: true,
-  });
+test("gadget context menu enables Copy and Paste scope for first structural container and panel roots but keeps Duplicate blocked", () => {
+  for (const gadget of [
+    { id: "#Container_0", kind: "ContainerGadget" },
+    { id: "#Panel_0", kind: "PanelGadget" },
+  ]) {
+    const actions = resolveGadgetCanvasContextMenuActions({
+      gadget,
+      copiedGadgetId: gadget.id,
+      canPasteCopiedGadget: true,
+    });
 
-  const copyAction = actions.find(action => action.kind === "copyGadget");
-  const pasteAction = actions.find(action => action.kind === "pasteGadget");
-  const duplicateAction = actions.find(action => action.kind === "duplicateGadget");
-  if (!copyAction || !pasteAction || !duplicateAction) throw new Error("Expected clipboard and duplicate actions to stay visible.");
+    const copyAction = actions.find(action => action.kind === "copyGadget");
+    const pasteAction = actions.find(action => action.kind === "pasteGadget");
+    const duplicateAction = actions.find(action => action.kind === "duplicateGadget");
+    if (!copyAction || !pasteAction || !duplicateAction) throw new Error("Expected clipboard and duplicate actions to stay visible.");
 
-  assert.equal(copyAction.enabled, true);
-  assert.equal(pasteAction.enabled, true);
-  assert.equal(duplicateAction.enabled, false);
-  assert.match(duplicateAction.title, /not implemented for this gadget structure yet/i);
+    assert.equal(copyAction.enabled, true);
+    assert.equal(pasteAction.enabled, true);
+    assert.equal(duplicateAction.enabled, false);
+    assert.match(duplicateAction.title, /not implemented for this gadget structure yet/i);
+  }
 });

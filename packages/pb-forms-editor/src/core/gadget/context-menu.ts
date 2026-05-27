@@ -81,6 +81,7 @@ function canCopyPasteFirstScopeStructuralGadgetFromContextMenu(gadget: GadgetCon
     && !gadget.splitterId
     && (gadget.kind === GADGET_KIND.ContainerGadget
       || gadget.kind === GADGET_KIND.ScrollAreaGadget
+      || gadget.kind === GADGET_KIND.PanelGadget
       || (gadget.kind === GADGET_KIND.FrameGadget && canHostInsertedGadgets({ kind: gadget.kind, flagsExpr: gadget.flagsExpr })));
 }
 

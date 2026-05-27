@@ -2269,6 +2269,7 @@ function buildCopiedPastedCallLine(
 function isFirstScopeStructuralCopyPasteRoot(gadget: Gadget): boolean {
   return gadget.kind === GADGET_KIND.ContainerGadget
     || gadget.kind === GADGET_KIND.ScrollAreaGadget
+    || gadget.kind === GADGET_KIND.PanelGadget
     || (gadget.kind === GADGET_KIND.FrameGadget && canHostInsertedGadgets(gadget));
 }
 
@@ -2282,7 +2283,6 @@ function canPatchStructuralGadgetCopyPaste(gadget: Gadget, gadgets: readonly Gad
     if (!subtreeIds.has(entry.id)) continue;
     if (!isInsertableGadgetKind(entry.kind)) return false;
     if (entry.kind === GADGET_KIND.SplitterGadget
-      || entry.kind === GADGET_KIND.PanelGadget
       || entry.splitterId
       || entry.resizeSource) {
       return false;

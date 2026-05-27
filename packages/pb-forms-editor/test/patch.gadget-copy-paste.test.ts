@@ -115,8 +115,8 @@ EndProcedure
   assert.equal(copiedString?.tooltip, "Input");
 });
 
-test("keeps structural copy paste blocked for panel and splitter subtrees", () => {
-  const panelText = `; Form Designer for PureBasic - 6.40 LTS
+test("pastes a copied panel subtree with tabs and renamed children", () => {
+  const text = `; Form Designer for PureBasic - 6.40 LTS
 
 Enumeration FormWindow
   #FrmMain
@@ -124,19 +124,37 @@ EndEnumeration
 
 Enumeration FormGadget
   #Panel_0
-  #BtnChild
+  #BtnFirst
+  #BtnSecond
 EndEnumeration
 
-Procedure OpenFrmMain(x = 0, y = 0, width = 260, height = 180)
+Procedure OpenFrmMain(x = 0, y = 0, width = 280, height = 200)
   OpenWindow(#FrmMain, x, y, width, height, "Main")
-  PanelGadget(#Panel_0, 10, 10, 160, 100)
-    AddGadgetItem(#Panel_0, -1, "Tab")
-    ButtonGadget(#BtnChild, 10, 12, 80, 24, "Child")
+  PanelGadget(#Panel_0, 10, 10, 180, 120)
+    AddGadgetItem(#Panel_0, -1, "First")
+    ButtonGadget(#BtnFirst, 10, 12, 80, 24, "First")
+    AddGadgetItem(#Panel_0, -1, "Second")
+    ButtonGadget(#BtnSecond, 12, 16, 90, 24, "Second")
   CloseGadgetList()
 EndProcedure
 `;
-  assert.equal(applyGadgetCopyPaste(new FakeTextDocument(panelText).asTextDocument(), "#Panel_0"), undefined);
 
+  const patched = patch(text, "#Panel_0");
+  const parsed = parseFormDocument(patched);
+
+  assert.match(patched, /Enumeration FormGadget\s+  #Panel_0\s+  #BtnFirst\s+  #BtnSecond\s+  #Panel_0_Copy1\s+  #BtnFirst_Copy1\s+  #BtnSecond_Copy1\s+EndEnumeration/s);
+  assert.match(patched, /PanelGadget\(#Panel_0_Copy1, 10, 10, 180, 120\)\s+    AddGadgetItem\(#Panel_0_Copy1, -1, "First"\)\s+    ButtonGadget\(#BtnFirst_Copy1, 10, 12, 80, 24, "First"\)\s+    AddGadgetItem\(#Panel_0_Copy1, -1, "Second"\)\s+    ButtonGadget\(#BtnSecond_Copy1, 12, 16, 90, 24, "Second"\)\s+  CloseGadgetList\(\)/s);
+
+  const copiedPanel = parsed.gadgets.find(gadget => gadget.id === "#Panel_0_Copy1");
+  const copiedFirst = parsed.gadgets.find(gadget => gadget.id === "#BtnFirst_Copy1");
+  const copiedSecond = parsed.gadgets.find(gadget => gadget.id === "#BtnSecond_Copy1");
+  assert.equal(copiedFirst?.parentId, copiedPanel?.id);
+  assert.equal(copiedSecond?.parentId, copiedPanel?.id);
+  assert.equal(copiedFirst?.parentItem, 0);
+  assert.equal(copiedSecond?.parentItem, 1);
+});
+
+test("keeps structural copy paste blocked for splitter subtrees", () => {
   const splitterText = `; Form Designer for PureBasic - 6.40 LTS
 
 Enumeration FormWindow
