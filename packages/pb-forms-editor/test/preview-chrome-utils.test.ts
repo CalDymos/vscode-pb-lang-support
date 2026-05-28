@@ -205,6 +205,16 @@ test("computes the original window resize button rect outside the preview frame"
 });
 
 
+test("computes the macOS preview frame with toolbar height outside the stored client height", () => {
+  const frameRect = getWindowPreviewFrameRect({ x: 10, y: 32 }, 304, 372, 26, 0, 0, METRICS.toolBarHeight);
+  const layout = getWindowChromeLayout(frameRect, 26, true, true, true, METRICS, 0, 0, true);
+
+  assert.deepEqual(frameRect, { x: 10, y: 32, w: 304, h: 422 });
+  assert.deepEqual(layout.toolBarRect, { x: 10, y: 58, w: 304, h: 24 });
+  assert.deepEqual(layout.contentRect, { x: 10, y: 82, w: 304, h: 349 });
+});
+
+
 test("hits the original outside window resize button as the bottom-right handle", () => {
   const frameRect = getWindowPreviewFrameRect({ x: 10, y: 10 }, 304, 372, 8, 8, 8);
 

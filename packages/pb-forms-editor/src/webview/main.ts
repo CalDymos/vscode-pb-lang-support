@@ -2927,6 +2927,12 @@ function getWindowPreviewFramePadding(): { top: number; side: number; bottom: nu
   };
 }
 
+function getWindowPreviewFrameExtraHeight(): number {
+  return resolvePbFormSkinPlatform() === "macos" && hasParsedToolbarChrome()
+    ? previewChromeMetrics.toolBarHeight
+    : 0;
+}
+
 function getWindowPreviewFrameForStoredSize(origin: { x: number; y: number }, clientWidth: number, clientHeight: number): PreviewRect {
   const framePadding = getWindowPreviewFramePadding();
   return getWindowPreviewFrameRect(
@@ -2935,7 +2941,8 @@ function getWindowPreviewFrameForStoredSize(origin: { x: number; y: number }, cl
     clientHeight,
     framePadding.top,
     framePadding.side,
-    framePadding.bottom
+    framePadding.bottom,
+    getWindowPreviewFrameExtraHeight()
   );
 }
 

@@ -925,17 +925,19 @@ export function getWindowPreviewFrameRect(
   clientHeight: number,
   chromeTopPadding: number,
   clientSidePadding = 0,
-  clientBottomPadding = 0
+  clientBottomPadding = 0,
+  extraFrameHeight = 0
 ): PreviewRect {
   const insetX = Math.max(0, Math.trunc(clientSidePadding));
   const insetTop = Math.max(0, Math.trunc(chromeTopPadding));
   const insetBottom = Math.max(0, Math.trunc(clientBottomPadding));
+  const extraHeight = Math.max(0, Math.trunc(extraFrameHeight));
 
   return {
     x: Math.trunc(origin.x),
     y: Math.trunc(origin.y),
     w: Math.max(0, Math.trunc(clientWidth) + insetX * 2),
-    h: Math.max(0, Math.trunc(clientHeight) + insetTop + insetBottom),
+    h: Math.max(0, Math.trunc(clientHeight) + insetTop + insetBottom + extraHeight),
   };
 }
 
