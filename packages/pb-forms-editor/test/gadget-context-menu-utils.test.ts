@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { resolveGadgetCanvasContextMenuActions } from "../src/core/gadget/context-menu";
+import { canCopyPasteGadgetFromContextMenu, resolveGadgetCanvasContextMenuActions } from "../src/core/gadget/context-menu";
 
 const ORIGINAL_STILL_UNIMPLEMENTED_POPUP_KINDS = [
   "cutGadget",
@@ -103,6 +103,22 @@ test("gadget context menu enables Paste when a safe copied gadget is available",
   if (!pasteAction) throw new Error("Expected Paste to stay visible.");
   assert.equal(pasteAction.enabled, true);
   assert.equal(pasteAction.gadgetId, "#Button_0");
+});
+
+test("gadget context menu keeps Paste disabled when copied source leaves the safe patch scope", () => {
+  assert.equal(canCopyPasteGadgetFromContextMenu({ id: "#Child", kind: "ButtonGadget", splitterId: "#SplitMain" }), false);
+
+  const actions = resolveGadgetCanvasContextMenuActions({
+    gadget: { id: "#Button_1", kind: "ButtonGadget" },
+    copiedGadgetId: "#Child",
+    canPasteCopiedGadget: false,
+  });
+
+  const pasteAction = actions.find(action => action.kind === "pasteGadget");
+  if (!pasteAction) throw new Error("Expected Paste to stay visible.");
+  assert.equal(pasteAction.enabled, false);
+  assert.equal(pasteAction.gadgetId, "#Child");
+  assert.match(pasteAction.title, /can no longer be pasted/i);
 });
 
 test("gadget context menu keeps Copy, Paste and Duplicate blocked for structural gadget kinds outside the first patch scope", () => {

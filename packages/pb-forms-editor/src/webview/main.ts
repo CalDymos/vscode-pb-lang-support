@@ -311,7 +311,7 @@ import {
 } from "../core/statusbar/image-inspector";
 import { getTopLevelSelectedImageInspectorConfig } from "../core/toplevel/image-inspector";
 import { resolveTopLevelCanvasContextMenuActions } from "../core/toplevel/context-menu";
-import { resolveGadgetCanvasContextMenuActions, type GadgetCanvasContextMenuAction } from "../core/gadget/context-menu";
+import { canCopyPasteGadgetFromContextMenu, resolveGadgetCanvasContextMenuActions, type GadgetCanvasContextMenuAction } from "../core/gadget/context-menu";
 import type { DesignerTopLevelSelection, TopLevelCanvasContextMenuSelection } from "../core/toplevel/selection";
 
 import {
@@ -3496,7 +3496,7 @@ function resolveCanvasContextMenuActions(
       gadget,
       deleteBlockedReason: getGadgetDeleteBlockedReason(gadget),
       copiedGadgetId: copiedGadget?.id,
-      canPasteCopiedGadget: Boolean(copiedGadget),
+      canPasteCopiedGadget: Boolean(copiedGadget && canCopyPasteGadgetFromContextMenu(copiedGadget)),
     });
   }
 
