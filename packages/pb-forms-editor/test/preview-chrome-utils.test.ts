@@ -215,6 +215,26 @@ test("computes the macOS preview frame with toolbar height outside the stored cl
 });
 
 
+test("keeps the Windows toolbar inside the stored client height", () => {
+  const frameRect = getWindowPreviewFrameRect({ x: 10, y: 10 }, 304, 372, 8, 8, 8);
+  const layout = getWindowChromeLayout(frameRect, 8, false, true, false, METRICS, 8, 8);
+
+  assert.deepEqual(frameRect, { x: 10, y: 10, w: 320, h: 388 });
+  assert.deepEqual(layout.toolBarRect, { x: 18, y: 18, w: 304, h: 24 });
+  assert.deepEqual(layout.contentRect, { x: 18, y: 42, w: 304, h: 348 });
+});
+
+
+test("keeps the Linux toolbar inside the stored client height", () => {
+  const frameRect = getWindowPreviewFrameRect({ x: 10, y: 10 }, 304, 372, 26);
+  const layout = getWindowChromeLayout(frameRect, 26, false, true, false, METRICS);
+
+  assert.deepEqual(frameRect, { x: 10, y: 10, w: 304, h: 398 });
+  assert.deepEqual(layout.toolBarRect, { x: 10, y: 36, w: 304, h: 24 });
+  assert.deepEqual(layout.contentRect, { x: 10, y: 60, w: 304, h: 348 });
+});
+
+
 test("hits the original outside window resize button as the bottom-right handle", () => {
   const frameRect = getWindowPreviewFrameRect({ x: 10, y: 10 }, 304, 372, 8, 8, 8);
 
