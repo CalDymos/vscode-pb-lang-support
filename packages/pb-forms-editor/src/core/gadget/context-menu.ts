@@ -132,10 +132,19 @@ function buildClipboardOriginalActions(args: {
   ];
 }
 
-function buildUnsupportedOriginalActions(gadgetId: string): GadgetCanvasContextMenuAction[] {
+function buildCutOriginalAction(gadgetId: string): GadgetCanvasContextMenuAction {
+  return {
+    kind: "cutGadget",
+    label: "Cut",
+    title: "This original Form Designer popup command is visible, but its patch path is not implemented yet.",
+    enabled: false,
+    gadgetId,
+  };
+}
+
+function buildAlignOriginalActions(gadgetId: string): GadgetCanvasContextMenuAction[] {
   const title = "This original Form Designer popup command is visible, but its patch path is not implemented yet.";
   return [
-    { kind: "cutGadget", label: "Cut", title, enabled: false, gadgetId },
     { kind: "alignGadgetLeft", label: "Align Left", title, enabled: false, gadgetId },
     { kind: "alignGadgetTop", label: "Align Top", title, enabled: false, gadgetId },
     { kind: "alignGadgetWidth", label: "Align Width", title, enabled: false, gadgetId },
@@ -175,12 +184,12 @@ export function resolveGadgetCanvasContextMenuActions(args: {
     }
   ];
 
+  actions.push(buildCutOriginalAction(gadget.id));
   actions.push(...buildClipboardOriginalActions({
     gadget,
     copiedGadgetId: args.copiedGadgetId,
     canPasteCopiedGadget: args.canPasteCopiedGadget,
   }));
-  actions.push(...buildUnsupportedOriginalActions(gadget.id));
   actions.push(buildDuplicateAction(gadget));
 
   if (canInspectGadgetItems(gadget.kind)) {
@@ -202,6 +211,8 @@ export function resolveGadgetCanvasContextMenuActions(args: {
       gadgetId: gadget.id
     });
   }
+
+  actions.push(...buildAlignOriginalActions(gadget.id));
 
   return actions;
 }

@@ -10,12 +10,20 @@ const ORIGINAL_STILL_UNIMPLEMENTED_POPUP_KINDS = [
   "alignGadgetHeight",
 ];
 
+const ALIGN_POPUP_KINDS = [
+  "alignGadgetLeft",
+  "alignGadgetTop",
+  "alignGadgetWidth",
+  "alignGadgetHeight",
+];
+
 const BASE_POPUP_KINDS = [
   "deleteGadget",
+  "cutGadget",
   "copyGadget",
   "pasteGadget",
-  ...ORIGINAL_STILL_UNIMPLEMENTED_POPUP_KINDS,
   "duplicateGadget",
+  ...ALIGN_POPUP_KINDS,
 ];
 
 test("gadget context menu exposes the first safe Copy and Paste popup scope", () => {
@@ -41,8 +49,8 @@ test("gadget context menu exposes the first safe Copy and Paste popup scope", ()
     assert.match(action.title, /not implemented yet/i);
   }
 
-  const duplicateAction = actions.at(-1)!;
-  assert.equal(duplicateAction.kind, "duplicateGadget");
+  const duplicateAction = actions.find(action => action.kind === "duplicateGadget");
+  if (!duplicateAction) throw new Error("Expected Duplicate to stay visible.");
   assert.equal(duplicateAction.enabled, true);
   assert.equal(duplicateAction.label, "Duplicate");
 });
@@ -54,11 +62,17 @@ test("gadget context menu exposes Edit Items for original item-capable gadgets",
     });
 
     assert.deepEqual(actions.map(action => action.kind), [
-      ...BASE_POPUP_KINDS,
-      "editGadgetItems"
+      "deleteGadget",
+      "cutGadget",
+      "copyGadget",
+      "pasteGadget",
+      "duplicateGadget",
+      "editGadgetItems",
+      ...ALIGN_POPUP_KINDS,
     ]);
-    assert.equal(actions.at(-1)?.label, "Edit Items…");
-    assert.equal(actions.at(-1)?.enabled, true);
+    const editItemsAction = actions.find(action => action.kind === "editGadgetItems");
+    assert.equal(editItemsAction?.label, "Edit Items…");
+    assert.equal(editItemsAction?.enabled, true);
   }
 });
 
@@ -68,12 +82,17 @@ test("listicon gadget context menu exposes Edit Items and Edit Columns", () => {
   });
 
   assert.deepEqual(actions.map(action => action.kind), [
-    ...BASE_POPUP_KINDS,
+    "deleteGadget",
+    "cutGadget",
+    "copyGadget",
+    "pasteGadget",
+    "duplicateGadget",
     "editGadgetItems",
-    "editGadgetColumns"
+    "editGadgetColumns",
+    ...ALIGN_POPUP_KINDS,
   ]);
-  assert.equal(actions.at(-2)?.label, "Edit Items…");
-  assert.equal(actions.at(-1)?.label, "Edit Columns…");
+  assert.equal(actions.find(action => action.kind === "editGadgetItems")?.label, "Edit Items…");
+  assert.equal(actions.find(action => action.kind === "editGadgetColumns")?.label, "Edit Columns…");
 });
 
 test("gadget context menu keeps delete disabled when core delete guard blocks it", () => {
@@ -86,10 +105,10 @@ test("gadget context menu keeps delete disabled when core delete guard blocks it
   if (deleteAction.kind !== "deleteGadget") throw new Error(`Unexpected action kind: ${deleteAction.kind}`);
   assert.equal(deleteAction.enabled, false);
   assert.equal(deleteAction.title, "This gadget is still linked by a splitter.");
-  assert.equal(actions[1]?.kind, "copyGadget");
-  assert.equal(actions[1]?.enabled, true);
-  assert.equal(actions[3]?.kind, "cutGadget");
-  assert.equal(actions[3]?.enabled, false);
+  assert.equal(actions[1]?.kind, "cutGadget");
+  assert.equal(actions[1]?.enabled, false);
+  assert.equal(actions[2]?.kind, "copyGadget");
+  assert.equal(actions[2]?.enabled, true);
 });
 
 test("gadget context menu enables Paste when a safe copied gadget is available", () => {
@@ -180,4 +199,22 @@ test("gadget context menu enables Copy, Paste and Duplicate for first structural
     assert.equal(pasteAction.enabled, true);
     assert.equal(duplicateAction.enabled, true);
   }
+});
+
+
+test("gadget context menu keeps original popup order around duplicate, item editors and align actions", () => {
+  const listIconActions = resolveGadgetCanvasContextMenuActions({
+    gadget: { id: "#ListIcon_0", kind: "ListIconGadget" }
+  });
+
+  assert.deepEqual(listIconActions.map(action => action.kind), [
+    "deleteGadget",
+    "cutGadget",
+    "copyGadget",
+    "pasteGadget",
+    "duplicateGadget",
+    "editGadgetItems",
+    "editGadgetColumns",
+    ...ALIGN_POPUP_KINDS,
+  ]);
 });
