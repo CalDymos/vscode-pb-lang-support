@@ -146,6 +146,7 @@ test("gadget context menu enables Duplicate for safe horizontal ResizeGadget per
 test("gadget context menu enables Copy and Paste scope for first structural container and panel roots but keeps Duplicate blocked", () => {
   for (const gadget of [
     { id: "#Container_0", kind: "ContainerGadget" },
+    { id: "#BottomLockedContainer", kind: "ContainerGadget", resizeSource: { line: 12 } },
     { id: "#Panel_0", kind: "PanelGadget" },
   ]) {
     const actions = resolveGadgetCanvasContextMenuActions({

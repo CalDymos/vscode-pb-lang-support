@@ -154,6 +154,42 @@ EndProcedure
   assert.equal(copiedSecond?.parentItem, 1);
 });
 
+test("pastes a copied container subtree with ResizeGadget formulas unchanged except for target ids", () => {
+  const text = `; Form Designer for PureBasic - 6.40 LTS
+
+Declare ResizeGadgetsFrmMain()
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #Container_0
+  #BtnChild
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 260, height = 180)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  ContainerGadget(#Container_0, 10, 10, 160, 100)
+    ButtonGadget(#BtnChild, 10, 12, 80, 24, "Child")
+  CloseGadgetList()
+EndProcedure
+
+Procedure ResizeGadgetsFrmMain()
+  Protected FormWindowWidth, FormWindowHeight
+  FormWindowWidth = WindowWidth(#FrmMain)
+  FormWindowHeight = WindowHeight(#FrmMain)
+  ResizeGadget(#Container_0, 10, 10, FormWindowWidth - 40, FormWindowHeight - 40)
+  ResizeGadget(#BtnChild, 10, 12, FormWindowWidth - 80, 24)
+EndProcedure
+`;
+
+  const patched = patch(text, "#Container_0");
+
+  assert.match(patched, /ContainerGadget\(#Container_0_Copy1, 10, 10, 160, 100\)\s+    ButtonGadget\(#BtnChild_Copy1, 10, 12, 80, 24, "Child"\)\s+  CloseGadgetList\(\)/s);
+  assert.match(patched, /ResizeGadget\(#Container_0, 10, 10, FormWindowWidth - 40, FormWindowHeight - 40\)\s+  ResizeGadget\(#BtnChild, 10, 12, FormWindowWidth - 80, 24\)\s+  ResizeGadget\(#Container_0_Copy1, 10, 10, FormWindowWidth - 40, FormWindowHeight - 40\)\s+  ResizeGadget\(#BtnChild_Copy1, 10, 12, FormWindowWidth - 80, 24\)/s);
+});
+
 test("keeps structural copy paste blocked for splitter subtrees", () => {
   const splitterText = `; Form Designer for PureBasic - 6.40 LTS
 

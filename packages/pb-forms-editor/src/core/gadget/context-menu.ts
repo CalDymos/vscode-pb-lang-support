@@ -77,8 +77,7 @@ function canCopyPasteSimpleGadgetFromContextMenu(gadget: GadgetContextMenuLike):
 }
 
 function canCopyPasteFirstScopeStructuralGadgetFromContextMenu(gadget: GadgetContextMenuLike): boolean {
-  return !gadget.resizeSource
-    && !gadget.splitterId
+  return !gadget.splitterId
     && (gadget.kind === GADGET_KIND.ContainerGadget
       || gadget.kind === GADGET_KIND.ScrollAreaGadget
       || gadget.kind === GADGET_KIND.PanelGadget

@@ -2283,8 +2283,7 @@ function canPatchStructuralGadgetCopyPaste(gadget: Gadget, gadgets: readonly Gad
     if (!subtreeIds.has(entry.id)) continue;
     if (!isInsertableGadgetKind(entry.kind)) return false;
     if (entry.kind === GADGET_KIND.SplitterGadget
-      || entry.splitterId
-      || entry.resizeSource) {
+      || entry.splitterId) {
       return false;
     }
   }
@@ -2328,6 +2327,7 @@ function buildCopiedPastedSubtreeCallLine(
   if (nameLower === "addgadgetitem"
     || nameLower === "addgadgetcolumn"
     || nameLower === "opengadgetlist"
+    || nameLower === "resizegadget"
     || GADGET_PROPERTY_NAMES.has(nameLower)) {
     const identity = findCopiedPastedIdentityForReference(gadgets, identityById, firstParamOfCall(call.args));
     if (!identity || params.length < 1) return undefined;
@@ -2377,12 +2377,26 @@ function applyStructuralGadgetCopyPaste(
   });
   if (requiredCallLines.some(line => !replacements.has(line))) return undefined;
 
-  const block = buildLineBlockWithReplacements(document, copiedLines, replacements);
+  const resizeLines = new Set<number>();
+  for (const call of calls) {
+    if (copiedLines.has(call.range.line) && call.name.toLowerCase() === "resizegadget") {
+      resizeLines.add(call.range.line);
+    }
+  }
+
+  const mainLines = new Set([...copiedLines].filter(line => !resizeLines.has(line)));
+  const block = buildLineBlockWithReplacements(document, mainLines, replacements);
   if (!block.trim()) return undefined;
 
-  const insertLine = Math.max(...copiedLines) + 1;
   const edit = new vscode.WorkspaceEdit();
-  edit.insert(document.uri, new vscode.Position(insertLine, 0), block);
+  edit.insert(document.uri, new vscode.Position(Math.max(...mainLines) + 1, 0), block);
+
+  if (resizeLines.size) {
+    const resizeBlock = buildLineBlockWithReplacements(document, resizeLines, replacements);
+    if (!resizeBlock.trim()) return undefined;
+    edit.insert(document.uri, new vscode.Position(Math.max(...resizeLines) + 1, 0), resizeBlock);
+  }
+
   const insertedStubs = subtreeGadgets.map(gadget => buildInsertedGadgetStub(
     gadget.kind as InsertableGadgetKind,
     identityById.get(gadget.id)!
