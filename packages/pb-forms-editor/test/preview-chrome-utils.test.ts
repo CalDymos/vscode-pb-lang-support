@@ -21,6 +21,7 @@ import {
   getStatusBarRect,
   getStatusBarAlignedX,
   getWindowClientSurfaceRects,
+  getWindowPreviewFrameRect,
   hitHandlePoints,
   getToolBarRect,
   getWindowContentRect,
@@ -184,6 +185,14 @@ test("computes the Windows client surface fill and border rects from chrome and 
     fillRect: { x: 48, y: 76, w: 304, h: 186 },
     borderRect: { x: 47, y: 75, w: 306, h: 188 }
   });
+});
+
+test("computes the Windows preview frame from the stored client size", () => {
+  const frameRect = getWindowPreviewFrameRect({ x: 10, y: 10 }, 304, 372, 8, 8, 8);
+  const layout = getWindowChromeLayout(frameRect, 8, false, false, false, METRICS, 8, 8);
+
+  assert.deepEqual(frameRect, { x: 10, y: 10, w: 320, h: 388 });
+  assert.deepEqual(layout.contentRect, { x: 18, y: 18, w: 304, h: 372 });
 });
 
 

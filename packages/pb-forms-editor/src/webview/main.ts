@@ -35,6 +35,7 @@ import {
   getStatusBarAlignedX,
   getCanvasMenuBarRect,
   getWindowChromeLayout,
+  getWindowPreviewFrameRect,
   getWindowClientSurfaceRects,
   resolvePreviewChromeMetrics,
   usesOriginalMacRoundedButtonChrome,
@@ -2910,6 +2911,32 @@ function escapeHtml(s: string): string {
     .replace(/'/g, "&#039;");
 }
 
+function getWindowPreviewFramePadding(): { top: number; side: number; bottom: number } {
+  const platformSkin = resolvePbFormSkinPlatform();
+  return {
+    top: getWindowPreviewChromeTopPadding(
+      platformSkin,
+      model.window?.flagsExpr,
+      asInt(settings.titleBarHeight),
+      asInt(settings.windowPreviewWindowsCaptionlessTopPadding)
+    ),
+    side: getWindowPreviewClientSidePadding(platformSkin, asInt(settings.windowPreviewWindowsClientSidePadding)),
+    bottom: getWindowPreviewClientBottomPadding(platformSkin, asInt(settings.windowPreviewWindowsClientBottomPadding)),
+  };
+}
+
+function getWindowPreviewFrameForStoredSize(origin: { x: number; y: number }, clientWidth: number, clientHeight: number): PreviewRect {
+  const framePadding = getWindowPreviewFramePadding();
+  return getWindowPreviewFrameRect(
+    origin,
+    clientWidth,
+    clientHeight,
+    framePadding.top,
+    framePadding.side,
+    framePadding.bottom
+  );
+}
+
 function getWinRect(): { x: number; y: number; w: number; h: number; title: string; id: string; tbH: number } | null {
   const rect = canvas.getBoundingClientRect();
   if (!model.window) return null;
@@ -2920,12 +2947,17 @@ function getWinRect(): { x: number; y: number; w: number; h: number; title: stri
   const w = clampPos(model.window.w ?? rect.width);
   const h = clampPos(model.window.h ?? rect.height);
   const externalMenuBar = usesWindowPreviewExternalMenuBar(settings.osSkin) && hasParsedMenuChrome();
+  const frameRect = getWindowPreviewFrameForStoredSize(
+    { x: origin.x, y: origin.y + (externalMenuBar ? previewChromeMetrics.menuHeight : 0) },
+    w,
+    h
+  );
 
   return {
-    x: origin.x,
-    y: origin.y + (externalMenuBar ? previewChromeMetrics.menuHeight : 0),
-    w,
-    h,
+    x: frameRect.x,
+    y: frameRect.y,
+    w: frameRect.w,
+    h: frameRect.h,
     title: model.window.title ?? "",
     id: model.window.id,
     tbH: getWindowPreviewTitleBarHeight(model.window.flagsExpr, asInt(settings.titleBarHeight))
@@ -2958,12 +2990,11 @@ function hasParsedStatusbarChrome(): boolean {
 }
 
 function getWindowLocalRect(): PreviewRect {
-  return {
-    x: 0,
-    y: 0,
-    w: Math.max(0, model.window?.w ?? 0),
-    h: Math.max(0, model.window?.h ?? 0)
-  };
+  return getWindowPreviewFrameForStoredSize(
+    { x: 0, y: 0 },
+    Math.max(0, model.window?.w ?? 0),
+    Math.max(0, model.window?.h ?? 0)
+  );
 }
 
 function getWindowContentPreviewRect(metrics: PreviewChromeMetrics): PreviewRect {
@@ -3963,8 +3994,8 @@ canvas.addEventListener("mousedown", (e) => {
         startMy: my,
         startX: asInt(model.window?.x ?? 0),
         startY: asInt(model.window?.y ?? 0),
-        startW: wr.w,
-        startH: wr.h
+        startW: asInt(model.window?.w ?? wr.w),
+        startH: asInt(model.window?.h ?? wr.h)
       };
       canvas.style.cursor = getHandleCursor(wh);
     } else if (isInTitleBar(mx, my)) {
