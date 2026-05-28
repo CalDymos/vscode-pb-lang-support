@@ -143,10 +143,10 @@ test("gadget context menu enables Duplicate for safe horizontal ResizeGadget per
   assert.equal(duplicateAction.enabled, true);
 });
 
-test("gadget context menu enables Copy and Paste scope for first structural container and panel roots but keeps Duplicate blocked", () => {
+test("gadget context menu enables Copy, Paste and Duplicate for first structural container and panel roots", () => {
   for (const gadget of [
     { id: "#Container_0", kind: "ContainerGadget" },
-    { id: "#BottomLockedContainer", kind: "ContainerGadget", resizeSource: { line: 12 } },
+    { id: "#BottomLockedContainer", kind: "ContainerGadget", resizeSource: { line: 12 }, resizeYRaw: "20", resizeHRaw: "80" },
     { id: "#Panel_0", kind: "PanelGadget" },
   ]) {
     const actions = resolveGadgetCanvasContextMenuActions({
@@ -162,7 +162,6 @@ test("gadget context menu enables Copy and Paste scope for first structural cont
 
     assert.equal(copyAction.enabled, true);
     assert.equal(pasteAction.enabled, true);
-    assert.equal(duplicateAction.enabled, false);
-    assert.match(duplicateAction.title, /not implemented for this gadget structure yet/i);
+    assert.equal(duplicateAction.enabled, true);
   }
 });

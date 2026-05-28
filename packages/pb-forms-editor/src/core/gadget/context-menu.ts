@@ -89,8 +89,14 @@ export function canCopyPasteGadgetFromContextMenu(gadget: GadgetContextMenuLike)
     || canCopyPasteFirstScopeStructuralGadgetFromContextMenu(gadget);
 }
 
+function canDuplicateStructuralHostGadgetFromContextMenu(gadget: GadgetContextMenuLike): boolean {
+  return !gadget.splitterId
+    && canHostInsertedGadgets({ kind: gadget.kind ?? "", flagsExpr: gadget.flagsExpr });
+}
+
 export function canDuplicateGadgetFromContextMenu(gadget: GadgetContextMenuLike): boolean {
-  return canCopyPasteSimpleGadgetFromContextMenu(gadget)
+  return (canCopyPasteSimpleGadgetFromContextMenu(gadget)
+    || canDuplicateStructuralHostGadgetFromContextMenu(gadget))
     && canDuplicatePersistedResizeLineFromContextMenu(gadget);
 }
 

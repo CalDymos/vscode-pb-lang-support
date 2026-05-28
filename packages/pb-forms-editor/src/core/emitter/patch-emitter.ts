@@ -2196,6 +2196,14 @@ function canPatchSimpleGadgetDuplicate(gadget: Gadget): boolean {
     && !canHostInsertedGadgets(gadget);
 }
 
+function canPatchStructuralGadgetDuplicate(gadget: Gadget): boolean {
+  return isInsertableGadgetKind(gadget.kind)
+    && gadget.kind !== GADGET_KIND.SplitterGadget
+    && !gadget.splitterId
+    && canDuplicatePersistedResizeLine(gadget)
+    && canHostInsertedGadgets(gadget);
+}
+
 function canPatchSimpleGadgetCopyPaste(gadget: Gadget): boolean {
   return isInsertableGadgetKind(gadget.kind)
     && gadget.kind !== GADGET_KIND.SplitterGadget
@@ -2406,6 +2414,66 @@ function applyStructuralGadgetCopyPaste(
 }
 
 
+function applyStructuralHostGadgetDuplicate(
+  document: vscode.TextDocument,
+  parsed: ReturnType<typeof parseFormDocument>,
+  sourceGadget: Gadget,
+  calls: PbCall[]
+): vscode.WorkspaceEdit | undefined {
+  if (!canPatchStructuralGadgetDuplicate(sourceGadget)) return undefined;
+
+  const createCall = findCallByStableKey(calls, sourceGadget.id, name => /gadget$/i.test(name));
+  if (!createCall) return undefined;
+
+  const proc = findProcedureBlock(document, createCall.range.line);
+  if (!proc) return undefined;
+
+  const identity = buildDuplicatedGadgetIdentity(sourceGadget, parsed.gadgets);
+  const relatedCalls = calls
+    .filter(call => call.range.line >= proc.startLine && call.range.line <= proc.endLine)
+    .filter(call => {
+      if (call.range.line === createCall.range.line) return true;
+      const nameLower = call.name.toLowerCase();
+      if (nameLower !== "addgadgetitem"
+        && nameLower !== "addgadgetcolumn"
+        && !GADGET_PROPERTY_NAMES.has(nameLower)) {
+        return false;
+      }
+      return firstParamOfCall(call.args) === sourceGadget.id;
+    })
+    .sort((a, b) => a.range.line - b.range.line);
+
+  const duplicatedLines: string[] = [];
+  for (const call of relatedCalls) {
+    const line = buildDuplicatedCallLine(document, call, sourceGadget, identity, call.range.line === createCall.range.line);
+    if (!line) return undefined;
+    duplicatedLines.push(line);
+  }
+  if (!duplicatedLines.length) return undefined;
+
+  const sourceSubtreeIds = collectRequestedGadgetDeleteIds(parsed.gadgets, sourceGadget.id);
+  const sourceBlockLines = collectMovedGadgetLineNumbers(calls, sourceSubtreeIds, buildGadgetListParentIds(parsed.gadgets));
+  if (!sourceBlockLines.size) return undefined;
+
+  const resizeCall = sourceGadget.resizeSource
+    ? findCallByStableKey(calls, sourceGadget.id, name => name === "ResizeGadget")
+    : undefined;
+  const duplicatedResizeLine = resizeCall
+    ? buildDuplicatedResizeCallLine(document, resizeCall, sourceGadget, identity)
+    : undefined;
+  if (sourceGadget.resizeSource && (!resizeCall || !duplicatedResizeLine)) return undefined;
+
+  const edit = new vscode.WorkspaceEdit();
+  const closeIndent = getLineIndent(document, createCall.range.line);
+  const block = `${duplicatedLines.join("\n")}\n${closeIndent}CloseGadgetList()\n`;
+  edit.insert(document.uri, new vscode.Position(Math.max(...sourceBlockLines) + 1, 0), block);
+  if (resizeCall && duplicatedResizeLine) {
+    edit.insert(document.uri, new vscode.Position(resizeCall.range.line + 1, 0), `${duplicatedResizeLine}\n`);
+  }
+  applyGadgetHeadPatchForGadgets(edit, document, [...parsed.gadgets, buildInsertedGadgetStub(sourceGadget.kind as InsertableGadgetKind, identity)]);
+  return edit;
+}
+
 export function applyGadgetDuplicate(
   document: vscode.TextDocument,
   gadgetKey: string,
@@ -2413,9 +2481,13 @@ export function applyGadgetDuplicate(
 ): vscode.WorkspaceEdit | undefined {
   const parsed = parseFormDocument(document.getText());
   const sourceGadget = parsed.gadgets.find(entry => entry.id === gadgetKey);
-  if (!sourceGadget || !canPatchSimpleGadgetDuplicate(sourceGadget)) return undefined;
+  if (!sourceGadget) return undefined;
 
   const calls = scanDocumentCalls(document, scanRange);
+  if (!canPatchSimpleGadgetDuplicate(sourceGadget)) {
+    return applyStructuralHostGadgetDuplicate(document, parsed, sourceGadget, calls);
+  }
+
   const createCall = findCallByStableKey(calls, gadgetKey, name => /gadget$/i.test(name));
   if (!createCall) return undefined;
 
