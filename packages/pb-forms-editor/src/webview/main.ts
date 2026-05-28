@@ -36,6 +36,7 @@ import {
   getCanvasMenuBarRect,
   getWindowChromeLayout,
   getWindowPreviewFrameRect,
+  getWindowPreviewResizeButtonRect,
   getWindowClientSurfaceRects,
   resolvePreviewChromeMetrics,
   usesOriginalMacRoundedButtonChrome,
@@ -8739,26 +8740,15 @@ function render() {
   const frameDecoration = getWindowPreviewFrameDecoration(settings.osSkin);
   drawWindowPreviewFrame(ctx, { x: winX, y: winY, w: winW, h: winH }, frameDecoration, focus, windowsChromeColors);
 
-  // Window resize grip
+  // Window resize button, matching FD_DrawResizeButton().
   if (hasWindowPreviewResizeGrip(platformSkin)) {
-    const gripInset = 4;
-    const gripSize = Math.max(8, Math.min(12, Math.trunc(Math.min(winW, winH) / 8)));
-    const gripRight = winX + winW - gripInset;
-    const gripBottom = winY + winH - gripInset;
+    const resizeButtonRect = getWindowPreviewResizeButtonRect({ x: winX, y: winY, w: winW, h: winH });
 
     ctx.save();
-    ctx.strokeStyle = fg;
-    ctx.globalAlpha = 0.45;
-    for (let offset = 0; offset < 3; offset++) {
-      const startX = gripRight - gripSize + offset * 4;
-      const startY = gripBottom;
-      const endX = gripRight;
-      const endY = gripBottom - gripSize + offset * 4;
-      ctx.beginPath();
-      ctx.moveTo(startX + 0.5, startY + 0.5);
-      ctx.lineTo(endX + 0.5, endY + 0.5);
-      ctx.stroke();
-    }
+    ctx.fillStyle = "rgb(0, 0, 0)";
+    ctx.fillRect(resizeButtonRect.x, resizeButtonRect.y, resizeButtonRect.w, resizeButtonRect.h);
+    ctx.fillStyle = "rgb(255, 255, 255)";
+    ctx.fillRect(resizeButtonRect.x + 1, resizeButtonRect.y + 1, resizeButtonRect.w - 2, resizeButtonRect.h - 2);
     ctx.restore();
   }
 

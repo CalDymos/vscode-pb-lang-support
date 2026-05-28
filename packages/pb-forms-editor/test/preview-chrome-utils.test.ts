@@ -22,6 +22,7 @@ import {
   getStatusBarAlignedX,
   getWindowClientSurfaceRects,
   getWindowPreviewFrameRect,
+  getWindowPreviewResizeButtonRect,
   hitHandlePoints,
   getToolBarRect,
   getWindowContentRect,
@@ -193,6 +194,13 @@ test("computes the Windows preview frame from the stored client size", () => {
 
   assert.deepEqual(frameRect, { x: 10, y: 10, w: 320, h: 388 });
   assert.deepEqual(layout.contentRect, { x: 18, y: 18, w: 304, h: 372 });
+});
+
+
+test("computes the original window resize button rect outside the preview frame", () => {
+  const frameRect = getWindowPreviewFrameRect({ x: 10, y: 10 }, 304, 372, 8, 8, 8);
+
+  assert.deepEqual(getWindowPreviewResizeButtonRect(frameRect), { x: 328, y: 396, w: 8, h: 8 });
 });
 
 

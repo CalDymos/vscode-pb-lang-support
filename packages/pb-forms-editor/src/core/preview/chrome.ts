@@ -903,6 +903,18 @@ export function getStatusBarRect(
 }
 
 
+export function getWindowPreviewResizeButtonRect(windowRect: PreviewRect): PreviewRect {
+  const anchorX = Math.trunc(windowRect.x + windowRect.w + 2);
+  const anchorY = Math.trunc(windowRect.y + windowRect.h + 2);
+
+  return {
+    x: anchorX - 4,
+    y: anchorY - 4,
+    w: 8,
+    h: 8,
+  };
+}
+
 export function getWindowPreviewFrameRect(
   origin: PreviewOffset,
   clientWidth: number,
