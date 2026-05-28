@@ -915,6 +915,10 @@ export function getWindowPreviewResizeButtonRect(windowRect: PreviewRect): Previ
   };
 }
 
+export function hitWindowPreviewResizeButton(windowRect: PreviewRect, x: number, y: number): ResizeHandle | null {
+  return rectContainsPoint(getWindowPreviewResizeButtonRect(windowRect), x, y) ? "se" : null;
+}
+
 export function getWindowPreviewFrameRect(
   origin: PreviewOffset,
   clientWidth: number,

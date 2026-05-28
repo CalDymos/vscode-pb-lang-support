@@ -23,6 +23,7 @@ import {
   getWindowClientSurfaceRects,
   getWindowPreviewFrameRect,
   getWindowPreviewResizeButtonRect,
+  hitWindowPreviewResizeButton,
   hitHandlePoints,
   getToolBarRect,
   getWindowContentRect,
@@ -201,6 +202,14 @@ test("computes the original window resize button rect outside the preview frame"
   const frameRect = getWindowPreviewFrameRect({ x: 10, y: 10 }, 304, 372, 8, 8, 8);
 
   assert.deepEqual(getWindowPreviewResizeButtonRect(frameRect), { x: 328, y: 396, w: 8, h: 8 });
+});
+
+
+test("hits the original outside window resize button as the bottom-right handle", () => {
+  const frameRect = getWindowPreviewFrameRect({ x: 10, y: 10 }, 304, 372, 8, 8, 8);
+
+  assert.equal(hitWindowPreviewResizeButton(frameRect, 332, 400), "se");
+  assert.equal(hitWindowPreviewResizeButton(frameRect, 326, 400), null);
 });
 
 

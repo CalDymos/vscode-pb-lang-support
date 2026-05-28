@@ -37,6 +37,7 @@ import {
   getWindowChromeLayout,
   getWindowPreviewFrameRect,
   getWindowPreviewResizeButtonRect,
+  hitWindowPreviewResizeButton,
   getWindowClientSurfaceRects,
   resolvePreviewChromeMetrics,
   usesOriginalMacRoundedButtonChrome,
@@ -3122,6 +3123,11 @@ function hitHandleWindow(mx: number, my: number): Handle | null {
   const wr = getWinRect();
   if (!wr) return null;
 
+  const resizeButtonHandle = hitWindowPreviewResizeButton({ x: wr.x, y: wr.y, w: wr.w, h: wr.h }, mx, my);
+  if (resizeButtonHandle && canResizeWindowHandleInCanvas(resizeButtonHandle)) {
+    return resizeButtonHandle;
+  }
+
   // Original Form Designer: top-level windows resize only to the right and bottom.
   const pts = getRectHandlePoints({ x: wr.x, y: wr.y, w: wr.w, h: wr.h }).filter(([handle]) => canResizeWindowHandleInCanvas(handle));
   return hitHandlePoints(pts, mx, my, HANDLE_HIT);
@@ -3982,10 +3988,10 @@ canvas.addEventListener("mousedown", (e) => {
 
   // Window interaction (no gadget hit)
   const wr = getWinRect();
-  if (wr && hitWindow(mx, my)) {
+  const wh = wr ? hitHandleWindow(mx, my) : null;
+  if (wr && (hitWindow(mx, my) || wh)) {
     selection = { kind: "window" };
 
-    const wh = hitHandleWindow(mx, my);
     if (wh) {
       drag = {
         target: "window",
