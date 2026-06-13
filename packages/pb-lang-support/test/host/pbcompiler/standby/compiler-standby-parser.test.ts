@@ -1,4 +1,4 @@
-import { serializeCompilerStandbyCommand, splitCompilerStandbyOutput } from '../../../../src/host/pbcompiler/standby/compiler-standby-protocol';
+import { isCompilerStandbyResponseComplete, serializeCompilerStandbyCommand, splitCompilerStandbyOutput } from '../../../../src/host/pbcompiler/standby/compiler-standby-protocol';
 import { parseCompilerStandbyLines } from '../../../../src/host/pbcompiler/standby/compiler-standby-parser';
 
 describe('compiler standby parser', () => {
@@ -137,5 +137,25 @@ describe('compiler standby protocol helpers', () => {
             'PROGRESS\tLINES\t1',
             'SUCCESS',
         ]);
+    });
+});
+
+
+describe('compiler standby response completion', () => {
+    test('does not treat a warning block as terminal before success', () => {
+        expect(isCompilerStandbyResponseComplete([
+            'WARNING\t12',
+            'MESSAGE\tVariable is not used.',
+            'OUTPUT\tCOMPLETE',
+        ])).toBe(false);
+    });
+
+    test('treats success and completed errors as terminal', () => {
+        expect(isCompilerStandbyResponseComplete(['SUCCESS'])).toBe(true);
+        expect(isCompilerStandbyResponseComplete([
+            'ERROR\tSYNTAX\t9',
+            'MESSAGE\tEndIf expected.',
+            'OUTPUT\tCOMPLETE',
+        ])).toBe(true);
     });
 });

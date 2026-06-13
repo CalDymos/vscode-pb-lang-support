@@ -26,3 +26,21 @@ export function splitCompilerStandbyOutput(output: string): string[] {
         .split('\n')
         .filter((line, index, lines) => line.length > 0 || index < lines.length - 1);
 }
+
+/**
+ * Returns true when the collected response lines contain a complete compiler
+ * result for one COMPILE command. Warning blocks are not terminal and must be
+ * followed by SUCCESS or an error block.
+ */
+export function isCompilerStandbyResponseComplete(lines: readonly string[]): boolean {
+    if (lines.some((line) => line === 'SUCCESS')) {
+        return true;
+    }
+
+    const firstErrorIndex = lines.findIndex((line) => line.startsWith('ERROR\t'));
+    if (firstErrorIndex < 0) {
+        return false;
+    }
+
+    return lines.slice(firstErrorIndex + 1).some((line) => line === 'OUTPUT\tCOMPLETE');
+}
