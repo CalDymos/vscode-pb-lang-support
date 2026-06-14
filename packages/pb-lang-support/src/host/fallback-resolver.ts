@@ -7,7 +7,17 @@
 import * as vscode from 'vscode';
 import * as path   from 'path';
 import { parse } from 'jsonc-parser';
-import { splitPbFile, parseCfgFile, parseProjectCfg, extractExecutable } from './utils/pb-metadata';
+import type { PbpTarget } from '@caldymos/pb-project-core';
+import {
+    extractExecutable,
+    extractUseMainFile,
+    isMetadataDebuggerEnabled,
+    metadataToFallbackTarget,
+    parseCfgFile,
+    parseProjectCfg,
+    splitPbFile,
+    type PbFileMetadata,
+} from './utils/pb-metadata';
 import { readHostSettings, SETTINGS_SECTION } from './config/settings';
 
 export type FallbackSource =
@@ -19,8 +29,25 @@ export type FallbackSource =
 export interface FallbackBuildContext {
     source:       FallbackSource;
     projectFiles: string[];
+    /** Source file that should be passed to the compiler. This can be a resolved MainFile. */
+    inputFile?: string;
+    /** Original source file used when a temporary source is introduced later. */
+    sourceAlias?: string;
+    /** Compilation working directory. */
+    workingDir?: string;
     /** Path to output file (compiler output), if available. */
     outputFile?:  string;
+    /** PureBasic IDE MainFile resolved from metadata, if active. */
+    mainFile?: string;
+    /** Target-like compiler options extracted from PureBasic IDE metadata. */
+    compilerTarget?: PbpTarget;
+    /** Non-fatal fallback resolution warnings. */
+    warnings?: string[];
+}
+
+interface FallbackMetadataReadResult {
+    metadata: PbFileMetadata;
+    baseDir: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -41,20 +68,13 @@ export class FallbackResolver {
     // sourceMetadata
     // PureBasic IDE writes build parameters as comments at end of file:
     //   ; Executable = output\MyApp.exe
+    //   ; UseMainFile = main.pb
     // -----------------------------------------------------------------------
     private async fromSourceMetadata(uri: vscode.Uri): Promise<FallbackBuildContext | null> {
-        try {
-            const bytes = await vscode.workspace.fs.readFile(uri);
-            const { metadata } = splitPbFile(Buffer.from(bytes).toString('utf8'));
-            if (!metadata) return null;
+        const active = await this.readSourceMetadata(uri.fsPath);
+        if (!active) return null;
 
-            const base = path.dirname(uri.fsPath);
-            return {
-                source:       'sourceMetadata',
-                projectFiles: [],
-                outputFile:   extractExecutable(metadata, base),
-            };
-        } catch { return null; }
+        return this.fromMetadata(uri, 'sourceMetadata', active, (filePath) => this.readSourceMetadata(filePath));
     }
 
     // -----------------------------------------------------------------------
@@ -75,16 +95,23 @@ export class FallbackResolver {
             const json = parse(text) as { configurations?: unknown[] };
             const cfgs  = json.configurations ?? [];
 
-            // Only use a purebasic-typed configuration – never fall back to an unrelated entry
+            // Only use a purebasic-typed configuration – never fall back to an unrelated entry.
             const cfg = cfgs.find((c: any) => c.type === SETTINGS_SECTION) as any | undefined;
             if (!cfg) return null;
 
             const base = wsFolder.uri.fsPath;
-            // projectFiles is not part of the launch schema; the active document
-            // serves as the input file (consistent with other fallback resolvers).
-            const outputFile = cfg.output ? this.abs(base, cfg.output as string) : undefined;
+            const program = typeof cfg.program === 'string' && cfg.program.trim()
+                ? this.expandLaunchPath(base, uri.fsPath, cfg.program.trim())
+                : uri.fsPath;
+            const outputFile = cfg.output ? this.expandLaunchPath(base, uri.fsPath, cfg.output as string) : undefined;
 
-            return { source: 'launchJson', projectFiles: [], outputFile };
+            return {
+                source: 'launchJson',
+                projectFiles: [],
+                inputFile: program,
+                workingDir: path.dirname(program),
+                outputFile,
+            };
         } catch {
             return null;
         }
@@ -94,43 +121,109 @@ export class FallbackResolver {
     // fileCfg  (<file>.pb.cfg)
     // -----------------------------------------------------------------------
     private async fromFileCfg(uri: vscode.Uri): Promise<FallbackBuildContext | null> {
-        const cfgPath = uri.fsPath + '.cfg';
-        try {
-            const bytes = await vscode.workspace.fs.readFile(vscode.Uri.file(cfgPath));
-            const meta  = parseCfgFile(Buffer.from(bytes).toString('utf8'));
-            if (!meta) return null;
+        const active = await this.readFileCfgMetadata(uri.fsPath);
+        if (!active) return null;
 
-            const base = path.dirname(uri.fsPath);
-            return {
-                source:       'fileCfg',
-                projectFiles: [],
-                outputFile:   extractExecutable(meta, base),
-            };
-        } catch { return null; }
+        return this.fromMetadata(uri, 'fileCfg', active, (filePath) => this.readFileCfgMetadata(filePath));
     }
 
     // -----------------------------------------------------------------------
     // projectCfg  (project.cfg – walk up directory tree to workspace root)
     // -----------------------------------------------------------------------
     private async fromProjectCfg(uri: vscode.Uri): Promise<FallbackBuildContext | null> {
-        const wsFolder = vscode.workspace.getWorkspaceFolder(uri);
-        const stopAt   = wsFolder?.uri.fsPath ?? path.parse(uri.fsPath).root;
-        const fileName = path.basename(uri.fsPath);  // z.B. "test.pb"
+        const active = await this.readProjectCfgMetadata(uri.fsPath);
+        if (!active) return null;
 
-        let dir = path.dirname(uri.fsPath);
+        return this.fromMetadata(uri, 'projectCfg', active, (filePath) => this.readProjectCfgMetadata(filePath));
+    }
+
+    // -----------------------------------------------------------------------
+
+    private async fromMetadata(
+        uri: vscode.Uri,
+        source: FallbackSource,
+        active: FallbackMetadataReadResult,
+        readMainMetadata: (filePath: string) => Promise<FallbackMetadataReadResult | null>,
+    ): Promise<FallbackBuildContext> {
+        const activeFile = uri.fsPath;
+        const activeBaseDir = path.dirname(activeFile);
+        const mainFile = extractUseMainFile(active.metadata, activeBaseDir);
+        const inputFile = mainFile ?? activeFile;
+        const warnings: string[] = [];
+
+        let targetMetadata = active.metadata;
+        let targetBaseDir = active.baseDir;
+
+        if (mainFile) {
+            const mainMetadata = await readMainMetadata(mainFile);
+            if (mainMetadata) {
+                targetMetadata = mainMetadata.metadata;
+                targetBaseDir = mainMetadata.baseDir;
+            } else {
+                warnings.push(`MainFile metadata could not be read; using active file metadata for compiler options: ${mainFile}`);
+                targetBaseDir = path.dirname(mainFile);
+            }
+        }
+
+        const compilerTarget = metadataToFallbackTarget(targetMetadata, inputFile, targetBaseDir, {
+            debuggerEnabled: mainFile ? isMetadataDebuggerEnabled(active.metadata) : undefined,
+        });
+        const outputFile = compilerTarget.outputFile.fsPath || extractExecutable(targetMetadata, targetBaseDir);
+
+        return {
+            source,
+            projectFiles: [],
+            inputFile,
+            workingDir: path.dirname(inputFile),
+            outputFile,
+            mainFile,
+            compilerTarget,
+            warnings,
+        };
+    }
+
+    private async readSourceMetadata(filePath: string): Promise<FallbackMetadataReadResult | null> {
+        try {
+            const bytes = await vscode.workspace.fs.readFile(vscode.Uri.file(filePath));
+            const { metadata } = splitPbFile(Buffer.from(bytes).toString('utf8'));
+            if (!metadata) return null;
+
+            return { metadata, baseDir: path.dirname(filePath) };
+        } catch {
+            return null;
+        }
+    }
+
+    private async readFileCfgMetadata(filePath: string): Promise<FallbackMetadataReadResult | null> {
+        const cfgPath = `${filePath}.cfg`;
+        try {
+            const bytes = await vscode.workspace.fs.readFile(vscode.Uri.file(cfgPath));
+            const metadata = parseCfgFile(Buffer.from(bytes).toString('utf8'));
+            if (!metadata) return null;
+
+            return { metadata, baseDir: path.dirname(filePath) };
+        } catch {
+            return null;
+        }
+    }
+
+    private async readProjectCfgMetadata(filePath: string): Promise<FallbackMetadataReadResult | null> {
+        const wsFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(filePath));
+        const stopAt = wsFolder?.uri.fsPath ?? path.parse(filePath).root;
+        const fileName = path.basename(filePath);
+
+        let dir = path.dirname(filePath);
         while (true) {
             const cfgPath = path.join(dir, 'project.cfg');
             try {
                 const bytes = await vscode.workspace.fs.readFile(vscode.Uri.file(cfgPath));
-                const meta  = parseProjectCfg(Buffer.from(bytes).toString('utf8'), fileName);
-                if (meta) {
-                    return {
-                        source:       'projectCfg',
-                        projectFiles: [],
-                        outputFile:   extractExecutable(meta, dir),
-                    };
+                const metadata = parseProjectCfg(Buffer.from(bytes).toString('utf8'), fileName);
+                if (metadata) {
+                    return { metadata, baseDir: dir };
                 }
-            } catch { /* Datei nicht vorhanden – nächste Ebene */ }
+            } catch {
+                // File not present; continue with the next parent directory.
+            }
 
             if (dir === stopAt || dir === path.dirname(dir)) break;
             dir = path.dirname(dir);
@@ -138,10 +231,15 @@ export class FallbackResolver {
         return null;
     }
 
-    // -----------------------------------------------------------------------
-
     private configuredSource(): FallbackSource {
-    return readHostSettings().build.fallbackSource;
+        return readHostSettings().build.fallbackSource;
+    }
+
+    private expandLaunchPath(base: string, activeFile: string, value: string): string {
+        const expanded = value
+            .replace(/\$\{file\}/g, activeFile)
+            .replace(/\$\{workspaceFolder\}/g, base);
+        return this.abs(base, expanded);
     }
 
     private abs(base: string, p: string): string {

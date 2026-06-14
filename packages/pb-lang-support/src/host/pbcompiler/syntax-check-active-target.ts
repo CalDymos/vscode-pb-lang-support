@@ -94,7 +94,10 @@ export async function syntaxCheckActiveTarget(deps: SyntaxCheckActiveTargetDeps)
 
     deps.outputChannel.clear();
     deps.outputChannel.show(true);
-    writeSyntaxCheckHeader(deps.outputChannel, resolved, compiler, commandBuild.warnings);
+    writeSyntaxCheckHeader(deps.outputChannel, resolved, compiler, [
+        ...(resolved.context.fallbackWarnings ?? []),
+        ...commandBuild.warnings,
+    ]);
 
     try {
         const runResult = await vscode.window.withProgress(
@@ -148,7 +151,7 @@ function resolveSyntaxCheckInput(context: UnifiedContext): SyntaxCheckResolvedIn
     const inputFile = (context.inputFile ?? '').trim();
     if (!inputFile) return null;
 
-    const compileCwd = (context.projectDir ?? '').trim() || path.dirname(inputFile);
+    const compileCwd = (context.projectDir ?? '').trim() || (context.workingDir ?? '').trim() || path.dirname(inputFile);
     if (!compileCwd) return null;
 
     const targetFile = makeSyntaxCheckTargetFile(inputFile);
@@ -156,7 +159,7 @@ function resolveSyntaxCheckInput(context: UnifiedContext): SyntaxCheckResolvedIn
         ? `PureBasic: Syntax Check (${context.targetName ?? 'active target'})`
         : `PureBasic: Syntax Check (${context.fallbackSource ?? 'fallback'})`;
 
-    return { context, compileCwd, targetFile, title };
+    return { context, compileCwd, targetFile, sourceAlias: context.sourceAlias, title };
 }
 
 function makeSyntaxCheckTargetFile(sourceFile: string): string {
@@ -180,10 +183,16 @@ function writeSyntaxCheckHeader(
         outputChannel.appendLine(`target:     ${context.targetName ?? '(active)'}`);
     } else {
         outputChannel.appendLine(`fallback:   ${context.fallbackSource ?? '(default)'}`);
+        if (context.fallbackMainFile) {
+            outputChannel.appendLine(`main file:  ${context.fallbackMainFile}`);
+        }
     }
     outputChannel.appendLine(`compiler:   ${compiler}`);
     outputChannel.appendLine(`cwd:        ${resolved.compileCwd}`);
     outputChannel.appendLine(`source:     ${context.inputFile ?? '(missing)'}`);
+    if (resolved.sourceAlias) {
+        outputChannel.appendLine(`alias:      ${resolved.sourceAlias}`);
+    }
     outputChannel.appendLine(`target:     ${resolved.targetFile}`);
 
     if (warnings.length > 0) {
