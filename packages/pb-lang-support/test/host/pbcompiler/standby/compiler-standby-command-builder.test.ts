@@ -147,6 +147,31 @@ describe('compiler standby command builder', () => {
         expect(result.warnings).toEqual(['Multiple resources are configured; compiler standby RESOURCE uses the first entry.']);
     });
 
+    test('uses source alias directory as include path for temporary syntax check source', () => {
+        const ctx: UnifiedContext = {
+            mode: 'fallback',
+            noProject: true,
+            projectFiles: [],
+            inputFile: '/tmp/vscode-pb-lang-support/syntax-check/PB_EditorOutput.pb',
+            sourceAlias: '/project/main.pb',
+            projectDir: '/project',
+        };
+
+        const result = buildSyntaxCheckStandbyCommands(ctx, {
+            platform: 'linux',
+            targetFile: '/tmp/check',
+            sourceAlias: ctx.sourceAlias,
+        });
+
+        expect(result.commands.map(serializeCompilerStandbyCommand)).toEqual([
+            'SOURCE\t/tmp/vscode-pb-lang-support/syntax-check/PB_EditorOutput.pb',
+            'TARGET\t/tmp/check',
+            'INCLUDEPATH\t/project',
+            'SOURCEALIAS\t/project/main.pb',
+            'COMPILE\tPROGRESS\tWARNINGS\tCHECKSYNTAX',
+        ]);
+    });
+
     test('builds syntax check commands from unified context', () => {
         const ctx: UnifiedContext = {
             mode: 'pbp',

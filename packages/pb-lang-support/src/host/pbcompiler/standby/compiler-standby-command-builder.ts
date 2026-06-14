@@ -46,10 +46,10 @@ export function buildSyntaxCheckStandbyCommands(
         platform: opt.platform,
         sourceFile,
         targetFile: opt.targetFile,
-        includePath: getSourceIncludePath(sourceFile, ctx.projectDir),
+        includePath: getSourceIncludePath(opt.sourceAlias || sourceFile, ctx.projectDir),
         sourceAlias: opt.sourceAlias,
         projectDir: ctx.projectDir,
-        target: ctx.target,
+        target: ctx.compilerTarget ?? ctx.target,
         checkSyntax: true,
         createExecutable: false,
     });

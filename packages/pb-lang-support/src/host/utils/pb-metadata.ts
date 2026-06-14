@@ -409,7 +409,26 @@ function resolve(base: string, p: string): string {
         return path.win32.normalize(path.win32.resolve(base, p));
     }
 
-    return path.isAbsolute(p) ? path.normalize(p) : path.resolve(base, p);
+    if (isRootedPath(p)) {
+        return path.normalize(p);
+    }
+    if (isRootedPath(base)) {
+        return path.normalize(joinRootedPath(base, p));
+    }
+
+    return path.resolve(base, p);
+}
+
+function joinRootedPath(base: string, p: string): string {
+    const separator = base.includes('\\') && !base.includes('/') ? '\\' : '/';
+    const trimmedBase = base.replace(/[\\/]+$/, '');
+    const trimmedPath = p.replace(/^[\\/]+/, '');
+
+    return `${trimmedBase}${separator}${trimmedPath}`;
+}
+
+function isRootedPath(value: string): boolean {
+    return value.startsWith('/') || value.startsWith('\\');
 }
 
 function looksLikeWindowsAbs(value: string): boolean {

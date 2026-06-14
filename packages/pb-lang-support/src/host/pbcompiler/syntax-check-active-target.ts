@@ -16,6 +16,7 @@ import { resolveUnifiedContext, type PbProjectFilesApi, type UnifiedContext } fr
 import { LANGUAGE_ID } from '../../shared/constants';
 
 import { resolvePbCompilerPath } from './compiler-path';
+import { prepareSyntaxCheckTempSource } from './syntax-check-temp-source';
 import { buildSyntaxCheckStandbyCommands } from './standby/compiler-standby-command-builder';
 import { buildCompilerStandbyDiagnostics, type CompilerStandbyDiagnostic } from './standby/compiler-standby-diagnostics';
 import { CompilerStandbySession, type CompilerStandbyRunResult } from './standby/compiler-standby-session';
@@ -69,37 +70,40 @@ export async function syntaxCheckActiveTarget(deps: SyntaxCheckActiveTargetDeps)
         return false;
     }
 
-    const resolved = resolveSyntaxCheckInput(context);
-    if (!resolved) {
-        void vscode.window.showErrorMessage('Syntax Check failed: missing source file or working directory.');
-        return false;
-    }
-
-    const compiler = await resolvePbCompilerPath();
-    if (!compiler) {
-        void vscode.window.showErrorMessage('PureBasic compiler not found. Configure purebasic.build.compiler or add pbcompiler to PATH.');
-        return false;
-    }
-
-    const commandBuild = buildSyntaxCheckStandbyCommands(resolved.context, {
-        platform: process.platform,
-        targetFile: resolved.targetFile,
-        sourceAlias: resolved.sourceAlias,
-    });
-
-    if (commandBuild.commands.length === 0) {
-        void vscode.window.showErrorMessage(commandBuild.warnings[0] ?? 'Failed to build compiler standby commands.');
-        return false;
-    }
-
-    deps.outputChannel.clear();
-    deps.outputChannel.show(true);
-    writeSyntaxCheckHeader(deps.outputChannel, resolved, compiler, [
-        ...(resolved.context.fallbackWarnings ?? []),
-        ...commandBuild.warnings,
-    ]);
+    const tempSource = await prepareSyntaxCheckTempSource(context);
 
     try {
+        const resolved = resolveSyntaxCheckInput(tempSource.context);
+        if (!resolved) {
+            void vscode.window.showErrorMessage('Syntax Check failed: missing source file or working directory.');
+            return false;
+        }
+
+        const compiler = await resolvePbCompilerPath();
+        if (!compiler) {
+            void vscode.window.showErrorMessage('PureBasic compiler not found. Configure purebasic.build.compiler or add pbcompiler to PATH.');
+            return false;
+        }
+
+        const commandBuild = buildSyntaxCheckStandbyCommands(resolved.context, {
+            platform: process.platform,
+            targetFile: resolved.targetFile,
+            sourceAlias: resolved.sourceAlias,
+        });
+
+        if (commandBuild.commands.length === 0) {
+            void vscode.window.showErrorMessage(commandBuild.warnings[0] ?? 'Failed to build compiler standby commands.');
+            return false;
+        }
+
+        deps.outputChannel.clear();
+        deps.outputChannel.show(true);
+        writeSyntaxCheckHeader(deps.outputChannel, resolved, compiler, [
+            ...(context.fallbackWarnings ?? []),
+            ...tempSource.warnings,
+            ...commandBuild.warnings,
+        ]);
+
         const runResult = await vscode.window.withProgress(
             { location: vscode.ProgressLocation.Notification, title: resolved.title, cancellable: false },
             async () => {
@@ -144,6 +148,8 @@ export async function syntaxCheckActiveTarget(deps: SyntaxCheckActiveTargetDeps)
         deps.outputChannel.appendLine(`Syntax check failed: ${msg}`);
         void vscode.window.showErrorMessage(`Syntax check failed: ${msg}`);
         return false;
+    } finally {
+        await tempSource.cleanup();
     }
 }
 
