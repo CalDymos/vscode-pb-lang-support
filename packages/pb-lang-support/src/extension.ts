@@ -8,6 +8,7 @@ import { FallbackResolver } from './host/fallback-resolver';
 import { resolveUnifiedContext, type PbProjectFilesApi } from './host/unified-context';
 import { buildActiveTarget } from './host/pbcompiler/build-active-target';
 import { runActiveTarget } from './host/pbcompiler/run-active-target';
+import { syntaxCheckActiveTarget } from './host/pbcompiler/syntax-check-active-target';
 import { buildPbCompilerArgs } from './host/pbcompiler/pbcompiler-args';
 import {splitPbFile, PbFileSplit} from './host/utils/pb-metadata';
 import { readHostSettings } from './host/config/settings';
@@ -20,6 +21,7 @@ import { PbfHoverProvider } from './pbf/hover-provider';
 let client: LanguageClient;
 let debugChannel: vscode.OutputChannel;
 let buildChannel: vscode.OutputChannel;
+let syntaxCheckChannel: vscode.OutputChannel;
 let fileWatcher: vscode.FileSystemWatcher;
 
 let projectFilesApi: PbProjectFilesApi | undefined;
@@ -85,6 +87,9 @@ export function activate(context: vscode.ExtensionContext) {
 
     buildChannel = vscode.window.createOutputChannel('PureBasic (Build)');
     context.subscriptions.push(buildChannel);
+
+    syntaxCheckChannel = vscode.window.createOutputChannel('PureBasic (Syntax Check)');
+    context.subscriptions.push(syntaxCheckChannel);
 
     debugChannel.appendLine('Activating PureBasic Language Server...');
 
@@ -643,6 +648,14 @@ function registerCommands(context: vscode.ExtensionContext) {
         }
     });
 
+
+    const syntaxCheckTarget = vscode.commands.registerCommand('purebasic.syntaxCheck', async () => {
+        await syntaxCheckActiveTarget({
+            projectFilesApi,
+            outputChannel: syntaxCheckChannel,
+        });
+    });
+
     const buildTarget = vscode.commands.registerCommand('purebasic.buildActiveTarget', async () => {
         await buildActiveTarget({
             projectFilesApi,
@@ -677,6 +690,7 @@ function registerCommands(context: vscode.ExtensionContext) {
         clearSymbolCache,
         formatDocument,
         findSymbols,
+        syntaxCheckTarget,
         buildTarget, 
         runTarget,
         buildAndRunTarget

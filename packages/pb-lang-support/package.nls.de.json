@@ -39,6 +39,7 @@
   "command.clearSymbolCache.title": "PureBasic: Symbol-Cache leeren",
   "command.formatDocument.title": "PureBasic: Dokument formatieren",
   "command.findSymbols.title": "PureBasic: Symbole im Arbeitsbereich suchen",
+  "command.syntaxCheck.title": "PureBasic: Syntaxprüfung",
   "command.buildActiveTarget.title": "PureBasic: Aktives Target bauen",
   "command.runActiveTarget.title": "PureBasic: Aktives Target starten",
   "command.buildAndRunActiveTarget.title": "PureBasic: Aktives Target bauen & starten",

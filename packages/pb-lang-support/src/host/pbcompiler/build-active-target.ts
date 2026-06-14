@@ -14,8 +14,7 @@ import { resolveUnifiedContext, type PbProjectFilesApi } from '../unified-contex
 
 import { buildPbCompilerArgs } from './pbcompiler-args';
 import { runPbCompiler } from './pbcompiler-runner';
-import { CompilerLauncher } from '../../debug/compiler/CompilerLauncher';
-import { readHostSettings } from '../config/settings';
+import { resolvePbCompilerPath } from './compiler-path';
 import { LANGUAGE_ID } from '../../shared/constants';
 
 export interface BuildActiveTargetDeps {
@@ -52,7 +51,7 @@ export async function buildActiveTarget(deps: BuildActiveTargetDeps): Promise<bo
         return false;
     }
 
-    const compiler = await resolveCompilerPath();
+    const compiler = await resolvePbCompilerPath();
     if (!compiler) {
         void vscode.window.showErrorMessage('PureBasic compiler not found. Configure purebasic.build.compiler or add pbcompiler to PATH.');
         return false;
@@ -129,18 +128,4 @@ export async function buildActiveTarget(deps: BuildActiveTargetDeps): Promise<bo
         void vscode.window.showErrorMessage(`Build failed: ${msg}`);
         return false;
     }
-}
-
-async function resolveCompilerPath(): Promise<string | null> {
-    const configured = readHostSettings().build.compiler ?? '';
-    if (configured) {
-        return configured;
-    }
-
-    // Try auto discovery first (PATH + common locations).
-    const found = await CompilerLauncher.findCompiler(process.platform);
-    if (found) return found;
-
-    // Fallback: rely on PATH (may still work even if auto discovery failed).
-    return 'pbcompiler';
 }
