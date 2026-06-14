@@ -22,6 +22,7 @@ let client: LanguageClient;
 let debugChannel: vscode.OutputChannel;
 let buildChannel: vscode.OutputChannel;
 let syntaxCheckChannel: vscode.OutputChannel;
+let syntaxCheckDiagnostics: vscode.DiagnosticCollection;
 let fileWatcher: vscode.FileSystemWatcher;
 
 let projectFilesApi: PbProjectFilesApi | undefined;
@@ -90,6 +91,9 @@ export function activate(context: vscode.ExtensionContext) {
 
     syntaxCheckChannel = vscode.window.createOutputChannel('PureBasic (Syntax Check)');
     context.subscriptions.push(syntaxCheckChannel);
+
+    syntaxCheckDiagnostics = vscode.languages.createDiagnosticCollection('purebasic-syntax-check');
+    context.subscriptions.push(syntaxCheckDiagnostics);
 
     debugChannel.appendLine('Activating PureBasic Language Server...');
 
@@ -653,6 +657,7 @@ function registerCommands(context: vscode.ExtensionContext) {
         await syntaxCheckActiveTarget({
             projectFilesApi,
             outputChannel: syntaxCheckChannel,
+            diagnosticCollection: syntaxCheckDiagnostics,
         });
     });
 

@@ -17,10 +17,10 @@ import { LANGUAGE_ID } from '../../shared/constants';
 
 import { resolvePbCompilerPath } from './compiler-path';
 import { buildSyntaxCheckStandbyCommands } from './standby/compiler-standby-command-builder';
+import { buildCompilerStandbyDiagnostics, type CompilerStandbyDiagnostic } from './standby/compiler-standby-diagnostics';
 import { CompilerStandbySession, type CompilerStandbyRunResult } from './standby/compiler-standby-session';
 import type {
     CompilerStandbyCompilerError,
-    CompilerStandbyParseResult,
     CompilerStandbySyntaxError,
     CompilerStandbyWarning,
 } from './standby/compiler-standby-types';
@@ -28,12 +28,14 @@ import type {
 export interface SyntaxCheckActiveTargetDeps {
     projectFilesApi?: PbProjectFilesApi;
     outputChannel: vscode.OutputChannel;
+    diagnosticCollection: vscode.DiagnosticCollection;
 }
 
 interface SyntaxCheckResolvedInput {
     context: UnifiedContext;
     compileCwd: string;
     targetFile: string;
+    sourceAlias?: string;
     title: string;
 }
 
@@ -47,6 +49,8 @@ export async function syntaxCheckActiveTarget(deps: SyntaxCheckActiveTargetDeps)
         void vscode.window.showWarningMessage('No file-backed editor is active.');
         return false;
     }
+
+    deps.diagnosticCollection.clear();
 
     const fallbackResolver = new FallbackResolver();
     const context = await resolveUnifiedContext({
@@ -80,6 +84,7 @@ export async function syntaxCheckActiveTarget(deps: SyntaxCheckActiveTargetDeps)
     const commandBuild = buildSyntaxCheckStandbyCommands(resolved.context, {
         platform: process.platform,
         targetFile: resolved.targetFile,
+        sourceAlias: resolved.sourceAlias,
     });
 
     if (commandBuild.commands.length === 0) {
@@ -110,15 +115,28 @@ export async function syntaxCheckActiveTarget(deps: SyntaxCheckActiveTargetDeps)
             },
         );
 
+        const diagnostics = buildCompilerStandbyDiagnostics(runResult.parseResult, {
+            sourceFile: resolved.context.inputFile ?? '',
+            sourceAlias: resolved.sourceAlias,
+            projectDir: resolved.context.projectDir,
+        });
+        applySyntaxCheckDiagnostics(deps.diagnosticCollection, diagnostics);
+
         const success = writeSyntaxCheckResult(deps.outputChannel, runResult);
         if (success) {
-            void vscode.window.showInformationMessage('PureBasic syntax check succeeded.');
+            if (diagnostics.some((diagnostic) => diagnostic.severity === 'warning')) {
+                void vscode.window.showInformationMessage('PureBasic syntax check succeeded with warnings.');
+            } else {
+                void vscode.window.showInformationMessage('PureBasic syntax check succeeded.');
+            }
         } else {
+            await revealFirstSyntaxCheckError(diagnostics, deps.outputChannel);
             void vscode.window.showErrorMessage('PureBasic syntax check failed. See Output: PureBasic (Syntax Check) for details.');
         }
         return success;
     } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
+        deps.diagnosticCollection.clear();
         deps.outputChannel.appendLine('');
         deps.outputChannel.appendLine(`Syntax check failed: ${msg}`);
         void vscode.window.showErrorMessage(`Syntax check failed: ${msg}`);
@@ -242,6 +260,65 @@ function writeCompilerError(outputChannel: vscode.OutputChannel, error: Compiler
     for (const detail of error.details) {
         outputChannel.appendLine(`Detail:  ${detail}`);
     }
+}
+
+function applySyntaxCheckDiagnostics(
+    diagnosticCollection: vscode.DiagnosticCollection,
+    diagnostics: readonly CompilerStandbyDiagnostic[],
+): void {
+    diagnosticCollection.clear();
+
+    const byFile = new Map<string, vscode.Diagnostic[]>();
+    for (const diagnostic of diagnostics) {
+        const uri = vscode.Uri.file(diagnostic.file);
+        const key = uri.toString();
+        const range = new vscode.Range(
+            new vscode.Position(Math.max(0, diagnostic.line), 0),
+            new vscode.Position(Math.max(0, diagnostic.line), 0),
+        );
+        const vscodeDiagnostic = new vscode.Diagnostic(
+            range,
+            diagnostic.message,
+            diagnostic.severity === 'error'
+                ? vscode.DiagnosticSeverity.Error
+                : vscode.DiagnosticSeverity.Warning,
+        );
+        vscodeDiagnostic.source = diagnostic.source;
+
+        const fileDiagnostics = byFile.get(key) ?? [];
+        fileDiagnostics.push(vscodeDiagnostic);
+        byFile.set(key, fileDiagnostics);
+    }
+
+    for (const [uriString, fileDiagnostics] of byFile) {
+        diagnosticCollection.set(vscode.Uri.parse(uriString), fileDiagnostics);
+    }
+}
+
+async function revealFirstSyntaxCheckError(
+    diagnostics: readonly CompilerStandbyDiagnostic[],
+    outputChannel: vscode.OutputChannel,
+): Promise<void> {
+    const firstError = diagnostics.find((diagnostic) => diagnostic.severity === 'error');
+    if (!firstError) return;
+
+    try {
+        const uri = vscode.Uri.file(firstError.file);
+        const document = await vscode.workspace.openTextDocument(uri);
+        const line = clampLine(firstError.line, document.lineCount);
+        const lineRange = document.lineAt(line).range;
+        const editor = await vscode.window.showTextDocument(document, { preview: false });
+        editor.selection = new vscode.Selection(lineRange.start, lineRange.start);
+        editor.revealRange(lineRange, vscode.TextEditorRevealType.InCenter);
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        outputChannel.appendLine(`Failed to reveal syntax check diagnostic: ${message}`);
+    }
+}
+
+function clampLine(line: number, lineCount: number): number {
+    if (!Number.isFinite(line) || line <= 0) return 0;
+    return Math.min(line, Math.max(0, lineCount - 1));
 }
 
 function formatLocation(file: string | undefined, line: number | undefined): string {
