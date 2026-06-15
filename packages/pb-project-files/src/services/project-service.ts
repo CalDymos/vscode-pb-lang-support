@@ -56,6 +56,51 @@ function formatStatusBarText(ctx: PbProjectContextPayload): string {
     return `PB: ${proj}${tgt}`;
 }
 
+type ProjectMenuAction =
+    | 'newProject'
+    | 'openActiveProjectAndRevealDirectory'
+    | 'revealActiveProjectDirectory'
+    | 'noProject'
+    | 'sectionHeader'
+    | 'selectProject'
+    | 'selectTarget';
+
+interface ProjectMenuItem extends vscode.QuickPickItem {
+    action: ProjectMenuAction;
+    projectFile?: string;
+    targetName?: string;
+}
+
+type ProjectMenuEntry = ProjectMenuItem | vscode.QuickPickItem;
+
+function isProjectMenuItem(item: ProjectMenuEntry): item is ProjectMenuItem {
+    return 'action' in item;
+}
+
+function getProjectDisplayName(project: PbpProject): string {
+    return project.config?.name?.trim() || path.basename(project.projectFile);
+}
+
+function getTargetDisplayName(target: PbpTarget): string {
+    return target.name?.trim() || 'Unnamed Target';
+}
+
+function formatTargetState(target: PbpTarget): string {
+    const states = [target.enabled ? 'enabled' : 'disabled'];
+    if (target.isDefault) states.push('default');
+    return states.join(', ');
+}
+
+function formatCompactFsPath(fsPath: string | undefined, segmentCount = 2): string | undefined {
+    if (!fsPath) return undefined;
+
+    const normalized = path.normalize(fsPath);
+    const segments = normalized.split(/[\\/]+/).filter(Boolean);
+    if (segments.length <= segmentCount) return normalized;
+
+    return `…${path.sep}${segments.slice(-segmentCount).join(path.sep)}`;
+}
+
 export class ProjectService implements vscode.Disposable {
     private readonly projects = new Map<string, PbpProject>();
 
@@ -77,9 +122,10 @@ export class ProjectService implements vscode.Disposable {
     private pbpWatcher?: vscode.FileSystemWatcher;
 
     public constructor(private readonly context: vscode.ExtensionContext) {
-        this.statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-        this.statusBar.command = 'pbProjectFiles.pickProject';
-        this.statusBar.tooltip = 'Select active PureBasic project/target';
+        this.statusBar = vscode.window.createStatusBarItem('pbProjectFiles.activeProject', vscode.StatusBarAlignment.Left, 100);
+        this.statusBar.name = 'PureBasic Active Project';
+        this.statusBar.command = 'pbProjectFiles.projectMenu';
+        this.statusBar.tooltip = 'Open PureBasic project menu';
         this.statusBar.show();
         this.disposables.push(this.statusBar);
 
@@ -230,6 +276,129 @@ export class ProjectService implements vscode.Disposable {
 
         this.updateStatusBar();
         this.emitActiveContextChanged();
+    }
+
+    public async showProjectMenu(): Promise<void> {
+        const activeProject = this.getActiveProject();
+        const activeProjectDir = activeProject ? this.getProjectDirectory(activeProject) : undefined;
+        const activeProjectName = activeProject ? getProjectDisplayName(activeProject) : undefined;
+
+        const items: ProjectMenuEntry[] = [
+            {
+                label: 'Project Actions',
+                kind: vscode.QuickPickItemKind.Separator,
+            },
+            {
+                label: '$(plus) New Project…',
+                description: 'Create a new PureBasic project file',
+                action: 'newProject',
+            },
+            {
+                label: '$(file) Open Active Project and Reveal Directory',
+                description: activeProjectName ?? 'No active project',
+                detail: formatCompactFsPath(activeProject?.projectFile),
+                action: 'openActiveProjectAndRevealDirectory',
+            },
+            {
+                label: '$(folder-opened) Reveal Active Project Directory',
+                description: activeProjectName ?? 'No active project',
+                detail: formatCompactFsPath(activeProjectDir, 1),
+                action: 'revealActiveProjectDirectory',
+            },
+            {
+                label: '$(circle-slash) No Project',
+                description: this.activeProjectFile === NO_PROJECT_SENTINEL
+                    ? 'Project context is currently disabled'
+                    : 'Deactivate project context – use local fallback',
+                action: 'noProject',
+            },
+            {
+                label: '',
+                kind: vscode.QuickPickItemKind.Separator,
+            },
+            {
+                label: '────────────────────────────────────────',
+                description: '',
+                detail: 'Choose the active PureBasic build target below',
+                action: 'sectionHeader',
+            },
+            {
+                label: 'Projects / Targets',
+                kind: vscode.QuickPickItemKind.Separator,
+            },
+            ...this.buildProjectTargetMenuItems(),
+        ];
+
+        const picked = await vscode.window.showQuickPick(items, {
+            placeHolder: 'Select PureBasic project action or target',
+            matchOnDescription: true,
+            matchOnDetail: true,
+        });
+        if (!picked || !isProjectMenuItem(picked)) return;
+
+        switch (picked.action) {
+            case 'newProject':
+                await this.createNewProject();
+                break;
+            case 'openActiveProjectAndRevealDirectory':
+                await this.openActiveProjectAndRevealDirectory();
+                break;
+            case 'revealActiveProjectDirectory':
+                await this.revealActiveProjectDirectory();
+                break;
+            case 'noProject':
+                await this.setNoProject();
+                break;
+            case 'sectionHeader':
+                await this.showProjectMenu();
+                break;
+            case 'selectProject':
+                if (picked.projectFile) {
+                    await this.setActiveProject(picked.projectFile);
+                }
+                break;
+            case 'selectTarget':
+                if (picked.projectFile) {
+                    await this.setActiveProjectTarget(picked.projectFile, picked.targetName);
+                }
+                break;
+        }
+    }
+
+    public async openActiveProject(): Promise<boolean> {
+        const activeProject = this.getActiveProject();
+        if (!activeProject) {
+            void vscode.window.showInformationMessage('No active PureBasic project.');
+            return false;
+        }
+
+        await vscode.commands.executeCommand(
+            'vscode.openWith',
+            vscode.Uri.file(activeProject.projectFile),
+            PBP_EDITOR_VIEW_TYPE,
+            { preview: false },
+        );
+        return true;
+    }
+
+    public async revealActiveProjectDirectory(): Promise<boolean> {
+        const activeProject = this.getActiveProject();
+        if (!activeProject) {
+            void vscode.window.showInformationMessage('No active PureBasic project.');
+            return false;
+        }
+
+        const projectDir = this.getProjectDirectory(activeProject);
+        await vscode.commands.executeCommand('workbench.view.explorer');
+        await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(projectDir));
+        return true;
+    }
+
+    public async openActiveProjectAndRevealDirectory(): Promise<void> {
+        const opened = await this.openActiveProject();
+        if (!opened) return;
+
+        await this.revealActiveProjectDirectory();
     }
 
     public async pickActiveProject(): Promise<void> {
@@ -442,6 +611,19 @@ export class ProjectService implements vscode.Disposable {
         this.emitActiveContextChanged();
     }
 
+    private async setActiveProjectTarget(projectFile: string, targetName: string | undefined): Promise<void> {
+        const key = normalizeFsPath(projectFile);
+        const proj = this.projects.get(key);
+        if (!proj) return;
+
+        this.activeProjectFile = key;
+        this.activeTargetName = targetName ?? this.getActiveTarget(proj)?.name;
+
+        await this.persistActiveState();
+        this.updateStatusBar();
+        this.emitActiveContextChanged();
+    }
+
     private async setNoProject(): Promise<void> {
         this.activeProjectFile = NO_PROJECT_SENTINEL;
         this.activeTargetName  = undefined;
@@ -619,6 +801,74 @@ export class ProjectService implements vscode.Disposable {
 
     public async writeProjectFileXml(projectFileUri: vscode.Uri, xml: string): Promise<void> {
         await vscode.workspace.fs.writeFile(projectFileUri, Buffer.from(xml, 'utf8'));
+    }
+
+    private getActiveProject(): PbpProject | undefined {
+        if (!this.activeProjectFile || this.activeProjectFile === NO_PROJECT_SENTINEL) return undefined;
+        return this.projects.get(this.activeProjectFile);
+    }
+
+    private getProjectDirectory(project: PbpProject): string {
+        return project.projectDir || path.dirname(project.projectFile);
+    }
+
+    private buildProjectTargetMenuItems(): ProjectMenuEntry[] {
+        const projects = [...this.projects.values()].sort((a, b) =>
+            getProjectDisplayName(a).localeCompare(getProjectDisplayName(b)),
+        );
+
+        if (projects.length === 0) {
+            return [{
+                label: '$(warning) No .pbp projects found',
+                description: 'Use New Project… or refresh the workspace',
+                action: 'newProject',
+            }];
+        }
+
+        const items: ProjectMenuEntry[] = [];
+        const showProjectSeparators = projects.length > 1;
+
+        for (const project of projects) {
+            const projectFile = normalizeFsPath(project.projectFile);
+            const projectName = getProjectDisplayName(project);
+            const targets = project.targets ?? [];
+
+            if (showProjectSeparators) {
+                items.push({
+                    label: projectName,
+                    kind: vscode.QuickPickItemKind.Separator,
+                });
+            }
+
+            if (targets.length === 0) {
+                const isActiveProject = this.activeProjectFile === projectFile;
+                items.push({
+                    label: `${isActiveProject ? '$(check)' : '-'} ${projectName}`,
+                    description: 'No targets',
+                    detail: formatCompactFsPath(project.projectFile),
+                    action: 'selectProject',
+                    projectFile,
+                });
+                continue;
+            }
+
+            for (const target of targets) {
+                const isActiveTarget = this.activeProjectFile === projectFile
+                    && this.getActiveTarget(project)?.name === target.name;
+                items.push({
+                    label: `${isActiveTarget ? '$(check)' : '-'} ${getTargetDisplayName(target)}`,
+                    description: showProjectSeparators ? formatTargetState(target) : projectName,
+                    detail: showProjectSeparators
+                        ? formatCompactFsPath(project.projectFile)
+                        : `${formatTargetState(target)} — ${formatCompactFsPath(project.projectFile)}`,
+                    action: 'selectTarget',
+                    projectFile,
+                    targetName: target.name,
+                });
+            }
+        }
+
+        return items;
     }
 
     private updateStatusBar(): void {

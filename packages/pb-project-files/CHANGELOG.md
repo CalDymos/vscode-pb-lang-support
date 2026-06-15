@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.0
+
+### Added
+
+- Status Bar project menu with direct actions for creating projects, opening the active project, revealing the active project directory, disabling project context, and selecting project targets.
+- Commands for opening the active PureBasic project and revealing its project directory in the VS Code Explorer.
+- Project menu entries now show compact tail paths instead of full absolute paths.
+- Project target selection is separated with a clearer QuickPick section header.
+
 ## 0.8.0
 
 ### Added
