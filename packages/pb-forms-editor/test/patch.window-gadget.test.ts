@@ -159,9 +159,9 @@ test("removes now-empty resize scaffolding when the last ResizeGadget line is de
   assert.doesNotMatch(patchedText, /Procedure ResizeGadgetsFrmMain\(/);
   assert.doesNotMatch(patchedText, /Case #PB_Event_SizeWindow/);
   assert.equal(
-    patchedText,
+    stripBomAndToLf(patchedText),
     [
-      "\uFEFF; Form Designer for PureBasic - 6.40",
+      "; Form Designer for PureBasic - 6.40",
       "; Warning: this file uses a strict syntax, if you edit it, make sure to respect the Form Designer limitation or it won't be opened again.",
       "",
       ";",
@@ -201,7 +201,7 @@ test("removes now-empty resize scaffolding when the last ResizeGadget line is de
       "EndProcedure",
       "",
       ""
-    ].join("\r\n")
+    ].join("\n")
   );
 });
 
