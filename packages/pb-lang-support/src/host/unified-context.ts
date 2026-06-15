@@ -79,10 +79,15 @@ export interface UnifiedContext {
     // --- Detailed models (optional, for bridge/debug tooling)
     project?: PbpProject;
     target?: PbpTarget;
+    /** Target-like compiler options extracted from fallback metadata. */
+    compilerTarget?: PbpTarget;
     resolvedBuild?: ResolvedBuildEntry;
 
     // --- Fallback diagnostics
     fallbackSource?: FallbackSource;
+    fallbackMainFile?: string;
+    fallbackWarnings?: string[];
+    sourceAlias?: string;
 }
 
 export interface ResolveUnifiedContextParams {
@@ -151,8 +156,8 @@ export async function resolveUnifiedContext(params: ResolveUnifiedContextParams)
     if (!docFileUri) return null;
 
     const fb = await params.fallbackResolver.resolve(docFileUri);
-    const inputFile = docFileUri.fsPath;
-    const workingDir = path.dirname(inputFile);
+    const inputFile = fb?.inputFile ?? docFileUri.fsPath;
+    const workingDir = fb?.workingDir ?? path.dirname(inputFile);
 
     return {
         mode: 'fallback',
@@ -162,6 +167,10 @@ export async function resolveUnifiedContext(params: ResolveUnifiedContextParams)
         inputFile,
         outputFile: fb?.outputFile,
         executable: fb?.outputFile,
+        compilerTarget: fb?.compilerTarget,
         fallbackSource: fb?.source,
+        fallbackMainFile: fb?.mainFile,
+        fallbackWarnings: fb?.warnings,
+        sourceAlias: fb?.sourceAlias,
     };
 }

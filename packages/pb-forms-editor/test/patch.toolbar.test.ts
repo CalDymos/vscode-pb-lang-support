@@ -12,6 +12,7 @@ import {
 import { TOOLBAR_ENTRY_KIND } from "../src/core/model";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
+import { loadFixture } from "./helpers/loadFixture";
 
 function patchAndReparse(
   text: string,
@@ -30,22 +31,9 @@ function patchAndReparse(
   };
 }
 
-const TOOLBAR_FIXTURE = `; Form Designer for PureBasic - 6.30
+const TOOLBAR_FIXTURE = loadFixture("fixtures/smoke/09-toolbar-basic.pbf");
 
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
-  OpenWindow(#FrmMain, x, y, width, height, "Toolbar", #PB_Window_SystemMenu)
-  CreateToolbar(0, WindowID(#FrmMain))
-  ToolBarImageButton(#TbSave, ImageID(#ImgSave))
-  ToolBarToolTip(0, #TbSave, "Save current form")
-  ToolBarSeparator()
-EndProcedure
-`;
-
-test("migrates legacy ToolBarButton inserts to the PB 6.30 image-button path", () => {
+test("migrates legacy ToolBarButton inserts to the current image-button path", () => {
   const args: ToolBarEntryArgs = {
     kind: TOOLBAR_ENTRY_KIND.ToolBarButton,
     idRaw: "#TbOpen",
@@ -68,7 +56,22 @@ test("migrates legacy ToolBarButton inserts to the PB 6.30 image-button path", (
   assert.match(patchedText, /ToolBarToolTip\(0, #TbOpen, "Open file"\)/);
 });
 
-test("migrates legacy ToolBarStandardButton updates to ToolBarImageButton", () => {
+
+test("keeps toolbar image button without assigned image as zero instead of original empty ImageID call", () => {
+  const args: ToolBarEntryArgs = {
+    kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton,
+    idRaw: "#TbNoImage",
+  };
+
+  const { patchedText } = patchAndReparse(TOOLBAR_FIXTURE, (document) =>
+    applyToolBarEntryInsert(document, "0", args)
+  );
+
+  assert.match(patchedText, /ToolBarImageButton\(#TbNoImage, 0\)/);
+  assert.doesNotMatch(patchedText, /ToolBarImageButton\(#TbNoImage, ImageID\(\)\)/);
+});
+
+test("normalizes legacy ToolBarStandardButton sources to ToolBarImageButton on update", () => {
   const text = `; Form Designer for PureBasic - 6.30
 
 Enumeration FormWindow
@@ -82,11 +85,14 @@ Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
 EndProcedure
 `;
 
+  const legacyParsed = parseFormDocument(text);
+  assert.equal(legacyParsed.toolbars[0]?.entries[0]?.kind, TOOLBAR_ENTRY_KIND.ToolBarImageButton);
+
   const sourceLine = text.split(/\r?\n/).findIndex((line) => line.includes("ToolBarStandardButton"));
   assert.notEqual(sourceLine, -1, "Expected legacy toolbar line.");
 
   const args: ToolBarEntryArgs = {
-    kind: TOOLBAR_ENTRY_KIND.ToolBarStandardButton,
+    kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton,
     idRaw: "#TbLegacy",
     iconRaw: "ImageID(#ImgLegacyNew)",
   };
@@ -101,6 +107,34 @@ EndProcedure
   assert.equal(toolBar.entries[0]?.iconId, "#ImgLegacyNew");
   assert.doesNotMatch(patchedText, /ToolBarStandardButton\(/);
   assert.match(patchedText, /ToolBarImageButton\(#TbLegacy, ImageID\(#ImgLegacyNew\)\)/);
+});
+
+test("deletes normalized legacy ToolBarStandardButton sources through the image-button path", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
+  OpenWindow(#FrmMain, x, y, width, height, "Toolbar", #PB_Window_SystemMenu)
+  CreateToolbar(0, WindowID(#FrmMain))
+  ToolBarStandardButton(#TbLegacy, ImageID(#ImgLegacy))
+  ToolBarToolTip(0, #TbLegacy, "Legacy")
+EndProcedure
+`;
+
+  const parsedLegacy = parseFormDocument(text);
+  const sourceLine = parsedLegacy.toolbars[0]?.entries[0]?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected source line for normalized legacy toolbar entry.");
+
+  const { parsed, patchedText } = patchAndReparse(text, (document) =>
+    applyToolBarEntryDelete(document, "0", sourceLine!, TOOLBAR_ENTRY_KIND.ToolBarImageButton)
+  );
+
+  assert.equal(parsed.toolbars[0]?.entries.length, 0);
+  assert.doesNotMatch(patchedText, /ToolBarStandardButton\(/);
+  assert.doesNotMatch(patchedText, /ToolBarToolTip\(0, #TbLegacy,/);
 });
 
 test("removes the paired ToolBarToolTip when deleting a toolbar image button", () => {

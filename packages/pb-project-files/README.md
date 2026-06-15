@@ -14,6 +14,8 @@ If installed, it provides project context (active project/target, include direct
 - Discover **.pbp** projects in the current workspace
 - Cache parsed projects (via **@caldymos/pb-project-core**)
 - Track **active project / active target** (auto-sync from active editor, QuickPick)
+- Provide a **Status Bar project menu** with project actions and target selection
+- Show **compact tail paths** for project entries in the Status Bar menu instead of full absolute paths
 - Maintain a **file → project** map (including best-match fallback by project root)
 - Show active project/target in the **Status Bar**
 - Open **.pbp** files in a dedicated **webview-based project editor**
@@ -24,19 +26,29 @@ If installed, it provides project context (active project/target, include direct
 
 ## Commands
 
+- **PureBasic: Project Menu** (`pbProjectFiles.projectMenu`)
 - **PureBasic: Select Active Project** (`pbProjectFiles.pickProject`)
 - **PureBasic: Select Active Target** (`pbProjectFiles.pickTarget`)
 - **PureBasic: Refresh Projects** (`pbProjectFiles.refresh`)
+- **PureBasic: New PureBasic Project** (`pbProjectFiles.newProject`)
+- **PureBasic: Open Active PureBasic Project** (`pbProjectFiles.openActiveProject`)
+- **PureBasic: Reveal Active PureBasic Project Directory** (`pbProjectFiles.revealActiveProjectDirectory`)
+- **PureBasic: Open Active PureBasic Project and Reveal Directory** (`pbProjectFiles.openActiveProjectAndRevealDirectory`)
 
 ## Custom Editor
 
 Opening a **.pbp** file in VS Code will automatically use the built-in **PureBasic Project Editor** (viewType: `pbProjectFiles.pbpEditor`).
 It provides a visual interface for managing project files, build targets, and project options — closely replicating the experience of the original PureBasic IDE.
 
-The project picker also includes:
+Clicking the Status Bar item opens a project menu with:
 
 - **New Project…** to create a new `.pbp` file
+- **Open Active Project and Reveal Directory** to open the active `.pbp` in the project editor and reveal its directory in the VS Code Explorer
+- **Reveal Active Project Directory** to jump to the active project directory in the VS Code Explorer
 - **No Project** to explicitly disable project context for the current workspace
+- **Select Project/Target …** target entries grouped by project when multiple `.pbp` files exist, with a dedicated section header separating the target list from the other menu actions
+
+The classic project and target pickers remain available through the command palette.
 
 When creating a new project, the editor can either:
 
@@ -45,16 +57,16 @@ When creating a new project, the editor can either:
 
 ## Configuration
 
-| Setting | Type | Default | Description |
-|---|---|---|---|
-| `purebasicProjectEditor.newProject.templateFile` | `string` | `""` | Absolute path to a `.pbp` file used as template when creating a new project. The template's targets, libraries, and compiler options are copied; name and data section are reset. Leave empty to start with a minimal default project. |
-| `purebasicProjectEditor.inactiveTabForeground` | `string` | `""` | Foreground color for inactive tabs in the project editor. Accepts any valid hex color value. Falls back to the VS Code theme default when empty. |
-| `purebasicProjectEditor.xmlTagColor` | `string` | `""` | Color for XML tag names in the Raw XML view. |
-| `purebasicProjectEditor.xmlAttributeColor` | `string` | `""` | Color for XML attribute names in the Raw XML view. |
-| `purebasicProjectEditor.xmlValueColor` | `string` | `""` | Color for XML attribute values in the Raw XML view. |
-| `purebasicProjectEditor.xmlBracketColor` | `string` | `""` | Color for XML brackets and punctuation in the Raw XML view. |
-| `purebasicProjectEditor.xmlCommentColor` | `string` | `""` | Color for XML comments in the Raw XML view. |
-| `purebasicProjectEditor.xmlProcInstColor` | `string` | `""` | Color for XML processing instructions in the Raw XML view. |
+| Setting                                          | Type     | Default | Description                                                                                                                                                                                                                            |
+|--------------------------------------------------|----------|---------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `purebasicProjectEditor.newProject.templateFile` | `string` | `""`    | Absolute path to a `.pbp` file used as template when creating a new project. The template's targets, libraries, and compiler options are copied; name and data section are reset. Leave empty to start with a minimal default project. |
+| `purebasicProjectEditor.inactiveTabForeground`   | `string` | `""`    | Foreground color for inactive tabs in the project editor. Accepts any valid hex color value. Falls back to the VS Code theme default when empty.                                                                                       |
+| `purebasicProjectEditor.xmlTagColor`             | `string` | `""`    | Color for XML tag names in the Raw XML view.                                                                                                                                                                                           |
+| `purebasicProjectEditor.xmlAttributeColor`       | `string` | `""`    | Color for XML attribute names in the Raw XML view.                                                                                                                                                                                     |
+| `purebasicProjectEditor.xmlValueColor`           | `string` | `""`    | Color for XML attribute values in the Raw XML view.                                                                                                                                                                                    |
+| `purebasicProjectEditor.xmlBracketColor`         | `string` | `""`    | Color for XML brackets and punctuation in the Raw XML view.                                                                                                                                                                            |
+| `purebasicProjectEditor.xmlCommentColor`         | `string` | `""`    | Color for XML comments in the Raw XML view.                                                                                                                                                                                            |
+| `purebasicProjectEditor.xmlProcInstColor`        | `string` | `""`    | Color for XML processing instructions in the Raw XML view.                                                                                                                                                                             |
 
 ## Notes
 

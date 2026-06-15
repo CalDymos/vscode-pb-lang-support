@@ -27,6 +27,7 @@ import {
   getMenuFlyoutShortcutOpacity,
   getMenuEntrySourceLine,
   getMenuEntryMoveTarget,
+  getLinearTopLevelEntryMoveTarget,
   getMenuEntryRect,
   getMenuFlyoutPanelRect,
   getMenuFooterRect,
@@ -35,6 +36,7 @@ import {
   getMenuVisibleEntries,
   getStatusBarFieldWidths,
   getStatusBarPreviewInsertArgs,
+  getSelectedMenuEntryInspectorFieldConfig,
   getSelectedStatusBarInspectorFieldConfig,
   getTopLevelSelectProcEditState,
   resolveMenuFooterHit,
@@ -300,6 +302,49 @@ test("builds default toolbar insert ids and preview insert args", () => {
   });
 });
 
+test("selected menu inspector follows the original row set with parser-safe editability", () => {
+  assert.deepEqual(getSelectedMenuEntryInspectorFieldConfig({ kind: "MenuItem", idRaw: "#Menu_Open" }, true), {
+    constantEditable: true,
+    nameEditable: true,
+    shortcutEditable: true,
+    imageEditable: true,
+    separatorChecked: false,
+    separatorEditable: false,
+  });
+  assert.deepEqual(getSelectedMenuEntryInspectorFieldConfig({ kind: "MenuTitle" }, true), {
+    constantEditable: false,
+    nameEditable: true,
+    shortcutEditable: false,
+    imageEditable: false,
+    separatorChecked: false,
+    separatorEditable: false,
+  });
+  assert.deepEqual(getSelectedMenuEntryInspectorFieldConfig({ kind: "OpenSubMenu" }, true), {
+    constantEditable: false,
+    nameEditable: true,
+    shortcutEditable: false,
+    imageEditable: false,
+    separatorChecked: false,
+    separatorEditable: false,
+  });
+  assert.deepEqual(getSelectedMenuEntryInspectorFieldConfig({ kind: "MenuBar" }, true), {
+    constantEditable: false,
+    nameEditable: false,
+    shortcutEditable: false,
+    imageEditable: false,
+    separatorChecked: true,
+    separatorEditable: false,
+  });
+  assert.deepEqual(getSelectedMenuEntryInspectorFieldConfig({ kind: "MenuItem", idRaw: "#Menu_Open" }, false), {
+    constantEditable: false,
+    nameEditable: false,
+    shortcutEditable: false,
+    imageEditable: false,
+    separatorChecked: false,
+    separatorEditable: false,
+  });
+});
+
 test("exposes editable tooltip rows only for real toolbar command entries", () => {
   assert.equal(canEditToolBarTooltip({ kind: "ToolBarImageButton", idRaw: "#TbOpen" }), true);
   assert.equal(canEditToolBarTooltip({ kind: "ToolBarSeparator", idRaw: "#TbSep" }), false);
@@ -307,18 +352,115 @@ test("exposes editable tooltip rows only for real toolbar command entries", () =
   assert.equal(canEditToolBarTooltip({ kind: "ToolBarImageButton", idRaw: "   " }), false);
 });
 
-test("selected toolbar inspector follows the original caption/current-image row set", () => {
-  const config = getSelectedToolBarInspectorFieldConfig();
-
-  assert.equal(config.captionLabel, "Caption");
-  assert.equal(config.showTextField, false);
-  assert.equal(config.showIconRawField, false);
+test("selected toolbar inspector follows the original row set with parser-safe editability", () => {
+  assert.deepEqual(getSelectedToolBarInspectorFieldConfig({ kind: "ToolBarImageButton", idRaw: "#TbOpen", toggle: true }, true), {
+    variableEditable: true,
+    captionLabel: "Caption",
+    captionEditable: true,
+    imageEditable: true,
+    toggleChecked: true,
+    toggleEditable: true,
+    separatorChecked: false,
+    separatorEditable: false,
+    selectProcParticipates: true,
+    selectProcDisabledTitle: "Toolbar separators are structural entries and do not participate in Select EventMenu() cases.",
+    showTextField: false,
+    showIconRawField: false,
+  });
+  assert.deepEqual(getSelectedToolBarInspectorFieldConfig({ kind: "ToolBarSeparator" }, true), {
+    variableEditable: false,
+    captionLabel: "Caption",
+    captionEditable: false,
+    imageEditable: false,
+    toggleChecked: false,
+    toggleEditable: false,
+    separatorChecked: true,
+    separatorEditable: false,
+    selectProcParticipates: false,
+    selectProcDisabledTitle: "Toolbar separators are structural entries and do not participate in Select EventMenu() cases.",
+    showTextField: false,
+    showIconRawField: false,
+  });
+  assert.deepEqual(getSelectedToolBarInspectorFieldConfig({ kind: "ToolBarToolTip", idRaw: "#TbOpen" }, true), {
+    variableEditable: true,
+    captionLabel: "Caption",
+    captionEditable: false,
+    imageEditable: false,
+    toggleChecked: false,
+    toggleEditable: false,
+    separatorChecked: false,
+    separatorEditable: false,
+    selectProcParticipates: false,
+    selectProcDisabledTitle: "This entry type does not participate in Select EventMenu() cases.",
+    showTextField: false,
+    showIconRawField: false,
+  });
+  assert.equal(getSelectedToolBarInspectorFieldConfig({ kind: "ToolBarImageButton", idRaw: "#TbOpen" }, false).variableEditable, false);
+  assert.equal(getSelectedToolBarInspectorFieldConfig({ kind: "ToolBarImageButton", idRaw: "#TbOpen" }, false).imageEditable, false);
 });
 
-test("selected statusbar inspector omits the non-original ProgressValue helper row", () => {
-  const config = getSelectedStatusBarInspectorFieldConfig();
+test("selected statusbar inspector follows the original row set with parser-safe editability", () => {
+  assert.deepEqual(getSelectedStatusBarInspectorFieldConfig(true), {
+    widthEditable: true,
+    textEditable: true,
+    currentImageEditable: true,
+    changeImageEditable: true,
+    progressBarEditable: true,
+    flagsEditable: true,
+    deleteEditable: true,
+    showProgressValueField: false,
+  });
 
-  assert.equal(config.showProgressValueField, false);
+  assert.deepEqual(getSelectedStatusBarInspectorFieldConfig(false), {
+    widthEditable: false,
+    textEditable: false,
+    currentImageEditable: false,
+    changeImageEditable: false,
+    progressBarEditable: false,
+    flagsEditable: false,
+    deleteEditable: false,
+    showProgressValueField: false,
+  });
+});
+
+test("selected top-level inspector policies cover the original menu toolbar and statusbar row matrices", () => {
+  const menuItem = getSelectedMenuEntryInspectorFieldConfig({ kind: "MenuItem", idRaw: "#Menu_Open" }, true);
+  assert.deepEqual(Object.keys(menuItem), [
+    "constantEditable",
+    "nameEditable",
+    "shortcutEditable",
+    "imageEditable",
+    "separatorChecked",
+    "separatorEditable"
+  ]);
+
+  const toolBarButton = getSelectedToolBarInspectorFieldConfig({ kind: "ToolBarImageButton", idRaw: "#TbOpen" }, true);
+  assert.deepEqual(Object.keys(toolBarButton), [
+    "variableEditable",
+    "captionLabel",
+    "captionEditable",
+    "imageEditable",
+    "toggleChecked",
+    "toggleEditable",
+    "separatorChecked",
+    "separatorEditable",
+    "selectProcParticipates",
+    "selectProcDisabledTitle",
+    "showTextField",
+    "showIconRawField"
+  ]);
+
+  const statusBarField = getSelectedStatusBarInspectorFieldConfig(true);
+  assert.deepEqual(Object.keys(statusBarField), [
+    "widthEditable",
+    "textEditable",
+    "currentImageEditable",
+    "changeImageEditable",
+    "progressBarEditable",
+    "flagsEditable",
+    "deleteEditable",
+    "showProgressValueField"
+  ]);
 });
 
 test("top-level SelectProc remains editable without an EventMenu block when an id exists", () => {
@@ -338,16 +480,14 @@ test("top-level SelectProc remains editable without an EventMenu block when an i
 
 test("builds default statusbar preview insert args", () => {
   assert.deepEqual(getStatusBarPreviewInsertArgs("image"), {
-    widthRaw: "96",
-    imageRaw: "0",
-    flagsRaw: "#PB_StatusBar_Raised"
+    widthRaw: "50"
   });
   assert.deepEqual(getStatusBarPreviewInsertArgs("label"), {
-    widthRaw: "120",
-    textRaw: '"StatusBarField"'
+    widthRaw: "50",
+    textRaw: '"Label"'
   });
   assert.deepEqual(getStatusBarPreviewInsertArgs("progress"), {
-    widthRaw: "120",
+    widthRaw: "50",
     progressBar: true,
     progressRaw: "0"
   });
@@ -358,6 +498,7 @@ test("exposes pb-style flags, string unquoting and top-level preview widths", ()
   assert.equal(hasPbFlag("#PB_StatusBar_Center | #PB_StatusBar_Raised", "#PB_StatusBar_Center"), true);
   assert.equal(hasPbFlag("#PB_StatusBar_Raised", "#PB_StatusBar_Center"), false);
   assert.equal(unquotePbString('  "Status"  '), "Status");
+  assert.equal(unquotePbString(' ~"Escaped ""Status""" '), 'Escaped "Status"');
   assert.equal(unquotePbString("Status"), "Status");
 
   assert.deepEqual(getStatusBarFieldWidths({
@@ -593,6 +734,78 @@ test("resolves menu move targets from visible flyout entries", () => {
   );
 });
 
+
+
+test("resolves linear top-level entry move targets at item edges", () => {
+  const rects = [
+    { ownerId: "tb-1", index: 0, x: 10, y: 20, w: 16, h: 16 },
+    { ownerId: "tb-1", index: 1, x: 32, y: 20, w: 16, h: 16 },
+    { ownerId: "tb-1", index: 2, x: 54, y: 20, w: 10, h: 16 },
+  ];
+  const sourceLines = [100, 101, 102];
+
+  assert.deepEqual(
+    getLinearTopLevelEntryMoveTarget({
+      sourceEntryIndex: 2,
+      x: 11,
+      y: 25,
+      entryRects: rects,
+      getSourceLine: index => sourceLines[index]
+    }),
+    {
+      targetSourceLine: 100,
+      placement: "before",
+      indicatorRect: { x: 9, y: 20, w: 2, h: 16 },
+      indicatorOrientation: "vertical"
+    }
+  );
+
+  assert.deepEqual(
+    getLinearTopLevelEntryMoveTarget({
+      sourceEntryIndex: 0,
+      x: 66,
+      y: 25,
+      entryRects: rects,
+      getSourceLine: index => sourceLines[index]
+    }),
+    {
+      targetSourceLine: 102,
+      placement: "after",
+      indicatorRect: { x: 64, y: 20, w: 2, h: 16 },
+      indicatorOrientation: "vertical"
+    }
+  );
+});
+
+test("ignores linear top-level moves onto the source edge", () => {
+  const rects = [
+    { ownerId: "sb-1", index: 0, x: 10, y: 50, w: 80, h: 18 },
+    { ownerId: "sb-1", index: 1, x: 90, y: 50, w: 120, h: 18 },
+  ];
+
+  assert.equal(
+    getLinearTopLevelEntryMoveTarget({
+      sourceEntryIndex: 0,
+      x: 11,
+      y: 55,
+      entryRects: rects,
+      getSourceLine: index => 200 + index
+    }),
+    null
+  );
+
+  assert.equal(
+    getLinearTopLevelEntryMoveTarget({
+      sourceEntryIndex: 0,
+      x: 91,
+      y: 55,
+      entryRects: rects,
+      getSourceLine: index => 200 + index,
+      isNoopMove: (targetIndex, placement) => targetIndex === 1 && placement === "before"
+    }),
+    null
+  );
+});
 
 test("treats toolbar image buttons with iconRaw 0 as empty preview buttons", () => {
   assert.equal(hasToolBarPreviewAssignedImage({ kind: "ToolBarImageButton", iconRaw: "0" }), false);

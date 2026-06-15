@@ -45,7 +45,6 @@ const TOOLBOX_PANEL_CATEGORIES: readonly ToolboxPanelCategory[] = [
     id: "common-controls",
     title: "Common Controls",
     items: [
-      item("Cursor", undefined, false, "vd_cursor.png"),
       item("Button", GADGET_KIND.ButtonGadget, true, "vd_buttongadget.png"),
       item("ButtonImage", GADGET_KIND.ButtonImageGadget, true, "vd_buttonimagegadget.png"),
       item("Calendar", GADGET_KIND.CalendarGadget, true, "vd_calendargadget.png"),
@@ -80,7 +79,6 @@ const TOOLBOX_PANEL_CATEGORIES: readonly ToolboxPanelCategory[] = [
     id: "containers",
     title: "Containers",
     items: [
-      item("Cursor", undefined, false, "vd_cursor.png"),
       item("Container", GADGET_KIND.ContainerGadget, true, "vd_containergadget.png"),
       item("Frame", GADGET_KIND.FrameGadget, true, "vd_frame3dgadget.png"),
       item("Panel", GADGET_KIND.PanelGadget, true, "vd_panelgadget.png"),
@@ -92,7 +90,6 @@ const TOOLBOX_PANEL_CATEGORIES: readonly ToolboxPanelCategory[] = [
     id: "menus-toolbars",
     title: "Menus & Toolbars",
     items: [
-      item("Cursor", undefined, false, "vd_cursor.png"),
       item("ToolBar", undefined, false, "vd_toolbar.png"),
       item("StatusBar", undefined, false, "vd_status.png"),
       item("Menu", undefined, false, "vd_menu.png"),

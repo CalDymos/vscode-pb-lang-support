@@ -12,6 +12,8 @@ If installed, it provides project context (active project/target, include direct
 - Discover **.pbp** projects in the current workspace
 - Cache parsed projects (via **@caldymos/pb-project-core**)
 - Track **active project / active target** (auto-sync from active editor, QuickPick)
+- Provide a **Status Bar project menu** with direct actions for project and target management
+- Show **compact tail paths** for project entries in the Status Bar menu instead of full absolute paths
 - Maintain a **file → project** map (including best-match fallback by project root)
 - Show active project/target in the **Status Bar**
 - Open **.pbp** files in a dedicated **webview-based project editor**
@@ -22,19 +24,29 @@ If installed, it provides project context (active project/target, include direct
 
 ## Commands
 
+- **PureBasic: Project Menu** (`pbProjectFiles.projectMenu`)
 - **PureBasic: Select Active Project** (`pbProjectFiles.pickProject`)
 - **PureBasic: Select Active Target** (`pbProjectFiles.pickTarget`)
 - **PureBasic: Refresh Projects** (`pbProjectFiles.refresh`)
+- **PureBasic: New PureBasic Project** (`pbProjectFiles.newProject`)
+- **PureBasic: Open Active PureBasic Project** (`pbProjectFiles.openActiveProject`)
+- **PureBasic: Reveal Active PureBasic Project Directory** (`pbProjectFiles.revealActiveProjectDirectory`)
+- **PureBasic: Open Active PureBasic Project and Reveal Directory** (`pbProjectFiles.openActiveProjectAndRevealDirectory`)
 
 ## Custom Editor
 
 Opening a **.pbp** file in VS Code will automatically use the built-in **PureBasic Project Editor** (viewType: `pbProjectFiles.pbpEditor`).
 It provides a visual interface for managing project files, build targets, and project options — closely replicating the experience of the original PureBasic IDE.
 
-The project picker also includes:
+Clicking the Status Bar item opens a project menu with:
 
 - **New Project…** to create a new `.pbp` file
+- **Open Active Project and Reveal Directory** to open the active `.pbp` in the project editor and reveal its directory in the VS Code Explorer
+- **Reveal Active Project Directory** to jump to the active project directory in the VS Code Explorer
 - **No Project** to explicitly disable project context for the current workspace
+- **Select Project/Target …** target entries grouped by project when multiple `.pbp` files exist, with a dedicated section header separating the target list from the other menu actions
+
+The classic project and target pickers remain available through the command palette.
 
 When creating a new project, the editor can either:
 

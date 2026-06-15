@@ -2,9 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { parseFormDocument } from "../src/core/parser/form-parser";
-import { applyGadgetDelete, applyGadgetEventProcUpdate, applyGadgetInsert, applyGadgetItemUpdate, applyGadgetOpenArgsUpdate, applyGadgetPropertyUpdate, applyGadgetReparent, applyMenuEntryEventUpdate, applyMovePatch, applyRectPatch, applyResizeGadgetDelete, applyResizeGadgetRawUpdate, applyToolBarEntryEventUpdate, applyWindowEventProcUpdate, applyWindowEventUpdate, applyWindowGenerateEventLoopUpdate, applyWindowOpenArgsUpdate, applyWindowPbAnyToggle, applyWindowPropertyUpdate, applyWindowRectPatch, applyWindowVariableNamePatch } from "../src/core/emitter/patch-emitter";
+import { applyGadgetDelete, applyGadgetEventProcUpdate, applyGadgetInsert, applyGadgetItemDelete, applyGadgetItemUpdate, applyPanelGadgetItemMove, applyGadgetOpenArgsUpdate, applyGadgetPbAnyToggle, applyGadgetPropertyUpdate, applyGadgetReparent, applyMenuEntryEventUpdate, applyMovePatch, applyRectPatch, applyResizeGadgetDelete, applyResizeGadgetMutation, applyResizeGadgetRawUpdate, applyToolBarEntryEventUpdate, applyWindowEventProcUpdate, applyWindowEventUpdate, applyWindowGenerateEventLoopUpdate, applyWindowOpenArgsUpdate, applyWindowPbAnyToggle, applyWindowPropertyUpdate, applyWindowRectPatch, applyWindowVariableNamePatch } from "../src/core/emitter/patch-emitter";
 import { loadFixture } from "./helpers/loadFixture";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
+import { stripBomAndToLf } from "./helpers/testUtils";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
 
 // NOTE: TextDocument is imported as a type only — it is used as the parameter
@@ -64,19 +65,7 @@ test("patches window X/Y raw values through procedure defaults for #PB_Ignore pa
 });
 
 test("roundtrips existing ResizeGadget raw expressions without touching constructor geometry", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
-  OpenWindow(#FrmMain, x, y, width, height, "Main")
-  ButtonGadget(#BtnStretch, 10, 50, 80, 24, "Stretch")
-EndProcedure
-
-Procedure ResizeGadgetsFrmMain()
-  Protected FormWindowWidth, FormWindowHeight
-  FormWindowWidth = WindowWidth(#FrmMain)
-  FormWindowHeight = WindowHeight(#FrmMain)
-  ResizeGadget(#BtnStretch, 10, ToolBarHeight(0) + 10, FormWindowWidth - 40, FormWindowHeight - 120)
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/49-windowgadget-resize-existing-basic.pbf");
 
   const document = new FakeTextDocument(text);
   const edit = applyResizeGadgetRawUpdate(document.asTextDocument(), "#BtnStretch", {
@@ -100,8 +89,124 @@ EndProcedure
   assert.equal(gadget?.w, 80);
 });
 
+test("creates missing resize scaffolding when lock editing needs a new ResizeGadget line", () => {
+  const text = loadFixture("fixtures/roundtrip/50-windowgadget-resize-create-with-events.pbf");
+
+  const document = new FakeTextDocument(text);
+  const edit = applyResizeGadgetMutation(document.asTextDocument(), "#BtnApply", {
+    xRaw: "FormWindowWidth - 310",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24"
+  });
+
+  assert.ok(edit, "Expected a WorkspaceEdit result.");
+  const patchedText = applyWorkspaceEditToText(text, edit!);
+  const parsed = parseFormDocument(patchedText);
+  const gadget = parsed.gadgets.find((g) => g.id === "#BtnApply");
+
+  assert.match(patchedText, /Declare ResizeGadgetsFrmMain\(\)/);
+  assert.match(patchedText, /Procedure ResizeGadgetsFrmMain\(\)\s+  Protected FormWindowWidth, FormWindowHeight\s+  FormWindowWidth = WindowWidth\(#FrmMain\)\s+  FormWindowHeight = WindowHeight\(#FrmMain\)\s+  ResizeGadget\(#BtnApply, FormWindowWidth - 310, 20, 80, 24\)\s+EndProcedure/s);
+  assert.match(patchedText, /Select event\s+    Case #PB_Event_SizeWindow\s+      ResizeGadgetsFrmMain\(\)\s+    Case #PB_Event_CloseWindow/s);
+  assert.equal(gadget?.resizeXRaw, "FormWindowWidth - 310");
+  assert.equal(gadget?.lockLeft, false);
+  assert.equal(gadget?.lockRight, true);
+});
+
+
+test("adds resize procedure scaffolding without a sizewindow hook when no event procedure exists", () => {
+  const text = loadFixture("fixtures/roundtrip/51-windowgadget-resize-create-no-events.pbf");
+
+  const document = new FakeTextDocument(text);
+  const edit = applyResizeGadgetMutation(document.asTextDocument(), "#BtnApply", {
+    xRaw: "FormWindowWidth - 310",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24"
+  });
+
+  assert.ok(edit, "Expected a WorkspaceEdit result.");
+  const patchedText = applyWorkspaceEditToText(text, edit!);
+  const parsed = parseFormDocument(patchedText);
+  const gadget = parsed.gadgets.find((g) => g.id === "#BtnApply");
+
+  assert.match(patchedText, /Declare ResizeGadgetsFrmMain\(\)/);
+  assert.match(patchedText, /Procedure ResizeGadgetsFrmMain\(\)\s+  Protected FormWindowWidth, FormWindowHeight\s+  FormWindowWidth = WindowWidth\(#FrmMain\)\s+  FormWindowHeight = WindowHeight\(#FrmMain\)\s+  ResizeGadget\(#BtnApply, FormWindowWidth - 310, 20, 80, 24\)\s+EndProcedure/s);
+  assert.doesNotMatch(patchedText, /Case #PB_Event_SizeWindow/);
+  assert.equal(gadget?.resizeXRaw, "FormWindowWidth - 310");
+  assert.equal(gadget?.lockLeft, false);
+  assert.equal(gadget?.lockRight, true);
+});
+
+
+
+test("removes now-empty resize scaffolding when the last ResizeGadget line is deleted", () => {
+  const text = loadFixture("fixtures/roundtrip/52-windowgadget-resize-delete-last-scaffolding.pbf");
+
+  const document = new FakeTextDocument(text);
+  const edit = applyResizeGadgetMutation(document.asTextDocument(), "#BtnApply", {
+    xRaw: "",
+    yRaw: "",
+    wRaw: "",
+    hRaw: "",
+    deleteResize: true
+  });
+
+  assert.ok(edit, "Expected a WorkspaceEdit result.");
+  const patchedText = applyWorkspaceEditToText(text, edit!);
+
+  assert.doesNotMatch(patchedText, /Declare ResizeGadgetsFrmMain\(\)/);
+  assert.doesNotMatch(patchedText, /Procedure ResizeGadgetsFrmMain\(/);
+  assert.doesNotMatch(patchedText, /Case #PB_Event_SizeWindow/);
+  assert.equal(
+    stripBomAndToLf(patchedText),
+    [
+      "; Form Designer for PureBasic - 6.40",
+      "; Warning: this file uses a strict syntax, if you edit it, make sure to respect the Form Designer limitation or it won't be opened again.",
+      "",
+      ";",
+      "; This code is automatically generated by the Form Designer.",
+      "; Manual modification is possible to adjust existing commands, but anything else will be dropped when the code is compiled.",
+      "; Event procedures need to be put in another source file.",
+      ";",
+      "",
+      "Enumeration FormWindow",
+      "  #FrmMain",
+      "EndEnumeration",
+      "",
+      "Enumeration FormGadget",
+      "  #BtnApply",
+      "EndEnumeration",
+      "",
+      "",
+      "Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)",
+      "  OpenWindow(#FrmMain, x, y, width, height, \"Main\")",
+      "  ButtonGadget(#BtnApply, 10, 20, 80, 24, \"Apply\")",
+      "EndProcedure",
+      "",
+      "Procedure FrmMain_Events(event)",
+      "  Select event",
+      "    Case #PB_Event_CloseWindow",
+      "      ProcedureReturn #False",
+      "",
+      "    Case #PB_Event_Menu",
+      "      Select EventMenu()",
+      "      EndSelect",
+      "",
+      "    Case #PB_Event_Gadget",
+      "      Select EventGadget()",
+      "      EndSelect",
+      "  EndSelect",
+      "  ProcedureReturn #True",
+      "EndProcedure",
+      "",
+      ""
+    ].join("\n")
+  );
+});
+
 test("inserts a new top-level gadget with original defaults", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
   OpenWindow(#FrmMain, x, y, width, height, "Main")
 EndProcedure
@@ -124,7 +229,7 @@ EndProcedure
 
 
 test("preserves original top-level Windows toolbar Y expressions when patching gadget rects", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
   OpenWindow(#FrmMain, x, y, width, height, "Main")
   CreateToolBar(0, WindowID(#FrmMain))
@@ -143,7 +248,7 @@ EndProcedure
 });
 
 test("inserts a new top-level Windows toolbar gadget with the original toolbar Y padding expression", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
   OpenWindow(#FrmMain, x, y, width, height, "Main")
   CreateToolBar(0, WindowID(#FrmMain))
@@ -161,7 +266,7 @@ EndProcedure
 });
 
 test("inserts a new panel child into the active panel item", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -195,7 +300,7 @@ EndProcedure
 });
 
 test("inserts a new child gadget into a frame gadget with #PB_Frame_Container", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -226,7 +331,7 @@ EndProcedure
 });
 
 test("inserts a new splitter gadget for two existing top-level siblings", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -260,7 +365,7 @@ EndProcedure
 });
 
 test("rejects splitter insertion when the selected gadgets do not share the same source parent", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -291,7 +396,7 @@ EndProcedure
 });
 
 test("reparents selected gadgets when inserting a splitter into a different target parent", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -334,7 +439,7 @@ EndProcedure
 });
 
 test("reparents a normal gadget into a container and resets its origin", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -363,8 +468,63 @@ EndProcedure
   assert.equal(gadget?.y, 0);
 });
 
+test("reparents a normal gadget into a container-enabled FrameGadget", () => {
+  const text = `; Form Designer for PureBasic - 6.40
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #FrameHost
+  #BtnApply
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  FrameGadget(#FrameHost, 10, 10, 200, 120, "Group", #PB_Frame_Container)
+  CloseGadgetList()
+  ButtonGadget(#BtnApply, 24, 36, 90, 25, "Apply")
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyGadgetReparent(document, "#BtnApply", "#FrameHost")
+  );
+
+  assert.match(patchedText, /FrameGadget\(#FrameHost, 10, 10, 200, 120, "Group", #PB_Frame_Container\)[\s\S]*ButtonGadget\(#BtnApply, 0, 0, 90, 25, "Apply"\)[\s\S]*CloseGadgetList\(\)/);
+  const gadget = parsed.gadgets.find((g) => g.id === "#BtnApply");
+  assert.equal(gadget?.parentId, "#FrameHost");
+  assert.equal(gadget?.x, 0);
+  assert.equal(gadget?.y, 0);
+});
+
+test("rejects reparenting into a plain FrameGadget without #PB_Frame_Container", () => {
+  const text = `; Form Designer for PureBasic - 6.40
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #FramePlain
+  #BtnApply
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  FrameGadget(#FramePlain, 10, 10, 200, 120, "Group")
+  ButtonGadget(#BtnApply, 24, 36, 90, 25, "Apply")
+EndProcedure
+`;
+
+  const document = new FakeTextDocument(text).asTextDocument();
+  const edit = applyGadgetReparent(document, "#BtnApply", "#FramePlain");
+
+  assert.equal(edit, undefined);
+});
+
+
 test("reparents a gadget subtree into a panel tab", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -402,7 +562,7 @@ EndProcedure
 });
 
 test("reparents a splitter together with its referenced gadgets", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -445,7 +605,7 @@ EndProcedure
 
 
 test("reparents a splitter and moves its SetGadgetState before the new parent closes", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -480,7 +640,7 @@ EndProcedure
   assert.equal(splitter?.stateRaw, '80');
 });
 test("rejects reparenting into the selected gadget subtree", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -507,7 +667,7 @@ EndProcedure
 });
 
 test("deletes a top-level gadget together with its managed lines and event binding", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -547,7 +707,7 @@ EndProcedure
 });
 
 test("merges secondary gadget delete edits when WorkspaceEdit only exposes entries()", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -616,7 +776,7 @@ test("deletes a panel gadget recursively with all child gadgets and tab items", 
 });
 
 test("deletes a frame gadget with #PB_Frame_Container recursively including CloseGadgetList", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -645,7 +805,7 @@ EndProcedure
 });
 
 test("deletes a custom gadget including the original marker pair", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -678,7 +838,7 @@ EndProcedure
 });
 
 test("deletes a container recursively when it contains a custom gadget", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -741,7 +901,7 @@ test("keeps a splitter child gadget when the original delete logic would no-op",
 });
 
 test("deletes descendants of a splitter child container but keeps the container itself", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -785,7 +945,7 @@ EndProcedure
 });
 
 test("deletes splitter-owned child gadgets when deleting their parent container subtree", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Enumeration FormWindow
   #FrmMain
 EndEnumeration
@@ -949,6 +1109,42 @@ EndProcedure
 });
 
 
+test("roundtrips partial window property updates without rewriting preserved raw color expressions", () => {
+  const text = `; Form Designer for PureBasic - 6.20
+;
+; EnableExplicit
+;
+;   Warning: This file is generated by the Form Designer.
+;            Manual changes will be lost after recompilation!
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  OpenWindow(#FrmMain, x, y, width, height, "Window Basic")
+  HideWindow(#FrmMain, 1)
+  SetWindowColor(#FrmMain, ColorExpr)
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyWindowPropertyUpdate(document, "#FrmMain", {
+      hiddenRaw: "",
+    })
+  );
+
+  assert.doesNotMatch(patchedText, /HideWindow\(#FrmMain,/);
+  assert.match(patchedText, /SetWindowColor\(#FrmMain, ColorExpr\)/);
+  assert.equal(parsed.window?.hidden, undefined);
+  assert.equal(parsed.window?.colorRaw, "ColorExpr");
+  assert.equal(parsed.window?.color, undefined);
+});
+
+
 test("roundtrips window OpenWindow arg updates for caption, flags and parent", () => {
   const text = loadFixture("fixtures/smoke/01-window-basic.pbf");
 
@@ -968,6 +1164,26 @@ test("roundtrips window OpenWindow arg updates for caption, flags and parent", (
   assert.equal(parsed.window?.title, "Window Advanced");
   assert.deepEqual(parsed.window?.knownFlags, ["#PB_Window_SystemMenu", "#PB_Window_SizeGadget"]);
   assert.equal(parsed.window?.parent, "#FrmParent");
+});
+
+test("roundtrips window constants with custom flags while preserving the parent argument", () => {
+  const text = loadFixture("fixtures/smoke/01-window-basic.pbf");
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyWindowOpenArgsUpdate(document, "#FrmMain", {
+      flagsExpr: "#PB_Window_SystemMenu | #PB_Window_CustomAlpha | #PB_Window_SizeGadget | #PB_Window_CustomBeta",
+      parentRaw: "ParentWindowHandle()",
+    })
+  );
+
+  assert.match(
+    patchedText,
+    /OpenWindow\(#FrmMain, x, y, width, height, "Window Basic", #PB_Window_SystemMenu \| #PB_Window_CustomAlpha \| #PB_Window_SizeGadget \| #PB_Window_CustomBeta, ParentWindowHandle\(\)\)/
+  );
+  assert.deepEqual(parsed.window?.knownFlags, ["#PB_Window_SystemMenu", "#PB_Window_SizeGadget"]);
+  assert.deepEqual(parsed.window?.customFlags, ["#PB_Window_CustomAlpha", "#PB_Window_CustomBeta"]);
+  assert.equal(parsed.window?.parentRaw, "ParentWindowHandle()");
+  assert.equal(parsed.window?.parent, "=ParentWindowHandle()");
 });
 
 test("roundtrips window OpenWindow arg updates for #PB_Any windows and clears optional params", () => {
@@ -1112,7 +1328,7 @@ EndProcedure
   const button = third.parsed.gadgets.find((g) => g.id === "#BtnSave");
   assert.ok(button, "Expected patched button image gadget.");
   assert.equal(button?.imageRaw, "0");
-  assert.equal(button?.imageId, "0");
+  assert.equal(button?.imageId, undefined);
   assert.equal(button?.flagsExpr, "#PB_Button_Default");
 });
 
@@ -1144,38 +1360,201 @@ test("roundtrips gadget constructor arg updates for splitter references and flag
   assert.equal(right?.splitterId, "#SplitMain");
 });
 
-
-
-test("roundtrips window event include update", () => {
-  const text = loadFixture("fixtures/smoke/13-events-and-parent-window.pbf");
+test("moves a newly linked splitter child before the splitter constructor", () => {
+  const text = [
+    "Enumeration FormWindow",
+    "  #FrmSplit",
+    "EndEnumeration",
+    "",
+    "Enumeration FormGadget",
+    "  #TxtLeft",
+    "  #TxtRight",
+    "  #BtnLate",
+    "  #SplitMain",
+    "EndEnumeration",
+    "",
+    "Procedure OpenFrmSplit()",
+    "  OpenWindow(#FrmSplit, 0, 0, 320, 220, \"Splitter\")",
+    "  StringGadget(#TxtLeft, 10, 40, 84, 120, \"Left\")",
+    "  SplitterGadget(#SplitMain, 10, 40, 250, 120, #TxtLeft, #TxtRight)",
+    "  SetGadgetState(#SplitMain, 112)",
+    "  StringGadget(#TxtRight, 101, 40, 159, 120, \"Right\")",
+    "  ButtonGadget(#BtnLate, 20, 170, 80, 24, \"Late\")",
+    "EndProcedure",
+    "",
+  ].join("\n");
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
-    applyWindowEventUpdate(document, "#FrmEventsParent", {
-      eventFileRaw: '"events/form-events-new.pbi"',
+    applyGadgetOpenArgsUpdate(document, "#SplitMain", {
+      gadget2Raw: "#BtnLate",
     })
   );
 
-  assert.match(patchedText, /XIncludeFile "events\/form-events-new\.pbi"/);
-  assert.equal(parsed.window?.eventFile, "events/form-events-new.pbi");
+  const lateIndex = patchedText.indexOf("ButtonGadget(#BtnLate");
+  const splitterIndex = patchedText.indexOf("SplitterGadget(#SplitMain");
+  const oldRightIndex = patchedText.indexOf("StringGadget(#TxtRight");
+  assert.ok(lateIndex > -1 && splitterIndex > -1 && oldRightIndex > -1);
+  assert.ok(lateIndex < splitterIndex, "Expected the newly referenced child to be emitted before the splitter.");
+  assert.ok(splitterIndex < oldRightIndex, "Expected the old, no longer referenced child to remain after the splitter.");
+  assert.match(patchedText, /SplitterGadget\(#SplitMain, 10, 40, 250, 120, #TxtLeft, #BtnLate\)/);
+  assert.match(patchedText, /SetGadgetState\(#SplitMain, 112\)/);
+
+  const splitter = parsed.gadgets.find((g) => g.id === "#SplitMain");
+  const late = parsed.gadgets.find((g) => g.id === "#BtnLate");
+  const right = parsed.gadgets.find((g) => g.id === "#TxtRight");
+  assert.equal(splitter?.gadget2Id, "#BtnLate");
+  assert.equal(late?.splitterId, "#SplitMain");
+  assert.equal(right?.splitterId, undefined);
 });
 
-test("roundtrips window event include removal", () => {
-  const text = loadFixture("fixtures/smoke/13-events-and-parent-window.pbf");
+test("moves a newly linked splitter child out of its old parent block", () => {
+  const text = [
+    "Enumeration FormWindow",
+    "  #FrmSplit",
+    "EndEnumeration",
+    "",
+    "Enumeration FormGadget",
+    "  #Box",
+    "  #TxtInner",
+    "  #TxtLeft",
+    "  #TxtRight",
+    "  #SplitMain",
+    "EndEnumeration",
+    "",
+    "Procedure OpenFrmSplit()",
+    "  OpenWindow(#FrmSplit, 0, 0, 320, 220, \"Splitter\")",
+    "  ContainerGadget(#Box, 10, 10, 280, 70)",
+    "    StringGadget(#TxtInner, 8, 8, 120, 22, \"Inner\")",
+    "  CloseGadgetList()",
+    "  StringGadget(#TxtLeft, 10, 90, 84, 120, \"Left\")",
+    "  StringGadget(#TxtRight, 101, 90, 159, 120, \"Right\")",
+    "  SplitterGadget(#SplitMain, 10, 90, 250, 120, #TxtLeft, #TxtRight)",
+    "  SetGadgetState(#SplitMain, 112)",
+    "EndProcedure",
+    "",
+  ].join("\n");
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
-    applyWindowEventUpdate(document, "#FrmEventsParent", {})
+    applyGadgetOpenArgsUpdate(document, "#SplitMain", {
+      gadget2Raw: "#TxtInner",
+    })
   );
 
-  assert.doesNotMatch(patchedText, /XIncludeFile/);
-  assert.equal(parsed.window?.eventFile, undefined);
+  assert.match(
+    patchedText,
+    /ContainerGadget\(#Box, 10, 10, 280, 70\)\n  CloseGadgetList\(\)[\s\S]*StringGadget\(#TxtInner, 8, 8, 120, 22, "Inner"\)[\s\S]*SplitterGadget\(#SplitMain, 10, 90, 250, 120, #TxtLeft, #TxtInner\)/
+  );
+
+  const inner = parsed.gadgets.find((g) => g.id === "#TxtInner");
+  const box = parsed.gadgets.find((g) => g.id === "#Box");
+  assert.equal(inner?.parentId, undefined);
+  assert.equal(inner?.splitterId, "#SplitMain");
+  assert.equal(box?.parentId, undefined);
 });
 
-test("returns no edit when removing a missing window event include", () => {
-  const text = loadFixture("fixtures/smoke/01-window-basic.pbf");
-  const document = new FakeTextDocument(text);
-  const edit = applyWindowEventUpdate(document.asTextDocument(), "#FrmMain", {});
+
+test("rejects splitter reference updates with duplicate or self links", () => {
+  const text = [
+    "Enumeration FormWindow",
+    "  #FrmSplit",
+    "EndEnumeration",
+    "",
+    "Enumeration FormGadget",
+    "  #TxtLeft",
+    "  #TxtRight",
+    "  #SplitMain",
+    "EndEnumeration",
+    "",
+    "Procedure OpenFrmSplit()",
+    "  OpenWindow(#FrmSplit, 0, 0, 320, 220, \"Splitter\")",
+    "  StringGadget(#TxtLeft, 10, 40, 84, 120, \"Left\")",
+    "  StringGadget(#TxtRight, 101, 40, 159, 120, \"Right\")",
+    "  SplitterGadget(#SplitMain, 10, 40, 250, 120, #TxtLeft, #TxtRight)",
+    "EndProcedure",
+    "",
+  ].join("\n");
+
+  let document = new FakeTextDocument(text).asTextDocument();
+  let edit = applyGadgetOpenArgsUpdate(document, "#SplitMain", {
+    gadget2Raw: "#TxtLeft",
+  });
+  assert.equal(edit, undefined);
+
+  document = new FakeTextDocument(text).asTextDocument();
+  edit = applyGadgetOpenArgsUpdate(document, "#SplitMain", {
+    gadget1Raw: "#SplitMain",
+  });
   assert.equal(edit, undefined);
 });
+
+test("rejects splitter reference updates with a child owned by another splitter", () => {
+  const text = [
+    "Enumeration FormWindow",
+    "  #FrmSplit",
+    "EndEnumeration",
+    "",
+    "Enumeration FormGadget",
+    "  #TxtLeft",
+    "  #TxtRight",
+    "  #TxtOwned",
+    "  #TxtOther",
+    "  #SplitOther",
+    "  #SplitMain",
+    "EndEnumeration",
+    "",
+    "Procedure OpenFrmSplit()",
+    "  OpenWindow(#FrmSplit, 0, 0, 420, 220, \"Splitter\")",
+    "  StringGadget(#TxtLeft, 10, 40, 84, 120, \"Left\")",
+    "  StringGadget(#TxtRight, 101, 40, 159, 120, \"Right\")",
+    "  StringGadget(#TxtOwned, 10, 170, 80, 24, \"Owned\")",
+    "  StringGadget(#TxtOther, 100, 170, 80, 24, \"Other\")",
+    "  SplitterGadget(#SplitOther, 10, 170, 180, 24, #TxtOwned, #TxtOther)",
+    "  SplitterGadget(#SplitMain, 10, 40, 250, 120, #TxtLeft, #TxtRight)",
+    "EndProcedure",
+    "",
+  ].join("\n");
+
+  const document = new FakeTextDocument(text).asTextDocument();
+  const edit = applyGadgetOpenArgsUpdate(document, "#SplitMain", {
+    gadget2Raw: "#TxtOwned",
+  });
+  assert.equal(edit, undefined);
+});
+
+test("rejects splitter reference updates when one child contains the other", () => {
+  const text = [
+    "Enumeration FormWindow",
+    "  #FrmSplit",
+    "EndEnumeration",
+    "",
+    "Enumeration FormGadget",
+    "  #Box",
+    "  #TxtInner",
+    "  #TxtLeft",
+    "  #TxtRight",
+    "  #SplitMain",
+    "EndEnumeration",
+    "",
+    "Procedure OpenFrmSplit()",
+    "  OpenWindow(#FrmSplit, 0, 0, 320, 220, \"Splitter\")",
+    "  ContainerGadget(#Box, 10, 10, 280, 70)",
+    "    StringGadget(#TxtInner, 8, 8, 120, 22, \"Inner\")",
+    "  CloseGadgetList()",
+    "  StringGadget(#TxtLeft, 10, 90, 84, 120, \"Left\")",
+    "  StringGadget(#TxtRight, 101, 90, 159, 120, \"Right\")",
+    "  SplitterGadget(#SplitMain, 10, 90, 250, 120, #TxtLeft, #TxtRight)",
+    "EndProcedure",
+    "",
+  ].join("\n");
+
+  const document = new FakeTextDocument(text).asTextDocument();
+  const edit = applyGadgetOpenArgsUpdate(document, "#SplitMain", {
+    gadget1Raw: "#Box",
+    gadget2Raw: "#TxtInner",
+  });
+  assert.equal(edit, undefined);
+});
+
 
 test("roundtrips window event include insertion", () => {
   const text = loadFixture("fixtures/smoke/01-window-basic.pbf");
@@ -1192,54 +1571,45 @@ test("roundtrips window event include insertion", () => {
   assert.equal(parsed.window?.generateEventLoop, undefined);
 });
 
-test("roundtrips window event proc insertion by adding Default branch to existing event loop", () => {
-  const text = `; Form Designer for PureBasic - 6.20
-;
-; EnableExplicit
-;
-;   Warning: This file is generated by the Form Designer.
-;            Manual changes will be lost after recompilation!
 
-Enumeration FormWindow
-  #FrmEventsParent
-EndEnumeration
-
-Enumeration FormGadget
-  #BtnApply
-EndEnumeration
-
-Procedure OpenFrmEventsParent(x = 0, y = 0, width = 280, height = 170)
-  OpenWindow(#FrmEventsParent, x, y, width, height, "Events Parent")
-  ButtonGadget(#BtnApply, 10, 10, 80, 25, "Apply")
-  Select EventGadget()
-    Case #BtnApply
-      HandleApply()
-  EndSelect
-EndProcedure
-`;
+test("roundtrips window event proc update inside separate _Events(event) procedure", () => {
+  const text = loadFixture("fixtures/smoke/13-events-and-parent-window.pbf");
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
-    applyWindowEventProcUpdate(document, "#FrmEventsParent", "HandleFrmEventsParent")
+    applyWindowEventProcUpdate(document, "#FrmEventsParent", "HandleFrmEventsParentUpdated")
   );
 
-  assert.match(patchedText, /Case #BtnApply\s+HandleApply\(\)\s+Default\s+HandleFrmEventsParent\(\)\s+EndSelect/s);
-  assert.equal(parsed.window?.eventProc, "HandleFrmEventsParent");
+  assert.match(patchedText, /Default\s+HandleFrmEventsParentUpdated\(event, #FrmEventsParent\)/s);
+  assert.equal(parsed.window?.eventProc, "HandleFrmEventsParentUpdated");
   assert.equal(parsed.window?.generateEventLoop, true);
 });
 
-test("roundtrips window generateEventLoop insertion via empty EventGadget block", () => {
+test("roundtrips window event proc removal without leaving an empty Default branch behind", () => {
+  const text = loadFixture("fixtures/smoke/13-events-and-parent-window.pbf");
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyWindowEventProcUpdate(document, "#FrmEventsParent", undefined)
+  );
+
+  assert.doesNotMatch(patchedText, /Default\s*$/m);
+  assert.doesNotMatch(patchedText, /Default\s+HandleFrmEventsParent\(event, #FrmEventsParent\)/s);
+  assert.equal(parsed.window?.eventProc, undefined);
+  assert.equal(parsed.window?.generateEventLoop, true);
+});
+
+test("roundtrips window generateEventLoop insertion via separate _Events(event) procedure", () => {
   const text = loadFixture("fixtures/smoke/01-window-basic.pbf");
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
     applyWindowGenerateEventLoopUpdate(document, "#FrmMain", true)
   );
 
-  assert.match(patchedText, /Select EventGadget\(\)\s+EndSelect/s);
+  assert.match(patchedText, /Procedure FrmMain_Events\(event\)\s+  Select event\s+    Case #PB_Event_CloseWindow\s+      ProcedureReturn #False\s+\s+    Case #PB_Event_Menu\s+      Select EventMenu\(\)\s+      EndSelect\s+\s+    Case #PB_Event_Gadget\s+      Select EventGadget\(\)\s+      EndSelect\s+  EndSelect\s+  ProcedureReturn #True\s+EndProcedure/s);
   assert.equal(parsed.window?.generateEventLoop, true);
   assert.equal(parsed.window?.eventProc, undefined);
 });
 
-test("roundtrips window generateEventLoop removal for default-only window event block", () => {
+test("roundtrips window generateEventLoop removal for a separate _Events(event) procedure without cases", () => {
   const text = loadFixture("fixtures/smoke/13-events-and-parent-window.pbf");
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
@@ -1251,36 +1621,6 @@ test("roundtrips window generateEventLoop removal for default-only window event 
   assert.equal(parsed.window?.eventProc, undefined);
 });
 
-test("refuses window generateEventLoop removal when EventGadget block contains gadget cases", () => {
-  const text = `; Form Designer for PureBasic - 6.20
-;
-; EnableExplicit
-;
-;   Warning: This file is generated by the Form Designer.
-;            Manual changes will be lost after recompilation!
-
-Enumeration FormWindow
-  #FrmEventsParent
-EndEnumeration
-
-Enumeration FormGadget
-  #BtnApply
-EndEnumeration
-
-Procedure OpenFrmEventsParent(x = 0, y = 0, width = 280, height = 170)
-  OpenWindow(#FrmEventsParent, x, y, width, height, "Events Parent")
-  ButtonGadget(#BtnApply, 10, 10, 80, 25, "Apply")
-  Select EventGadget()
-    Case #BtnApply
-      HandleApply()
-  EndSelect
-EndProcedure
-`;
-
-  const document = new FakeTextDocument(text);
-  const edit = applyWindowGenerateEventLoopUpdate(document.asTextDocument(), "#FrmEventsParent", false);
-  assert.equal(edit, undefined);
-});
 
 test("roundtrips combined window event bootstrap updates from a plain window fixture", () => {
   const text = loadFixture("fixtures/smoke/01-window-basic.pbf");
@@ -1307,12 +1647,34 @@ test("roundtrips combined window event bootstrap updates from a plain window fix
   const parsed = parseFormDocument(patchedText);
 
   assert.match(patchedText, /XIncludeFile "events\/form-main\.pbi"(?:\r?\n)+Procedure OpenFrmMain/);
-  assert.match(patchedText, /Select EventGadget\(\)\s+Default\s+HandleFrmMain\(\)\s+EndSelect/s);
+  assert.match(patchedText, /Procedure FrmMain_Events\(event\)\s+Select event/s);
+  assert.match(patchedText, /Case #PB_Event_Gadget\s+Select EventGadget\(\)\s+EndSelect\s+Default\s+HandleFrmMain\(event, #FrmMain\)/s);
   assert.equal(parsed.window?.eventFile, "events/form-main.pbi");
   assert.equal(parsed.window?.generateEventLoop, true);
   assert.equal(parsed.window?.eventProc, "HandleFrmMain");
   assert.equal(parsed.window?.hasEventGadgetBlock, true);
   assert.equal(parsed.window?.hasEventGadgetCaseBranches, undefined);
+});
+
+
+test("preserves window SelectProc grid string while patching the generated default branch", () => {
+  const text = loadFixture("fixtures/smoke/01-window-basic.pbf");
+
+  let patchedText = text;
+  let document = new FakeTextDocument(patchedText);
+  let edit = applyWindowGenerateEventLoopUpdate(document.asTextDocument(), "#FrmMain", true);
+  assert.ok(edit, "Expected generateEventLoop edit.");
+  patchedText = applyWorkspaceEditToText(patchedText, edit!);
+
+  document = new FakeTextDocument(patchedText);
+  edit = applyWindowEventProcUpdate(document.asTextDocument(), "#FrmMain", "  HandleFrmMain  ");
+  assert.ok(edit, "Expected window SelectProc edit.");
+  patchedText = applyWorkspaceEditToText(patchedText, edit!);
+
+  assert.match(patchedText, /Default\s+HandleFrmMain  \(event, #FrmMain\)/s);
+
+  const parsed = parseFormDocument(patchedText);
+  assert.equal(parsed.window?.eventProc, "HandleFrmMain");
 });
 
 
@@ -1351,41 +1713,6 @@ test("preserves the exact gadget event proc grid string without trimming", () =>
   assert.equal(parsed.gadgets.find((g) => g.id === "#BtnApply")?.eventProc, "HandleApplyUpdated");
 });
 
-test("roundtrips gadget event proc insertion before existing window Default branch", () => {
-  const text = `; Form Designer for PureBasic - 6.20
-;
-; EnableExplicit
-;
-;   Warning: This file is generated by the Form Designer.
-;            Manual changes will be lost after recompilation!
-
-Enumeration FormWindow
-  #FrmEventsParent
-EndEnumeration
-
-Enumeration FormGadget
-  #BtnChild
-EndEnumeration
-
-Procedure OpenFrmEventsParent(x = 0, y = 0, width = 280, height = 170)
-  OpenWindow(#FrmEventsParent, x, y, width, height, "Events Parent")
-  ButtonGadget(#BtnChild, 10, 10, 80, 24, "Child")
-
-  Select EventGadget()
-    Default
-      HandleFrmEventsParent()
-  EndSelect
-EndProcedure
-`;
-
-  const { patchedText, parsed } = patchAndReparse(text, (document) =>
-    applyGadgetEventProcUpdate(document, "#BtnChild", "HandleChildClick")
-  );
-
-  assert.match(patchedText, /Case #BtnChild\s+HandleChildClick\(\)\s+Default\s+HandleFrmEventsParent\(\)/s);
-  assert.equal(parsed.gadgets.find((g) => g.id === "#BtnChild")?.eventProc, "HandleChildClick");
-  assert.equal(parsed.window?.eventProc, "HandleFrmEventsParent");
-});
 
 test("roundtrips menu entry event update inside existing EventMenu block", () => {
   const text = loadFixture("fixtures/smoke/15-object-event-bindings.pbf");
@@ -1412,46 +1739,6 @@ test("roundtrips menu entry event removal by deleting the Case branch", () => {
   assert.equal(parsed.window?.generateEventLoop, true);
 });
 
-test("roundtrips toolbar entry event insertion into existing EventMenu block", () => {
-  const text = `; Form Designer for PureBasic - 6.20
-;
-; EnableExplicit
-;
-;   Warning: This file is generated by the Form Designer.
-;            Manual changes will be lost after recompilation!
-
-Enumeration FormWindow
-  #FrmObjectEvents
-EndEnumeration
-
-Enumeration FormGadget
-EndEnumeration
-
-Procedure OpenFrmObjectEvents(x = 0, y = 0, width = 320, height = 220)
-  OpenWindow(#FrmObjectEvents, x, y, width, height, "Object Events")
-
-  CreateMenu(#MenuMain, WindowID(#FrmObjectEvents))
-  MenuItem(#MenuOpen, "Open")
-
-  CreateToolBar(#TbMain, WindowID(#FrmObjectEvents))
-  ToolBarButton(#TbRefresh, 0, "Refresh")
-
-  Select EventMenu()
-    Case #MenuOpen
-      HandleMenuOpen()
-  EndSelect
-EndProcedure
-`;
-
-  const { patchedText, parsed } = patchAndReparse(text, (document) =>
-    applyToolBarEntryEventUpdate(document, "#TbRefresh", "HandleToolbarRefresh")
-  );
-
-  assert.match(patchedText, /Case #TbRefresh\s+HandleToolbarRefresh\(\)\s+EndSelect/s);
-  const toolBarButton = parsed.toolbars[0]?.entries.find((entry) => entry.idRaw === "#TbRefresh");
-  assert.equal(toolBarButton?.event, "HandleToolbarRefresh");
-  assert.equal(parsed.window?.generateEventLoop, true);
-});
 
 
 test("roundtrips toolbar entry event update inside existing EventMenu block", () => {
@@ -1513,6 +1800,138 @@ test("roundtrips combined object event binding updates in fixture 15", () => {
   assert.equal(menuItem?.event, "HandleMenuOpenUpdated");
   assert.equal(toolBarButton?.event, "HandleToolbarRefreshUpdated");
   assert.equal(parsed.window?.generateEventLoop, true);
+});
+
+test("deletes panel tab children when deleting a PanelGadget item", () => {
+  const text = `; Form Designer for PureBasic - 6.40
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #PnlMain
+  #TxtGeneral
+  #StrSettings
+  #BtnSettings
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  PanelGadget(#PnlMain, 10, 10, 240, 150)
+  AddGadgetItem(#PnlMain, -1, "General")
+    TextGadget(#TxtGeneral, 8, 8, 80, 20, "General")
+  AddGadgetItem(#PnlMain, -1, "Settings")
+    StringGadget(#StrSettings, 12, 14, 120, 24, "Settings")
+    ButtonGadget(#BtnSettings, 12, 48, 90, 25, "Apply")
+  CloseGadgetList()
+EndProcedure
+
+Procedure FrmMain_Events(event)
+  Select event
+    Case #PB_Event_Gadget
+      Select EventGadget()
+        Case #StrSettings
+          HandleSettings(EventType())
+      EndSelect
+  EndSelect
+EndProcedure
+`;
+
+  const parsedBefore = parseFormDocument(text);
+  const secondTabLine = parsedBefore.gadgets.find((g) => g.id === "#PnlMain")?.items?.[1]?.source?.line;
+  assert.equal(typeof secondTabLine, "number", "Expected source line for second panel item.");
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyGadgetItemDelete(document, "#PnlMain", secondTabLine!)
+  );
+
+  assert.match(patchedText, /AddGadgetItem\(#PnlMain, -1, "General"\)/);
+  assert.doesNotMatch(patchedText, /AddGadgetItem\(#PnlMain, -1, "Settings"\)/);
+  assert.doesNotMatch(patchedText, /#StrSettings/);
+  assert.doesNotMatch(patchedText, /#BtnSettings/);
+  assert.doesNotMatch(patchedText, /HandleSettings/);
+
+  assert.equal(parsed.gadgets.find((g) => g.id === "#TxtGeneral")?.parentItem, 0);
+  assert.equal(parsed.gadgets.find((g) => g.id === "#StrSettings"), undefined);
+  assert.equal(parsed.gadgets.find((g) => g.id === "#BtnSettings"), undefined);
+});
+
+
+test("moves panel item down with its child gadget block", () => {
+  const text = `Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #PnlMain
+  #TxtGeneral
+  #StrSettings
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  PanelGadget(#PnlMain, 10, 10, 240, 150)
+  AddGadgetItem(#PnlMain, -1, "General")
+    TextGadget(#TxtGeneral, 8, 8, 80, 20, "General")
+  AddGadgetItem(#PnlMain, -1, "Settings")
+    StringGadget(#StrSettings, 12, 14, 120, 24, "Settings")
+  CloseGadgetList()
+EndProcedure
+`;
+
+  const parsedBefore = parseFormDocument(text);
+  const firstTabLine = parsedBefore.gadgets.find((g) => g.id === "#PnlMain")?.items?.[0]?.source?.line;
+  assert.equal(typeof firstTabLine, "number", "Expected source line for first panel item.");
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyPanelGadgetItemMove(document, "#PnlMain", firstTabLine!, "down")
+  );
+
+  assert.ok(patchedText.indexOf('AddGadgetItem(#PnlMain, -1, "Settings")') < patchedText.indexOf('AddGadgetItem(#PnlMain, -1, "General")'));
+  assert.ok(patchedText.indexOf('StringGadget(#StrSettings') < patchedText.indexOf('TextGadget(#TxtGeneral'));
+  assert.equal(parsed.gadgets.find((g) => g.id === "#StrSettings")?.parentItem, 0);
+  assert.equal(parsed.gadgets.find((g) => g.id === "#TxtGeneral")?.parentItem, 1);
+});
+
+test("moves panel item up with nested container child block", () => {
+  const text = `Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #PnlMain
+  #CtrSettings
+  #BtnSettings
+  #TxtGeneral
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 360, height = 240)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  PanelGadget(#PnlMain, 10, 10, 260, 170)
+  AddGadgetItem(#PnlMain, -1, "General")
+    TextGadget(#TxtGeneral, 8, 8, 80, 20, "General")
+  AddGadgetItem(#PnlMain, -1, "Settings")
+    ContainerGadget(#CtrSettings, 12, 14, 150, 80)
+      ButtonGadget(#BtnSettings, 8, 8, 90, 25, "Apply")
+    CloseGadgetList()
+  CloseGadgetList()
+EndProcedure
+`;
+
+  const parsedBefore = parseFormDocument(text);
+  const secondTabLine = parsedBefore.gadgets.find((g) => g.id === "#PnlMain")?.items?.[1]?.source?.line;
+  assert.equal(typeof secondTabLine, "number", "Expected source line for second panel item.");
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyPanelGadgetItemMove(document, "#PnlMain", secondTabLine!, "up")
+  );
+
+  assert.ok(patchedText.indexOf('AddGadgetItem(#PnlMain, -1, "Settings")') < patchedText.indexOf('AddGadgetItem(#PnlMain, -1, "General")'));
+  assert.ok(patchedText.indexOf('ContainerGadget(#CtrSettings') < patchedText.indexOf('TextGadget(#TxtGeneral'));
+  assert.match(patchedText, /CloseGadgetList\(\)\n  AddGadgetItem\(#PnlMain, -1, "General"\)/);
+  assert.equal(parsed.gadgets.find((g) => g.id === "#CtrSettings")?.parentItem, 0);
+  assert.equal(parsed.gadgets.find((g) => g.id === "#BtnSettings")?.parentId, "#CtrSettings");
+  assert.equal(parsed.gadgets.find((g) => g.id === "#TxtGeneral")?.parentItem, 1);
 });
 
 test("roundtrips combined panel container updates in fixture 05", () => {
@@ -1611,27 +2030,13 @@ test("roundtrips combined scrollarea container updates in fixture 06", () => {
 
 
 test("re-inserts Enumeration FormWindow before FormImage when toggling a pbAny window back to enum mode", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormImage
-  #ImgMainLogo
-EndEnumeration
-
-UsePNGImageDecoder()
-
-LoadImage(#ImgMainLogo, "logo.png")
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  win = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
-  ImageGadget(#PB_Any, 10, 10, 32, 32, ImageID(#ImgMainLogo))
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/54-windowgadget-window-enum-before-image-block.pbf");
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
     applyWindowPbAnyToggle(document, "win", false, "win", "#FrmMain", undefined)
   );
 
-  const normalized = patchedText.replace(/\r\n/g, "\n");
+  const normalized = stripBomAndToLf(patchedText);
   assert.ok(normalized.includes([
     'Enumeration FormWindow',
     '  #FrmMain',
@@ -1645,24 +2050,13 @@ EndProcedure
 });
 
 test("re-inserts Enumeration FormWindow before an existing FormFont block", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormFont
-  #FontMain
-EndEnumeration
-
-LoadFont(#FontMain, "Arial", 10)
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  win = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/55-windowgadget-window-enum-before-font-block.pbf");
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
     applyWindowPbAnyToggle(document, "win", false, "win", "#FrmMain", undefined)
   );
 
-  const normalized = patchedText.replace(/\r\n/g, "\n");
+  const normalized = stripBomAndToLf(patchedText);
   assert.ok(normalized.includes([
     'Enumeration FormWindow',
     '  #FrmMain',
@@ -1676,57 +2070,19 @@ EndProcedure
 });
 
 test("re-inserts Enumeration FormWindow before image decoder lines when no enum anchor exists yet", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-UsePNGImageDecoder()
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  win = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/56-windowgadget-window-enum-before-image-decoder.pbf");
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
     applyWindowPbAnyToggle(document, "win", false, "win", "#FrmMain", undefined)
   );
 
-  const normalized = patchedText.replace(/\r\n/g, "\n");
+  const normalized = stripBomAndToLf(patchedText);
   assert.ok(normalized.includes([
     'Enumeration FormWindow',
     '  #FrmMain',
     'EndEnumeration',
     '',
-    'UsePNGImageDecoder()',
-  ].join("\n")));
-  assert.match(patchedText, /OpenWindow\(#FrmMain, x, y, width, height, "Window Basic"\)/);
-  assert.equal(parsed.window?.id, '#FrmMain');
-  assert.equal(parsed.window?.pbAny, false);
-});
-
-test("re-inserts Enumeration FormWindow before ProcedureDLL and XIncludeFile boundaries", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-ProcedureDLL ScintillaCallbackGadget, *scinotify.SCNotification)
-  
-EndProcedure
-
-XIncludeFile "events/form-main.pbi"
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  win = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
-EndProcedure
-`;
-
-  const { patchedText, parsed } = patchAndReparse(text, (document) =>
-    applyWindowPbAnyToggle(document, "win", false, "win", "#FrmMain", undefined)
-  );
-
-  const normalized = patchedText.replace(/\r\n/g, "\n");
-  assert.ok(normalized.includes([
-    'Enumeration FormWindow',
-    '  #FrmMain',
-    'EndEnumeration',
-    '',
-    'ProcedureDLL ScintillaCallbackGadget, *scinotify.SCNotification)',
+    'Enumeration FormImage',
   ].join("\n")));
   assert.match(patchedText, /OpenWindow\(#FrmMain, x, y, width, height, "Window Basic"\)/);
   assert.equal(parsed.window?.id, '#FrmMain');
@@ -1734,89 +2090,44 @@ EndProcedure
 });
 
 
-test("inserts a missing pbAny window Global before XIncludeFile when renaming the variable", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-XIncludeFile "events/form-main.pbi"
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  win = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
-EndProcedure
-`;
-
-  const { patchedText, parsed } = patchAndReparse(text, (document) =>
-    applyWindowVariableNamePatch(document, "winMain")
-  );
-
-  const normalized = patchedText.replace(/\r\n/g, "\n");
-  assert.ok(normalized.includes([
-    'Global winMain',
-    '',
-    'XIncludeFile "events/form-main.pbi"',
-  ].join("\n")));
-  assert.match(patchedText, /winMain = OpenWindow\(#PB_Any, x, y, width, height, "Window Basic"\)/);
-  assert.equal(parsed.window?.id, 'winMain');
-  assert.equal(parsed.window?.pbAny, true);
-});
 
 test("inserts a missing pbAny window Global before existing gadget and image globals", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Global gadgetMain
-
-Global imgMain
-
-Enumeration FormImage
-  #ImgMain
-EndEnumeration
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  win = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/59-windowgadget-window-global-before-gadget-image-globals.pbf");
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
     applyWindowVariableNamePatch(document, "winMain")
   );
 
-  const normalized = patchedText.replace(/\r\n/g, "\n");
+  const normalized = stripBomAndToLf(patchedText);
   assert.ok(normalized.includes([
     'Global winMain',
     '',
     'Global gadgetMain',
     '',
-    'Global imgMain',
+    'Global Img_winMain_0',
   ].join("\n")));
   assert.match(patchedText, /winMain = OpenWindow\(#PB_Any, x, y, width, height, "Window Basic"\)/);
+  assert.doesNotMatch(patchedText, /Enumeration FormWindow/);
   assert.equal(parsed.window?.id, 'winMain');
   assert.equal(parsed.window?.pbAny, true);
 });
 
 
 test("inserts a missing pbAny window Global before custom gadget initialisation", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-; 0 Custom gadget initialisation (do Not remove this line)
-InitScintillaBridge()
-
-XIncludeFile "events/form-main.pbi"
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  win = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/60-windowgadget-window-global-before-custom-init.pbf");
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
     applyWindowVariableNamePatch(document, "winMain")
   );
 
-  const normalized = patchedText.replace(/\r\n/g, "\n");
+  const normalized = stripBomAndToLf(patchedText);
   assert.ok(normalized.includes([
     'Global winMain',
     '',
     '; 0 Custom gadget initialisation (do Not remove this line)',
-    'InitScintillaBridge()',
+    'InitMyCustomGadget()',
   ].join("\n")));
+  assert.doesNotMatch(patchedText, /XIncludeFile/);
   assert.match(patchedText, /winMain = OpenWindow\(#PB_Any, x, y, width, height, "Window Basic"\)/);
   assert.equal(parsed.window?.id, 'winMain');
   assert.equal(parsed.window?.pbAny, true);
@@ -1824,7 +2135,7 @@ EndProcedure
 
 
 test("preserves leading and trailing spaces when patching a window variable name", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 
 Enumeration FormWindow
   #Window_0
@@ -1844,67 +2155,43 @@ EndProcedure
 });
 
 test("patches the selected pbAny window variable name by window key", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Global HelperWin
-Global Window_0
-
-Procedure OpenHelper()
-  HelperWin = OpenWindow(#PB_Any, 0, 0, 40, 40, "Helper")
-EndProcedure
-
-Procedure OpenWindow_0(x = 0, y = 0, width = 220, height = 140)
-  Window_0 = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
-EndProcedure
-
-Procedure Window_0_Events(event)
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/61-windowgadget-window-rename-selected-pbany.pbf");
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
     applyWindowVariableNamePatch(document, "Window_1", "Window_0")
   );
 
-  assert.match(patchedText, /^Global HelperWin$/m);
   assert.match(patchedText, /^Global Window_1$/m);
   assert.doesNotMatch(patchedText, /^Global Window_0$/m);
-  assert.match(patchedText, /HelperWin = OpenWindow\(#PB_Any, 0, 0, 40, 40, "Helper"\)/);
+  assert.doesNotMatch(patchedText, /^Global HelperWin$/m);
   assert.match(patchedText, /Window_1 = OpenWindow\(#PB_Any, x, y, width, height, "Window Basic"\)/);
   assert.match(patchedText, /Procedure OpenWindow_1\(/);
   assert.match(patchedText, /Procedure Window_1_Events\(/);
+  assert.match(patchedText, /Case #PB_Event_Menu\s+Select EventMenu\(\)\s+EndSelect/s);
+  assert.match(patchedText, /Case #PB_Event_Gadget\s+Select EventGadget\(\)\s+EndSelect/s);
   assert.equal(parsed.window?.id, "Window_1");
   assert.equal(parsed.window?.variable, "Window_1");
 });
 
 
 test("removes the trailing blank line of the last window Global when toggling back to enum mode", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Global winMain
-
-Enumeration FormImage
-  #ImgMain
-EndEnumeration
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  winMain = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/62-windowgadget-window-enum-remove-last-global-before-image-block.pbf");
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
     applyWindowPbAnyToggle(document, "winMain", false, "winMain", "#FrmMain", undefined)
   );
 
-  const normalized = patchedText.replace(/\r\n/g, "\n");
+  const normalized = stripBomAndToLf(patchedText);
   assert.ok(normalized.includes([
     'Enumeration FormWindow',
     '  #FrmMain',
     'EndEnumeration',
     '',
-    'Enumeration FormImage',
+    'Enumeration FormGadget',
   ].join("\n")));
   assert.doesNotMatch(patchedText, /^Global winMain$/m);
-  assert.doesNotMatch(normalized, /Global winMain\n\n\nEnumeration FormImage/);
+  assert.doesNotMatch(normalized, /Global winMain\n\n\nEnumeration FormGadget/);
+  assert.match(normalized, /ImageGadget\(#Image_0, 41, 30, 49, 45, ImageID\(#Img_winMain_0\)\)/);
   assert.equal(parsed.window?.id, '#FrmMain');
   assert.equal(parsed.window?.pbAny, false);
 });
@@ -1912,41 +2199,28 @@ EndProcedure
 
 
 
-test("re-inserts Enumeration FormGadget before custom gadget initialisation and ProcedureDLL boundaries", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-; 0 Custom gadget initialisation (do Not remove this line)
-InitScintillaBridge()
-
-ProcedureDLL ScintillaCallbackGadget, *scinotify.SCNotification)
-
-EndProcedure
-
-XIncludeFile "events/form-main.pbi"
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  OpenWindow(#FrmMain, x, y, width, height, "Window Basic")
-  ButtonGadget(#BtnOk, 10, 10, 80, 24, "OK")
-EndProcedure
-`;
+test("preserves Enumeration FormGadget before custom gadget initialisation when patching an enum gadget", () => {
+  const text = loadFixture("fixtures/roundtrip/63-windowgadget-gadget-enum-before-custom-init.pbf");
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
     applyRectPatch(document, "#BtnOk", 20, 24, 90, 28)
   );
 
-  const normalized = patchedText.replace(/\r\n/g, "\n");
+  const normalized = stripBomAndToLf(patchedText);
   assert.ok(normalized.includes([
     'Enumeration FormGadget',
     '  #BtnOk',
+    '  #Custom',
     'EndEnumeration',
     '',
-    '; 0 Custom gadget initialisation (do Not remove this line)',
+    '; 1 Custom gadget initialisation (do Not remove this line)',
   ].join("\n")));
   assert.ok(normalized.includes([
-    'InitScintillaBridge()',
-    '',
-    'ProcedureDLL ScintillaCallbackGadget, *scinotify.SCNotification)',
+    '; 1 Custom gadget initialisation (do Not remove this line)',
+    'InitMyCustomGadget()',
   ].join("\n")));
+  assert.doesNotMatch(patchedText, /ProcedureDLL/);
+  assert.doesNotMatch(patchedText, /XIncludeFile/);
 
   const button = parsed.gadgets.find((g) => g.id === '#BtnOk');
   assert.ok(button, 'Expected patched enum gadget.');
@@ -1957,44 +2231,21 @@ EndProcedure
 });
 
 test("re-inserts Enumeration FormGadget before FormMenu when patching an enum gadget", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Enumeration FormWindow
-  #FrmMain
-EndEnumeration
-
-Enumeration FormMenu
-  #MenuSave
-EndEnumeration
-
-; 0 Custom gadget initialisation (do Not remove this line)
-InitScintillaBridge()
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  OpenWindow(#FrmMain, x, y, width, height, "Window Basic")
-  ButtonGadget(#BtnOk, 10, 10, 80, 24, "OK")
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/64-windowgadget-gadget-enum-before-menu-block.pbf");
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
     applyRectPatch(document, "#BtnOk", 20, 24, 90, 28)
   );
 
-  const normalized = patchedText.replace(/\r\n/g, "\n");
-  assert.ok(normalized.includes([
-    'Enumeration FormWindow',
-    '  #FrmMain',
-    'EndEnumeration',
-    '',
-    'Enumeration FormGadget',
-    '  #BtnOk',
-    'EndEnumeration',
-    '',
-    'Enumeration FormMenu',
-  ].join("\n")));
+  const normalized = stripBomAndToLf(patchedText);
+  assert.match(normalized, /Enumeration FormWindow\n  #FrmMain\nEndEnumeration\n\nEnumeration FormGadget[\s\S]*?  #BtnOk\n[\s\S]*?EndEnumeration\n\nEnumeration FormMenu/);
+  assert.match(normalized, /^Global CustomGadget$/m);
+  assert.doesNotMatch(normalized, /^Global BtnOk(?:,|$)/m);
+  assert.match(patchedText, /ButtonGadget\(#BtnOk, 20, 24, 90, 28, "OK"\)/);
 
   const button = parsed.gadgets.find((g) => g.id === "#BtnOk");
   assert.ok(button, "Expected patched enum gadget.");
+  assert.equal(button?.pbAny, false);
   assert.equal(button?.x, 20);
   assert.equal(button?.y, 24);
   assert.equal(button?.w, 90);
@@ -2002,32 +2253,21 @@ EndProcedure
 });
 
 test("inserts a missing pbAny gadget Global between window and image globals", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-
-Global winMain
-
-Global imgMain
-
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  winMain = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
-  gInput = StringGadget(#PB_Any, 10, 36, 220, 24, "")
-  ImageGadget(imgMain, 10, 70, 32, 32, 0)
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/65-windowgadget-gadget-global-between-window-image-globals.pbf");
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
     applyGadgetOpenArgsUpdate(document, "gInput", { textRaw: 'Value$' })
   );
 
-  const normalized = patchedText.replace(/\r\n/g, "\n");
+  const normalized = stripBomAndToLf(patchedText);
   assert.ok(normalized.includes([
     'Global winMain',
     '',
     'Global gInput',
-    '',
-    'Global imgMain',
   ].join("\n")));
+  assert.doesNotMatch(normalized, /^Global imgMain$/m);
   assert.match(patchedText, /gInput = StringGadget\(#PB_Any, 10, 36, 220, 24, Value\$\)/);
+  assert.match(patchedText, /ImageGadget\(#PB_Any, 10, 70, 32, 32, 0\)/);
   const input = parsed.gadgets.find((g) => g.id === "gInput");
   assert.ok(input, "Expected patched pbAny gadget.");
   assert.equal(input?.pbAny, true);
@@ -2083,19 +2323,7 @@ test("roundtrips combined splitter container updates in fixture 07", () => {
 
 
 test("deletes an existing ResizeGadget line when lock editing no longer requires it", () => {
-  const text = `; Form Designer for PureBasic - 6.30
-Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
-  OpenWindow(#FrmMain, x, y, width, height, "Main")
-  ButtonGadget(#BtnStretch, 10, 50, 80, 24, "Stretch")
-EndProcedure
-
-Procedure ResizeGadgetsFrmMain()
-  Protected FormWindowWidth, FormWindowHeight
-  FormWindowWidth = WindowWidth(#FrmMain)
-  FormWindowHeight = WindowHeight(#FrmMain)
-  ResizeGadget(#BtnStretch, FormWindowWidth - 310, 50, 80, 24)
-EndProcedure
-`;
+  const text = loadFixture("fixtures/roundtrip/53-windowgadget-resize-delete-line-basic.pbf");
 
   const document = new FakeTextDocument(text);
   const edit = applyResizeGadgetDelete(document.asTextDocument(), "#BtnStretch");
@@ -2131,31 +2359,3 @@ test('trims surrounding whitespace for toolbar SelectProc updates', () => {
   assert.match(patchedText, /Case #TbRefresh\s+HandleToolbarRefreshUpdated\(EventMenu\(\)\)/s);
 });
 
-test('preserves surrounding whitespace for window SelectProc updates', () => {
-  const text = `; Form Designer for PureBasic - 6.20
-;
-; EnableExplicit
-;
-;   Warning: This file is generated by the Form Designer.
-;            Manual changes will be lost after recompilation!
-
-Enumeration FormWindow
-  #FrmEventsParent
-EndEnumeration
-
-Procedure OpenFrmEventsParent(x = 0, y = 0, width = 280, height = 170)
-  OpenWindow(#FrmEventsParent, x, y, width, height, "Events Parent")
-  Select EventGadget()
-    Default
-      HandleFrmEventsParent()
-  EndSelect
-EndProcedure
-`;
-
-  const document = new FakeTextDocument(text);
-  const edit = applyWindowEventProcUpdate(document.asTextDocument(), '#FrmEventsParent', '  HandleFrmEventsParent  ');
-  assert.ok(edit, 'Expected window event proc edit.');
-
-  const patchedText = applyWorkspaceEditToText(text, edit!);
-  assert.match(patchedText, /Default\s+  HandleFrmEventsParent  \(\)/s);
-});

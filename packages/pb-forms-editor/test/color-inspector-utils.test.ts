@@ -8,6 +8,7 @@ import {
   pbColorNumberToCssHex,
   WINDOW_COLOR_LITERAL_ERROR_MESSAGE
 } from '../src/core/window/color-inspector';
+import { parsePbColorLiteral } from '../src/core/parser/pb-color';
 
 test('pbColorNumberToCssHex converts PB color integers to css hex', () => {
   assert.equal(pbColorNumberToCssHex(0x332211), '#112233');
@@ -43,4 +44,11 @@ test('parseWindowColorInspectorInput rejects unsupported raw expressions', () =>
 test("getWindowColorInspectorDisplay keeps the saved raw value without enabling edits", () => {
   assert.equal(getWindowColorInspectorDisplay(" RGB(1,2,3) "), "RGB(1,2,3)");
   assert.equal(getWindowColorInspectorDisplay(undefined), "");
+});
+
+
+test('parsePbColorLiteral parses $hex and RGB literals via the shared parser path', () => {
+  assert.deepEqual(parsePbColorLiteral(' $112233 '), { format: 'hex', raw: '$112233', previewColor: 0x112233 });
+  assert.deepEqual(parsePbColorLiteral('RGB(17, 34, 51)'), { format: 'rgb', raw: 'RGB(17, 34, 51)', previewColor: 0x332211, red: 17, green: 34, blue: 51 });
+  assert.equal(parsePbColorLiteral('RGB(17,34,999)'), undefined);
 });

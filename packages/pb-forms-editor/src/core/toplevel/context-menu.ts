@@ -1,3 +1,5 @@
+import type { TopLevelCanvasContextMenuSelection } from "./selection";
+
 export type SourceLineLike = {
   line: number;
 };
@@ -30,16 +32,6 @@ export type StatusBarModelLike = {
   id: string;
   fields?: StatusBarFieldLike[];
 };
-
-export type TopLevelCanvasContextMenuSelectionLike =
-  | { kind: "menu"; id: string }
-  | { kind: "menuEntry"; menuId: string; entryIndex: number }
-  | { kind: "toolbar"; id: string }
-  | { kind: "toolBarEntry"; toolBarId: string; entryIndex: number }
-  | { kind: "statusbar"; id: string }
-  | { kind: "statusBarField"; statusBarId: string; fieldIndex: number }
-  | { kind: "toolBarAddButton"; toolBarId: string }
-  | { kind: "statusBarAddButton"; statusBarId: string };
 
 export type TopLevelCanvasContextMenuAction =
   | {
@@ -148,7 +140,7 @@ export type TopLevelCanvasContextMenuAction =
     };
 
 export function resolveTopLevelCanvasContextMenuActions(args: {
-  selection: TopLevelCanvasContextMenuSelectionLike;
+  selection: TopLevelCanvasContextMenuSelection;
   menus?: MenuModelLike[];
   toolbars?: ToolBarModelLike[];
   statusbars?: StatusBarModelLike[];

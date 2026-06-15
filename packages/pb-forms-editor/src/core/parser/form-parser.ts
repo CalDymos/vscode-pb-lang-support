@@ -29,8 +29,14 @@ import {
 
 import { canHostInsertedGadgets } from "../gadget/insert";
 import { inferGadgetCtorLocks, usesHeightLayoutReference, usesWidthLayoutReference } from "../gadget/layout";
-import { parseDesignerLayoutRaw } from "../utils/layout-dpi";
-import { asNumber, normalizeProcParamName, splitParams, unquoteString } from "./tokenizer";
+import { parseDesignerLayoutRaw } from "./layout-raw";
+import { parsePbColorLiteral } from "./pb-color";
+import { parsePbStringLiteral } from "./pb-string";
+import { normalizePbImageValue } from "./pb-image-value";
+import { parsePbImageIdReference, parsePbImageReference } from "./pb-image-reference";
+import { parsePbFontReference } from "./pb-font-reference";
+import { parsePbWindowReference } from "./pb-window-reference";
+import { asNumber, normalizeProcParamName, splitParams } from "./tokenizer";
 import { PbCall, scanCalls } from "./call-scanner";
 
 const KNOWN_WINDOW_FLAGS = new Set<string>(PBFD_WINDOW_KNOWN_FLAGS);
@@ -224,7 +230,7 @@ export function parseFormDocument(text: string): FormDocument {
         if (!curMenu) break;
         const p = splitParams(c.args);
         const textRaw = p[0]?.trim();
-        addMenuEntry({ kind: MENU_ENTRY_KIND.MenuTitle, level: 0, textRaw, text: unquoteString(textRaw ?? ""), source: c.range });
+        addMenuEntry({ kind: MENU_ENTRY_KIND.MenuTitle, level: 0, textRaw, text: parsePbStringLiteral(textRaw), source: c.range });
         menuLevel = 1;
         break;
       }
@@ -235,7 +241,7 @@ export function parseFormDocument(text: string): FormDocument {
         const idRaw = p[0]?.trim();
         const textRaw = p[1]?.trim();
         const parsedText = parseMenuItemText(textRaw);
-        const parsedIcon = parseImageReference(p[2]);
+        const parsedIcon = parsePbImageIdReference(p[2]);
         addMenuEntry({
           kind: MENU_ENTRY_KIND.MenuItem,
           level: menuLevel,
@@ -260,7 +266,7 @@ export function parseFormDocument(text: string): FormDocument {
         if (!curMenu) break;
         const p = splitParams(c.args);
         const textRaw = p[0]?.trim();
-        addMenuEntry({ kind: MENU_ENTRY_KIND.OpenSubMenu, level: menuLevel, textRaw, text: unquoteString(textRaw ?? ""), source: c.range });
+        addMenuEntry({ kind: MENU_ENTRY_KIND.OpenSubMenu, level: menuLevel, textRaw, text: parsePbStringLiteral(textRaw), source: c.range });
         menuLevel++;
         break;
       }
@@ -289,7 +295,7 @@ export function parseFormDocument(text: string): FormDocument {
       case TOOLBAR_ENTRY_KIND.ToolBarStandardButton: {
         if (!curToolBar) break;
         const p = splitParams(c.args);
-        addToolBarEntry({ kind: TOOLBAR_ENTRY_KIND.ToolBarStandardButton, idRaw: p[0]?.trim(), iconRaw: p[1]?.trim(), source: c.range });
+        addToolBarEntry({ kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton, idRaw: p[0]?.trim(), iconRaw: p[1]?.trim(), source: c.range });
         break;
       }
 
@@ -301,7 +307,7 @@ export function parseFormDocument(text: string): FormDocument {
           idRaw: p[0]?.trim(),
           iconRaw: p[1]?.trim(),
           textRaw: p[2]?.trim(),
-          text: unquoteString(p[2] ?? ""),
+          text: parsePbStringLiteral(p[2]),
           source: c.range
         });
         break;
@@ -310,7 +316,7 @@ export function parseFormDocument(text: string): FormDocument {
       case TOOLBAR_ENTRY_KIND.ToolBarImageButton: {
         if (!curToolBar) break;
         const p = splitParams(c.args);
-        const parsedIcon = parseImageReference(p[1]);
+        const parsedIcon = parsePbImageIdReference(p[1]);
         addToolBarEntry({
           kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton,
           idRaw: p[0]?.trim(),
@@ -333,7 +339,7 @@ export function parseFormDocument(text: string): FormDocument {
         const p = splitParams(c.args);
         const buttonIdRaw = (p.length >= 3 ? p[1] : p[0])?.trim();
         const textRaw = (p.length >= 3 ? p[2] : p[1])?.trim();
-        const text = unquoteString(textRaw ?? "");
+        const text = parsePbStringLiteral(textRaw);
         addToolBarEntry({ kind: TOOLBAR_ENTRY_KIND.ToolBarToolTip, idRaw: buttonIdRaw, textRaw, text, source: c.range });
         applyToolBarTooltip(curToolBar, buttonIdRaw, text ?? undefined);
         break;
@@ -367,7 +373,7 @@ export function parseFormDocument(text: string): FormDocument {
         const statusBar = findStatusBarByReference(p[0]);
         updateStatusBarField(statusBar, p[1], (field) => {
           field.textRaw = p[2]?.trim() || undefined;
-          field.text = unquoteString(p[2] ?? "") ?? field.textRaw;
+          field.text = parsePbStringLiteral(p[2]) ?? field.textRaw;
           field.flagsRaw = p[3]?.trim() || undefined;
         });
         break;
@@ -388,7 +394,7 @@ export function parseFormDocument(text: string): FormDocument {
         const p = splitParams(c.args);
         const statusBar = findStatusBarByReference(p[0]);
         updateStatusBarField(statusBar, p[1], (field) => {
-          const parsedImage = parseImageReference(p[2]);
+          const parsedImage = parsePbImageIdReference(p[2]);
           field.imageRaw = parsedImage.imageRaw;
           field.imageId = parsedImage.imageId;
           field.flagsRaw = p[3]?.trim() || undefined;
@@ -428,11 +434,11 @@ export function parseFormDocument(text: string): FormDocument {
             const beforeLen = g.items?.length ?? 0;
             const posRaw = (p[1] ?? "").trim();
             const textRaw = (p[2] ?? "").trim();
-            const parsedImage = parseImageReference(p[3]);
+            const parsedImage = parsePbImageReference(p[3]);
             const item: GadgetItem = {
               posRaw,
               textRaw,
-              text: unquoteString(textRaw),
+              text: parsePbStringLiteral(textRaw),
               imageRaw: parsedImage.imageRaw,
               imageId: parsedImage.imageId,
               flagsRaw: p[4]?.trim(),
@@ -464,7 +470,7 @@ export function parseFormDocument(text: string): FormDocument {
             const col: GadgetColumn = {
               colRaw,
               titleRaw,
-              title: unquoteString(titleRaw),
+              title: parsePbStringLiteral(titleRaw),
               widthRaw: p[3]?.trim(),
               source: c.range
             };
@@ -514,7 +520,7 @@ export function parseFormDocument(text: string): FormDocument {
         const g = findGadgetByReference(gadgetById, p[0]);
         if (p.length >= 2 && g) {
           const tooltipRaw = (p[1] ?? "").trim();
-          const literalTooltip = unquoteString(tooltipRaw);
+          const literalTooltip = parsePbStringLiteral(tooltipRaw);
           g.tooltipRaw = tooltipRaw || undefined;
           g.tooltip = literalTooltip ?? (tooltipRaw.length ? tooltipRaw : undefined);
           g.tooltipVariable = literalTooltip === undefined && tooltipRaw.length > 0;
@@ -528,7 +534,7 @@ export function parseFormDocument(text: string): FormDocument {
         if (p.length >= 3 && g) {
           const colorType = (p[1] ?? "").trim();
           const colorRaw = (p[2] ?? "").trim();
-          const color = parsePbColor(colorRaw);
+          const color = parsePbColorLiteral(colorRaw)?.previewColor;
 
           if (colorType === "#PB_Gadget_BackColor") {
             g.backColorRaw = colorRaw || undefined;
@@ -560,10 +566,8 @@ export function parseFormDocument(text: string): FormDocument {
         const p = splitParams(c.args);
         const g = findGadgetByReference(gadgetById, p[0]);
         if (p.length >= 2 && g) {
-          const fontExpr = (p[1] ?? "").trim();
-          g.gadgetFontRaw = fontExpr || undefined;
-          const m = /^FontID\((.+)\)$/i.exec(fontExpr);
-          const fontId = m?.[1]?.trim();
+          const { fontRaw, fontId } = parsePbFontReference(p[1]);
+          g.gadgetFontRaw = fontRaw;
           const font = fontId ? fontById.get(fontId) : undefined;
           if (font) {
             g.gadgetFont = font.name;
@@ -662,7 +666,7 @@ export function parseFormDocument(text: string): FormDocument {
           const colorRaw = (p[1] ?? "").trim();
           doc.window.colorRaw = colorRaw || undefined;
 
-          const color = parsePbColor(colorRaw);
+          const color = parsePbColorLiteral(colorRaw)?.previewColor;
           if (typeof color === "number") {
             doc.window.color = color;
           }
@@ -911,7 +915,7 @@ function findEventFileAbove(lines: string[], fromLine: number): string | undefin
     const includeMatch = /^\s*XIncludeFile\s+(~?"(?:""|[^"])*")/i.exec(line);
     if (!includeMatch) continue;
 
-    return unquoteString(includeMatch[1]);
+    return parsePbStringLiteral(includeMatch[1]);
   }
 
   return undefined;
@@ -1133,9 +1137,9 @@ function normalizeWindowParent(raw: string | undefined): string | undefined {
   const parentRaw = raw?.trim();
   if (!parentRaw) return undefined;
 
-  const windowIdMatch = /^WindowID\((.+)\)$/i.exec(parentRaw);
-  if (windowIdMatch) {
-    return windowIdMatch[1]?.trim() || undefined;
+  const parsed = parsePbWindowReference(parentRaw);
+  if (parsed) {
+    return parsed.normalizedInner;
   }
 
   return "=" + parentRaw;
@@ -1155,29 +1159,6 @@ function windowMatchesReference(win: FormWindow | undefined, rawRef: string | un
   if (win.variable && win.variable === ref) return true;
   if (win.id.replace(/^#/, "") === ref) return true;
   return false;
-}
-
-function parsePbColor(raw: string | undefined): number | undefined {
-  const colorRaw = raw?.trim();
-  if (!colorRaw) return undefined;
-
-  if (/^\$[0-9a-f]+$/i.test(colorRaw)) {
-    const n = Number.parseInt(colorRaw.slice(1), 16);
-    return Number.isFinite(n) ? n : undefined;
-  }
-
-  const rgbMatch = /^RGB\((.+)\)$/i.exec(colorRaw);
-  if (!rgbMatch) return undefined;
-
-  const parts = splitParams(rgbMatch[1] ?? "");
-  if (parts.length !== 3) return undefined;
-
-  const r = asNumber(parts[0] ?? "");
-  const g = asNumber(parts[1] ?? "");
-  const b = asNumber(parts[2] ?? "");
-  if ([r, g, b].some((v) => typeof v !== "number")) return undefined;
-
-  return ((b as number) << 16) | ((g as number) << 8) | (r as number);
 }
 
 function splitFlagExpr(flagsExpr: string | undefined): string[] {
@@ -1229,40 +1210,6 @@ function parseMenuItemText(textRaw: string | undefined): { text?: string; shortc
 
     return { text: undefined, shortcut: undefined };
   }
-
-/**
- * Parses only plain PureBasic string literals for the menu/text helper path.
- *
- * This intentionally stays stricter than `unquoteString()` from tokenizer.ts:
- * it accepts `"..."` / `~"..."` literals with doubled quotes, but rejects any
- * trailing or concatenated expression such as `"..." + Chr(9) + "..."`.
- *
- * The menu parser relies on that stricter boundary so plain captions and
- * shortcut concatenations stay distinguishable.
- */
-function parsePbStringLiteral(raw: string): string | undefined {
-  const value = raw.trim();
-  const unescaped = value.startsWith('~"') ? value.slice(1) : value;
-  if (unescaped.length < 2 || !unescaped.startsWith('"')) {
-    return undefined;
-  }
-
-  let i = 1;
-  while (i < unescaped.length) {
-    const ch = unescaped[i];
-    if (ch === '"' && unescaped[i + 1] === '"') {
-      i += 2;
-      continue;
-    }
-    if (ch === '"') {
-      if (i !== unescaped.length - 1) return undefined;
-      return unescaped.slice(1, -1).replace(/""/g, '"');
-    }
-    i++;
-  }
-
-  return undefined;
-}
 
 function parseMenuItemTextExpression(raw: string): { text?: string; shortcut?: string } | undefined {
   const parts = splitConcatenation(raw);
@@ -1335,29 +1282,8 @@ function splitConcatenation(raw: string): string[] {
   return parts;
 }
 
-function parseImageReference(raw: string | undefined): { imageRaw?: string; imageId?: string } {
-  const imageRaw = raw?.trim();
-  if (!imageRaw) return {};
-
-  const imageIdMatch = /^ImageID\((.+)\)$/i.exec(imageRaw);
-  const imageId = imageIdMatch?.[1]?.trim() || imageRaw;
-
-  return {
-    imageRaw,
-    imageId: imageId.length ? imageId : undefined
-  };
-}
-
 function normalizeImageValue(raw: string | undefined, inline: boolean): string | undefined {
-  const valueRaw = raw?.trim();
-  if (!valueRaw) return undefined;
-
-  if (inline) {
-    const label = valueRaw.replace(/^\?+/, "").trim();
-    return label.length ? label : undefined;
-  }
-
-  return unquoteString(valueRaw) ?? (valueRaw.length ? valueRaw : undefined);
+  return normalizePbImageValue(raw, inline);
 }
 
 function parseFormFont(assignedVar: string | undefined, args: string, source?: FormFont["source"]): FormFont | undefined {
@@ -1371,7 +1297,7 @@ function parseFormFont(assignedVar: string | undefined, args: string, source?: F
   const sizeRaw = (p[2] ?? "").trim();
   if (!nameRaw.length || !sizeRaw.length) return undefined;
 
-  const name = unquoteString(nameRaw) ?? undefined;
+  const name = parsePbStringLiteral(nameRaw) ?? undefined;
   const size = asNumber(sizeRaw);
 
   return {
@@ -1529,7 +1455,7 @@ function parseCustomGadgetCreationCall(
   const pbAny = !idRaw.startsWith("#");
   const firstParam = pbAny ? PB_ANY : idRaw;
   const textRaw = resolved.get("txt")?.trim() || undefined;
-  const literalText = unquoteString(textRaw ?? "");
+  const literalText = parsePbStringLiteral(textRaw);
   const initIndex = Number(markerMatch[1]);
   const initEntry = initByIndex.get(initIndex);
 
@@ -1607,7 +1533,7 @@ function parseGadgetConstructorDetails(kind: GadgetKind, params: string[]): {
 
     case GADGET_KIND.ButtonImageGadget:
     case GADGET_KIND.ImageGadget: {
-      const parsedImage = parseImageReference(params[5]);
+      const parsedImage = parsePbImageIdReference(params[5]);
       imageRaw = parsedImage.imageRaw;
       imageId = parsedImage.imageId;
       flagsExpr = params[6]?.trim() || undefined;
@@ -1720,7 +1646,7 @@ function parseOpenWindow(assignedVar: string | undefined, args: string, procDefa
   const h = asNumber(hRaw) ?? 0;
 
   const captionRaw = (p[5] ?? "").trim();
-  const literalCaption = unquoteString(captionRaw);
+  const literalCaption = parsePbStringLiteral(captionRaw);
   const caption = literalCaption ?? (captionRaw.length ? captionRaw : undefined);
   const captionVariable = literalCaption === undefined && captionRaw.length > 0;
   const flagsExpr = p[6]?.trim();
@@ -1776,7 +1702,7 @@ function parseGadgetCall(kind: GadgetKind, assignedVar: string | undefined, args
   const h = parseDesignerLayoutRaw(hRaw, "h") ?? asNumber(hRaw) ?? 0;
 
   const ctor = parseGadgetConstructorDetails(kind, p);
-  const literalText = unquoteString(ctor.textRaw ?? "");
+  const literalText = parsePbStringLiteral(ctor.textRaw);
   const text = literalText ?? (ctor.textRaw?.length ? ctor.textRaw : undefined);
   const textVariable = literalText === undefined && !!ctor.textRaw?.length;
 

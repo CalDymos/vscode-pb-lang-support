@@ -2,7 +2,7 @@
   "name": "pb-lang-support",
   "displayName": "PureBasic Language Services",
   "description": "%extension.description%",
-  "version": "0.19.4",
+  "version": "0.21.0",
   "publisher": "CalDymos",
   "author": {
     "name": "CalDymos"
@@ -253,6 +253,11 @@
         "category": "PureBasic"
       },
       {
+        "command": "purebasic.syntaxCheck",
+        "title": "%command.syntaxCheck.title%",
+        "category": "PureBasic"
+      },
+      {
         "command": "purebasic.buildActiveTarget",
         "title": "%command.buildActiveTarget.title%",
         "category": "PureBasic"
@@ -291,6 +296,10 @@
           "when": "editorLangId == purebasic"
         },
         {
+          "command": "purebasic.syntaxCheck",
+          "when": "editorLangId == purebasic"
+        },
+        {
           "command": "purebasic.buildActiveTarget",
           "when": "editorLangId == purebasic"
         },
@@ -308,6 +317,11 @@
           "command": "purebasic.formatDocument",
           "when": "editorLangId == purebasic",
           "group": "1_modification"
+        },
+        {
+          "command": "purebasic.syntaxCheck",
+          "when": "editorLangId == purebasic && resourceScheme == file",
+          "group": "navigation@20"
         }
       ]
     },

@@ -1,5 +1,9 @@
-import { quotePbString, unquoteString } from "../parser/tokenizer";
+import { parsePbStringLiteral } from "../parser/pb-string";
+import { quotePbString } from "../parser/tokenizer";
+import type { DesignerTopLevelContainerSelection, DesignerTopLevelEntrySelection } from "./selection";
 import { parseStatusBarWidth } from "../statusbar/preview";
+import { MenuEntryMovePlacement } from "../../shared/menu";
+import type { FormToolBarEntry } from "../model";
 
 export type SourceLineLike = {
   line: number;
@@ -26,6 +30,7 @@ export type ToolBarEntryLike = {
   idRaw?: string;
   iconRaw?: string;
   iconId?: string;
+  toggle?: boolean;
 };
 
 export type ToolBarModelLike = {
@@ -77,20 +82,22 @@ export type PreviewStatusBarAddRectLike = PreviewRectLike & {
 };
 
 export type TopLevelChromeHitLike =
-  | { selection: { kind: "menu"; id: string }; rect: PreviewRectLike }
-  | { selection: { kind: "menuEntry"; menuId: string; entryIndex: number }; rect: PreviewEntryRectLike }
-  | { selection: { kind: "toolbar"; id: string }; rect: PreviewRectLike }
-  | { selection: { kind: "toolBarEntry"; toolBarId: string; entryIndex: number }; rect: PreviewEntryRectLike }
-  | { selection: { kind: "statusbar"; id: string }; rect: PreviewRectLike }
-  | { selection: { kind: "statusBarField"; statusBarId: string; fieldIndex: number }; rect: PreviewEntryRectLike };
+  | { selection: DesignerTopLevelContainerSelection; rect: PreviewRectLike }
+  | { selection: DesignerTopLevelEntrySelection; rect: PreviewEntryRectLike };
 
-export type MenuEntryMovePlacement = "before" | "after" | "appendChild";
 
 export type MenuEntryMoveTargetLike = {
   targetSourceLine: number;
   placement: MenuEntryMovePlacement;
   indicatorRect: PreviewRectLike;
   indicatorOrientation: "horizontal" | "vertical";
+};
+
+export type LinearTopLevelEntryMoveTargetLike = {
+  targetSourceLine: number;
+  placement: Extract<MenuEntryMovePlacement, "before" | "after">;
+  indicatorRect: PreviewRectLike;
+  indicatorOrientation: "vertical";
 };
 
 export type VisibleMenuEntryLike = {
@@ -242,7 +249,7 @@ export function canResizeWindowHandleInCanvas(handle: "nw" | "n" | "ne" | "w" | 
 
 export function unquotePbString(raw?: string): string {
   if (!raw) return "";
-  return unquoteString(raw) ?? raw.trim();
+  return parsePbStringLiteral(raw) ?? raw.trim();
 }
 
 export function getMenuEntryLevel(entry: MenuEntryLike | undefined): number {
@@ -349,14 +356,14 @@ export function getPredictedMenuEntryMoveIndex(
   menu: MenuModelLike,
   sourceEntryIndex: number,
   targetEntryIndex: number,
-  placement: "before" | "after" | "appendChild"
+  placement: MenuEntryMovePlacement
 ): number | null {
   const entries = menu.entries ?? [];
   if (sourceEntryIndex < 0 || sourceEntryIndex >= entries.length) return null;
   if (targetEntryIndex < 0 || targetEntryIndex >= entries.length) return null;
 
   const sourceEndIndex = getMenuEntryBlockEndIndex(entries, sourceEntryIndex);
-  let insertIndex = placement === "before"
+  let insertIndex = placement === MenuEntryMovePlacement.Before
     ? targetEntryIndex
     : getMenuEntryBlockEndIndex(entries, targetEntryIndex) + 1;
 
@@ -450,13 +457,52 @@ export function hasStatusBarPreviewAssignedImage(field: StatusBarFieldLike): boo
 }
 
 
+export interface SelectedMenuEntryInspectorFieldConfig {
+  constantEditable: boolean;
+  nameEditable: boolean;
+  shortcutEditable: boolean;
+  imageEditable: boolean;
+  separatorChecked: boolean;
+  separatorEditable: boolean;
+}
+
+export function getSelectedMenuEntryInspectorFieldConfig(
+  entry: MenuEntryLike,
+  canPatch: boolean
+): SelectedMenuEntryInspectorFieldConfig {
+  return {
+    constantEditable: canPatch && entry.kind === "MenuItem",
+    nameEditable: canPatch && (entry.kind === "MenuItem" || entry.kind === "MenuTitle" || entry.kind === "OpenSubMenu"),
+    shortcutEditable: canPatch && entry.kind === "MenuItem",
+    imageEditable: canPatch && entry.kind === "MenuItem",
+    separatorChecked: entry.kind === "MenuBar",
+    separatorEditable: false,
+  };
+}
+
 export interface SelectedToolBarInspectorFieldConfig {
+  variableEditable: boolean;
   captionLabel: string;
+  captionEditable: boolean;
+  imageEditable: boolean;
+  toggleChecked: boolean;
+  toggleEditable: boolean;
+  separatorChecked: boolean;
+  separatorEditable: boolean;
+  selectProcParticipates: boolean;
+  selectProcDisabledTitle: string;
   showTextField: boolean;
   showIconRawField: boolean;
 }
 
 export interface SelectedStatusBarInspectorFieldConfig {
+  widthEditable: boolean;
+  textEditable: boolean;
+  currentImageEditable: boolean;
+  changeImageEditable: boolean;
+  progressBarEditable: boolean;
+  flagsEditable: boolean;
+  deleteEditable: boolean;
   showProgressValueField: boolean;
 }
 
@@ -487,16 +533,41 @@ export function getTopLevelSelectProcEditState(
   };
 }
 
-export function getSelectedToolBarInspectorFieldConfig(): SelectedToolBarInspectorFieldConfig {
+export function getSelectedToolBarInspectorFieldConfig(
+  entry: ToolBarEntryLike,
+  canPatch: boolean
+): SelectedToolBarInspectorFieldConfig {
+  const isImageButton = entry.kind === "ToolBarImageButton";
+  const isSeparator = entry.kind === "ToolBarSeparator";
+  const isToolTip = entry.kind === "ToolBarToolTip";
+
   return {
+    variableEditable: canPatch && !isSeparator,
     captionLabel: "Caption",
+    captionEditable: canPatch && canEditToolBarTooltip(entry),
+    imageEditable: canPatch && isImageButton,
+    toggleChecked: Boolean(entry.toggle),
+    toggleEditable: canPatch && isImageButton,
+    separatorChecked: isSeparator,
+    separatorEditable: false,
+    selectProcParticipates: !isSeparator && !isToolTip,
+    selectProcDisabledTitle: isToolTip
+      ? "This entry type does not participate in Select EventMenu() cases."
+      : "Toolbar separators are structural entries and do not participate in Select EventMenu() cases.",
     showTextField: false,
     showIconRawField: false,
   };
 }
 
-export function getSelectedStatusBarInspectorFieldConfig(): SelectedStatusBarInspectorFieldConfig {
+export function getSelectedStatusBarInspectorFieldConfig(canPatch = true): SelectedStatusBarInspectorFieldConfig {
   return {
+    widthEditable: canPatch,
+    textEditable: canPatch,
+    currentImageEditable: canPatch,
+    changeImageEditable: canPatch,
+    progressBarEditable: canPatch,
+    flagsEditable: canPatch,
+    deleteEditable: canPatch,
     showProgressValueField: false,
   };
 }
@@ -504,7 +575,7 @@ export function getSelectedStatusBarInspectorFieldConfig(): SelectedStatusBarIns
 export function getToolBarPreviewInsertArgs(
   toolBar: ToolBarModelLike,
   action: ToolBarPreviewInsertAction
-): { kind: string; idRaw?: string; iconRaw?: string; toggle?: boolean } {
+): { kind: FormToolBarEntry["kind"]; idRaw?: string; iconRaw?: string; toggle?: boolean } {
   const idRaw = getDefaultToolBarInsertId(toolBar);
   switch (action) {
     case "button":
@@ -521,11 +592,11 @@ export function getStatusBarPreviewInsertArgs(
 ): { widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string } {
   switch (action) {
     case "image":
-      return { widthRaw: "96", imageRaw: "0", flagsRaw: "#PB_StatusBar_Raised" };
+      return { widthRaw: "50" };
     case "label":
-      return { widthRaw: "120", textRaw: '"StatusBarField"' };
+      return { widthRaw: "50", textRaw: '"Label"' };
     case "progress":
-      return { widthRaw: "120", progressBar: true, progressRaw: "0" };
+      return { widthRaw: "50", progressBar: true, progressRaw: "0" };
   }
 }
 
@@ -767,6 +838,56 @@ export function getMenuFooterRect(
   return footerRects.find((entry) => entry.menuId === menuId && entry.parentIndex === parentIndex);
 }
 
+
+export function getLinearTopLevelEntryMoveTarget(args: {
+  sourceEntryIndex: number;
+  x: number;
+  y: number;
+  entryRects: PreviewEntryRectLike[];
+  getSourceLine: (index: number) => number | undefined;
+  edgeTolerance?: number;
+  isNoopMove?: (targetIndex: number, placement: Extract<MenuEntryMovePlacement, "before" | "after">) => boolean;
+}): LinearTopLevelEntryMoveTargetLike | null {
+  const edgeTolerance = args.edgeTolerance ?? 5;
+  const entryRects = [...args.entryRects].sort((left, right) => left.x - right.x || left.index - right.index);
+  if (entryRects.length < 2) return null;
+
+  for (const rect of entryRects) {
+    if (rect.index === args.sourceEntryIndex) continue;
+    if (args.y < rect.y || args.y > rect.y + rect.h) continue;
+    if (args.x > rect.x - edgeTolerance && args.x < rect.x + edgeTolerance) {
+      if (args.isNoopMove?.(rect.index, MenuEntryMovePlacement.Before)) return null;
+      const targetSourceLine = args.getSourceLine(rect.index);
+      if (typeof targetSourceLine !== "number") return null;
+      return {
+        targetSourceLine,
+        placement: MenuEntryMovePlacement.Before,
+        indicatorRect: { x: rect.x - 1, y: rect.y, w: 2, h: rect.h },
+        indicatorOrientation: "vertical"
+      };
+    }
+  }
+
+  const lastRect = entryRects[entryRects.length - 1];
+  if (lastRect.index !== args.sourceEntryIndex
+    && args.y >= lastRect.y
+    && args.y <= lastRect.y + lastRect.h
+    && args.x > lastRect.x + edgeTolerance
+  ) {
+    if (args.isNoopMove?.(lastRect.index, MenuEntryMovePlacement.After)) return null;
+    const targetSourceLine = args.getSourceLine(lastRect.index);
+    if (typeof targetSourceLine !== "number") return null;
+    return {
+      targetSourceLine,
+      placement: MenuEntryMovePlacement.After,
+      indicatorRect: { x: lastRect.x + lastRect.w, y: lastRect.y, w: 2, h: lastRect.h },
+      indicatorOrientation: "vertical"
+    };
+  }
+
+  return null;
+}
+
 export function getMenuVisibleEntries(
   menu: MenuModelLike,
   entryRects: PreviewEntryRectLike[]
@@ -817,7 +938,7 @@ export function getMenuEntryMoveTarget(args: {
     if (typeof targetSourceLine === "number") {
       return {
         targetSourceLine,
-        placement: "before",
+        placement: MenuEntryMovePlacement.Before,
         indicatorRect: { x: firstVisibleRoot.rect.x - 1, y: firstVisibleRoot.rect.y, w: 2, h: firstVisibleRoot.rect.h },
         indicatorOrientation: "vertical"
       };
@@ -841,7 +962,7 @@ export function getMenuEntryMoveTarget(args: {
     ) {
       return {
         targetSourceLine,
-        placement: "before",
+        placement: MenuEntryMovePlacement.Before,
         indicatorRect: { x: rect.x, y: rect.y - 1, w: rect.w, h: 2 },
         indicatorOrientation: "horizontal"
       };
@@ -856,7 +977,7 @@ export function getMenuEntryMoveTarget(args: {
     ) {
       return {
         targetSourceLine,
-        placement: "after",
+        placement: MenuEntryMovePlacement.After,
         indicatorRect: level === 0
           ? { x: rect.x + rect.w, y: rect.y, w: 2, h: rect.h }
           : { x: rect.x, y: rect.y + rect.h, w: rect.w, h: 2 },
@@ -879,7 +1000,7 @@ export function getMenuEntryMoveTarget(args: {
       ) {
         return {
           targetSourceLine,
-          placement: "appendChild",
+          placement: MenuEntryMovePlacement.AppendChild,
           indicatorRect: { x: rect.x + rect.w, y: rect.y, w: footerRect.w, h: 2 },
           indicatorOrientation: "horizontal"
         };

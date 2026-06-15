@@ -1,66 +1,14 @@
 import * as vscode from "vscode";
-
-const GRID_MODE_KEY = {
-  dots: "dots",
-  lines: "lines"
-} as const;
-
-const SNAP_MODE_KEY = {
-  live: "live",
-  drop: "drop"
-} as const;
-
-const DESIGNER_OS_SKIN_KEY = {
-  windows7: "windows7",
-  windows8: "windows8",
-  linux: "linux",
-  macos: "macos"
-} as const;
-
-const WARNING_PRESENCE_MODE_KEY = {
-  never: "never",
-  always: "always"
-} as const;
-
-const WARNING_VERSION_UPGRADE_MODE_KEY = {
-  never: "never",
-  ifBackwardCompatibilityIsAffected: "ifBackwardCompatibilityIsAffected",
-  always: "always"
-} as const;
-
-export type GridMode = typeof GRID_MODE_KEY[keyof typeof GRID_MODE_KEY];
-export type SnapMode = typeof SNAP_MODE_KEY[keyof typeof SNAP_MODE_KEY];
-export type DesignerOsSkin = typeof DESIGNER_OS_SKIN_KEY[keyof typeof DESIGNER_OS_SKIN_KEY];
-export type WarningPresenceMode = typeof WARNING_PRESENCE_MODE_KEY[keyof typeof WARNING_PRESENCE_MODE_KEY];
-export type WarningVersionUpgradeMode = typeof WARNING_VERSION_UPGRADE_MODE_KEY[keyof typeof WARNING_VERSION_UPGRADE_MODE_KEY];
-
-export interface DesignerSettings {
-  showGrid: boolean;
-  gridMode: GridMode;
-  gridSize: number;
-  gridOpacity: number;
-
-  snapToGrid: boolean;
-  snapMode: SnapMode;
-
-  windowFillOpacity: number;
-  outsideDimOpacity: number;
-  titleBarHeight: number;
-  windowPreviewWindowsCaptionlessTopPadding: number;
-  windowPreviewWindowsClientSidePadding: number;
-  windowPreviewWindowsClientBottomPadding: number;
-
-  canvasBackground: string;
-  canvasReadonlyBackground: string;
-
-  newGadgetsUsePbAnyByDefault: boolean;
-  newGadgetsUseVariableAsCaption: boolean;
-  generateEventProcedure: boolean;
-  osSkin: DesignerOsSkin;
-  warningUnrecognizedFile: WarningPresenceMode;
-  warningVersionUpgrade: WarningVersionUpgradeMode;
-  warningVersionDowngrade: WarningPresenceMode;
-}
+import {
+  GRID_MODE_KEY,
+  SNAP_MODE_KEY,
+  DESIGNER_OS_SKIN_KEY,
+  WARNING_PRESENCE_MODE_KEY,
+  WARNING_VERSION_UPGRADE_MODE_KEY,
+  type GridMode,
+  type SnapMode,
+  type DesignerSettings
+} from "../shared/designer-settings";
 
 export const SETTINGS_SECTION = "purebasicFormsDesigner";
 

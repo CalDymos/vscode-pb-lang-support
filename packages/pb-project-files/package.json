@@ -2,7 +2,7 @@
   "name": "pb-project-files",
   "displayName": "PureBasic Project Files",
   "description": "Workspace project/target management for PureBasic (.pbp) projects",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "publisher": "CalDymos",
   "author": {
     "name": "CalDymos"
@@ -36,6 +36,8 @@
     "Other"
   ],
   "activationEvents": [
+    "onStartupFinished",
+    "onLanguage:purebasic-project",
     "workspaceContains:**/*.pbp"
   ],
   "main": "./out/extension.js",
@@ -115,6 +117,11 @@
         "category": "PureBasic"
       },
       {
+        "command": "pbProjectFiles.projectMenu",
+        "title": "%pbProjectFiles.projectMenu.title%",
+        "category": "PureBasic"
+      },
+      {
         "command": "pbProjectFiles.pickTarget",
         "title": "PureBasic: Select Active Target",
         "category": "PureBasic"
@@ -127,6 +134,21 @@
       {
         "command": "pbProjectFiles.newProject",
         "title": "%pbProjectFiles.newProject.title%",
+        "category": "PureBasic"
+      },
+      {
+        "command": "pbProjectFiles.openActiveProject",
+        "title": "%pbProjectFiles.openActiveProject.title%",
+        "category": "PureBasic"
+      },
+      {
+        "command": "pbProjectFiles.revealActiveProjectDirectory",
+        "title": "%pbProjectFiles.revealActiveProjectDirectory.title%",
+        "category": "PureBasic"
+      },
+      {
+        "command": "pbProjectFiles.openActiveProjectAndRevealDirectory",
+        "title": "%pbProjectFiles.openActiveProjectAndRevealDirectory.title%",
         "category": "PureBasic"
       }
     ],

@@ -1,12 +1,15 @@
 import * as cp from "child_process";
 import * as vscode from "vscode";
-import { EXT_TO_WEBVIEW_MSG_TYPE, WEBVIEW_TO_EXT_MSG_TYPE } from "./shared/messages";
+import { EXT_TO_WEBVIEW_MSG_TYPE, WEBVIEW_TO_EXT_MSG_TYPE, type ExtensionToWebviewMessage, type WebviewToExtensionMessage, type WindowsRegistryColors } from "./shared/messages";
 import { parseFormDocument } from "./core/parser/form-parser";
+import { extractProcedureNamesFromText } from "./core/parser/procedure-scanner";
 import {
   applyGadgetColumnDelete,
   applyGadgetColumnInsert,
   applyGadgetColumnUpdate,
-  applyGadgetDelete,
+  applyGadgetDeleteWithImageCleanup,
+  applyGadgetDuplicate,
+  applyGadgetCopyPaste,
   applyGadgetInsert,
   applyGadgetReparent,
   applyGadgetOpenArgsUpdate,
@@ -14,11 +17,15 @@ import {
   applyGadgetPropertyUpdate,
   applyImageDelete,
   applyImageInsert,
+  applyImageInsertAndReferenceUpdate,
+  applyImageCleanupAfterSingleLineReferenceDelete,
+  applyImageReferenceUpdateWithCleanup,
   applyImageUpdate,
   applyGadgetEventProcUpdate,
   applyGadgetItemDelete,
   applyGadgetItemInsert,
   applyGadgetItemUpdate,
+  applyMenuCreate,
   applyMenuDelete,
   applyMenuEntryDelete,
   applyMenuEntryEventUpdate,
@@ -27,16 +34,20 @@ import {
   applyMenuEntryUpdate,
   applyMovePatch,
   applyRectPatch,
-  applyResizeGadgetDelete,
-  applyResizeGadgetRawUpdate,
+  applyResizeGadgetMutation,
+  applyStatusBarCreate,
   applyStatusBarDelete,
   applyStatusBarFieldDelete,
+  applyStatusBarFieldDeleteWithImageCleanup,
   applyStatusBarFieldInsert,
+  applyStatusBarFieldMove,
   applyStatusBarFieldUpdate,
+  applyToolBarCreate,
   applyToolBarDelete,
   applyToolBarEntryDelete,
   applyToolBarEntryEventUpdate,
   applyToolBarEntryInsert,
+  applyToolBarEntryMove,
   applyToolBarEntryTooltipSet,
   applyToolBarEntryUpdate,
   applyWindowEnumValuePatch,
@@ -57,7 +68,7 @@ import {
   GadgetPropertyArgs,
   WindowPropertyArgs
 } from "./core/emitter/patch-emitter";
-import { readDesignerSettings, SETTINGS_SECTION, DesignerSettings } from "./config/settings";
+import { readDesignerSettings, SETTINGS_SECTION } from "./config/settings";
 import { FormDocument, PBFD_SYMBOLS, PB_ANY, GADGET_KIND } from "./core/model";
 import { buildInsertedGadgetIdentity, insertedGadgetHasAmbiguousEmptyTextDefault, isInsertableGadgetKind, shouldInsertGadgetAsPbAny } from "./core/gadget/insert";
 import { applyConfiguredFormVersionWarnings, applyGadgetCaptionVariableSessionOverrides, isAmbiguousEmptyTextLiteral } from "./core/utils/form-settings-runtime";
@@ -65,11 +76,11 @@ import { getToolboxPanelCategories } from "./core/toolbox/panel";
 import { relativizeImagePath, toPbFilePathLiteral } from "./core/image/path";
 import { buildImageReferenceFromEntry, resolveExistingLoadImageByFilePath } from "./core/image/assignment";
 import { readImageDimensions } from "./core/image/dimension";
+import { countFormImageUsages } from "./core/image/model";
 import {
   resolveFixedProcedureSourcePaths,
   readProcedureSourceTextAsync,
   MAX_PROCEDURE_FILE_BYTES,
-  extractProcedureNamesFromText,
   isProcedureSourceFilePath,
   resolveProcedureEventFilePath,
   sortUniqueProcedureNames
@@ -242,93 +253,6 @@ function shouldRefreshProcedureListFromFileChanges(changedUris: readonly vscode.
   });
 }
 
-type WebviewToExtensionMessage =
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.ready }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveGadget; id: string; x: number; y: number }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetRect; id: string; x: number; y: number; w: number; h: number; yRaw?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetOpenArgs; id: string; textRaw?: string; textVariable?: boolean; minRaw?: string; maxRaw?: string; flagsExpr?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setCustomGadgetCode; id: string; customInitRaw?: string; customCreateRaw?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetProperties; id: string; hiddenRaw?: string; disabledRaw?: string; tooltipRaw?: string; frontColorRaw?: string; backColorRaw?: string; gadgetFontRaw?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc; id: string; eventProc?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetImageRaw; id: string; imageRaw: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw; id: string; stateRaw?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetResizeRaw; id: string; xRaw?: string; yRaw?: string; wRaw?: string; hRaw?: string; deleteResize?: boolean }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.toggleGadgetPbAny; gadgetId: string; toPbAny: boolean; variableName: string; enumSymbol: string; enumValueRaw?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEnumValue; enumSymbol: string; enumValueRaw?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetVariableName; gadgetId: string; variableName: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowRect; id: string; x: number; y: number; w: number; h: number }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowOpenArgs; windowKey: string; xRaw?: string; yRaw?: string; wRaw?: string; hRaw?: string; captionRaw?: string; flagsExpr?: string; parentRaw?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowProperties; windowKey: string; hiddenRaw?: string; disabledRaw?: string; colorRaw?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.toggleWindowPbAny; windowKey: string; toPbAny: boolean; variableName: string; enumSymbol: string; enumValueRaw?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEnumValue; enumSymbol: string; enumValueRaw?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowVariableName; windowKey: string; variableName?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventFile; windowKey: string; eventFile?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventProc; windowKey: string; eventProc?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowGenerateEventLoop; windowKey: string; enabled: boolean }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadget; kind: string; x: number; y: number; yRaw?: string; parentId?: string; parentItem?: number; gadget1Id?: string; gadget2Id?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.reparentGadget; id: string; parentId?: string; parentItem?: number }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadget; id: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadgetItem; id: string; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateGadgetItem; id: string; sourceLine: number; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadgetItem; id: string; sourceLine: number }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadgetColumn; id: string; colRaw: string; titleRaw: string; widthRaw: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateGadgetColumn; id: string; sourceLine: number; colRaw: string; titleRaw: string; widthRaw: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadgetColumn; id: string; sourceLine: number }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertMenuEntry; menuId: string; kind: string; idRaw?: string; textRaw?: string; parentSourceLine?: number }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveMenuEntry; menuId: string; sourceLine: number; kind: string; targetSourceLine: number; placement: "before" | "after" | "appendChild" }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateMenuEntry; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; iconRaw?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteMenuEntry; menuId: string; sourceLine: number; kind: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteMenu; menuId: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setMenuEntryEvent; entryIdRaw: string; eventProc?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertToolBarEntry; toolBarId: string; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateToolBarEntry; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string; toggle?: boolean }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBarEntry; toolBarId: string; sourceLine: number; kind: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBar; toolBarId: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setToolBarEntryEvent; entryIdRaw: string; eventProc?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setToolBarEntryTooltip; toolBarId: string; sourceLine: number; entryIdRaw: string; textRaw?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertStatusBarField; statusBarId: string; widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateStatusBarField; statusBarId: string; sourceLine: number; widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBarField; statusBarId: string; sourceLine: number }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBar; statusBarId: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertImage; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateImage; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string; pbAny?: boolean }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteImage; sourceLine: number }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.relativizeImagePath; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseImageFileForEntry; sourceLine: number; inline: boolean; idRaw: string; assignedVar?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.toggleImagePbAny; sourceLine: number; toPbAny: boolean }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignGadgetImage; id: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignGadgetImage; id: string; x: number; y: number; resizeToImage: boolean; newImageIdRaw: string; newAssignedVar?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignMenuEntryImage; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string; oldImageId?: string; oldImageSourceLine?: number }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string; oldImageId?: string; oldImageSourceLine?: number }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignMenuEntryImage; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; newImageIdRaw: string; newAssignedVar?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; newImageIdRaw: string; newAssignedVar?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; newImageIdRaw: string; newAssignedVar?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.rebindToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; iconRaw: string; oldImageId?: string; oldImageSourceLine?: number }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.rebindStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; imageRaw: string; oldImageId?: string; oldImageSourceLine?: number };
-
-/** Colors read from HKCU\Control Panel\Colors that have no CSS system-color equivalent. */
-type WindowsRegistryColors = {
-  menu:                 string; // Menu background
-  menuBar:              string; // Menu bar background
-  menuText:             string; // Menu text
-  menuHilight:          string; // Selected menu item background
-  activeTitle:          string; // Active title bar (solid)
-  gradientActiveTitle:  string; // Active title bar gradient end
-  inactiveTitle:        string; // Inactive title bar
-  titleText:            string; // Title bar text
-  hotTrackingColor:     string; // Hover / hot-track color
-  scrollbar:            string; // Scrollbar track background
-};
-
-
-type ExtensionToWebviewMessage =
-  | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.init; model: any; settings: DesignerSettings }
-  | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.settings; settings: DesignerSettings }
-  | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.error; message: string }
-  | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.windowsSystemColors; colors: WindowsRegistryColors }
-  | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.procedureNames; names: string[] };
-
 /**
  * Reads Windows UI colors from HKCU\Control Panel\Colors asynchronously.
  * Uses `execFile('reg', ['query', ...])` to avoid shell parsing and to keep
@@ -415,7 +339,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
 
     webviewPanel.webview.html = this.getWebviewHtml(webviewPanel.webview);
 
-    const post = (msg: ExtensionToWebviewMessage) => webviewPanel.webview.postMessage(msg);
+    const post = (msg: ExtensionToWebviewMessage<FormDocument>) => webviewPanel.webview.postMessage(msg);
 
     let lastModel: FormDocument | undefined;
     let initTimer: ReturnType<typeof setTimeout> | undefined;
@@ -530,7 +454,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         for (const id of staleGadgetTextVariableIds) {
           gadgetTextVariableSessionOverrides.delete(id);
         }
-        post({ type: "init", model, settings });
+        post({ type: EXT_TO_WEBVIEW_MSG_TYPE.init, model, settings });
 
         // Kick off non-blocking procedure discovery; the eventFile may have
         // changed after re-parsing, so always pass the freshly parsed value.
@@ -539,7 +463,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         // Keep the webview alive with a minimal model and a structured error.
         const model = createErrorModel(text.length, e?.message ?? String(e));
         lastModel = model;
-        post({ type: "init", model, settings: readDesignerSettings() });
+        post({ type: EXT_TO_WEBVIEW_MSG_TYPE.init, model, settings: readDesignerSettings() });
       }
     };
 
@@ -555,7 +479,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
 
     const cfgSub = vscode.workspace.onDidChangeConfiguration((e: vscode.ConfigurationChangeEvent) => {
       if (e.affectsConfiguration(SETTINGS_SECTION)) {
-        post({ type: "settings", settings: readDesignerSettings() });
+        post({ type: EXT_TO_WEBVIEW_MSG_TYPE.settings, settings: readDesignerSettings() });
       }
     });
 
@@ -615,7 +539,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
     webviewPanel.webview.onDidReceiveMessage(async (msg: WebviewToExtensionMessage) => {
       const sr = lastModel?.meta.scanRange;
       const rangeInfo = sr ? ` (scanRange: ${sr.start}-${sr.end})` : "";
-      const postError = (message: string) => post({ type: "error", message });
+      const postError = (message: string) => post({ type: EXT_TO_WEBVIEW_MSG_TYPE.error, message });
 
       const applyEditOrError = async (edit: vscode.WorkspaceEdit | undefined, errorMessage: string) => {
         if (!edit) {
@@ -659,20 +583,8 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
       };
 
 
-      const applyTripleEditsOrError = async (
-        firstEdit: vscode.WorkspaceEdit | undefined,
-        firstErrorMessage: string,
-        secondEdit: vscode.WorkspaceEdit | undefined,
-        secondErrorMessage: string,
-        thirdEdit: vscode.WorkspaceEdit | undefined,
-        thirdErrorMessage: string,
-      ): Promise<boolean> => {
-        if (!firstEdit) { postError(firstErrorMessage); return false; }
-        if (!secondEdit) { postError(secondErrorMessage); return false; }
-        if (!thirdEdit) { postError(thirdErrorMessage); return false; }
-        const ok = await vscode.workspace.applyEdit(mergeWorkspaceEdits(mergeWorkspaceEdits(firstEdit, secondEdit), thirdEdit));
-        if (!ok) { postError(firstErrorMessage); return false; }
-        return true;
+      const countCurrentImageUsages = (imageId: string | undefined): number => {
+        return imageId && lastModel ? countFormImageUsages(lastModel, imageId) : 0;
       };
 
       const pickImageFile = async (): Promise<{ fsPath: string; imageRaw: string } | undefined> => {
@@ -923,6 +835,23 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           return;
         }
         case WEBVIEW_TO_EXT_MSG_TYPE.setGadgetImageRaw: {
+          const oldImageUsageCount = countCurrentImageUsages(msg.oldImageId);
+          const cleanupSourceLine = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
+            ? msg.oldImageSourceLine
+            : undefined;
+
+          if (typeof cleanupSourceLine === "number") {
+            const edit = applyImageReferenceUpdateWithCleanup(
+              document,
+              msg.imageRaw,
+              imageRef => applyGadgetOpenArgsUpdate(document, msg.id, { imageRaw: imageRef }, sr),
+              cleanupSourceLine,
+              sr
+            );
+            await applyEditOrError(edit, `Could not rebind image argument and clean the previous image entry for gadget '${msg.id}'${rangeInfo}.`);
+            return;
+          }
+
           const edit = applyGadgetOpenArgsUpdate(document, msg.id, { imageRaw: msg.imageRaw }, sr);
           await applyEditOrError(edit, `Could not patch image argument for gadget '${msg.id}'. No matching image-capable gadget constructor found${rangeInfo}.`);
           return;
@@ -971,19 +900,13 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             postError(`Could not find gadget '${msg.id}' for ResizeGadget update${rangeInfo}.`);
             return;
           }
-          if (!gadget.resizeSource) {
-            postError(`Could not update locks for '${msg.id}'. No existing ResizeGadget(...) line was parsed${rangeInfo}.`);
-            return;
-          }
-
-          const edit = msg.deleteResize
-            ? applyResizeGadgetDelete(document, msg.id, sr)
-            : applyResizeGadgetRawUpdate(document, msg.id, {
-                xRaw: msg.xRaw ?? "",
-                yRaw: msg.yRaw ?? "",
-                wRaw: msg.wRaw ?? "",
-                hRaw: msg.hRaw ?? ""
-              }, sr);
+          const edit = applyResizeGadgetMutation(document, msg.id, {
+            xRaw: msg.xRaw ?? "",
+            yRaw: msg.yRaw ?? "",
+            wRaw: msg.wRaw ?? "",
+            hRaw: msg.hRaw ?? "",
+            deleteResize: msg.deleteResize === true
+          }, sr);
           await applyEditOrError(edit, `Could not patch ResizeGadget(...) for gadget '${msg.id}'${rangeInfo}.`);
           return;
         }
@@ -1059,8 +982,20 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         }
 
         case WEBVIEW_TO_EXT_MSG_TYPE.deleteGadget: {
-          const edit = applyGadgetDelete(document, msg.id, sr);
+          const edit = applyGadgetDeleteWithImageCleanup(document, msg.id, sr);
           await applyEditOrError(edit, `Could not delete gadget '${msg.id}'. No safe delete path found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.duplicateGadget: {
+          const edit = applyGadgetDuplicate(document, msg.id, sr);
+          await applyEditOrError(edit, `Could not duplicate gadget '${msg.id}'. No safe duplicate path found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.pasteCopiedGadget: {
+          const edit = applyGadgetCopyPaste(document, msg.id, sr);
+          await applyEditOrError(edit, `Could not paste copied gadget '${msg.id}'. No safe paste path found${rangeInfo}.`);
           return;
         }
 
@@ -1117,6 +1052,17 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           return;
         }
 
+        case WEBVIEW_TO_EXT_MSG_TYPE.createMenu: {
+          if (!ensureMenuEntryKind(msg.kind)) return;
+          const edit = applyMenuCreate(
+            document,
+            { kind: msg.kind as any, idRaw: msg.idRaw, textRaw: msg.textRaw },
+            sr
+          );
+          await applyEditOrError(edit, `Could not create a menu root. No suitable insertion point found${rangeInfo}.`);
+          return;
+        }
+
         case WEBVIEW_TO_EXT_MSG_TYPE.insertMenuEntry: {
           if (!ensureMenuEntryKind(msg.kind)) return;
           const edit = applyMenuEntryInsert(
@@ -1159,7 +1105,20 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
 
         case WEBVIEW_TO_EXT_MSG_TYPE.deleteMenuEntry: {
           if (!ensureMenuEntryKind(msg.kind)) return;
-          const edit = applyMenuEntryDelete(document, msg.menuId, msg.sourceLine, msg.kind as any, sr);
+          const currentModel = parseFormDocument(document.getText());
+          const menuEntry = currentModel.menus
+            .find((entry) => entry.id === msg.menuId)
+            ?.entries.find((entry) => entry.source?.line === msg.sourceLine && entry.kind.toLowerCase() === msg.kind.toLowerCase());
+          const oldImage = currentModel.images.find((entry) => entry.id === menuEntry?.iconId);
+          const cleanupSourceLine = menuEntry?.iconId
+            && countFormImageUsages(currentModel, menuEntry.iconId) === 1
+            && typeof oldImage?.source?.line === "number"
+            ? oldImage.source.line
+            : undefined;
+          const buildDeleteEdit = () => applyMenuEntryDelete(document, msg.menuId, msg.sourceLine, msg.kind as any, sr);
+          const edit = typeof cleanupSourceLine === "number"
+            ? applyImageCleanupAfterSingleLineReferenceDelete(document, cleanupSourceLine, buildDeleteEdit, sr)
+            : buildDeleteEdit();
           await applyEditOrError(edit, `Could not delete menu entry for menu '${msg.menuId}'. No matching call found${rangeInfo}.`);
           return;
         }
@@ -1167,6 +1126,17 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         case WEBVIEW_TO_EXT_MSG_TYPE.deleteMenu: {
           const edit = applyMenuDelete(document, msg.menuId, sr);
           await applyEditOrError(edit, `Could not delete menu '${msg.menuId}'. No matching CreateMenu section found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.createToolBar: {
+          if (!ensureToolBarEntryKind(msg.kind)) return;
+          const edit = applyToolBarCreate(
+            document,
+            { kind: msg.kind as any, idRaw: msg.idRaw, iconRaw: msg.iconRaw, textRaw: msg.textRaw, toggle: msg.toggle },
+            sr
+          );
+          await applyEditOrError(edit, `Could not create a toolbar root. No suitable insertion point found${rangeInfo}.`);
           return;
         }
 
@@ -1195,9 +1165,36 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           return;
         }
 
+        case WEBVIEW_TO_EXT_MSG_TYPE.moveToolBarEntry: {
+          if (!ensureToolBarEntryKind(msg.kind)) return;
+          const edit = applyToolBarEntryMove(
+            document,
+            msg.toolBarId,
+            msg.sourceLine,
+            msg.kind as any,
+            { targetSourceLine: msg.targetSourceLine, placement: msg.placement },
+            sr
+          );
+          await applyEditOrError(edit, `Could not move toolbar entry for toolbar '${msg.toolBarId}'. No matching structural move target found${rangeInfo}.`);
+          return;
+        }
+
         case WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBarEntry: {
           if (!ensureToolBarEntryKind(msg.kind)) return;
-          const edit = applyToolBarEntryDelete(document, msg.toolBarId, msg.sourceLine, msg.kind as any, sr);
+          const currentModel = parseFormDocument(document.getText());
+          const toolBarEntry = currentModel.toolbars
+            .find((entry) => entry.id === msg.toolBarId)
+            ?.entries.find((entry) => entry.source?.line === msg.sourceLine && entry.kind.toLowerCase() === msg.kind.toLowerCase());
+          const oldImage = currentModel.images.find((entry) => entry.id === toolBarEntry?.iconId);
+          const cleanupSourceLine = toolBarEntry?.iconId
+            && countFormImageUsages(currentModel, toolBarEntry.iconId) === 1
+            && typeof oldImage?.source?.line === "number"
+            ? oldImage.source.line
+            : undefined;
+          const buildDeleteEdit = () => applyToolBarEntryDelete(document, msg.toolBarId, msg.sourceLine, msg.kind as any, sr);
+          const edit = typeof cleanupSourceLine === "number"
+            ? applyImageCleanupAfterSingleLineReferenceDelete(document, cleanupSourceLine, buildDeleteEdit, sr)
+            : buildDeleteEdit();
           await applyEditOrError(edit, `Could not delete toolbar entry for toolbar '${msg.toolBarId}'. No matching call found${rangeInfo}.`);
           return;
         }
@@ -1205,6 +1202,24 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         case WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBar: {
           const edit = applyToolBarDelete(document, msg.toolBarId, sr);
           await applyEditOrError(edit, `Could not delete toolbar '${msg.toolBarId}'. No matching CreateToolBar section found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.createStatusBar: {
+          const normalized = normalizeStatusBarFieldMessageArgs({
+            widthRaw: msg.widthRaw,
+            textRaw: msg.textRaw,
+            imageRaw: msg.imageRaw,
+            flagsRaw: msg.flagsRaw,
+            progressBar: msg.progressBar,
+            progressRaw: msg.progressRaw,
+          });
+          if (!normalized.ok) {
+            postError(normalized.error);
+            return;
+          }
+          const edit = applyStatusBarCreate(document, normalized.args, sr);
+          await applyEditOrError(edit, `Could not create a statusbar root. No suitable insertion point found${rangeInfo}.`);
           return;
         }
 
@@ -1247,11 +1262,38 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           return;
         }
 
-        case WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBarField: {
-          const edit = applyStatusBarFieldDelete(document, msg.statusBarId, msg.sourceLine, sr);
+        case WEBVIEW_TO_EXT_MSG_TYPE.moveStatusBarField: {
+          const edit = applyStatusBarFieldMove(
+            document,
+            msg.statusBarId,
+            msg.sourceLine,
+            { targetSourceLine: msg.targetSourceLine, placement: msg.placement },
+            sr
+          );
           await applyEditOrError(
             edit,
-            `Could not delete statusbar field for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`
+            `Could not move statusbar field for statusbar '${msg.statusBarId}'. No matching structural move target found${rangeInfo}.`
+          );
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBarField: {
+          const statusBar = lastModel?.statusbars.find(entry => entry.id === msg.statusBarId);
+          const field = statusBar?.fields.find(entry => entry.source?.line === msg.sourceLine);
+          const oldImageUsageCount = countCurrentImageUsages(field?.imageId);
+          const oldImageSourceLine = lastModel?.images.find(entry => entry.id === field?.imageId)?.source?.line;
+          const cleanupSourceLine = field?.imageId && oldImageUsageCount === 1 && typeof oldImageSourceLine === "number"
+            ? oldImageSourceLine
+            : undefined;
+
+          const edit = typeof cleanupSourceLine === "number"
+            ? applyStatusBarFieldDeleteWithImageCleanup(document, msg.statusBarId, msg.sourceLine, cleanupSourceLine, sr)
+            : applyStatusBarFieldDelete(document, msg.statusBarId, msg.sourceLine, sr);
+          await applyEditOrError(
+            edit,
+            typeof cleanupSourceLine === "number"
+              ? `Could not delete statusbar field and clean the previous image entry for statusbar '${msg.statusBarId}'${rangeInfo}.`
+              : `Could not delete statusbar field for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`
           );
           return;
         }
@@ -1460,18 +1502,19 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         }
 
         case WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignGadgetImage: {
-          const imageRef = buildImageIdReference(msg.newImageIdRaw, msg.newAssignedVar);
-          if (!imageRef) {
-            postError(`Could not create image entry for gadget '${msg.id}'. ${PB_ANY} requires an assigned variable name${rangeInfo}.`);
-            return;
-          }
+          const oldImageUsageCount = countCurrentImageUsages(msg.oldImageId);
+          const cleanupSourceLine = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
+            ? msg.oldImageSourceLine
+            : undefined;
 
-          const assignEdit = applyGadgetOpenArgsUpdate(document, msg.id, { imageRaw: imageRef }, sr);
-          const insertEdit = applyImageInsert(document, { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar }, sr);
-          await applyPairedEditsOrError(
-            assignEdit, `Could not patch image argument for gadget '${msg.id}'. No matching image-capable gadget constructor found${rangeInfo}.`,
-            insertEdit, `Could not insert image entry for gadget '${msg.id}'. No suitable insertion point found${rangeInfo}.`,
+          const edit = applyImageInsertAndReferenceUpdate(
+            document,
+            { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar },
+            imageRef => applyGadgetOpenArgsUpdate(document, msg.id, { imageRaw: imageRef }, sr),
+            cleanupSourceLine,
+            sr
           );
+          await applyEditOrError(edit, `Could not create and assign image entry for gadget '${msg.id}'${rangeInfo}.`);
           return;
         }
 
@@ -1489,17 +1532,36 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             return;
           }
 
-          const assignEdit = applyGadgetOpenArgsUpdate(document, msg.id, { imageRaw: imageRef }, sr);
+          const oldImageUsageCount = countCurrentImageUsages(msg.oldImageId);
+          const cleanupSourceLine = msg.oldImageId
+            && msg.oldImageId !== existingImage?.id
+            && oldImageUsageCount === 1
+            && typeof msg.oldImageSourceLine === "number"
+            ? msg.oldImageSourceLine
+            : undefined;
+
           if (existingImage) {
-            if (!await applyEditOrError(assignEdit, `Could not patch image argument for gadget '${msg.id}'. No matching image-capable gadget constructor found${rangeInfo}.`)) {
+            const edit = typeof cleanupSourceLine === "number"
+              ? applyImageReferenceUpdateWithCleanup(
+                document,
+                imageRef,
+                nextImageRef => applyGadgetOpenArgsUpdate(document, msg.id, { imageRaw: nextImageRef }, sr),
+                cleanupSourceLine,
+                sr
+              )
+              : applyGadgetOpenArgsUpdate(document, msg.id, { imageRaw: imageRef }, sr);
+            if (!await applyEditOrError(edit, `Could not patch image argument for gadget '${msg.id}'. No matching image-capable gadget constructor found${rangeInfo}.`)) {
               return;
             }
           } else {
-            const insertEdit = applyImageInsert(document, { inline: false, idRaw: msg.newImageIdRaw, imageRaw: picked.imageRaw, assignedVar: msg.newAssignedVar }, sr);
-            if (!await applyPairedEditsOrError(
-              assignEdit, `Could not patch image argument for gadget '${msg.id}'. No matching image-capable gadget constructor found${rangeInfo}.`,
-              insertEdit, `Could not insert image entry for gadget '${msg.id}'. No suitable insertion point found${rangeInfo}.`,
-            )) {
+            const edit = applyImageInsertAndReferenceUpdate(
+              document,
+              { inline: false, idRaw: msg.newImageIdRaw, imageRaw: picked.imageRaw, assignedVar: msg.newAssignedVar },
+              nextImageRef => applyGadgetOpenArgsUpdate(document, msg.id, { imageRaw: nextImageRef }, sr),
+              cleanupSourceLine,
+              sr
+            );
+            if (!await applyEditOrError(edit, `Could not choose and assign image entry for gadget '${msg.id}'${rangeInfo}.`)) {
               return;
             }
           }
@@ -1525,133 +1587,100 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         case WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignMenuEntryImage: {
           if (!ensureMenuEntryKind(msg.kind)) return;
 
-          const imageRef = buildImageIdReference(msg.newImageIdRaw, msg.newAssignedVar);
-          if (!imageRef) {
-            postError(`Could not create image entry for menu '${msg.menuId}'. ${PB_ANY} requires an assigned variable name${rangeInfo}.`);
-            return;
-          }
+          const oldImageUsageCount = countCurrentImageUsages(msg.oldImageId);
+          const cleanupSourceLine = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
+            ? msg.oldImageSourceLine
+            : undefined;
 
-          const assignEdit = applyMenuEntryUpdate(
+          const edit = applyImageInsertAndReferenceUpdate(
             document,
-            msg.menuId,
-            msg.sourceLine,
-            { kind: msg.kind as any, idRaw: msg.idRaw, textRaw: msg.textRaw, shortcut: msg.shortcut, iconRaw: imageRef },
+            { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar },
+            imageRef => applyMenuEntryUpdate(
+              document,
+              msg.menuId,
+              msg.sourceLine,
+              { kind: msg.kind as any, idRaw: msg.idRaw, textRaw: msg.textRaw, shortcut: msg.shortcut, iconRaw: imageRef },
+              sr
+            ),
+            cleanupSourceLine,
             sr
           );
-          const insertEdit = applyImageInsert(document, { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar }, sr);
-          await applyPairedEditsOrError(
-            assignEdit, `Could not patch image argument for menu entry in menu '${msg.menuId}'. No matching call found${rangeInfo}.`,
-            insertEdit, `Could not insert image entry for menu '${msg.menuId}'. No suitable insertion point found${rangeInfo}.`,
-          );
+          await applyEditOrError(edit, `Could not create and assign image entry for menu '${msg.menuId}'${rangeInfo}.`);
           return;
         }
 
         case WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignToolBarEntryImage: {
           if (!ensureToolBarEntryKind(msg.kind)) return;
 
-          const imageRef = buildImageIdReference(msg.newImageIdRaw, msg.newAssignedVar);
-          if (!imageRef) {
-            postError(`Could not create image entry for toolbar '${msg.toolBarId}'. ${PB_ANY} requires an assigned variable name${rangeInfo}.`);
-            return;
-          }
-
-          const model = lastModel;
-          const assignEdit = applyToolBarEntryUpdate(
-            document,
-            msg.toolBarId,
-            msg.sourceLine,
-            { kind: msg.kind as any, idRaw: msg.idRaw, iconRaw: imageRef, toggle: msg.toggle },
-            sr
-          );
-          const insertEdit = applyImageInsert(document, { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar }, sr);
-          const oldImageUsageCount = msg.oldImageId
-            ? [
-                ...(model?.gadgets ?? []).filter((entry) => entry.imageId === msg.oldImageId),
-                ...((model?.menus ?? []).flatMap((menu) => menu.entries.filter((entry) => entry.iconId === msg.oldImageId))),
-                ...((model?.toolbars ?? []).flatMap((toolBar) => toolBar.entries.filter((entry) => entry.iconId === msg.oldImageId))),
-                ...((model?.statusbars ?? []).flatMap((statusBar) => statusBar.fields.filter((field) => field.imageId === msg.oldImageId))),
-              ].length
-            : 0;
-          const cleanupEdit = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
-            ? applyImageDelete(document, msg.oldImageSourceLine, sr)
+          const oldImageUsageCount = countCurrentImageUsages(msg.oldImageId);
+          const cleanupSourceLine = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
+            ? msg.oldImageSourceLine
             : undefined;
 
-          if (cleanupEdit) {
-            await applyTripleEditsOrError(
-              assignEdit, `Could not patch image argument for toolbar entry in toolbar '${msg.toolBarId}'. No matching call found${rangeInfo}.`,
-              insertEdit, `Could not insert image entry for toolbar '${msg.toolBarId}'. No suitable insertion point found${rangeInfo}.`,
-              cleanupEdit, `Could not clean the previous image entry for toolbar '${msg.toolBarId}'. No matching LoadImage/CatchImage call found${rangeInfo}.`,
-            );
-            return;
-          }
-
-          await applyPairedEditsOrError(
-            assignEdit, `Could not patch image argument for toolbar entry in toolbar '${msg.toolBarId}'. No matching call found${rangeInfo}.`,
-            insertEdit, `Could not insert image entry for toolbar '${msg.toolBarId}'. No suitable insertion point found${rangeInfo}.`,
+          const edit = applyImageInsertAndReferenceUpdate(
+            document,
+            { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar },
+            imageRef => applyToolBarEntryUpdate(
+              document,
+              msg.toolBarId,
+              msg.sourceLine,
+              { kind: msg.kind as any, idRaw: msg.idRaw, iconRaw: imageRef, toggle: msg.toggle },
+              sr
+            ),
+            cleanupSourceLine,
+            sr
           );
+          await applyEditOrError(edit, `Could not create and assign image entry for toolbar '${msg.toolBarId}'${rangeInfo}.`);
           return;
         }
 
         case WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignStatusBarFieldImage: {
-          const imageRef = buildImageIdReference(msg.newImageIdRaw, msg.newAssignedVar);
-          if (!imageRef) {
-            postError(`Could not create image entry for statusbar '${msg.statusBarId}'. ${PB_ANY} requires an assigned variable name${rangeInfo}.`);
-            return;
-          }
-
-          const model = lastModel;
-          const assignEdit = applyStatusBarFieldUpdate(document, msg.statusBarId, msg.sourceLine, { widthRaw: msg.widthRaw, imageRaw: imageRef }, sr);
-          const insertEdit = applyImageInsert(document, { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar }, sr);
-          const oldImageUsageCount = msg.oldImageId
-            ? [
-                ...(model?.gadgets ?? []).filter((entry) => entry.imageId === msg.oldImageId),
-                ...((model?.menus ?? []).flatMap((menu) => menu.entries.filter((entry) => entry.iconId === msg.oldImageId))),
-                ...((model?.toolbars ?? []).flatMap((toolBar) => toolBar.entries.filter((entry) => entry.iconId === msg.oldImageId))),
-                ...((model?.statusbars ?? []).flatMap((statusBar) => statusBar.fields.filter((field) => field.imageId === msg.oldImageId))),
-              ].length
-            : 0;
-          const cleanupEdit = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
-            ? applyImageDelete(document, msg.oldImageSourceLine, sr)
+          const oldImageUsageCount = countCurrentImageUsages(msg.oldImageId);
+          const cleanupSourceLine = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
+            ? msg.oldImageSourceLine
             : undefined;
 
-          if (cleanupEdit) {
-            await applyTripleEditsOrError(
-              assignEdit, `Could not patch image argument for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`,
-              insertEdit, `Could not insert image entry for statusbar '${msg.statusBarId}'. No suitable insertion point found${rangeInfo}.`,
-              cleanupEdit, `Could not clean the previous image entry for statusbar '${msg.statusBarId}'. No matching LoadImage/CatchImage call found${rangeInfo}.`,
-            );
-            return;
-          }
-
-          await applyPairedEditsOrError(
-            assignEdit, `Could not patch image argument for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`,
-            insertEdit, `Could not insert image entry for statusbar '${msg.statusBarId}'. No suitable insertion point found${rangeInfo}.`,
+          const edit = applyImageInsertAndReferenceUpdate(
+            document,
+            { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar },
+            imageRef => applyStatusBarFieldUpdate(
+              document,
+              msg.statusBarId,
+              msg.sourceLine,
+              { widthRaw: msg.widthRaw, imageRaw: imageRef },
+              sr
+            ),
+            cleanupSourceLine,
+            sr
           );
+          await applyEditOrError(edit, `Could not create and assign image entry for statusbar '${msg.statusBarId}'${rangeInfo}.`);
           return;
         }
         case WEBVIEW_TO_EXT_MSG_TYPE.rebindStatusBarFieldImage: {
-          const model = lastModel;
-          const assignEdit = applyStatusBarFieldUpdate(document, msg.statusBarId, msg.sourceLine, { widthRaw: msg.widthRaw, imageRaw: msg.imageRaw }, sr);
-          const oldImageUsageCount = msg.oldImageId
-            ? [
-                ...(model?.gadgets ?? []).filter((entry) => entry.imageId === msg.oldImageId),
-                ...((model?.menus ?? []).flatMap((menu) => menu.entries.filter((entry) => entry.iconId === msg.oldImageId))),
-                ...((model?.toolbars ?? []).flatMap((toolBar) => toolBar.entries.filter((entry) => entry.iconId === msg.oldImageId))),
-                ...((model?.statusbars ?? []).flatMap((statusBar) => statusBar.fields.filter((field) => field.imageId === msg.oldImageId))),
-              ].length
-            : 0;
-          const cleanupEdit = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
-            ? applyImageDelete(document, msg.oldImageSourceLine, sr)
+          const oldImageUsageCount = countCurrentImageUsages(msg.oldImageId);
+          const cleanupSourceLine = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
+            ? msg.oldImageSourceLine
             : undefined;
 
-          if (cleanupEdit) {
-            await applyPairedEditsOrError(
-              assignEdit, `Could not rebind image argument for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`,
-              cleanupEdit, `Could not clean the previous image entry for statusbar '${msg.statusBarId}'. No matching LoadImage/CatchImage call found${rangeInfo}.`,
+          if (typeof cleanupSourceLine === "number") {
+            const edit = applyImageReferenceUpdateWithCleanup(
+              document,
+              msg.imageRaw,
+              imageRef => applyStatusBarFieldUpdate(
+                document,
+                msg.statusBarId,
+                msg.sourceLine,
+                { widthRaw: msg.widthRaw, imageRaw: imageRef },
+                sr
+              ),
+              cleanupSourceLine,
+              sr
             );
+            await applyEditOrError(edit, `Could not rebind image argument and clean the previous image entry for statusbar '${msg.statusBarId}'${rangeInfo}.`);
             return;
           }
 
+          const assignEdit = applyStatusBarFieldUpdate(document, msg.statusBarId, msg.sourceLine, { widthRaw: msg.widthRaw, imageRaw: msg.imageRaw }, sr);
           await applyEditOrError(assignEdit, `Could not rebind image argument for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`);
           return;
         }
@@ -1665,9 +1694,51 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             return;
           }
 
-          const imageRef = buildImageIdReference(msg.newImageIdRaw, msg.newAssignedVar);
-          if (!imageRef) {
-            postError(`Could not create image entry for menu '${msg.menuId}'. ${PB_ANY} requires an assigned variable name${rangeInfo}.`);
+          const oldImageUsageCount = countCurrentImageUsages(msg.oldImageId);
+          const cleanupSourceLine = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
+            ? msg.oldImageSourceLine
+            : undefined;
+
+          const edit = applyImageInsertAndReferenceUpdate(
+            document,
+            { inline: false, idRaw: msg.newImageIdRaw, imageRaw: pickedImageRaw, assignedVar: msg.newAssignedVar },
+            imageRef => applyMenuEntryUpdate(
+              document,
+              msg.menuId,
+              msg.sourceLine,
+              { kind: msg.kind as any, idRaw: msg.idRaw, textRaw: msg.textRaw, shortcut: msg.shortcut, iconRaw: imageRef },
+              sr
+            ),
+            cleanupSourceLine,
+            sr
+          );
+          await applyEditOrError(edit, `Could not choose and assign image entry for menu '${msg.menuId}'${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.rebindMenuEntryImage: {
+          if (!ensureMenuEntryKind(msg.kind)) return;
+
+          const oldImageUsageCount = countCurrentImageUsages(msg.oldImageId);
+          const cleanupSourceLine = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
+            ? msg.oldImageSourceLine
+            : undefined;
+
+          if (typeof cleanupSourceLine === "number") {
+            const edit = applyImageReferenceUpdateWithCleanup(
+              document,
+              msg.iconRaw,
+              imageRef => applyMenuEntryUpdate(
+                document,
+                msg.menuId,
+                msg.sourceLine,
+                { kind: msg.kind as any, idRaw: msg.idRaw, textRaw: msg.textRaw, shortcut: msg.shortcut, iconRaw: imageRef },
+                sr
+              ),
+              cleanupSourceLine,
+              sr
+            );
+            await applyEditOrError(edit, `Could not rebind image argument and clean the previous image entry for menu '${msg.menuId}'${rangeInfo}.`);
             return;
           }
 
@@ -1675,14 +1746,10 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             document,
             msg.menuId,
             msg.sourceLine,
-            { kind: msg.kind as any, idRaw: msg.idRaw, textRaw: msg.textRaw, shortcut: msg.shortcut, iconRaw: imageRef },
+            { kind: msg.kind as any, idRaw: msg.idRaw, textRaw: msg.textRaw, shortcut: msg.shortcut, iconRaw: msg.iconRaw },
             sr
           );
-          const insertEdit = applyImageInsert(document, { inline: false, idRaw: msg.newImageIdRaw, imageRaw: pickedImageRaw, assignedVar: msg.newAssignedVar }, sr);
-          await applyPairedEditsOrError(
-            assignEdit, `Could not patch image argument for menu entry in menu '${msg.menuId}'. No matching call found${rangeInfo}.`,
-            insertEdit, `Could not insert image entry for menu '${msg.menuId}'. No suitable insertion point found${rangeInfo}.`,
-          );
+          await applyEditOrError(assignEdit, `Could not rebind image argument for menu '${msg.menuId}'. No matching menu item call found${rangeInfo}.`);
           return;
         }
 
@@ -1694,30 +1761,54 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             return;
           }
 
-          const imageRef = buildImageIdReference(msg.newImageIdRaw, msg.newAssignedVar);
-          if (!imageRef) {
-            postError(`Could not create image entry for toolbar '${msg.toolBarId}'. ${PB_ANY} requires an assigned variable name${rangeInfo}.`);
-            return;
-          }
+          const oldImageUsageCount = countCurrentImageUsages(msg.oldImageId);
+          const cleanupSourceLine = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
+            ? msg.oldImageSourceLine
+            : undefined;
 
-          const assignEdit = applyToolBarEntryUpdate(
+          const edit = applyImageInsertAndReferenceUpdate(
             document,
-            msg.toolBarId,
-            msg.sourceLine,
-            { kind: msg.kind as any, idRaw: msg.idRaw, iconRaw: imageRef, toggle: msg.toggle },
+            { inline: false, idRaw: msg.newImageIdRaw, imageRaw: pickedImageRaw, assignedVar: msg.newAssignedVar },
+            imageRef => applyToolBarEntryUpdate(
+              document,
+              msg.toolBarId,
+              msg.sourceLine,
+              { kind: msg.kind as any, idRaw: msg.idRaw, iconRaw: imageRef, toggle: msg.toggle },
+              sr
+            ),
+            cleanupSourceLine,
             sr
           );
-          const insertEdit = applyImageInsert(document, { inline: false, idRaw: msg.newImageIdRaw, imageRaw: pickedImageRaw, assignedVar: msg.newAssignedVar }, sr);
-          await applyPairedEditsOrError(
-            assignEdit, `Could not patch image argument for toolbar entry in toolbar '${msg.toolBarId}'. No matching call found${rangeInfo}.`,
-            insertEdit, `Could not insert image entry for toolbar '${msg.toolBarId}'. No suitable insertion point found${rangeInfo}.`,
-          );
+          await applyEditOrError(edit, `Could not choose and assign image entry for toolbar '${msg.toolBarId}'${rangeInfo}.`);
           return;
         }
 
         case WEBVIEW_TO_EXT_MSG_TYPE.rebindToolBarEntryImage: {
           if (!ensureToolBarEntryKind(msg.kind)) return;
-          const model = lastModel;
+
+          const oldImageUsageCount = countCurrentImageUsages(msg.oldImageId);
+          const cleanupSourceLine = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
+            ? msg.oldImageSourceLine
+            : undefined;
+
+          if (typeof cleanupSourceLine === "number") {
+            const edit = applyImageReferenceUpdateWithCleanup(
+              document,
+              msg.iconRaw,
+              imageRef => applyToolBarEntryUpdate(
+                document,
+                msg.toolBarId,
+                msg.sourceLine,
+                { kind: msg.kind as any, idRaw: msg.idRaw, iconRaw: imageRef, toggle: msg.toggle },
+                sr
+              ),
+              cleanupSourceLine,
+              sr
+            );
+            await applyEditOrError(edit, `Could not rebind image argument and clean the previous image entry for toolbar '${msg.toolBarId}'${rangeInfo}.`);
+            return;
+          }
+
           const assignEdit = applyToolBarEntryUpdate(
             document,
             msg.toolBarId,
@@ -1725,26 +1816,6 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             { kind: msg.kind as any, idRaw: msg.idRaw, iconRaw: msg.iconRaw, toggle: msg.toggle },
             sr
           );
-          const oldImageUsageCount = msg.oldImageId
-            ? [
-                ...(model?.gadgets ?? []).filter((entry) => entry.imageId === msg.oldImageId),
-                ...((model?.menus ?? []).flatMap((menu) => menu.entries.filter((entry) => entry.iconId === msg.oldImageId))),
-                ...((model?.toolbars ?? []).flatMap((toolBar) => toolBar.entries.filter((entry) => entry.iconId === msg.oldImageId))),
-                ...((model?.statusbars ?? []).flatMap((statusBar) => statusBar.fields.filter((field) => field.imageId === msg.oldImageId))),
-              ].length
-            : 0;
-          const cleanupEdit = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
-            ? applyImageDelete(document, msg.oldImageSourceLine, sr)
-            : undefined;
-
-          if (cleanupEdit) {
-            await applyPairedEditsOrError(
-              assignEdit, `Could not rebind image argument for toolbar '${msg.toolBarId}'. No matching toolbar image button call found${rangeInfo}.`,
-              cleanupEdit, `Could not clean the previous image entry for toolbar '${msg.toolBarId}'. No matching LoadImage/CatchImage call found${rangeInfo}.`,
-            );
-            return;
-          }
-
           await applyEditOrError(assignEdit, `Could not rebind image argument for toolbar '${msg.toolBarId}'. No matching toolbar image button call found${rangeInfo}.`);
           return;
         }
@@ -1755,18 +1826,25 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             return;
           }
 
-          const imageRef = buildImageIdReference(msg.newImageIdRaw, msg.newAssignedVar);
-          if (!imageRef) {
-            postError(`Could not create image entry for statusbar '${msg.statusBarId}'. ${PB_ANY} requires an assigned variable name${rangeInfo}.`);
-            return;
-          }
+          const oldImageUsageCount = countCurrentImageUsages(msg.oldImageId);
+          const cleanupSourceLine = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
+            ? msg.oldImageSourceLine
+            : undefined;
 
-          const assignEdit = applyStatusBarFieldUpdate(document, msg.statusBarId, msg.sourceLine, { widthRaw: msg.widthRaw, imageRaw: imageRef }, sr);
-          const insertEdit = applyImageInsert(document, { inline: false, idRaw: msg.newImageIdRaw, imageRaw: pickedImageRaw, assignedVar: msg.newAssignedVar }, sr);
-          await applyPairedEditsOrError(
-            assignEdit, `Could not patch image argument for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`,
-            insertEdit, `Could not insert image entry for statusbar '${msg.statusBarId}'. No suitable insertion point found${rangeInfo}.`,
+          const edit = applyImageInsertAndReferenceUpdate(
+            document,
+            { inline: false, idRaw: msg.newImageIdRaw, imageRaw: pickedImageRaw, assignedVar: msg.newAssignedVar },
+            imageRef => applyStatusBarFieldUpdate(
+              document,
+              msg.statusBarId,
+              msg.sourceLine,
+              { widthRaw: msg.widthRaw, imageRaw: imageRef },
+              sr
+            ),
+            cleanupSourceLine,
+            sr
           );
+          await applyEditOrError(edit, `Could not choose and assign image entry for statusbar '${msg.statusBarId}'${rangeInfo}.`);
           return;
         }
 

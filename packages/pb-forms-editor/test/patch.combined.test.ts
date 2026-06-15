@@ -31,6 +31,7 @@ import {
 } from "../src/core/emitter/patch-emitter";
 import { MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND } from "../src/core/model";
 import { loadFixture } from "./helpers/loadFixture";
+import { stripBomAndToLf } from "./helpers/testUtils";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
 
@@ -38,6 +39,7 @@ import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
 // type of editFactory so that patch emitter functions (which expect vscode.TextDocument)
 // are accepted without additional casts at each call site.
 import type { TextDocument } from "vscode";
+import { MenuEntryMovePlacement } from "../src/shared/menu";
 
 const DEFAULT_SECTION_ID = "0";
 const menuId = DEFAULT_SECTION_ID;
@@ -379,7 +381,7 @@ test("roundtrips menu entry insert into leaf menu item footer by promoting paren
 
 test("roundtrips menu entry insert into empty submenu footer", () => {
   const text = [
-    '; Form Designer for PureBasic - 6.30',
+    '; Form Designer for PureBasic - 6.40',
     'Enumeration FormMenu',
     '  #MenuOpen',
     'EndEnumeration',
@@ -427,7 +429,7 @@ test("roundtrips menu entry insert into empty submenu footer", () => {
 
 test("roundtrips menu entry insert into empty submenu footer with placeholder comment before close", () => {
   const text = [
-    '; Form Designer for PureBasic - 6.30',
+    '; Form Designer for PureBasic - 6.40',
     'Enumeration FormMenu',
     '  #MenuOpen',
     'EndEnumeration',
@@ -510,6 +512,41 @@ test("roundtrips menu entry update", () => {
 });
 
 
+test("preserves raw menu expressions when adding a shortcut to non-literal captions", () => {
+  const text = `; Form Designer for PureBasic - 6.40
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormMenu
+  #MenuMain
+  #MnuOpen
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  If CreateMenu(#MenuMain, WindowID(#FrmMain))
+    MenuItem(#MnuOpen, "Open" + suffix$ + "X")
+  EndIf
+EndProcedure
+`;
+
+  const parsed = parseFormDocument(text);
+  const menu = parsed.menus[0];
+  assert.ok(menu?.entries[0]?.source?.line !== undefined, "Expected source line for existing menu item.");
+
+  const { patchedText } = patchAndReparse(text, (document) =>
+    applyMenuEntryUpdate(document, menu!.id, menu!.entries[0]!.source!.line, {
+      kind: MENU_ENTRY_KIND.MenuItem,
+      idRaw: "#MnuOpen",
+      textRaw: '"Open" + suffix$ + "X"',
+      shortcut: "Ctrl+O",
+    })
+  );
+
+  assert.match(patchedText, /MenuItem\(#MnuOpen, "Open" \+ suffix\$ \+ "X" \+ Chr\(9\) \+ "Ctrl\+O"\)/);
+});
+
 test("preserves surrounding whitespace for menu shortcut updates", () => {
   const { text, menu, menuId } = parseFixture();
   const openItem = menu.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem);
@@ -557,7 +594,7 @@ test("roundtrips menu entry update with preserved shortcut and icon", () => {
 });
 
 
-test("patches menu entries inside CreateImageMenu sections", () => {
+test("patches menu entries inside CreateImageMenu sections and downgrades when no icons remain", () => {
   const text = [
     'Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)',
     '  OpenWindow(#FrmMain, x, y, width, height, "Menu")',
@@ -578,10 +615,11 @@ test("patches menu entries inside CreateImageMenu sections", () => {
   );
 
   const menu = parsed.menus.find((m) => m.id === '0');
-  assert.ok(menu, 'Expected CreateImageMenu section after insert.');
+  assert.ok(menu, 'Expected menu section after insert.');
   assert.equal(menu!.entries.at(-1)?.idRaw, '#MenuSave');
   assert.equal(menu!.entries.at(-1)?.shortcut, 'Ctrl+S');
-  assert.match(patchedText, /CreateImageMenu\(0, WindowID\(#FrmMain\)\)[\s\S]*MenuItem\(#MenuSave, "Save" \+ Chr\(9\) \+ "Ctrl\+S"\)/);
+  assert.match(patchedText, /CreateMenu\(0, WindowID\(#FrmMain\)\)[\s\S]*MenuItem\(#MenuSave, "Save" \+ Chr\(9\) \+ "Ctrl\+S"\)/);
+  assert.doesNotMatch(patchedText, /CreateImageMenu\(/);
 });
 
 test("roundtrips menu subtree move before sibling entry", () => {
@@ -598,7 +636,7 @@ test("roundtrips menu subtree move before sibling entry", () => {
   const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
     applyMenuEntryMove(document, menuId, subMenu!.source!.line, MENU_ENTRY_KIND.OpenSubMenu, {
       targetSourceLine: separator!.source!.line,
-      placement: "before",
+      placement: MenuEntryMovePlacement.Before,
     })
   );
 
@@ -631,7 +669,7 @@ test("roundtrips menu entry move into submenu as child block", () => {
   const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
     applyMenuEntryMove(document, menuId, openItem!.source!.line, MENU_ENTRY_KIND.MenuItem, {
       targetSourceLine: subMenu!.source!.line,
-      placement: "appendChild",
+      placement: MenuEntryMovePlacement.AppendChild,
     })
   );
 
@@ -691,19 +729,7 @@ test("roundtrips submenu delete removes matching CloseSubMenu and descendants", 
 });
 
 test("roundtrips menu title delete removes nested submenu block until next title", () => {
-  const text = [
-    'Procedure OpenFrmMain()',
-    '  CreateMenu(#MenuMain, WindowID(#FrmMain))',
-    '  MenuTitle("File")',
-    '  MenuItem(#MenuOpen, "Open")',
-    '  OpenSubMenu("Recent")',
-    '  MenuItem(#MenuRecent1, "Last file")',
-    '  CloseSubMenu()',
-    '  MenuTitle("Help")',
-    '  MenuItem(#MenuAbout, "About")',
-    'EndProcedure',
-    ''
-  ].join("\n");
+  const text = loadFixture("fixtures/roundtrip/17-menu-title-delete-nested-submenu.pbf");
 
   const parsed = parseFormDocument(text);
   const menuId = parsed.menus[0]?.id;
@@ -822,15 +848,7 @@ test("roundtrips toolbar tooltip set via toolbar entry source line", () => {
 });
 
 test("roundtrips toolbar tooltip insert directly after toolbar entry", () => {
-  const text = [
-    'Procedure OpenFrmMain()',
-    '  OpenWindow(#FrmMain, 0, 0, 320, 220, "Toolbar")',
-    '  CreateToolBar(#TbMain, WindowID(#FrmMain))',
-    '  ToolBarImageButton(#TbSave, ImageID(#ImgSave))',
-    '  ToolBarSeparator()',
-    'EndProcedure',
-    ''
-  ].join("\n");
+  const text = loadFixture("fixtures/roundtrip/18-toolbar-tooltip-insert-after-button.pbf");
 
   const parsedFixture = parseFormDocument(text);
   const toolBarId = parsedFixture.toolbars[0]?.id;
@@ -846,7 +864,7 @@ test("roundtrips toolbar tooltip insert directly after toolbar entry", () => {
   const updatedToolBar = parsed.toolbars.find((tb) => tb.id === toolBarId);
   assert.ok(updatedToolBar, "Expected updated toolbar.");
   assert.equal(updatedToolBar!.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton)?.tooltip, "Save current form");
-  assert.match(patchedText, /ToolBarImageButton\(#TbSave, ImageID\(#ImgSave\)\)[\s\S]*ToolBarToolTip\((0|#TbMain), #TbSave, "Save current form"\)[\s\S]*ToolBarSeparator\(\)/);
+  assert.match(patchedText, /ToolBarImageButton\(#TbSave,\s*ImageID\(#Img_FrmMain_0\)\)[\s\S]*ToolBarToolTip\(0, #TbSave, "Save current form"\)[\s\S]*ToolBarSeparator\(\)/);
 });
 
 test("roundtrips toolbar tooltip clear removes linked tooltip line", () => {
@@ -1055,7 +1073,32 @@ test("normalizes rebuilt statusbar sections to per-field Add/Decoration order", 
 });
 
 
-test("core statusbar patcher still preserves explicit progress raw values when used directly", () => {
+test("normalizes rebuilt statusbar decorations to original text-image-progress precedence", () => {
+  const { text, statusBar, statusBarId } = parseStatusFixture();
+  const sourceLine = statusBar.fields[1]?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected source line for statusbar field.");
+
+  const { parsed, patchedText } = patchAndReparse(text, (document) =>
+    applyStatusBarFieldUpdate(document, statusBarId, sourceLine!, {
+      widthRaw: "120",
+      textRaw: '"Done"',
+      imageRaw: "ImageID(#Img_FrmMain_0)",
+      flagsRaw: "#PB_StatusBar_Raised",
+      progressBar: true,
+      progressRaw: "75"
+    })
+  );
+
+  const updatedStatusBar = parsed.statusbars.find((sb) => sb.id === statusBarId);
+  assert.ok(updatedStatusBar, "Expected statusbar after update.");
+  assert.equal(updatedStatusBar!.fields[1]?.text, "Done");
+  assert.equal(updatedStatusBar!.fields[1]?.flagsRaw, "#PB_StatusBar_Raised");
+  assert.match(patchedText, /StatusBarText\(0, 1, "Done", #PB_StatusBar_Raised\)/);
+  assert.doesNotMatch(patchedText, /StatusBarImage\(0, 1,/);
+  assert.doesNotMatch(patchedText, /StatusBarProgress\(0, 1,/);
+});
+
+test("normalizes statusbar progress values to the original Form Designer save format", () => {
   const { text, statusBar, statusBarId } = parseStatusFixture();
   const sourceLine = statusBar.fields[1]?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected source line for progress statusbar field.");
@@ -1141,7 +1184,7 @@ test("roundtrips image insert after existing image block", () => {
   assert.ok(insertedImage, "Expected inserted image entry.");
   assert.equal(insertedImage?.inline, false);
   assert.equal(insertedImage?.image, "close.png");
-  assert.match(patchedText, /LoadImage\(#ImgClose, "close\.png"\)/);
+  assert.match(patchedText, /LoadImage\(#ImgClose,"close\.png"\)/);
 });
 
 test("roundtrips image update for pbAny catch image", () => {
@@ -1165,7 +1208,7 @@ test("roundtrips image update for pbAny catch image", () => {
   assert.equal(updatedImage?.inline, true);
   assert.equal(updatedImage?.imageRaw, "?ImgSaveData");
   assert.equal(updatedImage?.image, "ImgSaveData");
-  assert.match(patchedText, /Img_FrmImages_2 = CatchImage\(#PB_Any, \?ImgSaveData\)/);
+  assert.match(patchedText, /Img_FrmImages_2 = CatchImage\(#PB_Any,\?ImgSaveData\)/);
 });
 
 test("roundtrips image update from load image to catch image without changing raw value", () => {
@@ -1188,7 +1231,7 @@ test("roundtrips image update from load image to catch image without changing ra
   assert.equal(updatedImage?.inline, true);
   assert.equal(updatedImage?.firstParam, "#Img_FrmImages_0");
   assert.equal(updatedImage?.imageRaw, '"open.png"');
-  assert.match(patchedText, /CatchImage\(#Img_FrmImages_0, "open\.png"\)/);
+  assert.match(patchedText, /CatchImage\(#Img_FrmImages_0,"open\.png"\)/);
 });
 
 test("roundtrips image update from catch image to load image without changing raw value", () => {
@@ -1211,7 +1254,7 @@ test("roundtrips image update from catch image to load image without changing ra
   assert.equal(updatedImage?.inline, false);
   assert.equal(updatedImage?.firstParam, "#Img_FrmImages_3");
   assert.equal(updatedImage?.imageRaw, "?Img_FrmImages_3");
-  assert.match(patchedText, /LoadImage\(#Img_FrmImages_3, \?Img_FrmImages_3\)/);
+  assert.match(patchedText, /LoadImage\(#Img_FrmImages_3,\?Img_FrmImages_3\)/);
 });
 
 test("roundtrips image delete", () => {
@@ -1224,7 +1267,7 @@ test("roundtrips image delete", () => {
   );
 
   assert.equal(updated.images.some((image) => image.id === "#Img_FrmImages_3"), false);
-  assert.doesNotMatch(patchedText, /CatchImage\(#ImgState, \?ImgState\)/);
+  assert.doesNotMatch(patchedText, /CatchImage\(#ImgState,\?ImgState\)/);
 });
 
 test("roundtrips choose-file gadget workflow with auto-resize patch sequence", () => {
@@ -1247,7 +1290,7 @@ test("roundtrips choose-file gadget workflow with auto-resize patch sequence", (
   assert.ok(image, "Expected inserted file-backed image entry.");
   assert.equal(image?.imageRaw, '"chosen.png"');
   assert.match(patchedText, /ImageGadget\(#ImgPreview, 20, 20, 96, 48, ImageID\(#ImgChosen\)\)/);
-  assert.match(patchedText, /LoadImage\(#ImgChosen, "chosen\.png"\)/);
+  assert.match(patchedText, /LoadImage\(#ImgChosen,"chosen\.png"\)/);
 });
 
 test("roundtrips choose-file button image gadget workflow with auto-resize patch sequence", () => {
@@ -1271,7 +1314,7 @@ test("roundtrips choose-file button image gadget workflow with auto-resize patch
   assert.ok(image, "Expected inserted file-backed image entry for button image gadget.");
   assert.equal(image?.imageRaw, '"toolbar/apply-selected.png"');
   assert.match(patchedText, /ButtonImageGadget\(#BtnApply, 52, [^,]+, 128, 36, ImageID\(#ImgBtnChosen\)\)/);
-  assert.match(patchedText, /LoadImage\(#ImgBtnChosen, "toolbar\/apply-selected\.png"\)/);
+  assert.match(patchedText, /LoadImage\(#ImgBtnChosen,"toolbar\/apply-selected\.png"\)/);
 });
 
 test("roundtrips create-and-assign workflow for image gadget", () => {
@@ -1290,7 +1333,47 @@ test("roundtrips create-and-assign workflow for image gadget", () => {
   assert.equal(gadget?.imageId, "#ImgNewLogo");
   assert.ok(image, "Expected inserted image entry.");
   assert.equal(image?.imageRaw, '"new-logo.png"');
-  assert.match(patchedText, /LoadImage\(#ImgNewLogo, "new-logo\.png"\)/);
+  assert.match(patchedText, /LoadImage\(#ImgNewLogo,"new-logo\.png"\)/);
+});
+
+test("roundtrips create-and-assign workflow for the first image block before FormFont in fixture 19", () => {
+  const text = loadFixture("fixtures/roundtrip/19-imageblock-before-font.pbf");
+
+  const { parsed, patchedText } = patchTwiceAndReparse(
+    text,
+    (document) => applyGadgetOpenArgsUpdate(document, "ButtonImage_0", { imageRaw: "ImageID(#Img_FrmMain_0)" }),
+    (document) => applyImageInsert(document, {
+      inline: false,
+      idRaw: "#Img_FrmMain_0",
+      imageRaw: '"logo.png"',
+    })
+  );
+
+  const gadget = parsed.gadgets.find((entry) => entry.id === "ButtonImage_0");
+  const image = parsed.images.find((entry) => entry.id === "#Img_FrmMain_0");
+  const normalized = stripBomAndToLf(patchedText);
+
+  assert.equal(gadget?.kind, "ButtonImageGadget");
+  assert.equal(gadget?.imageRaw, "ImageID(#Img_FrmMain_0)");
+  assert.equal(gadget?.imageId, "#Img_FrmMain_0");
+  assert.ok(image, "Expected inserted image entry.");
+  assert.equal(image?.imageRaw, '"logo.png"');
+  assert.match(patchedText, /ButtonImage_0 = ButtonImageGadget\(#PB_Any, 80, 80, 70, 30, ImageID\(#Img_FrmMain_0\)\)/);
+  assert.ok(normalized.includes([
+    'Enumeration FormWindow',
+    '  #FrmMain',
+    'EndEnumeration',
+    '',
+    'Enumeration FormImage',
+    '  #Img_FrmMain_0',
+    'EndEnumeration',
+    '',
+    'UsePNGImageDecoder()',
+    '',
+    'LoadImage(#Img_FrmMain_0,"logo.png")',
+    '',
+    'Enumeration FormFont',
+  ].join("\n")));
 });
 
 test("roundtrips create-and-assign workflow for menu item", () => {
@@ -1347,7 +1430,7 @@ test("roundtrips create-and-assign workflow for toolbar image button with pbAny 
   assert.equal(updatedButton?.iconRaw, "ImageID(imgToolbarNew)");
   assert.equal(updatedButton?.iconId, "imgToolbarNew");
   assert.ok(image, "Expected inserted pbAny toolbar image entry.");
-  assert.match(patchedText, /imgToolbarNew = CatchImage\(#PB_Any, \?TbImgNew\)/);
+  assert.match(patchedText, /imgToolbarNew = CatchImage\(#PB_Any,\?TbImgNew\)/);
 });
 
 test("roundtrips create-and-assign workflow for statusbar field", () => {
@@ -1523,7 +1606,7 @@ test("roundtrips image pbAny toggle from enum image and updates gadget plus menu
   assert.equal(image?.variable, "ImgOpen");
   assert.equal(gadget?.imageId, "ImgOpen");
   assert.equal(updatedOpen?.iconId, "ImgOpen");
-  assert.match(patchedText, /ImgOpen = LoadImage\(#PB_Any, "open\.png"\)/);
+  assert.match(patchedText, /ImgOpen = LoadImage\(#PB_Any,"open\.png"\)/);
   assert.match(patchedText, /ImageGadget\(#ImgPreview, 10, [^,]+, 32, 32, ImageID\(ImgOpen\)\)/);
   assert.match(patchedText, /MenuItem\(#MenuOpen, "Open", ImageID\(ImgOpen\)\)/);
 });
@@ -1560,7 +1643,7 @@ test("roundtrips image pbAny toggle from pbAny image and updates toolbar referen
   assert.equal(image?.pbAny, false);
   assert.equal(image?.firstParam, "#imgSave");
   assert.equal(updatedButton?.iconId, "#imgSave");
-  assert.match(patchedText, /LoadImage\(#imgSave, "save\.png"\)/);
+  assert.match(patchedText, /LoadImage\(#imgSave,"save\.png"\)/);
   assert.match(patchedText, /ToolBarImageButton\(#TbSave, ImageID\(#imgSave\)\)/);
 });
 
@@ -1594,7 +1677,7 @@ test("roundtrips image pbAny toggle updates statusbar references", () => {
   assert.ok(image, "Expected pbAny status image entry after toggle.");
   assert.equal(image?.pbAny, true);
   assert.equal(updatedField?.imageId, "ImgState");
-  assert.match(patchedText, /ImgState = CatchImage\(#PB_Any, \?ImgState\)/);
+  assert.match(patchedText, /ImgState = CatchImage\(#PB_Any,\?ImgState\)/);
   assert.match(patchedText, /StatusBarImage\(0, 0, ImageID\(ImgState\)\)/);
 });
 
@@ -1731,7 +1814,7 @@ test("roundtrips statusbar CurrentImage auto-create for a new path-like string a
   assert.ok(insertedImage, "Expected the new LoadImage entry to be inserted.");
   assert.equal(insertedImage?.image, "./icons/new.png");
   assert.equal(removedImage, undefined);
-  assert.match(patchedText, /LoadImage\(#Img_FrmImages_2, "\.\/icons\/new\.png"\)/);
+  assert.match(patchedText, /LoadImage\(#Img_FrmImages_2,"\.\/icons\/new\.png"\)/);
   assert.match(patchedText, /StatusBarImage\(0, 0, ImageID\(#Img_FrmImages_2\)\)/);
   assert.doesNotMatch(patchedText, /CatchImage\(#Img_FrmImages_3,\?Img_FrmImages_3\)/);
 });
@@ -1760,7 +1843,7 @@ test("roundtrips image pbAny toggle updates button image gadget references", () 
   assert.equal(image?.pbAny, true);
   assert.equal(gadget?.kind, "ButtonImageGadget");
   assert.equal(gadget?.imageId, "ImgRelative");
-  assert.match(patchedText, /ImgRelative = LoadImage\(#PB_Any, "\.\/icons\/apply\.png"\)/);
+  assert.match(patchedText, /ImgRelative = LoadImage\(#PB_Any,"\.\/icons\/apply\.png"\)/);
   assert.match(patchedText, /ButtonImageGadget\(#BtnApply, 52, [^,]+, 96, 28, ImageID\(ImgRelative\)\)/);
 });
 
@@ -1865,7 +1948,7 @@ test("roundtrips combined top-level chrome updates in fixture 14", () => {
 
 
 test("trims menu constants during selected-entry style updates", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
   OpenWindow(#FrmMain, x, y, width, height, "Menu")
   CreateMenu(0, WindowID(#FrmMain))
@@ -1885,7 +1968,7 @@ EndProcedure
 });
 
 test("trims toolbar variables during selected-entry style updates", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
   OpenWindow(#FrmMain, x, y, width, height, "Toolbar")
   CreateToolBar(0, WindowID(#FrmMain))
