@@ -25,6 +25,8 @@ including `IntelliSense`, `Debugging`, and `Code Navigation`. It supports PureBa
 - Outline: `Ctrl+Shift+O`
 - Built-in PureBasic functions in completion, hover, and signature help - updated for PureBasic 6.40.
 - Built-In PureBasic constants in completion - updated for PureBasic 6.40.
+- PureBasic Forms (`.pbf`): completion, hover and signature help for gadget, window, menu, toolbar and status bar commands.
+- PureBasic Residents constants and structures in completion and hover (configure `purebasic.residentsPath` to index them)
 
 ### Navigation & Refactoring 🧭
 
@@ -63,8 +65,9 @@ including `IntelliSense`, `Debugging`, and `Code Navigation`. It supports PureBa
 - Build Active Target command
 - Run Active Target command
 - Build & Run Active Target command
+- Syntax Check Active Target command
 - Standalone fallback build context when no `.pbp` project is active
-  - PureBasic IDE metadata in the source file
+  - PureBasic IDE metadata in the source file (including `UseMainFile` resolution)
   - `.vscode/launch.json`
   - `<filename>.pb.cfg`
   - `project.cfg`
@@ -135,6 +138,7 @@ The extension provides some configuration options. Access these via:
 ```json
 {
   "purebasic.apiFunctionListingPath": "C:/PureBasic/Compilers/APIFunctionListing.txt",
+  "purebasic.residentsPath": "C:/PureBasic/Residents",
   "purebasic.build.compiler": "pbcompiler",
   "purebasic.build.fallbackSource": "launchJson",
   "purebasic.run.mode": "spawn",
@@ -192,15 +196,16 @@ The extension provides several commands accessible via:
 - **PureBasic: Build Active Target** - Compile the active `.pbp` target or the resolved fallback input
 - **PureBasic: Run Active Target** - Run the resolved executable from project or fallback context
 - **PureBasic: Build & Run Active Target** - Compile and then run the resolved executable
+- **PureBasic: Syntax Check** - Run a compiler syntax check on the active file or `.pbp` target; errors and warnings are shown as editor diagnostics and in the *PureBasic (Syntax Check)* output channel
 
 ### Fallback Build Context
 
 When `pb-project-files` is not installed or no `.pbp` project is active, host-side toolchain commands resolve their context from one of four sources, configured via `purebasic.build.fallbackSource`:
 
-- `sourceMetadata` - PureBasic IDE metadata block at the end of the current file
-- `launchJson` - `.vscode/launch.json`
-- `fileCfg` - `<filename>.pb.cfg` next to the current source file
-- `projectCfg` - `project.cfg`, searched upward from the current source directory
+- `pbMetadata` - PureBasic IDE metadata block at the end of the current file; `UseMainFile` declarations are followed to resolve the correct main source and compiler options
+- `launchJson` - `.vscode/launch.json`; `${file}` and `${workspaceFolder}` variables are expanded and the `program` path is validated
+- `pbCfg` - `<filename>.pb.cfg` next to the current source file
+- `projectCfg` - `project.cfg`, searched upward from the current source directory to the workspace root
 
 ### Testing Features
 
@@ -275,11 +280,17 @@ pb-lang-support/
 │   ├── extension.ts                   # Extension entry point
 │   ├── host/                          # Host-side project/build/run integration
 │   │   ├── config/                    # Shared host settings access
-│   │   ├── pbcompiler/                # Build/run helpers for pbcompiler and executables
+│   │   ├── pbcompiler/                # Build/run/syntax-check helpers for pbcompiler
+│   │   │   └── standby/               # Compiler standby protocol (command builder, parser, session, diagnostics)
 │   │   └── utils/                     # Host-side metadata and utility helpers
+│   ├── pbf/                           # .pbf text-mode IntelliSense providers
+│   │   ├── builtins.ts                # Shared built-in data for .pbf providers
+│   │   ├── completion-provider.ts
+│   │   ├── hover-provider.ts
+│   │   └── signature-provider.ts
 │   ├── server/                        # Language server implementation
 │   │   ├── config/                    # Server-side configuration management
-│   │   ├── indexer/                   # Cross-file indexing helpers
+│   │   ├── indexer/                   # Cross-file indexing helpers (including residents index)
 │   │   ├── managers/                  # Document/project managers
 │   │   ├── parsers/                   # Parser helpers
 │   │   ├── providers/                 # Language feature providers
@@ -318,8 +329,10 @@ The extension follows a modular architecture with clear separation of concerns:
 #### Host / Unified Context
 
 - **Project Integration**: Uses `pb-project-files` API v3 when available
-- **Fallback Resolver**: Resolves build/run context without `.pbp` project support
-- **Toolchain Commands**: Coordinates build, run, and build-and-run commands
+- **Fallback Resolver**: Resolves build/run/syntax-check context without `.pbp` project support; reads PureBasic IDE metadata, `.pb.cfg`, and `project.cfg` and follows `UseMainFile` declarations
+- **Toolchain Commands**: Coordinates build, run, build-and-run, and syntax check commands
+- **Syntax Check**: Runs the compiler in standby mode (`/STANDBY` / `--standby`), sends a tab-separated command sequence, and maps the parsed response (warnings, syntax errors, compiler errors) to editor diagnostics
+- **Residents Index**: Scans the configured Residents folder for `.pb` source files at startup and exposes their constants and structures to completion and hover providers
 - **Shared Settings**: Centralized host-side access to PureBasic settings
 
 #### Debug Adapter

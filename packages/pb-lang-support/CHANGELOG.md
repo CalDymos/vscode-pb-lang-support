@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.21.0
+
+### Added
+
+- Added **PureBasic: Syntax Check** command (`purebasic.syntaxCheck`), accessible from the Command Palette and the editor context menu for `.pb` files:
+  - Runs the PureBasic compiler against the active file or the active project target and shows errors and warnings directly as editor diagnostics.
+  - Results are also written to a dedicated *PureBasic (Syntax Check)* output channel with location and message details.
+  - When a project is active (`pb-project-files`), the configured target is used; otherwise the active standalone file is checked.
+  - `UseMainFile` declarations in PureBasic file metadata are respected — compiler options are read from the main file when one is configured.
+- Added `purebasic.residentsPath` setting: point the extension at the PureBasic Residents folder to make constants and structures defined there available in hover and completion.
+
+### Changed
+
+- Compiler path resolution is now shared across all build and syntax check commands: the extension tries the configured path first, then automatic discovery, and finally falls back to `pbcompiler` on `PATH`.
+- The build context for standalone `.pb` files now reads PureBasic IDE metadata from inline file comments, `.pb.cfg` sidecar files, and `project.cfg` files in parent directories, giving more accurate compiler options when no `.pbp` project is active.
+- `launch.json` program paths are now validated to exist before use; a warning is shown when the configured path cannot be found and the active file is used as fallback.
+
+### Fixed
+
+- Residents folder scanning now runs fully asynchronously so the extension host is no longer blocked during startup indexing.
+
+---
+
 ## 0.20.0
 
 ### Added

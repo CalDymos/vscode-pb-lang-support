@@ -29,6 +29,7 @@ including `IntelliSense`, `Debugging`, and `Code Navigation`. It supports PureBa
 - Built-In PureBasic constants in completion - updated for PureBasic 6.40.
 - PureBasic Forms (`.pbf`): small completion, hover and signature help for
   gadget, window, menu, toolbar and status bar commands.
+- PureBasic Residents constants and structures in completion and hover (configure `purebasic.residentsPath` to index them)
 
 ### Navigation & Refactoring 🧭
 
@@ -67,8 +68,9 @@ including `IntelliSense`, `Debugging`, and `Code Navigation`. It supports PureBa
 - Build Active Target command
 - Run Active Target command
 - Build & Run Active Target command
+- Syntax Check Active Target command
 - Standalone fallback build context when no `.pbp` project is active
-  - PureBasic IDE metadata in the source file
+  - PureBasic IDE metadata in the source file (including `UseMainFile` resolution)
   - `.vscode/launch.json`
   - `<filename>.pb.cfg`
   - `project.cfg`
@@ -114,6 +116,7 @@ The extension provides some configuration options. Access these via:
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
 | `purebasic.apiFunctionListingPath` | `string` | `""` | Path to `APIFunctionListing.txt` from your PureBasic installation (`Compilers/APIFunctionListing.txt`). Required for OS API IntelliSense. |
+| `purebasic.residentsPath` | `string` | `""` | Path to the PureBasic Residents folder containing `.pb` source files (structures and constants). When set, Residents symbols are available in completion and hover. |
 | `purebasic.enableValidation` | `boolean` | `true` | Enable/disable all live diagnostics. |
 | `purebasic.enableCompletion` | `boolean` | `true` | Enable/disable completion suggestions. |
 | `purebasic.maxNumberOfProblems` | `number` | `100` | Maximum number of diagnostics reported per document. |
@@ -158,6 +161,7 @@ The extension provides some configuration options. Access these via:
 ```json
 {
   "purebasic.apiFunctionListingPath": "C:/PureBasic/Compilers/APIFunctionListing.txt",
+  "purebasic.residentsPath": "C:/PureBasic/Residents",
   "purebasic.build.compiler": "pbcompiler",
   "purebasic.build.fallbackSource": "launchJson",
   "purebasic.run.mode": "spawn",
@@ -195,6 +199,14 @@ The extension provides some configuration options. Access these via:
 3. With `pb-project-files`, the active `.pbp` target is used automatically
 4. Without `pb-project-files`, the extension uses the configured fallback source
 
+### Quick Syntax Check (over PureBasic Compiler)
+
+1. Open a PureBasic source file
+2. Run `PureBasic: Syntax Check` from the Command Palette or the editor context menu
+3. Errors and warnings appear as diagnostics in the editor and in the *PureBasic (Syntax Check)* output channel
+4. With `pb-project-files`, the active `.pbp` target is checked automatically
+5. Without `pb-project-files`, the extension uses the configured fallback source
+
 ### Keyboard Shortcuts
 
 | Shortcut | Action |
@@ -221,6 +233,7 @@ The extension provides some configuration options. Access these via:
 - `PureBasic: Build Active Target` — Compile the active target or fallback source
 - `PureBasic: Run Active Target` — Run the resolved executable
 - `PureBasic: Build & Run Active Target` — Build and then run the resolved executable
+- `PureBasic: Syntax Check` — Check the active file or project target for syntax errors with the PureBasic compiler
 
 ### 🧭 Shortcuts
 

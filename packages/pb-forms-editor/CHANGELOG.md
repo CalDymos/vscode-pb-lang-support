@@ -1,27 +1,62 @@
 # Changelog
 
+## 0.25.0
+
+### Added
+
+- **Create menu, toolbar, and statusbar from scratch**: When a form has no menu, toolbar, or statusbar yet, a *Create...* action is now available in the properties panel to insert a new section with a default starter entry.
+- **Toolbar entry drag-to-reorder**: Toolbar entries can now be reordered by dragging them in the canvas preview. Image button tooltips stay linked to their button throughout the move.
+- **Statusbar field drag-to-reorder**: Statusbar fields can now be reordered by dragging. Field order in the source file is updated automatically.
+- **Automatic ResizeGadget scaffolding**: When the first resize lock is set on a gadget, the editor generates the required resize procedure, its `Declare` line, and a `#PB_Event_SizeWindow` hook automatically. When the last lock is removed, all generated scaffolding is cleaned up.
+- **PureBasic 6.40 support**: The editor now recognises PureBasic 6.40 as the current supported form designer version.
+- **Automatic CreateMenu / CreateImageMenu switching**: Menu sections automatically switch between `CreateMenu` and `CreateImageMenu` when icons are assigned to or removed from entries — no manual edit needed.
+
+### Fixed
+
+- Menu titles with variable-based captions no longer lose their caption expression when a keyboard shortcut is added.
+- Statusbar field decoration order now always matches the original Form Designer output format.
+- Statusbar progress values are now saved in the same format as the original Form Designer.
+
+---
+
+## 0.24.0
+
+### Added
+
+- **Gadget duplicate**: A *Duplicate* action in the canvas right-click menu inserts a copy of the selected gadget immediately below it. Container gadgets are duplicated as empty hosts; `PanelGadget` hosts keep their tabs but not their child gadgets.
+- **Gadget copy / paste**: *Copy* and *Paste* actions in the canvas right-click menu let you copy a gadget or a container subtree to a new position. Panel subtrees are copied with renamed child gadgets.
+- **Extended canvas right-click menu**: The gadget context menu now matches the original PureBasic Form Designer with *Delete Gadget*, *Cut*, *Copy*, *Paste*, *Duplicate*, *Edit Items...*, *Edit Columns...*, *Align Left*, *Align Top*, *Align Width*, and *Align Height*. Actions not yet implemented are shown greyed out with an explanation.
+- **Automatic image cleanup**: Replacing or deleting an image reference now automatically removes the `LoadImage` / `CatchImage` entry from the source file when nothing else references it.
+
+### Fixed
+
+- The *Select Parent* dialog no longer lists a SplitterGadget's own child gadgets as valid reparent targets.
+- Deleting a gadget that has an assigned image now correctly accounts for that reference before checking whether the image entry can be removed.
+
+---
+
 ## 0.23.0
 
 ### Added
 
-- **Gadget Constants section**: The gadget inspector now shows a *Constants* section with a checkbox per known PureBasic flag for the selected gadget kind (e.g. `#PB_Button_Default`, `#PB_String_Password`, `#PB_Panel_TabBar`). Toggling a flag rebuilds the `flagsExpr` in the original PureBasic constant order while preserving any unknown custom tail flags.
-- **Color pickers for FrontColor / BackColor**: The gadget *FrontColor Raw* and *BackColor Raw* text inputs are replaced with a read-only display field, a native color swatch picker, and a *Remove* button — matching the window color picker introduced in 0.17.0. The picker writes `RGB(...)` literals; Remove clears the property.
-- **Disabled gadget overlay**: A translucent overlay is now drawn over disabled gadgets in the canvas preview to make their disabled state visually obvious at a glance.
-
-### Fixed
-
-- Hidden gadgets are no longer drawn in the canvas preview, matching the original PureBasic IDE behavior. A gadget with a non-literal `HideGadget` expression (e.g. a variable) is treated as visible to avoid false hiding.
-- Hidden gadgets that are selected still show their blue selection frame and resize handles even though the gadget content itself is not drawn.
-- Setting *Hidden*, *Disabled*, or *Checked* on one gadget/window property no longer silently clears unrelated properties. Property updates are now partial — only the fields explicitly present in the message are written.
-- Window selection overlay (border highlight) is now aligned correctly on macOS and Windows 7 rounded-border previews; previously the outline was drawn with a different stroke rect than the actual outer frame.
-- Source range offsets no longer drift on CRLF documents; `buildLineStartOffsets` now scans raw newline positions instead of using split lines.
-- Splitter child gadgets are now correctly included when deleting a container subtree that also contains the owning SplitterGadget.
-- `appendWorkspaceEdit` now falls back to rebuilding edits from `entries()` when `getOperations()` is unavailable, fixing gadget delete in some VS Code host environments.
+- **Gadget Constants section**: The gadget inspector now shows a *Constants* section with a checkbox for each known flag of the selected gadget kind (e.g. `#PB_Button_Default`, `#PB_String_Password`, `#PB_Panel_TabBar`). Flags are rebuilt in the correct PureBasic order; any unrecognised custom flags are preserved.
+- **Color pickers for FrontColor / BackColor**: The gadget front and back color fields now show a color swatch picker with a *Remove* button, matching the window color picker introduced in 0.17.0.
+- **Disabled gadget overlay**: Disabled gadgets now show a translucent overlay in the canvas preview so their state is immediately visible.
 
 ### Changed
 
-- *Delete Gadget* button moved from the bottom to a new *Actions* section at the top of the gadget properties panel.
-- Window resize in the canvas is now restricted to the right and bottom edges only, matching the original PureBasic Form Designer behavior (top and left edges can no longer be dragged, and the window cannot be moved by dragging the title bar).
+- The *Delete Gadget* button has been moved to a new *Actions* section at the top of the gadget properties panel.
+- Window resizing in the canvas is now restricted to the right and bottom edges only, matching the original PureBasic Form Designer behavior.
+
+### Fixed
+
+- Hidden gadgets are no longer drawn in the canvas preview, matching PureBasic IDE behavior. Gadgets hidden via a variable expression remain visible to avoid false hiding.
+- A hidden gadget that is selected still shows its selection frame and resize handles.
+- Changing one gadget or window flag (Hidden, Disabled, or Checked) no longer accidentally clears other properties.
+- The window selection outline now aligns correctly with the window border on macOS and Windows 7 skins.
+- Source file edits on Windows (CRLF line endings) no longer shift to the wrong position after a structural change.
+- Deleting a container that contains both a SplitterGadget and its child gadgets now correctly removes all of them.
+- Gadget delete now works correctly in all VS Code host environments.
 
 ---
 
@@ -29,17 +64,14 @@
 
 ### Added
 
-- **DPI-aware layout**: When VS Code is running on a HiDPI display (e.g. 150% scaling), the canvas and inspector now correctly handle the scale factor:
-  - Gadget and window X/Y/W/H values are shown in the inspector as their logical (unscaled) display values; a read-only *Unscaled* row is shown alongside when scaling is active.
-  - Dragging or resizing a gadget on the canvas writes the correct unscaled integer back to the source file.
-  - Splitter position and ScrollArea *InnerWidth/InnerHeight* fields are also DPI-scaled and display the corrected values.
-- **Nested gadget resize locks**: LockLeft/LockRight/LockTop/LockBottom are now editable for gadgets inside a `ContainerGadget` or `ScrollAreaGadget`, emitting `GadgetWidth(#Parent) - N` / `GadgetHeight(#Parent) - N` anchor formulas. `PanelGadget` children use `GetGadgetAttribute(#Panel, #PB_Panel_ItemWidth/Height)` formulas with a per-skin tab header height correction.
-- **Toolbar Y expression preservation**: The canvas and insert paths now preserve `ToolBarHeight(N) + Y` expressions in the gadget Y coordinate so that gadgets anchored to the toolbar do not lose their formula on every edit.
+- **DPI-aware layout**: On HiDPI displays (e.g. 150 % scaling) the canvas and inspector now show correct logical values. An additional *Unscaled* reference row appears in the inspector when scaling is active. Dragging or resizing a gadget writes the correct value to the source file regardless of display scaling.
+- **Resize locks for nested gadgets**: LockLeft, LockRight, LockTop, and LockBottom are now editable for gadgets inside a `ContainerGadget`, `ScrollAreaGadget`, or `PanelGadget`, using the correct anchor formulas for each container type.
+- **Toolbar Y coordinate preservation**: Gadget Y coordinates that reference the toolbar height are now preserved correctly when a gadget is moved or inserted.
 
 ### Fixed
 
-- Resize lock formula values are now correctly unscaled via the active DPI scale before being written to the source, preventing off-by-scale errors on HiDPI displays.
-- Per-toggle lock probing in the inspector enables asymmetric lock editing — LockLeft and LockRight can now be toggled independently when only one direction's formula can be derived.
+- Resize lock formulas are now written with the correct unscaled pixel values on HiDPI displays.
+- LockLeft and LockRight can now be toggled independently when only one direction has a derivable formula.
 
 ---
 
@@ -47,28 +79,22 @@
 
 ### Added
 
-- **Gadget font rendering**: Gadgets that display text now apply the font family, size, and style flags (`#PB_Font_Bold`, `#PB_Font_Italic`, `#PB_Font_Underline`, `#PB_Font_StrikeOut`) assigned via `SetGadgetFont` to the canvas preview. Underline and strikeout decorations are drawn explicitly after each `fillText` call.
-- **Text variable captions shown with brackets**: When a gadget's caption is set via a variable (rather than a string literal), the preview now renders it as `[variableName]` in brackets, matching the original PureBasic Form Designer display.
-- **Raster assets for remaining gadget kinds**: The following gadget previews now use original-style raster icons with vector fallbacks:
-  - *Combo boxes*: per-skin drop-down arrow (Windows 7/Linux, Windows 8) and macOS double-arrow for non-editable combos.
-  - *Spin gadget*: macOS and Windows 8 spin button images.
-  - *Trackbar*: macOS and Windows 7/Linux thumb images; macOS groove highlight lines and no-ticks guide fill.
-  - *Scrollbar*: per-skin arrow button images (Windows 7/Linux, Windows 8) and split-fill thumb layout (Windows 7/Linux).
-  - *Date gadget*: per-skin dropdown arrow (reuses combo arrow assets on Windows 7/8; separate arrow on macOS/Linux).
-  - *macOS/Linux title buttons*: raster close/minimize/maximize icons replace the previous circle and glyph fallbacks.
-- **macOS external menu bar**: On the macOS skin the menu bar is now rendered as a full-canvas-width band above the window body (matching the macOS system behavior), with gadget hit-testing and layout adjusted accordingly. The window title is centered across the full window width on macOS.
-- **Selection outline for toolbar separators and flyout MenuBar separators**: Selected `ToolBarSeparator` entries now show a visible selection outline in the canvas. Flyout `MenuBar` separator entries also draw a selection outline when selected.
+- **Gadget font rendering**: Gadgets that display text now respect the font assigned via `SetGadgetFont` — including family, size, bold, italic, underline, and strikeout — in the canvas preview.
+- **Variable captions shown with brackets**: When a gadget caption is set via a variable rather than a string literal, the preview now renders it as `[variableName]`, matching the original PureBasic Form Designer.
+- **OS-accurate icons for remaining gadget kinds**: Combo drop-down arrows, spin buttons, trackbar thumbs, scrollbar arrows, date picker dropdowns, and macOS/Linux title bar buttons now use platform-accurate raster icons in the canvas preview.
+- **macOS external menu bar**: On the macOS skin the menu bar is now rendered as a full-width band above the window body, matching real macOS behavior. The window title is centered across the full window width.
+- **Selection outline for toolbar and menu bar separators**: Selected separator entries now show a visible selection outline in the canvas.
 
 ### Fixed
 
-- Text heights across all gadget preview draw paths (string, button, combo, spin, list rows, list headers, frame caption, date gadget, menu bar entries, menu flyout entries) are now derived from the actual measured canvas text height rather than the nominal font size in points, ensuring correct vertical centering at all font sizes.
-- Menu flyout shortcut and footer text are now rendered at full opacity; the previous 0.72 and 0.92 alpha values had no original justification.
-- Menu bar entry rect height and width now use measured text dimensions rather than hardcoded constants, improving accuracy at non-default font sizes.
-- macOS `FrameGadget` caption body border Y offset now uses measured text height instead of a hardcoded constant.
-- Toolbar separator hit rect width narrowed from 10 px to 6 px to match the visible separator line and prevent overlap with adjacent entries.
-- macOS maximize button raster asset corrected.
-- Windows 7 menu bar palette colors now blend the Windows skin *Menu* and *MenuBar* system colors into the original gradient palette instead of using hardcoded values.
-- Windows frame stroke colors and inner client border now prefer skin-derived system colors (`ButtonShadow`, `ActiveTitle`, `GradientActiveTitle`) over hardcoded fallbacks.
+- Text is now vertically centered correctly in all gadget types at all font sizes.
+- Menu flyout shortcut text and footer text are now rendered at full opacity.
+- Menu bar entry widths and heights now scale correctly with non-default font sizes.
+- macOS FrameGadget caption position now scales correctly with the font size.
+- The toolbar separator click area is now exactly as wide as the visible separator line, preventing accidental selection of adjacent entries.
+- macOS maximize button icon corrected.
+- Windows 7 menu bar gradient now blends with the configured Windows skin colors instead of using hardcoded values.
+- Windows frame border colors now use the configured skin system colors.
 
 ---
 
@@ -76,28 +102,14 @@
 
 ### Added
 
-- **Gadget #PB_Any toggle in the inspector**: The gadget *Details* section now has an editable *#PB_Any* checkbox and *Variable* input.
-  - Switching from an enum constant to `#PB_Any` removes the enum entry from `Enumeration FormGadget`, inserts a `Global` declaration, rewrites the constructor call, and updates all usages of the variable in the procedure scope.
-  - Switching back from `#PB_Any` to an enum constant reverses all of the above.
-  - Renaming the variable or enum symbol propagates to the constructor, all in-procedure call sites, and the `FormGadget` enum block.
-- **#PB_Any toggle for assigned images**: Image assignments in the statusbar field, toolbar entry, menu entry, and gadget image inspector now offer a *#PB_Any* checkbox — switching converts the named enum ID to a `#PB_Any` variable (or back) and updates all `ImageID(...)` references in the form.
+- **#PB_Any toggle for gadgets**: Gadgets can now be switched between a named enum constant and `#PB_Any` directly in the inspector. The editor updates the enum block, adds or removes the `Global` declaration, and rewrites all references in the form procedure. Renaming the variable or enum symbol propagates everywhere automatically.
+- **#PB_Any toggle for images**: Image entries assigned to gadgets, menu entries, toolbar entries, and statusbar fields can be switched between a named enum ID and a `#PB_Any` variable in the inspector.
 
 ### Fixed
 
-- Menu bar is now drawn on top of gadget previews instead of beneath them, so menu chrome no longer appears behind overlapping gadgets.
-- Windows registry color loading is now asynchronous — reading `HKCU\Control Panel\Colors` no longer blocks the extension host during editor startup; colors are sent to the webview after the initial render.
-- Procedure name discovery is now asynchronous — workspace-wide `.pb`/`.pbi` file scans no longer block the extension host; names are refreshed incrementally with debouncing and cancellation support, keeping the inspector state intact between refreshes.
-
-### Internal
-
-- Core helper modules reorganized into feature-based subfolders (`gadget/`, `image/`, `statusbar/`, `toplevel/`, `window/`, `utils/`) with shorter, feature-local file names.
-- Message type constants centralized in `src/shared/messages.ts`; provider and webview now share a single source of truth for all message names.
-- Webview types deduplicated: local `Gadget`, `FormWindow`, `FormMenuEntry`, and related interfaces removed from `main.ts` in favour of the shared `model.ts` definitions; kind fields tightened from plain `string` to the respective union types.
-- `GADGET_KIND` enum constants replace raw string literals throughout the emitter, parser, provider, and webview utilities.
-- `PB_ANY`, `ENUM_NAMES`, and `PB_CALL` constants centralized and reused across all modules.
-- `quotePbString` and `unquoteString` consolidated into `tokenizer.ts`; all duplicate inline implementations removed.
-- Image reference helpers (`buildImageIdReference`, `toPbAnyAssignedVar`, `toEnumImageId`) moved into `patchEmitter.ts` for consistent `ImageID(...)` generation across all assignment paths.
-- Blank-line skipping helpers (`isBlankLine`, `skipBlankLines`) unified in the emitter.
+- The menu bar is now drawn on top of gadgets in the canvas preview instead of behind them.
+- Windows system colors for the canvas preview are now loaded in the background and no longer delay editor startup.
+- Procedure name suggestions in the inspector are now collected in the background and no longer block the extension host; suggestions update automatically when source files change.
 
 ---
 
@@ -105,23 +117,23 @@
 
 ### Added
 
-- **Native preview chrome for all gadget kinds**: Every gadget in the canvas preview now renders with a platform-accurate, skin-specific appearance instead of a generic label box. Affected gadgets:
-  - *Text gadgets*: `StringGadget` and `IPAddressGadget` render with a native text-field border and background; `TextGadget` respects alignment and border flags; `HyperLinkGadget` shows underlined link styling.
-  - *Buttons*: `ButtonGadget` renders with a Windows 7 two-tone gradient, Windows 8 flat style, or macOS/Linux rounded chrome depending on the active skin.
-  - *Lists*: `TreeGadget`, `ListViewGadget`, `EditorGadget`, and `ScintillaGadget` render with a native client area and display actual gadget items from the parsed model.
-  - *Explorer gadgets*: `ListIconGadget` and `ExplorerListGadget` render with native column headers and item rows; `ExplorerTreeGadget` renders with a tree list chrome.
-  - *Input gadgets*: `ComboBoxGadget` and `ExplorerComboGadget` render with a native drop-down arrow; `SpinGadget` with up/down buttons; `ProgressBarGadget` with a filled track (including vertical orientation and Windows color variants).
-  - *Frame and bars*: `FrameGadget` renders with OS-specific single, double, flat, and captioned frame styles; `TrackBarGadget` with native thumb, track, and tick marks; `ScrollBarGadget` with arrow buttons, thumb, and OS-specific track styling.
-  - *Checkables*: `CheckBoxGadget` and `OptionGadget` render from raster assets with a fallback checkmark/dot; `DateGadget` and `CalendarGadget` render with OS-specific chrome and a date icon.
-  - *Canvas/Web gadgets*: `CanvasGadget` and `OpenGLGadget` render with a framed native surface; `WebGadget` and `WebViewGadget` with a browser-style white client area.
-  - *Container and image gadgets*: `ContainerGadget` and `CustomGadget` have dedicated chrome; `ImageGadget` and `ButtonImageGadget` render the resolved assigned image when available.
-  - *Panel, ScrollArea, and Splitter*: Reworked with original-style per-platform chrome (tabs, scrollbar arrows/thumbs, separator fill).
-- **Resolved images in top-level chrome previews**: Menu flyout entries, toolbar `ToolBarImageButton` entries, and statusbar image fields now display the resolved assigned image instead of a placeholder rectangle. A small fallback icon (frame / sky / sun / terrain) is shown when no image is assigned.
+- **Native preview chrome for all gadget kinds**: Every gadget in the canvas preview now renders with a platform-accurate appearance instead of a generic label box:
+  - *Text gadgets*: `StringGadget` and `IPAddressGadget` with a native input border; `TextGadget` respects alignment and border flags; `HyperLinkGadget` shows underlined link styling.
+  - *Buttons*: `ButtonGadget` with Windows 7 gradient, Windows 8 flat, or macOS/Linux rounded style depending on the active skin.
+  - *Lists*: `TreeGadget`, `ListViewGadget`, `EditorGadget`, and `ScintillaGadget` with a native client area showing actual gadget items.
+  - *Explorer gadgets*: `ListIconGadget` and `ExplorerListGadget` with native column headers and rows; `ExplorerTreeGadget` with tree chrome.
+  - *Input gadgets*: `ComboBoxGadget` / `ExplorerComboGadget` with a drop-down arrow; `SpinGadget` with up/down buttons; `ProgressBarGadget` with a filled track.
+  - *Frame and bars*: `FrameGadget` with OS-specific frame styles; `TrackBarGadget` with thumb, track, and tick marks; `ScrollBarGadget` with arrow buttons and thumb.
+  - *Checkables*: `CheckBoxGadget` and `OptionGadget` from OS assets; `DateGadget` and `CalendarGadget` with OS chrome.
+  - *Canvas/Web*: `CanvasGadget` and `OpenGLGadget` with a framed surface; `WebGadget` / `WebViewGadget` with a browser-style area.
+  - *Image gadgets*: `ImageGadget` and `ButtonImageGadget` show the assigned image when available.
+  - *Panel, ScrollArea, Splitter*: reworked with per-platform chrome.
+- **Images resolved in chrome previews**: Menu flyout entries, toolbar image buttons, and statusbar image fields now display the assigned image instead of a placeholder. A fallback icon is shown when no image is assigned.
 
 ### Fixed
 
-- Separator contrast is now checked against the background before rendering, preventing invisible separators on light or dark VS Code themes (toolbar, statusbar, menu bar, flyout borders).
-- Windows 8 menu bar separator now derives its color from the Windows skin system colors instead of a hardcoded value.
+- Separators are no longer invisible on light or dark VS Code themes (toolbar, statusbar, menu bar, flyout borders).
+- Windows 8 menu bar separator color now matches the configured Windows skin.
 
 ---
 
@@ -130,24 +142,19 @@
 ### Added
 
 - **Platform-accurate window chrome**: The canvas preview now renders the window frame, title bar, menu bar, toolbar, statusbar, and menu flyouts with OS-specific styling for Windows 7, Windows 8, macOS, and Linux:
-  - *Title bar*: Per-skin button layout (macOS: circles on the left; Linux: glyphs on the right; Windows 7/8: min/max/close on the right with correct sizing). macOS renders a compact or toolbar-aware gradient with a white title shadow. Linux uses a dark rounded-top fill with light glyphs. Windows 7 renders a blue gradient frame and rounded outer border; Windows 8 a flat blue frame.
-  - *Window frame*: macOS uses a rounded grey border; Linux omits the frame; Windows 7/8 draw an accurate outer frame with skin-derived gradient and stroke colors.
-  - *Toolbar*: macOS uses a top-to-bottom gradient with a dark bottom separator; Linux a flat fill; Windows 7/8 a plain light fill with configurable item insets.
-  - *Statusbar*: Per-skin background, separator insets, and progress bar styling (rounded blue track for most skins; flat green track for Windows 8).
-  - *Menu bar*: Per-skin background and separator colors; macOS uses a layered gradient; Linux a flat fill; Windows 7/8 derive colors from skin constants.
-  - *Menu flyouts*: Background, border, separator, and entry text colors now use skin-derived values with solid (non-transparent) rendering.
-- **Windows system colors**: On Windows, the extension reads UI colors from the registry (`HKCU\Control Panel\Colors`) and combines them with CSS system color keywords to drive accurate Windows 7 / Windows 8 preview colors for gradients, borders, text, and selection outlines.
-- **Raster preview assets**: Title bar buttons (Windows 7 and Windows 8 styles), the window title icon, the `+` add-button icon, and the submenu arrow indicator are now rendered from embedded raster assets; vector fallbacks are used when assets are unavailable.
-- **Canvas page padding**: The window preview is now offset by a configurable padding (default 10 px) from the canvas edge so the window border is never clipped.
-- **Per-skin title bar metrics**: Button sizes, insets, gaps, and title baseline offsets are resolved per skin (macOS 12×14 px circles, Linux 18×19 px glyphs, Windows 7/8 dynamic sizing).
-- **Selection outlines use system text colors**: Toolbar, statusbar, menu bar, and flyout selection outlines now use the Windows button/menu/window text system color instead of the VS Code hot-tracking color.
+  - *Title bar*: Per-skin button layout — macOS circles on the left, Linux glyphs on the right, Windows 7/8 min/max/close on the right with accurate gradients and colors.
+  - *Window frame*: macOS rounded grey border; Linux frameless; Windows 7/8 accurate gradient frame.
+  - *Toolbar, Statusbar, Menu bar, Menu flyouts*: Per-skin background colors, separator styles, and progress bar appearances.
+- **Windows system colors**: On Windows the extension reads system UI colors from the registry so the preview gradients, borders, and text use the user's actual Windows theme colors.
+- **Raster preview assets**: Title bar buttons, the window icon, the add-entry (`+`) icon, and the submenu arrow are now rendered from embedded raster images.
+- **Canvas page padding**: The window preview now has a small margin from the canvas edge so the window border is never clipped.
+- **Selection outlines**: Toolbar, statusbar, menu bar, and flyout selection outlines now use the correct system text color.
 
 ### Fixed
 
-- Title bar is now hidden for borderless or tool windows that have no `#PB_Window_SystemMenu` / `#PB_Window_TitleBar` flag (regression from 0.15.0).
-- Title text start position adjusted correctly when a title icon is present (Windows 8 extra gap removed).
-- Titlebar button band aligned to the Windows-specific start position on Windows skins.
-- Generic fallback title fill and captionless top chrome no longer paint over Windows-specific title bar rendering.
+- The title bar is now hidden for borderless or tool windows that do not have the `#PB_Window_SystemMenu` / `#PB_Window_TitleBar` flag.
+- Title text is now positioned correctly when a window icon is shown.
+- Title bar buttons are now positioned correctly on Windows skins.
 
 ---
 
@@ -155,37 +162,29 @@
 
 ### Added
 
-- **Designer settings**: New extension settings control gadget insertion behaviour, version compatibility warnings, and the OS skin used for the canvas preview:
-  - *New gadgets use #PB_Any by default* — controls whether inserted gadgets use `#PB_Any` or an enum constant.
-  - *New gadgets use variable as caption* — makes newly inserted gadgets write their caption as a variable reference instead of a string literal; the override survives model reloads for gadgets that still hold an empty default caption.
+- **Designer settings**: New settings control gadget insertion and canvas behavior:
+  - *New gadgets use #PB_Any by default* — choose between `#PB_Any` or an enum constant for newly inserted gadgets.
+  - *New gadgets use variable as caption* — inserted gadgets write their caption as a variable reference instead of a string literal.
   - *Generate event procedure* — controls whether an event procedure is generated on insert.
-  - *OS Skin* — selects the platform skin (Windows / Linux / macOS) for the canvas preview independently of the host OS.
-  - *Warning modes* for unrecognized form files and version upgrades/downgrades.
-  - *Windows frame padding* values (captionless top, client side, client bottom) are now configurable instead of hardcoded.
-- **Color picker for window background color**: The window Color property now shows a native color swatch picker alongside the raw value field, with a *Remove* button to clear `SetWindowColor`.
-- **Editable CurrentImage for statusbar fields**: The CurrentImage field in the statusbar inspector is now editable — typing an existing image ID rebinds the field and optionally removes the orphaned old entry; typing a file path auto-creates a new `LoadImage` entry.
-- **Editable CurrentImage for toolbar entries**: Same direct-edit / rebind / auto-create flow now available for toolbar `ToolBarImageButton` entries.
-- **Workspace-aware procedure discovery**: SelectProc autocomplete now picks up procedure names from all `.pb`/`.pbi` files in the workspace folder and refreshes automatically when files are created, deleted, or renamed.
+  - *OS Skin* — choose the preview skin (Windows / Linux / macOS) independently of the host OS.
+  - *Warning modes* for unrecognized form files and version mismatches.
+- **Color picker for window background color**: The window Color property now shows a color swatch picker with a *Remove* button.
+- **Editable image assignment for statusbar and toolbar**: The image field in the statusbar field and toolbar entry inspector is now directly editable — type an existing image ID to rebind, or a file path to auto-create a new `LoadImage` entry.
+- **Workspace-aware procedure suggestions**: SelectProc autocomplete now scans all `.pb` / `.pbi` files in the workspace and refreshes automatically when files change.
 
 ### Fixed
 
-- Whitespace around raw values is now preserved throughout the inspector — variable names, proc names, menu shortcuts, toolbar text, and ID fields no longer have surrounding spaces silently stripped.
-- Hidden/Disabled checkboxes on the window inspector now use the parsed boolean value correctly instead of coercing the raw string.
-- Window variable name field no longer clears accidentally when submitting an empty value.
-- Window Color field is now read-only (picker and Remove are the only write paths), preventing invalid expressions from being written to the source.
-- Window SelectProc is now always editable — the event loop block is created on demand.
-- The *Generate events procedure* toggle no longer blocks when case branches exist; the guard is removed.
-- EventMenu case assignments now propagate to all matching menu and toolbar entries when an ID is shared across both.
-- Menu and toolbar SelectProc fields remain editable even without an EventMenu block; a hint explains the write-back limitation.
-- Partial statusbar field updates (e.g. image-only) no longer overwrite unrelated sibling fields (text, progress, flags).
-- Status bar progress bar preview now renders with a proper filled track, border, and shadow instead of a plain rectangle.
-- Menu flyout entries that extend beyond the window boundary are now hit-testable.
-- Selecting a gadget in the hierarchy list now activates the ancestor panel tabs so the gadget is visible in the canvas.
-- No-op rect posts (drag without movement) are suppressed; panel tab state is retained across model refreshes.
-- Delete buttons added to the selected menu entry, toolbar entry, and statusbar field inspector sections.
-- `CloseSubMenu` insert is now guarded — the *Add Close* button is disabled when no unmatched `OpenSubMenu` exists.
-- Inserting a child into a leaf `MenuItem` now automatically promotes it to `OpenSubMenu/CloseSubMenu`.
-- Inserting into an empty submenu with a comment before `CloseSubMenu` no longer fails the section-boundary check.
+- Inspector fields no longer strip surrounding whitespace from variable names, procedure names, shortcuts, and IDs.
+- Window Hidden and Disabled checkboxes now reflect the parsed value correctly.
+- Window variable name no longer clears accidentally when submitting an empty value.
+- Window SelectProc is now always editable — the event loop block is created on demand if missing.
+- Changing one gadget event binding no longer clears the other binding.
+- Partial statusbar field updates (e.g. image only) no longer overwrite unrelated sibling fields.
+- Status bar progress bar preview now renders with a correct filled track.
+- Menu flyout entries that extend beyond the window boundary are now selectable.
+- Selecting a gadget in the hierarchy list now scrolls the canvas to reveal it through ancestor panel tabs.
+- The *Add Close* button for submenus is now disabled when there is no unmatched open submenu.
+- Inserting a child into a plain `MenuItem` now automatically promotes it to a submenu.
 
 ---
 
@@ -193,19 +192,19 @@
 
 ### Added
 
-- **Toolbox panel**: The *Insert Gadget* kind selector has been replaced with a scrollable toolbox tree organized into categories (*Common Controls*, *Containers*, *Menus & Toolbars*). Each item shows the original PureBasic IDE icon and a label. A single click enters placement mode; a double-click inserts at a default position immediately.
-- **Insert gadget from the canvas**: After selecting a gadget kind in the toolbox, click anywhere on the canvas to place it. The insert respects snap-to-grid and automatically targets nested containers (Panel, ScrollArea, Container, FrameGadget with `#PB_Frame_Container`). The cursor changes to a crosshair during placement; press Escape to cancel.
-- **Delete gadget**: A *Delete Gadget* button (and canvas right-click menu option) removes a gadget along with all its children, property lines, event bindings, and enum/global block entries in one atomic edit.
-- **Gadget reparent**: A *Change Parent* button in the gadget inspector opens a dialog to move the gadget (and its children) into a different container or panel tab. X/Y coordinates are reset to 0,0 on reparent.
-- **SplitterGadget insert**: Selecting *SplitterGadget* in the toolbox opens a two-gadget picker dialog. If the chosen gadgets are in a different parent than the target, they are automatically reparented before the splitter is inserted.
-- **Canvas right-click context menu**: Right-clicking a menu entry, toolbar entry, or statusbar field in the canvas opens a context menu with delete and insert-type actions. Destructive actions show a modal confirmation dialog.
-- **FrameGadget as container**: `FrameGadget` with the `#PB_Frame_Container` flag is now recognised as a valid insert and delete host, consistent with PureBasic's own form designer.
+- **Toolbox panel**: The gadget kind selector has been replaced with a scrollable toolbox organized into categories (*Common Controls*, *Containers*, *Menus & Toolbars*) with icons matching the original PureBasic IDE. Single-click enters placement mode; double-click inserts at a default position.
+- **Canvas placement**: After selecting a kind in the toolbox, click anywhere on the canvas to place the gadget. The target container is detected automatically; press Escape to cancel.
+- **Gadget delete**: A *Delete Gadget* button (and canvas right-click option) removes the gadget together with all its children, property calls, and event bindings in one step.
+- **Gadget reparent**: A *Change Parent* button moves the gadget and its children into a different container or panel tab.
+- **SplitterGadget insert**: Selecting SplitterGadget opens a picker for the two child gadgets; children are reparented automatically if needed.
+- **Canvas right-click menu for top-level elements**: Right-clicking a menu entry, toolbar entry, or statusbar field shows a context menu with delete and insert actions.
+- **FrameGadget as container**: `FrameGadget` with `#PB_Frame_Container` is now a valid insert and delete host.
 
 ### Fixed
 
-- Gadget property lines (`SetGadgetState`, `HideGadget`, `DisableGadget`, etc.) are now moved together with the gadget when reparenting.
-- `CustomGadget` marker lines (creation call, init code, init marker) are now fully removed when deleting a custom gadget or a container that holds one.
-- Splitter child gadgets that are referenced by a surviving splitter are correctly skipped during partial deletes.
+- Property calls (`SetGadgetState`, `HideGadget`, etc.) are now moved along with the gadget when reparenting.
+- Deleting a container that holds a `CustomGadget` now also removes all associated custom gadget marker lines.
+- Splitter child gadgets belonging to a surviving splitter are correctly skipped when deleting a partial subtree.
 
 ---
 
@@ -213,15 +212,15 @@
 
 ### Added
 
-- **Window title bar in canvas preview**: The canvas now renders a platform-accurate title bar including close, maximize, and minimize buttons (driven by `#PB_Window_SystemMenu`, `#PB_Window_MinimizeGadget`, `#PB_Window_MaximizeGadget` flags), a window icon placeholder (Windows skin), and correct title text clipping.
-- **Resize lock editing**: LockLeft / LockRight checkboxes in the gadget inspector are now editable — toggling builds or removes the `ResizeGadget` call with the correct right-anchor (`FormWindowWidth - N`) or stretch-width formula. LockTop / LockBottom are also editable when the necessary bottom-anchor or stretch-height formula can be derived from the existing source expressions.
-- **Resize grip**: A three-line diagonal resize grip is rendered in the bottom-right corner of the window preview.
-- **Windows skin chrome accuracy**: The canvas now renders narrow left/right client-side frame strips, a bottom frame strip, a tinted captionless padding area (for windows without a title bar), and a subtle border around the client surface — all matching the Windows skin dimensions.
+- **Window title bar in canvas preview**: The canvas now renders the title bar with close, maximize, and minimize buttons (based on `#PB_Window_SystemMenu`, `#PB_Window_MinimizeGadget`, `#PB_Window_MaximizeGadget` flags) and correct title text clipping.
+- **Resize lock editing**: LockLeft, LockRight, LockTop, and LockBottom checkboxes in the gadget inspector are now editable — toggling them writes the correct anchor or stretch formula to `ResizeGadget`.
+- **Resize grip**: A resize grip is shown in the bottom-right corner of the window preview.
+- **Improved Windows skin chrome**: Client-side frame strips, bottom frame strip, and a captionless padding area are now rendered correctly for the Windows skin.
 
 ### Fixed
 
-- The title bar is now hidden for borderless or tool windows (no `#PB_Window_SystemMenu` / `#PB_Window_TitleBar` flag) instead of always being shown.
-- Status bar progress bar preview metrics corrected (track dimensions and fill width).
+- The title bar is no longer shown for borderless or tool windows.
+- Status bar progress bar track dimensions and fill width corrected.
 
 ---
 
@@ -229,28 +228,16 @@
 
 ### Added
 
-- **Window inspector overhaul**: The window properties panel now exposes all editable window properties:
-  - *Caption* field with a *Caption is variable* toggle.
-  - Known window flag checkboxes (`#PB_Window_SystemMenu`, `#PB_Window_TitleBar`, etc.) and a *Custom Flags* free-text field.
-  - *Hidden* and *Disabled* checkboxes.
-  - *Parent* field with a *Parent as raw expression* toggle (bypasses `WindowID()` wrapping).
-  - *Color* field (validated; color picker added in 0.17.0).
-  - *X / Y* position fields with `#PB_Ignore` support.
-  - *Width / Height*, *Constants*, and *Event* sections.
-- **Gadget inspector — caption and tooltip**: Caption and tooltip fields are now editable with a *Caption/Tooltip is variable* toggle. Supported caption labels vary by gadget kind (e.g. *Mask* for DateGadget, *Callback* for ScintillaGadget).
-- **Gadget inspector — colors and font**: Front color, back color, and font are shown as editable / display fields in the gadget properties panel.
-- **Gadget inspector — range fields**: Min/Max fields (with kind-specific labels such as *Inner Width/Height* for ScrollAreaGadget) are editable for ProgressBar, ScrollBar, Spin, TrackBar, and ScrollArea gadgets.
-- **Gadget inspector — checked state**: A *Checked* checkbox is shown for `CheckBoxGadget` and `OptionGadget` and writes `#PB_Checkbox_Checked` / `"1"` to the source.
-- **Gadget inspector — resize locks (display)**: LockLeft, LockRight, LockTop, and LockBottom flags parsed from `ResizeGadget` calls are displayed as read-only checkboxes (editable in 0.15.0).
-- **CustomGadget inspector**: SelectGadget (editable combo), InitCode, CreateCode, and Help fields are shown in the inspector for `CustomGadget` entries.
-- **SelectProc autocomplete**: All SelectProc fields (window, gadget, menu entry, toolbar entry) now use an editable combo input with autocomplete suggestions drawn from procedure names found in the `.pbf` document and its event file sibling.
-- **Info panel**: A context-aware info panel above the properties panel shows a one-line selection summary and a contextual hint for every selection kind.
-- **Resizable properties panel**: A draggable vertical divider between the canvas and the properties panel allows customizing the split (300–900 px).
-
-### Internal
-
-- `ResizeGadget` raw parameter expressions are now stored on the gadget model and can be patched in-place without touching the constructor geometry.
-- Raw rect parameters (`xRaw`, `yRaw`, `wRaw`, `hRaw`) stored on both `Gadget` and `FormWindow` model entries.
+- **Window inspector overhaul**: All window properties are now editable in the properties panel: caption, flags, hidden/disabled state, parent window, background color, position, size, and event settings.
+- **Gadget inspector — caption and tooltip**: Caption and tooltip fields are now editable with a *is variable* toggle. The caption label adapts to the gadget kind (e.g. *Mask* for DateGadget).
+- **Gadget inspector — colors and font**: Front color, back color, and font assignment are now shown and editable in the properties panel.
+- **Gadget inspector — range fields**: Min and Max values are editable for ProgressBar, ScrollBar, Spin, TrackBar, and ScrollArea gadgets (shown as *Inner Width/Height* for ScrollArea).
+- **Gadget inspector — checked state**: A *Checked* checkbox is shown for `CheckBoxGadget` and `OptionGadget`.
+- **Gadget inspector — resize lock display**: LockLeft, LockRight, LockTop, and LockBottom flags from `ResizeGadget` are shown as read-only checkboxes (editable from 0.15.0).
+- **CustomGadget inspector**: SelectGadget, InitCode, CreateCode, and Help fields are shown for `CustomGadget` entries.
+- **SelectProc autocomplete**: All SelectProc fields now offer autocomplete suggestions from procedure names found in the form file and its event file.
+- **Info panel**: A summary line above the properties panel describes the current selection and shows a contextual hint.
+- **Resizable properties panel**: The split between canvas and properties panel can be adjusted by dragging the divider.
 
 ---
 
@@ -258,14 +245,9 @@
 
 ### Fixed
 
-- Preview: menu entry captions containing embedded quotes are now displayed correctly instead of being truncated or showing raw escape sequences.
-- Preview: menu entry shortcuts are no longer incorrectly split off when the caption contains an embedded quote.
-- Editor: failed workspace edits are now surfaced as an error and abort the operation instead of silently continuing with a partial update.
-
-### Internal
-
-- Extracted hit-test logic, chrome layout helpers, preview utils, and menu move logic from the main webview module into dedicated, fully-tested core utility modules.
-- Build: removed redundant `compile` step from the VSIX packaging script.
+- Menu entry captions containing embedded quotes are now displayed correctly in the preview instead of being truncated.
+- Menu entry shortcuts are no longer split off incorrectly when the caption contains an embedded quote.
+- Failed source file edits now surface an error and stop instead of silently continuing with a partial result.
 
 ---
 
@@ -273,19 +255,19 @@
 
 ### Added
 
-- **Inline editors**: All prompt-based dialogs have been replaced with inline panels directly in the properties section — no more browser-style pop-ups.
-  - Menu entries: edit constant, name, shortcut, and image inline in the inspector.
-  - Toolbar entries: edit tooltip, toggle flag, and image inline in the inspector.
-  - Statusbar fields: edit width, text, progress bar, flags, and image inline in the inspector.
-  - Gadget items and columns: inline draft editor with save/cancel flow.
-  - Image assignment and destructive delete/clear actions now show inline confirmation panels.
-- **Status bar flag checkboxes**: Alignment and style flags (`#PB_StatusBar_*`) can now be toggled individually via checkboxes instead of typing raw flag expressions.
-- **Discrete add buttons**: "Add" actions for menus, toolbars, and statusbars now offer separate buttons per type (e.g. *Add Item / Add Title / Add SubMenu / Add Separator*) instead of a single combined prompt.
+- **Inline editors**: All pop-up dialogs have been replaced with inline panels in the properties section:
+  - Menu entries: edit constant, name, shortcut, and image inline.
+  - Toolbar entries: edit tooltip, toggle flag, and image inline.
+  - Statusbar fields: edit width, text, progress bar, flags, and image inline.
+  - Gadget items and columns: inline editor with save/cancel.
+  - Image assignment and delete actions show inline confirmation panels.
+- **Statusbar flag checkboxes**: `#PB_StatusBar_*` alignment and style flags can now be toggled individually via checkboxes.
+- **Discrete add buttons**: Add actions for menus, toolbars, and statusbars now offer separate buttons per entry type (*Add Item*, *Add Title*, *Add SubMenu*, *Add Separator*).
 
 ### Changed
 
-- Toolbar entries: bound `ToolBarToolTip` entries are now hidden from the structure list and only visible via the selected entry inspector, reducing visual noise.
-- Inspector panel: selecting a menu entry, toolbar entry, or statusbar field now shows only the *Selected Entry / Field* panel without the full container structure list behind it.
+- Paired `ToolBarToolTip` entries are now hidden from the toolbar structure list and only shown in the selected entry inspector.
+- Selecting a menu entry, toolbar entry, or statusbar field now shows only the *Selected Entry / Field* panel instead of the full container list.
 
 ---
 
@@ -293,21 +275,20 @@
 
 ### Added
 
-- **PureBasic 6.30 syntax support**: The editor now correctly parses and emits `CreateImageMenu`, `CreateToolbar` (lowercase b), and `Chr(9)`-concatenated shortcut syntax used by the PB 6.30 form designer.
-- **Menu drag-and-drop**: Menu entries can be reordered by dragging directly in the canvas preview. Entire subtrees move together; entries can be dropped before/after siblings or appended into an empty submenu.
-- **Add buttons in the canvas preview**: Inline `+` buttons now appear in the menu bar, toolbar, and statusbar preview areas for quick insertion without leaving the canvas.
-- **Section delete**: Entire menu, toolbar, or statusbar sections can be deleted from the properties panel with a confirmation step.
-- **Font management**: `LoadFont` entries are parsed, shown in the properties panel, and can be inserted, updated, or deleted. The `FormFont` enumeration block is kept in sync automatically.
-- **FormMenu / FormGadget enum blocks**: The editor now manages PureBasic `Enumeration FormMenu` and `Enumeration FormGadget` blocks, keeping them consistent across all insert, rename, and delete operations.
+- **PureBasic 6.30 syntax support**: The editor now correctly handles `CreateImageMenu`, `CreateToolbar`, and `Chr(9)`-concatenated shortcut syntax used by the PB 6.30 form designer.
+- **Menu drag-and-drop**: Menu entries can be reordered by dragging in the canvas preview. Entire subtrees move together.
+- **Canvas add buttons**: Inline `+` buttons appear in the menu bar, toolbar, and statusbar preview areas for quick insertion.
+- **Section delete**: Entire menu, toolbar, or statusbar sections can be deleted from the properties panel.
+- **Font management**: `LoadFont` entries are shown in the properties panel and can be inserted, updated, or deleted. The `FormFont` enum block is kept in sync.
+- **FormMenu / FormGadget enum management**: The editor keeps `Enumeration FormMenu` and `Enumeration FormGadget` blocks consistent across all insert, rename, and delete operations.
 
 ### Fixed
 
-- Toolbar emitter: `ToolBarImageButton` entries are now emitted correctly for PB 6.30 format, including paired `ToolBarToolTip` lines that are co-deleted or id-synced on rename.
-- Menu emitter: shortcuts now use the PB 6.30 `Chr(9)` concatenation format; `CreateImageMenu` is now recognised in all patch operations.
-- Statusbar emitter: `AddStatusBarField` and its decoration line are now emitted per-field in the correct order.
-- Image and font blocks are now inserted at the correct position relative to custom gadget initialisation markers.
-- Double blank lines no longer appear after block replace operations (font, image, statusbar field).
-- Menu enum block is now correctly inserted before an existing `FormImage` block.
+- Toolbar image button entries and their paired tooltip lines are now handled correctly for PB 6.30 format.
+- Menu shortcuts now use the PB 6.30 `Chr(9)` format; `CreateImageMenu` is now recognised in all edit operations.
+- Statusbar field decoration lines are now emitted in the correct order.
+- Image and font blocks are now inserted in the correct position relative to custom gadget initialisation markers.
+- Double blank lines no longer appear after block replace operations.
 
 ---
 
@@ -315,16 +296,14 @@
 
 ### Added
 
-- **Event bindings**: Gadget, menu entry, and toolbar entry event procedures can now be viewed and edited directly in the properties panel.
-- **Window event settings**: Event file (`XIncludeFile`), event procedure name, and the *Generate Event Loop* toggle are now editable in the window properties panel.
-- **Generate event loop guard**: The *Generate Event Loop* checkbox is disabled with an explanatory hint when disabling it would destroy existing `Case` branches or an event menu block.
-- **Image management panel**: `LoadImage` and `CatchImage` entries are shown in a dedicated *Images* section with cross-reference counts per entry.
-  - Navigate from any gadget, menu entry, toolbar entry, or statusbar field directly to its referenced image.
+- **Event bindings**: Gadget, menu entry, and toolbar entry event procedures can now be viewed and edited in the properties panel.
+- **Window event settings**: Event file, event procedure name, and the *Generate Event Loop* toggle are editable in the window properties panel.
+- **Image management panel**: `LoadImage` and `CatchImage` entries are shown in a dedicated *Images* section with cross-reference counts.
+  - Navigate from any gadget, menu entry, toolbar entry, or statusbar field to its referenced image.
   - Insert, update, and delete images from the panel.
-  - Toggle between `LoadImage` and `CatchImage` inline.
-  - Toggle between a named enum ID and a `#PB_Any` variable.
-  - Make image paths relative to the current form file.
-  - Choose an image file via a system file dialog; gadgets can be auto-resized to match the image dimensions.
+  - Toggle between `LoadImage` and `CatchImage`, and between a named ID and `#PB_Any`.
+  - Make image paths relative to the form file.
+  - Choose an image file via a file dialog; gadgets can be auto-resized to match the image.
   - Create new image entries with auto-generated IDs and assign them in one step.
 
 ---
@@ -333,20 +312,13 @@
 
 ### Added
 
-- **Extended window model**: Caption (literal or variable), background color, hidden/disabled state, parent window reference, event file, event procedure, and custom flags are now parsed and reflected in the properties panel.
-- **Extended gadget model**: Text content, tooltip, state, front/back colors, font, hidden/disabled flags, image references, min/max range values, and splitter child references are now fully parsed.
-- **Menu / toolbar / statusbar detail parsing**: Menu shortcuts and icon references, toolbar toggle flags and paired tooltip text, and statusbar field decorations (text label, progress bar, image) are now fully parsed.
-- **Canvas chrome for container gadgets**: Panel gadget tabs, ScrollArea scrollbars (with drag scrolling), Splitter separator bar (draggable), FrameGadget and ContainerGadget borders are now rendered in the canvas preview.
-- **Nested gadget layout engine**: Nested gadgets are laid out within their container's content area; clip regions prevent child gadgets from drawing outside their parent bounds.
-- **Splitter position editing**: The splitter position can be set directly via a number input in the properties panel.
-- **Menu bar / toolbar / statusbar chrome**: Menu bar, toolbar, and statusbar are now rendered in the canvas preview with selection highlighting; the gadget layout area is offset to account for their height.
-- **Window and gadget property emitters**: `HideWindow`, `DisableWindow`, `SetWindowColor`, `HideGadget`, `DisableGadget`, `GadgetToolTip`, `SetGadgetColor` (front + back), `SetGadgetState`, and `SetGadgetFont` are now written back to the source file when changed.
-- **Gadget constructor argument editing**: Text, image reference, min/max range, flags, and splitter child references can be edited in the properties panel and are written back to the `OpenGadget` call in the source file.
-- **Menu, toolbar, and statusbar emitters**: Insert, update, and delete operations for menu entries, toolbar entries, and statusbar fields are now fully implemented with roundtrip accuracy.
-
-### Fixed
-
-- EOF insert offset corrected in the internal `fakeTextDocument` test helper.
+- **Extended window and gadget model**: Caption, background color, hidden/disabled state, parent reference, event settings, tooltip, font, colors, image references, min/max values, and resize lock flags are now fully parsed and shown in the properties panel.
+- **Menu, toolbar, and statusbar detail parsing**: Shortcuts, icon references, toggle flags, tooltip text, and statusbar field decorations are now fully parsed.
+- **Canvas chrome for containers**: Panel tabs, ScrollArea scrollbars, Splitter separator bar, FrameGadget and ContainerGadget borders are now rendered in the canvas preview. Nested gadgets are clipped to their parent's bounds.
+- **Splitter position editing**: The splitter position can be set via a number input in the properties panel.
+- **Menu bar, toolbar, and statusbar canvas preview**: Menu bar, toolbar, and statusbar are now rendered with selection highlighting; the gadget area is offset accordingly.
+- **Property write-back**: Changes to window and gadget visibility, disabled state, colors, tooltip, and font are written back to the source file. Gadget constructor arguments (text, image, range, flags, splitter children) are editable and written back to the `OpenGadget` call.
+- **Menu, toolbar, and statusbar emitters**: Insert, update, and delete operations for all top-level elements are now fully implemented.
 
 ---
 
@@ -354,7 +326,7 @@
 
 ### Fixed
 
-- Fixed: remove extensionDependencies to prevent activation failure
+- Removed `extensionDependencies` to prevent activation failure after installation.
 
 ## 0.8.1
 
@@ -366,13 +338,9 @@
 
 ### Added
 
-- Added pb-lang-support as extensionDependencies for .pbf text mode.
+- Added pb-lang-support as a dependency for `.pbf` text mode.
 
 ### Changed
 
-- .pbf text mode now prefers the purebasic language (pb-lang-support).
-- Switching between text and designer mode now closes the opposite tab type to prevent duplicate editors.
-
-### Internal
-
-- Updated extension.ts to handle language detection and fallback logic.
+- `.pbf` text mode now prefers the PureBasic language from pb-lang-support.
+- Switching between text and designer mode now closes the other tab to prevent duplicate editors.

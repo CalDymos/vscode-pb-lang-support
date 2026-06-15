@@ -15,6 +15,7 @@ If installed, it provides project context (active project/target, include direct
 - Cache parsed projects (via **@caldymos/pb-project-core**)
 - Track **active project / active target** (auto-sync from active editor, QuickPick)
 - Provide a **Status Bar project menu** with project actions and target selection
+- Show **compact tail paths** for project entries in the Status Bar menu instead of full absolute paths
 - Maintain a **file → project** map (including best-match fallback by project root)
 - Show active project/target in the **Status Bar**
 - Open **.pbp** files in a dedicated **webview-based project editor**
@@ -45,7 +46,7 @@ Clicking the Status Bar item opens a project menu with:
 - **Open Active Project and Reveal Directory** to open the active `.pbp` in the project editor and reveal its directory in the VS Code Explorer
 - **Reveal Active Project Directory** to jump to the active project directory in the VS Code Explorer
 - **No Project** to explicitly disable project context for the current workspace
-- **Select Project/Target …** target entries grouped by project when multiple `.pbp` files exist
+- **Select Project/Target …** target entries grouped by project when multiple `.pbp` files exist, with a dedicated section header separating the target list from the other menu actions
 
 The classic project and target pickers remain available through the command palette.
 
