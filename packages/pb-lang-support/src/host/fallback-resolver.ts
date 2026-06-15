@@ -165,7 +165,10 @@ export class FallbackResolver {
                 targetBaseDir = mainMetadata.baseDir;
             } else {
                 warnings.push(`MainFile metadata could not be read; using active file metadata for compiler options: ${mainFile}`);
-                targetBaseDir = path.dirname(mainFile);
+                // Keep targetBaseDir aligned with targetMetadata. The active file
+                // metadata is still used here, so its relative paths must remain
+                // relative to the active metadata location.
+                targetBaseDir = active.baseDir;
             }
         }
 
