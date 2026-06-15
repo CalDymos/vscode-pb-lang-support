@@ -14,6 +14,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<PbProj
         vscode.commands.registerCommand('pbProjectFiles.refresh', async () => {
             await projectService?.refresh();
         }),
+        vscode.commands.registerCommand('pbProjectFiles.projectMenu', async () => {
+            await projectService?.showProjectMenu();
+        }),
         vscode.commands.registerCommand('pbProjectFiles.pickProject', async () => {
             await projectService?.pickActiveProject();
         }),
@@ -22,6 +25,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<PbProj
         }),
         vscode.commands.registerCommand('pbProjectFiles.newProject', async () => {
             await projectService?.createNewProject();
+        }),
+        vscode.commands.registerCommand('pbProjectFiles.openActiveProject', async () => {
+            await projectService?.openActiveProject();
+        }),
+        vscode.commands.registerCommand('pbProjectFiles.revealActiveProjectDirectory', async () => {
+            await projectService?.revealActiveProjectDirectory();
+        }),
+        vscode.commands.registerCommand('pbProjectFiles.openActiveProjectAndRevealDirectory', async () => {
+            await projectService?.openActiveProjectAndRevealDirectory();
         })
     );
 
