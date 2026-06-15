@@ -35,6 +35,9 @@ import {
   getStatusBarAlignedX,
   getCanvasMenuBarRect,
   getWindowChromeLayout,
+  getWindowPreviewFrameRect,
+  getWindowPreviewResizeButtonRect,
+  hitWindowPreviewResizeButton,
   getWindowClientSurfaceRects,
   resolvePreviewChromeMetrics,
   usesOriginalMacRoundedButtonChrome,
@@ -77,10 +80,14 @@ import {
 } from "../core/statusbar/inspector";
 import {
   type MenuEntryMoveTargetLike,
+  type LinearTopLevelEntryMoveTargetLike,
+  type StatusBarPreviewInsertAction,
+  type ToolBarPreviewInsertAction,
   canEditToolBarTooltip,
   deriveWindows7MenuBarPalette,
   getDefaultMenuItemInsertArgs,
   getMenuEntryMoveTarget,
+  getLinearTopLevelEntryMoveTarget,
   getMenuEntryRect,
   getMenuFlyoutAnchorRect,
   getMenuFlyoutPanelRect,
@@ -102,6 +109,7 @@ import {
   getPredictedMenuEntryMoveIndex,
   getStatusBarFieldWidths,
   getStatusBarPreviewInsertArgs,
+  getSelectedMenuEntryInspectorFieldConfig,
   getSelectedStatusBarInspectorFieldConfig,
   getSelectedToolBarInspectorFieldConfig,
   getTopLevelSelectProcEditState,
@@ -134,8 +142,18 @@ import {
   canEditGadgetCheckedState,
   canEditGadgetColors,
   canInspectGadgetColumns,
+  canInspectCustomGadgetCodeRows,
+  canInspectGadgetImageRows,
   canInspectGadgetItems,
+  canInspectGadgetSplitterPosition,
   getCustomGadgetHelpDisplay,
+  getCustomGadgetSelectPresetFieldConfig,
+  getGadgetConstantsFieldConfig,
+  getGadgetFontFieldConfig,
+  getGadgetParentFieldConfig,
+  getGadgetResizeLockFieldConfig,
+  getGadgetSelectProcFieldConfig,
+  getGadgetTooltipFieldConfig,
   getGadgetCaptionFieldConfig,
   getGadgetCurrentImageDisplay,
   getGadgetCtorRangeFieldLabels,
@@ -195,7 +213,6 @@ import {
 } from "../core/toolbox/panel";
 import { buildOriginalGadgetDeletePlan } from "../core/gadget/delete";
 import { quotePbString } from "../core/parser/tokenizer";
-import { isPbStringLiteral } from "../core/parser/pb-string";
 import {
   GADGET_KIND,
   type SourceRange,
@@ -212,9 +229,34 @@ import {
   type FormImage,
 } from "../core/model";
 import {
+  buildCreatedFormImageReference,
+  buildFormImageEditorDraft,
+  buildFormImageLineLabel,
+  canChooseFileForFormImageEntry,
+  canRelativizeFormImageEntry,
+  canToggleFormImagePbAny,
+  collectFormImageUsages,
+  countFormImageUsages,
+  findFormImageEntryById,
+  getDefaultFormImageReferenceSelection,
+  getFormImageCallName,
+  getFormImageReferenceHint as getCoreFormImageReferenceHint,
+  requiresFormImageAssignedVar,
+  type FormImageUsage,
+} from "../core/image/model";
+import {
   buildWindowFlagsExpr,
+  getWindowBaseRowsFieldConfig,
   getWindowBooleanInspectorState,
+  getWindowColorFieldConfig,
+  getWindowConstantsFieldConfig,
+  getWindowGenerateEventProcFieldConfig,
+  getWindowGenerateEventProcEditState,
+  getWindowHiddenFieldConfig,
+  getWindowDisabledFieldConfig,
+  getWindowEnumValueFieldConfig,
   getWindowParentAsRawExpressionWithOverride,
+  getWindowParentFieldConfig,
   getWindowParentInspectorValue,
   getWindowPositionInspectorValue,
   getWindowPreviewTitleBarHeight,
@@ -229,6 +271,7 @@ import {
   getWindowPreviewTitleButtonSize,
   getWindowPreviewTitleTextLayout,
   getWindowPreviewTitleIconSize,
+  getWindowSelectProcFieldConfig,
   getWindowPreviewToolBarDecoration,
   getWindowPreviewStatusBarDecoration,
   getWindowPreviewStatusBarProgressDecoration,
@@ -271,6 +314,7 @@ import {
 } from "../core/statusbar/image-inspector";
 import { getTopLevelSelectedImageInspectorConfig } from "../core/toplevel/image-inspector";
 import { resolveTopLevelCanvasContextMenuActions } from "../core/toplevel/context-menu";
+import { canCopyPasteGadgetFromContextMenu, resolveGadgetCanvasContextMenuActions, type GadgetCanvasContextMenuAction } from "../core/gadget/context-menu";
 import type { DesignerTopLevelSelection, TopLevelCanvasContextMenuSelection } from "../core/toplevel/selection";
 
 import {
@@ -514,15 +558,6 @@ let splitterInsertDialogBackdropEl: HTMLDivElement | null = null;
 let selectParentDialogBackdropEl: HTMLDivElement | null = null;
 
 type PendingCanvasContextMenuActions = ReturnType<typeof resolveTopLevelCanvasContextMenuActions>;
-type GadgetCanvasContextMenuAction = {
-  kind: "deleteGadget";
-  label: "Delete Gadget…";
-  title: string;
-  enabled: boolean;
-  gadgetId: string;
-  confirmLabel: "Delete Gadget";
-  message: string;
-};
 type CanvasContextMenuAction = NonNullable<PendingCanvasContextMenuActions>[number] | GadgetCanvasContextMenuAction;
 type CanvasContextMenuSelection = DesignerTopLevelSelection | { kind: "gadget"; id: string };
 type CanvasContextMenuTarget = TopLevelCanvasContextMenuSelection | { kind: "gadget"; id: string };
@@ -539,6 +574,7 @@ let canvasContextMenuEl: HTMLDivElement | null = null;
 let canvasContextMenuIgnoreMouseDownTimeStamp: number | null = null;
 
 const expanded = new Map<string, boolean>();
+let copiedGadgetId: string | null = null;
 const panelActiveItems = new Map<string, number>();
 const scrollAreaOffsets = new Map<string, { x: number; y: number }>();
 
@@ -1340,9 +1376,9 @@ function postWindowProperties(win: FormWindow, updates: { hiddenRaw?: string; di
   post({
     type: WEBVIEW_TO_EXT_MSG_TYPE.setWindowProperties,
     windowKey: win.id,
-    hiddenRaw: Object.prototype.hasOwnProperty.call(updates, "hiddenRaw") ? updates.hiddenRaw : (win.hiddenRaw ?? ""),
-    disabledRaw: Object.prototype.hasOwnProperty.call(updates, "disabledRaw") ? updates.disabledRaw : (win.disabledRaw ?? ""),
-    colorRaw: Object.prototype.hasOwnProperty.call(updates, "colorRaw") ? updates.colorRaw : (win.colorRaw ?? "")
+    ...(Object.prototype.hasOwnProperty.call(updates, "hiddenRaw") ? { hiddenRaw: updates.hiddenRaw } : {}),
+    ...(Object.prototype.hasOwnProperty.call(updates, "disabledRaw") ? { disabledRaw: updates.disabledRaw } : {}),
+    ...(Object.prototype.hasOwnProperty.call(updates, "colorRaw") ? { colorRaw: updates.colorRaw } : {})
   });
 }
 
@@ -1418,10 +1454,7 @@ function postWindowPositionRaw(win: FormWindow, axis: "x" | "y", rawValue: strin
   renderProps();
 }
 
-type ImageUsage = {
-  label: string;
-  select: DesignerSelection;
-};
+type ImageUsage = FormImageUsage;
 
 function getSelectionParentId(sel: DesignerSelection): string | undefined {
   if (!sel) return undefined;
@@ -1616,72 +1649,26 @@ function isStatusBarFieldSelection(sel: DesignerSelection, statusBarId: string, 
 }
 
 function collectImageUsages(imageId: string): ImageUsage[] {
-  const usages: ImageUsage[] = [];
-
-  for (const g of model.gadgets ?? []) {
-    if (g.imageId === imageId) {
-      usages.push({
-        label: `Gadget ${g.id} (${g.kind})`,
-        select: { kind: "gadget", id: g.id }
-      });
-    }
-
-    (g.items ?? []).forEach((it, idx) => {
-      if (it.imageId === imageId) {
-        const itemName = it.text ?? it.textRaw ?? `item ${idx}`;
-        usages.push({
-          label: `Gadget ${g.id} (${g.kind}) :: Item ${idx} ${itemName}`,
-          select: { kind: "gadget", id: g.id }
-        });
-      }
-    });
-  }
-
-  for (const m of model.menus ?? []) {
-    (m.entries ?? []).forEach((e, idx) => {
-      if (e.iconId === imageId) {
-        const entryName = e.idRaw ?? e.text ?? e.textRaw ?? `entry ${idx}`;
-        usages.push({
-          label: `Menu ${m.id} :: ${e.kind} ${entryName}`,
-          select: { kind: "menuEntry", menuId: m.id, entryIndex: idx }
-        });
-      }
-    });
-  }
-
-  for (const t of model.toolbars ?? []) {
-    (t.entries ?? []).forEach((e, idx) => {
-      if (e.iconId === imageId) {
-        const entryName = e.idRaw ?? e.text ?? e.textRaw ?? `entry ${idx}`;
-        usages.push({
-          label: `ToolBar ${t.id} :: ${e.kind} ${entryName}`,
-          select: { kind: "toolBarEntry", toolBarId: t.id, entryIndex: idx }
-        });
-      }
-    });
-  }
-
-  for (const sb of model.statusbars ?? []) {
-    (sb.fields ?? []).forEach((f, idx) => {
-      if (f.imageId === imageId) {
-        usages.push({
-          label: `StatusBar ${sb.id} :: Field ${idx}`,
-          select: { kind: "statusBarField", statusBarId: sb.id, fieldIndex: idx }
-        });
-      }
-    });
-  }
-
-  return usages;
+  return collectFormImageUsages(model, imageId);
 }
 
 function countImageUsages(imageId: string): number {
-  return collectImageUsages(imageId).length;
+  return countFormImageUsages(model, imageId);
 }
 
 function findImageEntryById(imageId?: string): FormImage | undefined {
-  if (!imageId) return undefined;
-  return (model.images ?? []).find(entry => entry.id === imageId);
+  return findFormImageEntryById(model.images, imageId);
+}
+
+function getCleanupSourceLineForImageReference(oldImageId: string | undefined, nextImageId: string | undefined): number | undefined {
+  const oldImage = findImageEntryById(oldImageId);
+  const oldUsageCount = oldImageId ? countImageUsages(oldImageId) : 0;
+  return shouldCleanupStatusBarReboundImage(
+    oldImageId,
+    oldUsageCount,
+    oldImage?.source?.line,
+    nextImageId
+  ) ? oldImage?.source?.line : undefined;
 }
 
 function selectImageById(imageId: string): void {
@@ -1715,70 +1702,30 @@ function drawResolvedPreviewImage(
   return true;
 }
 
-const IMAGE_CAPABLE_GADGET_KINDS: ReadonlySet<string> = new Set([GADGET_KIND.ImageGadget, GADGET_KIND.ButtonImageGadget]);
 
 
 function canRelativizeImageEntry(entry?: FormImage): boolean {
-  return Boolean(entry && !entry.inline && isPbStringLiteral(entry.imageRaw));
+  return canRelativizeFormImageEntry(entry);
 }
 
 function canChooseFileImageEntry(entry?: FormImage): boolean {
-  return Boolean(entry && !entry.inline);
+  return canChooseFileForFormImageEntry(entry);
 }
 
 function canToggleImagePbAny(entry?: FormImage): boolean {
-  if (!entry) return false;
-  if (entry.pbAny) {
-    return Boolean((entry.variable ?? entry.id ?? "").trim().length);
-  }
-  return Boolean(entry.firstParam.trim().length);
+  return canToggleFormImagePbAny(entry);
 }
 
 function getImageReferenceHint(imageId?: string, label: "gadget" | "menu" | "toolbar" | "statusbar" = "gadget"): string {
-  if (!imageId) {
-    switch (label) {
-      case "menu":
-      case "toolbar":
-        return "This entry has no parsed image reference.";
-      case "statusbar":
-        return "This field has no parsed image reference.";
-      default:
-        return "This gadget has no parsed image reference.";
-    }
-  }
-
-  if (!findImageEntryById(imageId)) {
-    return `Referenced image '${imageId}' is not loaded in this form.`;
-  }
-
-  return "";
+  return getCoreFormImageReferenceHint(model.images, imageId, label);
 }
 
 function getDefaultImageReferenceSelection(currentImageId?: string): string {
-  const images = model.images ?? [];
-  if (!images.length) return "";
-  return currentImageId && findImageEntryById(currentImageId)
-    ? currentImageId
-    : (images[0]?.id ?? "");
+  return getDefaultFormImageReferenceSelection(model.images, currentImageId);
 }
 
 function buildCreatedImageReference(idRaw: string, assignedVar?: string): { imageId: string; imageRaw: string } | undefined {
-  const trimmedId = idRaw.trim();
-  if (!trimmedId.length) return undefined;
-
-  if (trimmedId.toLowerCase() === "#pb_any") {
-    const variableName = assignedVar?.trim();
-    if (!variableName) return undefined;
-    return {
-      imageId: variableName,
-      imageRaw: `ImageID(${variableName})`
-    };
-  }
-
-  return {
-    imageId: trimmedId,
-    imageRaw: `ImageID(${trimmedId})`
-  };
+  return buildCreatedFormImageReference(idRaw, assignedVar);
 }
 
 function toPbString(v: string): string {
@@ -1790,6 +1737,64 @@ function getMenuInsertLevel(menu: FormMenu, parentSourceLine?: number): number {
   const parentEntry = (menu.entries ?? []).find(entry => entry.source?.line === parentSourceLine);
   if (!parentEntry) return 0;
   return Math.max(0, getMenuEntryLevel(parentEntry) + 1);
+}
+
+function postCreateMenuRoot(): void {
+  const args = { kind: "MenuTitle" as FormMenuEntry["kind"], textRaw: toPbString("MenuTitle") };
+  pendingMenuEntrySelection = {
+    menuId: "0",
+    preferredIndex: 0,
+    kind: args.kind,
+    level: 0,
+    textRaw: args.textRaw,
+  };
+  vscode.postMessage({
+    type: WEBVIEW_TO_EXT_MSG_TYPE.createMenu,
+    kind: args.kind,
+    textRaw: args.textRaw,
+  });
+}
+
+function postCreateToolBarRoot(action: ToolBarPreviewInsertAction): void {
+  const args = getToolBarPreviewInsertArgs({ entries: [] }, action);
+  pendingToolBarEntrySelection = {
+    toolBarId: "0",
+    preferredIndex: 0,
+    kind: args.kind,
+    idRaw: args.idRaw,
+    iconRaw: args.iconRaw,
+    toggle: args.toggle,
+  };
+  vscode.postMessage({
+    type: WEBVIEW_TO_EXT_MSG_TYPE.createToolBar,
+    kind: args.kind,
+    idRaw: args.idRaw,
+    iconRaw: args.iconRaw,
+    toggle: args.toggle,
+  });
+}
+
+function postCreateStatusBarRoot(action: StatusBarPreviewInsertAction): void {
+  const args = getStatusBarPreviewInsertArgs(action);
+  pendingStatusBarFieldSelection = {
+    statusBarId: "0",
+    preferredIndex: 0,
+    widthRaw: args.widthRaw,
+    textRaw: args.textRaw,
+    imageRaw: args.imageRaw,
+    flagsRaw: args.flagsRaw,
+    progressBar: args.progressBar,
+    progressRaw: args.progressRaw,
+  };
+  vscode.postMessage({
+    type: WEBVIEW_TO_EXT_MSG_TYPE.createStatusBar,
+    widthRaw: args.widthRaw,
+    textRaw: args.textRaw,
+    imageRaw: args.imageRaw,
+    flagsRaw: args.flagsRaw,
+    progressBar: args.progressBar,
+    progressRaw: args.progressRaw,
+  });
 }
 
 function postInsertMenuEntry(menu: FormMenu, args: { kind: FormMenuEntry["kind"]; idRaw?: string; textRaw?: string }, parentSourceLine?: number): void {
@@ -2588,6 +2593,27 @@ type DragState =
       moveTarget: MenuEntryMoveTargetLike | null;
     }
   | {
+      target: "toolBarEntry";
+      toolBarId: string;
+      entryIndex: number;
+      sourceLine: number;
+      kind: string;
+      startMx: number;
+      startMy: number;
+      moved: boolean;
+      moveTarget: LinearTopLevelEntryMoveTargetLike | null;
+    }
+  | {
+      target: "statusBarField";
+      statusBarId: string;
+      fieldIndex: number;
+      sourceLine: number;
+      startMx: number;
+      startMy: number;
+      moved: boolean;
+      moveTarget: LinearTopLevelEntryMoveTargetLike | null;
+    }
+  | {
       target: "scrollArea";
       axis: "x" | "y";
       id: string;
@@ -2887,6 +2913,39 @@ function escapeHtml(s: string): string {
     .replace(/'/g, "&#039;");
 }
 
+function getWindowPreviewFramePadding(): { top: number; side: number; bottom: number } {
+  const platformSkin = resolvePbFormSkinPlatform();
+  return {
+    top: getWindowPreviewChromeTopPadding(
+      platformSkin,
+      model.window?.flagsExpr,
+      asInt(settings.titleBarHeight),
+      asInt(settings.windowPreviewWindowsCaptionlessTopPadding)
+    ),
+    side: getWindowPreviewClientSidePadding(platformSkin, asInt(settings.windowPreviewWindowsClientSidePadding)),
+    bottom: getWindowPreviewClientBottomPadding(platformSkin, asInt(settings.windowPreviewWindowsClientBottomPadding)),
+  };
+}
+
+function getWindowPreviewFrameExtraHeight(): number {
+  return resolvePbFormSkinPlatform() === "macos" && hasParsedToolbarChrome()
+    ? previewChromeMetrics.toolBarHeight
+    : 0;
+}
+
+function getWindowPreviewFrameForStoredSize(origin: { x: number; y: number }, clientWidth: number, clientHeight: number): PreviewRect {
+  const framePadding = getWindowPreviewFramePadding();
+  return getWindowPreviewFrameRect(
+    origin,
+    clientWidth,
+    clientHeight,
+    framePadding.top,
+    framePadding.side,
+    framePadding.bottom,
+    getWindowPreviewFrameExtraHeight()
+  );
+}
+
 function getWinRect(): { x: number; y: number; w: number; h: number; title: string; id: string; tbH: number } | null {
   const rect = canvas.getBoundingClientRect();
   if (!model.window) return null;
@@ -2897,12 +2956,17 @@ function getWinRect(): { x: number; y: number; w: number; h: number; title: stri
   const w = clampPos(model.window.w ?? rect.width);
   const h = clampPos(model.window.h ?? rect.height);
   const externalMenuBar = usesWindowPreviewExternalMenuBar(settings.osSkin) && hasParsedMenuChrome();
+  const frameRect = getWindowPreviewFrameForStoredSize(
+    { x: origin.x, y: origin.y + (externalMenuBar ? previewChromeMetrics.menuHeight : 0) },
+    w,
+    h
+  );
 
   return {
-    x: origin.x,
-    y: origin.y + (externalMenuBar ? previewChromeMetrics.menuHeight : 0),
-    w,
-    h,
+    x: frameRect.x,
+    y: frameRect.y,
+    w: frameRect.w,
+    h: frameRect.h,
     title: model.window.title ?? "",
     id: model.window.id,
     tbH: getWindowPreviewTitleBarHeight(model.window.flagsExpr, asInt(settings.titleBarHeight))
@@ -2935,12 +2999,11 @@ function hasParsedStatusbarChrome(): boolean {
 }
 
 function getWindowLocalRect(): PreviewRect {
-  return {
-    x: 0,
-    y: 0,
-    w: Math.max(0, model.window?.w ?? 0),
-    h: Math.max(0, model.window?.h ?? 0)
-  };
+  return getWindowPreviewFrameForStoredSize(
+    { x: 0, y: 0 },
+    Math.max(0, model.window?.w ?? 0),
+    Math.max(0, model.window?.h ?? 0)
+  );
 }
 
 function getWindowContentPreviewRect(metrics: PreviewChromeMetrics): PreviewRect {
@@ -3042,7 +3105,7 @@ function hitTestGadget(mx: number, my: number): Gadget | null {
     if (!layout.visible) continue;
     if (!rectContainsPoint(layout.rect, lx, ly)) continue;
     if (!rectContainsPoint(layout.clip, lx, ly)) continue;
-    if (g.kind === GADGET_KIND.SplitterGadget) {
+    if (canInspectGadgetSplitterPosition(g.kind)) {
       const splitterBarRect = intersectRect(getSplitterBarRect(layout.rect, hasPbFlag(g.flagsExpr, "#PB_Splitter_Vertical"), metrics.splitterWidth, g.state), layout.clip);
       if (!isPointOnRectBorder(layout.rect, lx, ly) && !rectContainsPoint(splitterBarRect, lx, ly)) {
         continue;
@@ -3066,6 +3129,11 @@ function hitHandleGadget(g: Gadget, mx: number, my: number): Handle | null {
 function hitHandleWindow(mx: number, my: number): Handle | null {
   const wr = getWinRect();
   if (!wr) return null;
+
+  const resizeButtonHandle = hitWindowPreviewResizeButton({ x: wr.x, y: wr.y, w: wr.w, h: wr.h }, mx, my);
+  if (resizeButtonHandle && canResizeWindowHandleInCanvas(resizeButtonHandle)) {
+    return resizeButtonHandle;
+  }
 
   // Original Form Designer: top-level windows resize only to the right and bottom.
   const pts = getRectHandlePoints({ x: wr.x, y: wr.y, w: wr.w, h: wr.h }).filter(([handle]) => canResizeWindowHandleInCanvas(handle));
@@ -3310,6 +3378,40 @@ function renderCanvasContextMenu(): void {
             confirmLabel: action.confirmLabel
           }, current.selection);
           return;
+        case "copyGadget":
+          copiedGadgetId = action.gadgetId;
+          selection = { kind: "gadget", id: action.gadgetId };
+          renderSelectionUiWithoutParentSelector();
+          return;
+        case "pasteGadget":
+          post({ type: WEBVIEW_TO_EXT_MSG_TYPE.pasteCopiedGadget, id: action.gadgetId });
+          selection = { kind: "gadget", id: action.gadgetId };
+          renderSelectionUiWithoutParentSelector();
+          return;
+        case "duplicateGadget":
+          post({ type: WEBVIEW_TO_EXT_MSG_TYPE.duplicateGadget, id: action.gadgetId });
+          selection = { kind: "gadget", id: action.gadgetId };
+          renderSelectionUiWithoutParentSelector();
+          return;
+        case "editGadgetItems": {
+          const gadget = model.gadgets.find(entry => entry.id === action.gadgetId);
+          if (!gadget) return;
+          const firstItem = (gadget.items ?? []).find(item => typeof item.source?.line === "number");
+          openGadgetItemEditor(gadget, firstItem);
+          selection = { kind: "gadget", id: gadget.id };
+          renderSelectionUiWithoutParentSelector();
+          return;
+        }
+        case "editGadgetColumns": {
+          const gadget = model.gadgets.find(entry => entry.id === action.gadgetId);
+          if (!gadget) return;
+          const columnIndex = (gadget.columns ?? []).findIndex(column => typeof column.source?.line === "number");
+          const firstColumn = columnIndex >= 0 ? gadget.columns?.[columnIndex] : undefined;
+          openGadgetColumnEditor(gadget, firstColumn, columnIndex >= 0 ? columnIndex : undefined);
+          selection = { kind: "gadget", id: gadget.id };
+          renderSelectionUiWithoutParentSelector();
+          return;
+        }
         case "deleteMenu":
           openDestructiveDialog({
             kind: "deleteMenu",
@@ -3434,17 +3536,13 @@ function resolveCanvasContextMenuActions(
     const gadget = model.gadgets.find(entry => entry.id === target.id);
     if (!gadget) return null;
 
-    const blockedReason = getGadgetDeleteBlockedReason(gadget);
-    const action = buildGadgetDeleteAction(gadget);
-    return [{
-      kind: "deleteGadget",
-      label: "Delete Gadget…",
-      title: blockedReason ?? "Delete the currently selected gadget.",
-      enabled: !blockedReason,
-      gadgetId: gadget.id,
-      confirmLabel: "Delete Gadget",
-      message: action?.message ?? `Delete gadget '${gadget.id}'?`
-    }];
+    const copiedGadget = copiedGadgetId ? model.gadgets.find(entry => entry.id === copiedGadgetId) : undefined;
+    return resolveGadgetCanvasContextMenuActions({
+      gadget,
+      deleteBlockedReason: getGadgetDeleteBlockedReason(gadget),
+      copiedGadgetId: copiedGadget?.id,
+      canPasteCopiedGadget: Boolean(copiedGadget && canCopyPasteGadgetFromContextMenu(copiedGadget)),
+    });
   }
 
   return resolveTopLevelCanvasContextMenuActions({
@@ -3734,6 +3832,51 @@ canvas.addEventListener("mousedown", (e) => {
       }
     }
 
+    if (topLevelChromeHit.selection.kind === "toolBarEntry") {
+      const toolBarSel = topLevelChromeHit.selection;
+      const toolBar = (model.toolbars ?? []).find(entry => entry.id === toolBarSel.toolBarId);
+      const entry = toolBar?.entries?.[toolBarSel.entryIndex];
+      const sourceLine = entry?.source?.line;
+      if (toolBar && entry && typeof sourceLine === "number") {
+        drag = {
+          target: "toolBarEntry",
+          toolBarId: toolBar.id,
+          entryIndex: toolBarSel.entryIndex,
+          sourceLine,
+          kind: entry.kind,
+          startMx: mx,
+          startMy: my,
+          moved: false,
+          moveTarget: null
+        };
+        canvas.style.cursor = "move";
+        renderSelectionUiWithoutParentSelector();
+        return;
+      }
+    }
+
+    if (topLevelChromeHit.selection.kind === "statusBarField") {
+      const statusBarSel = topLevelChromeHit.selection;
+      const statusBar = (model.statusbars ?? []).find(entry => entry.id === statusBarSel.statusBarId);
+      const field = statusBar?.fields?.[statusBarSel.fieldIndex];
+      const sourceLine = field?.source?.line;
+      if (statusBar && field && typeof sourceLine === "number") {
+        drag = {
+          target: "statusBarField",
+          statusBarId: statusBar.id,
+          fieldIndex: statusBarSel.fieldIndex,
+          sourceLine,
+          startMx: mx,
+          startMy: my,
+          moved: false,
+          moveTarget: null
+        };
+        canvas.style.cursor = "move";
+        renderSelectionUiWithoutParentSelector();
+        return;
+      }
+    }
+
     drag = null;
     canvas.style.cursor = "default";
     renderSelectionUiWithoutParentSelector();
@@ -3852,10 +3995,10 @@ canvas.addEventListener("mousedown", (e) => {
 
   // Window interaction (no gadget hit)
   const wr = getWinRect();
-  if (wr && hitWindow(mx, my)) {
+  const wh = wr ? hitHandleWindow(mx, my) : null;
+  if (wr && (hitWindow(mx, my) || wh)) {
     selection = { kind: "window" };
 
-    const wh = hitHandleWindow(mx, my);
     if (wh) {
       drag = {
         target: "window",
@@ -3865,8 +4008,8 @@ canvas.addEventListener("mousedown", (e) => {
         startMy: my,
         startX: asInt(model.window?.x ?? 0),
         startY: asInt(model.window?.y ?? 0),
-        startW: wr.w,
-        startH: wr.h
+        startW: asInt(model.window?.w ?? wr.w),
+        startH: asInt(model.window?.h ?? wr.h)
       };
       canvas.style.cursor = getHandleCursor(wh);
     } else if (isInTitleBar(mx, my)) {
@@ -4012,6 +4155,63 @@ window.addEventListener("mousemove", (e) => {
     return;
   }
 
+  if (d.target === "toolBarEntry") {
+    const moved = Math.abs(dx) > 3 || Math.abs(dy) > 3;
+    d.moved = moved;
+    if (moved) {
+      const toolBar = (model.toolbars ?? []).find(entry => entry.id === d.toolBarId);
+      const entryRects = toolBarEntryPreviewRects.filter(rect => rect.ownerId === d.toolBarId);
+      d.moveTarget = toolBar ? getLinearTopLevelEntryMoveTarget({
+        sourceEntryIndex: d.entryIndex,
+        x: mx,
+        y: my,
+        entryRects,
+        getSourceLine: index => toolBar.entries?.[index]?.source?.line,
+        isNoopMove: (targetIndex, placement) => {
+          const sourceEndIndex = getToolBarEntryMoveBlockEndIndex(toolBar, d.entryIndex);
+          const targetEndIndex = getToolBarEntryMoveBlockEndIndex(toolBar, targetIndex);
+          return getPredictedLinearMoveIndex(toolBar.entries?.length ?? 0, d.entryIndex, sourceEndIndex, targetIndex, targetEndIndex, placement) === null;
+        }
+      }) : null;
+    } else {
+      d.moveTarget = null;
+    }
+    canvas.style.cursor = moved ? "move" : "default";
+    render();
+    renderProps();
+    return;
+  }
+
+  if (d.target === "statusBarField") {
+    const moved = Math.abs(dx) > 3 || Math.abs(dy) > 3;
+    d.moved = moved;
+    if (moved) {
+      const statusBar = (model.statusbars ?? []).find(entry => entry.id === d.statusBarId);
+      const entryRects = statusBarFieldPreviewRects.filter(rect => rect.ownerId === d.statusBarId);
+      d.moveTarget = statusBar ? getLinearTopLevelEntryMoveTarget({
+        sourceEntryIndex: d.fieldIndex,
+        x: mx,
+        y: my,
+        entryRects,
+        getSourceLine: index => statusBar.fields?.[index]?.source?.line,
+        isNoopMove: (targetIndex, placement) => getPredictedLinearMoveIndex(
+          statusBar.fields?.length ?? 0,
+          d.fieldIndex,
+          d.fieldIndex,
+          targetIndex,
+          targetIndex,
+          placement
+        ) === null
+      }) : null;
+    } else {
+      d.moveTarget = null;
+    }
+    canvas.style.cursor = moved ? "move" : "default";
+    render();
+    renderProps();
+    return;
+  }
+
   if (d.target === "gadget") {
     const g = model.gadgets.find(it => it.id === d.id);
     if (!g) return;
@@ -4099,6 +4299,47 @@ window.addEventListener("mouseup", () => {
         menuId: d.menuId,
         sourceLine: d.sourceLine,
         kind: d.kind,
+        targetSourceLine: d.moveTarget.targetSourceLine,
+        placement: d.moveTarget.placement
+      });
+    }
+    drag = null;
+    canvas.style.cursor = "default";
+    renderSelectionUiWithoutParentSelector();
+    return;
+  }
+
+  if (d.target === "toolBarEntry") {
+    if (d.moved && d.moveTarget) {
+      const toolBar = (model.toolbars ?? []).find(entry => entry.id === d.toolBarId);
+      pendingToolBarEntrySelection = toolBar
+        ? buildPendingToolBarEntryMoveSelection(toolBar, d.entryIndex, d.moveTarget.targetSourceLine, d.moveTarget.placement)
+        : null;
+      post({
+        type: WEBVIEW_TO_EXT_MSG_TYPE.moveToolBarEntry,
+        toolBarId: d.toolBarId,
+        sourceLine: d.sourceLine,
+        kind: d.kind,
+        targetSourceLine: d.moveTarget.targetSourceLine,
+        placement: d.moveTarget.placement
+      });
+    }
+    drag = null;
+    canvas.style.cursor = "default";
+    renderSelectionUiWithoutParentSelector();
+    return;
+  }
+
+  if (d.target === "statusBarField") {
+    if (d.moved && d.moveTarget) {
+      const statusBar = (model.statusbars ?? []).find(entry => entry.id === d.statusBarId);
+      pendingStatusBarFieldSelection = statusBar
+        ? buildPendingStatusBarFieldMoveSelection(statusBar, d.fieldIndex, d.moveTarget.targetSourceLine, d.moveTarget.placement)
+        : null;
+      post({
+        type: WEBVIEW_TO_EXT_MSG_TYPE.moveStatusBarField,
+        statusBarId: d.statusBarId,
+        sourceLine: d.sourceLine,
         targetSourceLine: d.moveTarget.targetSourceLine,
         placement: d.moveTarget.placement
       });
@@ -6726,13 +6967,7 @@ function saveGadgetColumnEditor(gadget: Gadget) {
 
 function openImageEditor(entry: FormImage) {
   if (typeof entry.source?.line !== "number") return;
-  pendingImageEditor = {
-    sourceLine: entry.source.line,
-    inline: entry.inline,
-    idRaw: entry.firstParam,
-    imageRaw: entry.imageRaw,
-    assignedVar: entry.variable ?? entry.id ?? "imgNew"
-  };
+  pendingImageEditor = buildFormImageEditorDraft(entry);
 }
 
 function closeImageEditor(sourceLine?: number) {
@@ -6751,13 +6986,7 @@ function getImageEditorDraft(entry: FormImage): PendingImageEditor {
     return pendingImageEditor;
   }
 
-  return {
-    sourceLine: entry.source?.line ?? -1,
-    inline: entry.inline,
-    idRaw: entry.firstParam,
-    imageRaw: entry.imageRaw,
-    assignedVar: entry.variable ?? entry.id ?? "imgNew"
-  };
+  return buildFormImageEditorDraft(entry);
 }
 
 function updateImageEditorDraft(patch: Partial<PendingImageEditor>) {
@@ -6774,7 +7003,7 @@ function saveImageEditor(entry: FormImage) {
   if (!idRaw.length || !imageRaw.length) return;
 
   let assignedVar: string | undefined;
-  if (idRaw.toLowerCase() === "#pb_any") {
+  if (requiresFormImageAssignedVar(idRaw)) {
     const trimmedAssigned = draft.assignedVar.trim();
     if (!trimmedAssigned.length) {
       alert(`${PB_ANY} requires an assigned variable name.`);
@@ -6845,7 +7074,7 @@ function saveImageInsertDraft() {
   if (!idRaw.length || !imageRaw.length) return;
 
   let assignedVar: string | undefined;
-  if (idRaw.toLowerCase() === "#pb_any") {
+  if (requiresFormImageAssignedVar(idRaw)) {
     const trimmedAssigned = pendingImageInsertDraft.assignedVar.trim();
     if (!trimmedAssigned.length) {
       alert(`${PB_ANY} requires an assigned variable name.`);
@@ -6957,14 +7186,16 @@ function saveImageReferencePicker() {
       const entry = menu?.entries?.[target.entryIndex];
       if (!menu || !entry || typeof entry.source?.line !== "number" || entry.kind !== "MenuItem") return;
       post({
-        type: WEBVIEW_TO_EXT_MSG_TYPE.updateMenuEntry,
+        type: WEBVIEW_TO_EXT_MSG_TYPE.rebindMenuEntryImage,
         menuId: menu.id,
         sourceLine: entry.source.line,
         kind: entry.kind,
         idRaw: entry.idRaw,
         textRaw: entry.textRaw ?? (entry.text !== undefined ? toPbString(entry.text) : undefined),
         shortcut: entry.shortcut,
-        iconRaw: imageRaw
+        iconRaw: imageRaw,
+        oldImageId: entry.iconId,
+        oldImageSourceLine: getCleanupSourceLineForImageReference(entry.iconId, selected.id)
       });
       break;
     }
@@ -6973,13 +7204,15 @@ function saveImageReferencePicker() {
       const entry = toolBar?.entries?.[target.entryIndex];
       if (!toolBar || !entry || typeof entry.source?.line !== "number" || entry.kind !== "ToolBarImageButton") return;
       post({
-        type: WEBVIEW_TO_EXT_MSG_TYPE.updateToolBarEntry,
+        type: WEBVIEW_TO_EXT_MSG_TYPE.rebindToolBarEntryImage,
         toolBarId: toolBar.id,
         sourceLine: entry.source.line,
         kind: entry.kind,
         idRaw: entry.idRaw,
         iconRaw: imageRaw,
-        toggle: entry.toggle
+        toggle: entry.toggle,
+        oldImageId: entry.iconId,
+        oldImageSourceLine: getCleanupSourceLineForImageReference(entry.iconId, selected.id)
       });
       break;
     }
@@ -6988,23 +7221,29 @@ function saveImageReferencePicker() {
       const field = statusBar?.fields?.[target.fieldIndex];
       if (!statusBar || !field || typeof field.source?.line !== "number") return;
       post({
-        type: WEBVIEW_TO_EXT_MSG_TYPE.updateStatusBarField,
+        type: WEBVIEW_TO_EXT_MSG_TYPE.rebindStatusBarFieldImage,
         statusBarId: statusBar.id,
         sourceLine: field.source.line,
         widthRaw: field.widthRaw,
         imageRaw,
+        oldImageId: field.imageId,
+        oldImageSourceLine: getCleanupSourceLineForImageReference(field.imageId, selected.id)
       });
       break;
     }
     case "gadget": {
       const gadget = model.gadgets.find(candidate => candidate.id === target.gadgetId);
       if (!gadget) return;
+      const oldImageId = gadget.imageId;
+      const oldImageSourceLine = getCleanupSourceLineForImageReference(oldImageId, selected.id);
       gadget.imageRaw = imageRaw;
       gadget.imageId = selected.id;
       post({
         type: WEBVIEW_TO_EXT_MSG_TYPE.setGadgetImageRaw,
         id: gadget.id,
-        imageRaw
+        imageRaw,
+        oldImageId,
+        oldImageSourceLine
       });
       break;
     }
@@ -7020,7 +7259,7 @@ function saveImageAssignmentDraft() {
   if (!idRaw.length) return;
 
   let assignedVar: string | undefined;
-  if (idRaw.toLowerCase() === "#pb_any") {
+  if (requiresFormImageAssignedVar(idRaw)) {
     const trimmedAssigned = draft.assignedVar.trim();
     if (!trimmedAssigned.length) {
       alert(`${PB_ANY} requires an assigned variable name.`);
@@ -7047,6 +7286,7 @@ function saveImageAssignmentDraft() {
       const menu = model.menus?.find(candidate => candidate.id === target.menuId);
       const entry = menu?.entries?.[target.entryIndex];
       if (!menu || !entry || typeof entry.source?.line !== "number" || entry.kind !== "MenuItem") return;
+      const oldImageSourceLine = getCleanupSourceLineForImageReference(entry.iconId, reference.imageId);
       if (draft.mode === "create") {
         post({
           type: WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignMenuEntryImage,
@@ -7060,6 +7300,8 @@ function saveImageAssignmentDraft() {
           newImageIdRaw: idRaw,
           newImageRaw: imageRaw,
           newAssignedVar: assignedVar,
+          oldImageId: entry.iconId,
+          oldImageSourceLine,
         });
       }
       else {
@@ -7073,6 +7315,8 @@ function saveImageAssignmentDraft() {
           shortcut: entry.shortcut,
           newImageIdRaw: idRaw,
           newAssignedVar: assignedVar,
+          oldImageId: entry.iconId,
+          oldImageSourceLine,
         });
       }
       break;
@@ -7081,6 +7325,7 @@ function saveImageAssignmentDraft() {
       const toolBar = model.toolbars?.find(candidate => candidate.id === target.toolBarId);
       const entry = toolBar?.entries?.[target.entryIndex];
       if (!toolBar || !entry || typeof entry.source?.line !== "number" || entry.kind !== "ToolBarImageButton") return;
+      const oldImageSourceLine = getCleanupSourceLineForImageReference(entry.iconId, reference.imageId);
       if (draft.mode === "create") {
         post({
           type: WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignToolBarEntryImage,
@@ -7094,7 +7339,7 @@ function saveImageAssignmentDraft() {
           newImageRaw: imageRaw,
           newAssignedVar: assignedVar,
           oldImageId: entry.iconId,
-          oldImageSourceLine: entry.iconId ? findImageEntryById(entry.iconId)?.source?.line : undefined,
+          oldImageSourceLine,
         });
       }
       else {
@@ -7107,6 +7352,8 @@ function saveImageAssignmentDraft() {
           toggle: entry.toggle,
           newImageIdRaw: idRaw,
           newAssignedVar: assignedVar,
+          oldImageId: entry.iconId,
+          oldImageSourceLine,
         });
       }
       break;
@@ -7115,6 +7362,7 @@ function saveImageAssignmentDraft() {
       const statusBar = model.statusbars?.find(candidate => candidate.id === target.statusBarId);
       const field = statusBar?.fields?.[target.fieldIndex];
       if (!statusBar || !field || typeof field.source?.line !== "number") return;
+      const oldImageSourceLine = getCleanupSourceLineForImageReference(field.imageId, reference.imageId);
       if (draft.mode === "create") {
         post({
           type: WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignStatusBarFieldImage,
@@ -7125,6 +7373,8 @@ function saveImageAssignmentDraft() {
           newImageIdRaw: idRaw,
           newImageRaw: imageRaw,
           newAssignedVar: assignedVar,
+          oldImageId: field.imageId,
+          oldImageSourceLine,
         });
       }
       else {
@@ -7135,6 +7385,8 @@ function saveImageAssignmentDraft() {
           widthRaw: field.widthRaw,
           newImageIdRaw: idRaw,
           newAssignedVar: assignedVar,
+          oldImageId: field.imageId,
+          oldImageSourceLine,
         });
       }
       break;
@@ -7142,6 +7394,8 @@ function saveImageAssignmentDraft() {
     case "gadget": {
       const gadget = model.gadgets.find(candidate => candidate.id === target.gadgetId);
       if (!gadget) return;
+      const oldImageId = gadget.imageId;
+      const oldImageSourceLine = getCleanupSourceLineForImageReference(oldImageId, reference.imageId);
       gadget.imageRaw = reference.imageRaw;
       gadget.imageId = reference.imageId;
       if (draft.mode === "create") {
@@ -7152,6 +7406,8 @@ function saveImageAssignmentDraft() {
           newImageIdRaw: idRaw,
           newImageRaw: imageRaw,
           newAssignedVar: assignedVar,
+          oldImageId,
+          oldImageSourceLine,
         });
       }
       else {
@@ -7163,6 +7419,8 @@ function saveImageAssignmentDraft() {
           resizeToImage: draft.resizeToImage,
           newImageIdRaw: idRaw,
           newAssignedVar: assignedVar,
+          oldImageId,
+          oldImageSourceLine,
         });
       }
       break;
@@ -7197,6 +7455,107 @@ function buildPendingMenuEntrySelection(
     textRaw: sourceEntry.textRaw,
     shortcut: sourceEntry.shortcut,
     iconRaw: sourceEntry.iconRaw
+  };
+}
+
+
+function drawTopLevelMoveIndicator(ctx: CanvasRenderingContext2D, target: { indicatorRect: PreviewRect; indicatorOrientation: "horizontal" | "vertical" }): void {
+  const indicatorColor = getCssVar("--vscode-editorInfo-foreground") || "#0000ff";
+  const indicator = target.indicatorRect;
+  ctx.save();
+  ctx.strokeStyle = indicatorColor;
+  ctx.lineWidth = 2;
+  if (target.indicatorOrientation === "vertical") {
+    const x = indicator.x + Math.max(0, Math.trunc(indicator.w / 2));
+    ctx.beginPath();
+    ctx.moveTo(x + 0.5, indicator.y);
+    ctx.lineTo(x + 0.5, indicator.y + indicator.h);
+    ctx.stroke();
+  } else {
+    const y = indicator.y + Math.max(0, Math.trunc(indicator.h / 2));
+    ctx.beginPath();
+    ctx.moveTo(indicator.x, y + 0.5);
+    ctx.lineTo(indicator.x + indicator.w, y + 0.5);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function getToolBarEntryMoveBlockEndIndex(toolBar: FormToolBar, entryIndex: number): number {
+  const entry = toolBar.entries?.[entryIndex];
+  if (!entry || entry.kind === "ToolBarToolTip") return entryIndex;
+  const nextEntry = toolBar.entries?.[entryIndex + 1];
+  if (nextEntry?.kind === "ToolBarToolTip" && (nextEntry.idRaw?.trim() ?? "") === (entry.idRaw?.trim() ?? "")) {
+    return entryIndex + 1;
+  }
+  return entryIndex;
+}
+
+function getPredictedLinearMoveIndex(entryCount: number, sourceEntryIndex: number, sourceEndIndex: number, targetEntryIndex: number, targetEndIndex: number, placement: MenuEntryMovePlacement): number | null {
+  if (sourceEntryIndex < 0 || sourceEntryIndex >= entryCount) return null;
+  if (targetEntryIndex < 0 || targetEntryIndex >= entryCount) return null;
+
+  let insertIndex = placement === "before" ? targetEntryIndex : targetEndIndex + 1;
+  if (insertIndex >= sourceEntryIndex && insertIndex <= sourceEndIndex + 1) return null;
+
+  if (sourceEntryIndex < insertIndex) {
+    insertIndex -= sourceEndIndex - sourceEntryIndex + 1;
+  }
+  return Math.max(0, insertIndex);
+}
+
+function buildPendingToolBarEntryMoveSelection(
+  toolBar: FormToolBar,
+  sourceEntryIndex: number,
+  targetSourceLine: number,
+  placement: MenuEntryMovePlacement
+): PendingToolBarEntrySelection | null {
+  const sourceEntry = toolBar.entries?.[sourceEntryIndex];
+  if (!sourceEntry) return null;
+
+  const targetEntryIndex = (toolBar.entries ?? []).findIndex(entry => entry.source?.line === targetSourceLine);
+  if (targetEntryIndex < 0) return null;
+
+  const sourceEndIndex = getToolBarEntryMoveBlockEndIndex(toolBar, sourceEntryIndex);
+  const targetEndIndex = getToolBarEntryMoveBlockEndIndex(toolBar, targetEntryIndex);
+  const preferredIndex = getPredictedLinearMoveIndex(toolBar.entries?.length ?? 0, sourceEntryIndex, sourceEndIndex, targetEntryIndex, targetEndIndex, placement);
+  if (preferredIndex === null) return null;
+
+  return {
+    toolBarId: toolBar.id,
+    preferredIndex,
+    kind: sourceEntry.kind,
+    idRaw: sourceEntry.idRaw,
+    iconRaw: sourceEntry.iconRaw,
+    textRaw: sourceEntry.textRaw,
+    toggle: sourceEntry.toggle
+  };
+}
+
+function buildPendingStatusBarFieldMoveSelection(
+  statusBar: FormStatusBar,
+  sourceFieldIndex: number,
+  targetSourceLine: number,
+  placement: MenuEntryMovePlacement
+): PendingStatusBarFieldSelection | null {
+  const sourceField = statusBar.fields?.[sourceFieldIndex];
+  if (!sourceField) return null;
+
+  const targetFieldIndex = (statusBar.fields ?? []).findIndex(field => field.source?.line === targetSourceLine);
+  if (targetFieldIndex < 0) return null;
+
+  const preferredIndex = getPredictedLinearMoveIndex(statusBar.fields?.length ?? 0, sourceFieldIndex, sourceFieldIndex, targetFieldIndex, targetFieldIndex, placement);
+  if (preferredIndex === null) return null;
+
+  return {
+    statusBarId: statusBar.id,
+    preferredIndex,
+    widthRaw: sourceField.widthRaw,
+    textRaw: sourceField.textRaw,
+    imageRaw: sourceField.imageRaw,
+    flagsRaw: sourceField.flagsRaw,
+    progressBar: sourceField.progressBar,
+    progressRaw: sourceField.progressRaw
   };
 }
 
@@ -8360,6 +8719,9 @@ function render() {
         ctx.restore();
       }
     }
+    if (drag?.target === "toolBarEntry" && drag.moved && drag.moveTarget) {
+      drawTopLevelMoveIndicator(ctx, drag.moveTarget);
+    }
   }
 
   if (statusBarRect) {
@@ -8382,32 +8744,24 @@ function render() {
         ctx.restore();
       }
     }
+    if (drag?.target === "statusBarField" && drag.moved && drag.moveTarget) {
+      drawTopLevelMoveIndicator(ctx, drag.moveTarget);
+    }
   }
 
   // Window border
   const frameDecoration = getWindowPreviewFrameDecoration(settings.osSkin);
   drawWindowPreviewFrame(ctx, { x: winX, y: winY, w: winW, h: winH }, frameDecoration, focus, windowsChromeColors);
 
-  // Window resize grip
+  // Window resize button, matching FD_DrawResizeButton().
   if (hasWindowPreviewResizeGrip(platformSkin)) {
-    const gripInset = 4;
-    const gripSize = Math.max(8, Math.min(12, Math.trunc(Math.min(winW, winH) / 8)));
-    const gripRight = winX + winW - gripInset;
-    const gripBottom = winY + winH - gripInset;
+    const resizeButtonRect = getWindowPreviewResizeButtonRect({ x: winX, y: winY, w: winW, h: winH });
 
     ctx.save();
-    ctx.strokeStyle = fg;
-    ctx.globalAlpha = 0.45;
-    for (let offset = 0; offset < 3; offset++) {
-      const startX = gripRight - gripSize + offset * 4;
-      const startY = gripBottom;
-      const endX = gripRight;
-      const endY = gripBottom - gripSize + offset * 4;
-      ctx.beginPath();
-      ctx.moveTo(startX + 0.5, startY + 0.5);
-      ctx.lineTo(endX + 0.5, endY + 0.5);
-      ctx.stroke();
-    }
+    ctx.fillStyle = "rgb(0, 0, 0)";
+    ctx.fillRect(resizeButtonRect.x, resizeButtonRect.y, resizeButtonRect.w, resizeButtonRect.h);
+    ctx.fillStyle = "rgb(255, 255, 255)";
+    ctx.fillRect(resizeButtonRect.x + 1, resizeButtonRect.y + 1, resizeButtonRect.w - 2, resizeButtonRect.h - 2);
     ctx.restore();
   }
 
@@ -8975,7 +9329,7 @@ function renderList() {
     children: (model.images ?? []).map((img) => ({
       kind: "image" as const,
       id: img.id,
-      label: `${img.pbAny && img.variable ? `${img.variable} = ` : ""}${img.inline ? "CatchImage" : "LoadImage"}  ${img.firstParam}  ${img.imageRaw}  refs:${countImageUsages(img.id)}`,
+      label: `${buildFormImageLineLabel(img)}  refs:${countImageUsages(img.id)}`,
       selectable: true,
       children: []
     }))
@@ -9254,8 +9608,24 @@ function renderProps() {
     const enumSymbol = variableName ? `#${variableName.trim()}` : "#Window_0";
     const knownFlags = new Set(win.knownFlags ?? []);
     const customFlagsValue = (win.customFlags ?? []).join(" | ");
+    const windowBaseRowsField = getWindowBaseRowsFieldConfig();
+    const windowParentField = getWindowParentFieldConfig();
+    const windowColorField = getWindowColorFieldConfig();
+    const windowGenerateEventProcField = getWindowGenerateEventProcFieldConfig();
+    const windowGenerateEventProcEditState = getWindowGenerateEventProcEditState(
+      Boolean(win.generateEventLoop),
+      Boolean(win.hasEventMenuBlock),
+      Boolean(win.hasEventGadgetCaseBranches)
+    );
+    const windowHiddenField = getWindowHiddenFieldConfig();
+    const windowDisabledField = getWindowDisabledFieldConfig();
+    const windowEnumValueField = getWindowEnumValueFieldConfig(Boolean(win.pbAny));
+    const windowSelectProcField = getWindowSelectProcFieldConfig();
+    const windowConstantsField = getWindowConstantsFieldConfig();
 
-    propsEl.appendChild(section("Properties"));
+    if (windowBaseRowsField.visible) {
+      propsEl.appendChild(section("Properties"));
+    }
     propsEl.appendChild(row(PB_ANY, checkboxInput(win.pbAny, v => {
       vscode.postMessage({
         type: WEBVIEW_TO_EXT_MSG_TYPE.toggleWindowPbAny,
@@ -9315,14 +9685,16 @@ function renderProps() {
       })
     ));
 
-    if (!win.pbAny) {
-      propsEl.appendChild(row("Enum Value", textInput(win.enumValueRaw ?? "", v => {
+    if (windowEnumValueField.visible) {
+      const enumValueInput = textInput(win.enumValueRaw ?? "", v => {
         vscode.postMessage({
           type: WEBVIEW_TO_EXT_MSG_TYPE.setWindowEnumValue,
           enumSymbol,
           enumValueRaw: v.trim().length ? v.trim() : undefined
         });
-      })));
+      }, { title: windowEnumValueField.title });
+      enumValueInput.disabled = !windowEnumValueField.valueEditable;
+      propsEl.appendChild(row("Enum Value", enumValueInput));
     }
 
     propsEl.appendChild(section("Layout"));
@@ -9348,20 +9720,24 @@ function renderProps() {
     if (shouldShowReadonlyUnscaledLayoutRows()) {
       propsEl.appendChild(row("Height (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(win.hRaw, win.h), "Readonly code value written to OpenWindow(...).")));
     }
-    propsEl.appendChild(row("Hidden", checkboxInput(getWindowBooleanInspectorState(win.hiddenRaw, win.hidden), checked => {
-      if (!model.window) return;
-      win.hidden = checked;
-      win.hiddenRaw = checked ? "1" : "";
-      postWindowProperties(win, { hiddenRaw: checked ? "1" : "" });
-      renderProps();
-    })));
-    propsEl.appendChild(row("Disabled", checkboxInput(getWindowBooleanInspectorState(win.disabledRaw, win.disabled), checked => {
-      if (!model.window) return;
-      win.disabled = checked;
-      win.disabledRaw = checked ? "1" : "";
-      postWindowProperties(win, { disabledRaw: checked ? "1" : "" });
-      renderProps();
-    })));
+    if (windowHiddenField.visible) {
+      propsEl.appendChild(row("Hidden", checkboxInput(getWindowBooleanInspectorState(win.hiddenRaw, win.hidden), checked => {
+        if (!model.window) return;
+        win.hidden = checked;
+        win.hiddenRaw = checked ? windowHiddenField.checkedValue : windowHiddenField.uncheckedValue;
+        postWindowProperties(win, { hiddenRaw: win.hiddenRaw });
+        renderProps();
+      }, { title: windowHiddenField.title })));
+    }
+    if (windowDisabledField.visible) {
+      propsEl.appendChild(row("Disabled", checkboxInput(getWindowBooleanInspectorState(win.disabledRaw, win.disabled), checked => {
+        if (!model.window) return;
+        win.disabled = checked;
+        win.disabledRaw = checked ? windowDisabledField.checkedValue : windowDisabledField.uncheckedValue;
+        postWindowProperties(win, { disabledRaw: win.disabledRaw });
+        renderProps();
+      }, { title: windowDisabledField.title })));
+    }
     const parentAsRawExpression = getWindowParentAsRawExpressionWithOverride(
       win.parentRaw,
       win.parent,
@@ -9371,30 +9747,30 @@ function renderProps() {
       if (!model.window) return;
       const parsed = parseWindowParentInspectorInput(v, parentAsRawExpressionCheckbox.checked);
       win.parentRaw = parsed.raw || undefined;
-      win.parent = parsed.storedValue
-        ? (parentAsRawExpressionCheckbox.checked ? `=${parsed.storedValue}` : parsed.storedValue)
-        : undefined;
+      win.parent = parsed.storedValue;
       postWindowOpenArgs(win, { parentRaw: parsed.raw });
     });
-    parentInput.title = "Enter the parent window expression. Disable the checkbox to emit WindowID(...); enable it to write the expression raw.";
+    parentInput.disabled = !windowParentField.valueEditable;
+    parentInput.title = windowParentField.title;
     const parentAsRawExpressionCheckbox = checkboxInput(parentAsRawExpression, checked => {
       if (!model.window) return;
       windowParentAsRawExpressionOverrides.set(win.id, checked);
       const parsed = parseWindowParentInspectorInput(parentInput.value, checked);
       win.parentRaw = parsed.raw || undefined;
-      win.parent = parsed.storedValue
-        ? (checked ? `=${parsed.storedValue}` : parsed.storedValue)
-        : undefined;
+      win.parent = parsed.storedValue;
       if (parsed.raw.length > 0) {
         postWindowOpenArgs(win, { parentRaw: parsed.raw });
       }
       renderProps();
     });
-    parentAsRawExpressionCheckbox.title = "When enabled, the parent is written directly as the last OpenWindow(...) argument. When disabled, the editor emits WindowID(...), matching the original default path.";
-    propsEl.appendChild(row("Parent", parentInput));
-    propsEl.appendChild(row("Parent as raw expression", parentAsRawExpressionCheckbox));
+    parentAsRawExpressionCheckbox.disabled = !windowParentField.rawExpressionToggleAvailable;
+    parentAsRawExpressionCheckbox.title = windowParentField.rawExpressionTitle;
+    if (windowParentField.visible) {
+      propsEl.appendChild(row("Parent", parentInput));
+      propsEl.appendChild(row("Parent as raw expression", parentAsRawExpressionCheckbox));
+    }
     const windowColorInput = readonlyInput(getWindowColorInspectorDisplay(win.colorRaw));
-    windowColorInput.title = "Use the color picker to choose a window color, or Remove to clear it.";
+    windowColorInput.title = windowColorField.title;
     const windowColorPicker = document.createElement("input");
     windowColorPicker.type = "color";
     windowColorPicker.value = pbColorNumberToCssHex(win.color) ?? "#000000";
@@ -9429,19 +9805,27 @@ function renderProps() {
       postWindowProperties(win, { colorRaw: "" });
       renderProps();
     };
-    propsEl.appendChild(row("Color", inputWithActions(windowColorInput, windowColorPicker, clearWindowColorBtn)));
-    propsEl.appendChild(mutedNote("Use the picker to set the window color. Remove clears the current color."));
-    propsEl.appendChild(row(
-      "Generate events procedure?",
-      checkboxInput(Boolean(win.generateEventLoop), v => {
+    if (windowColorField.visible) {
+      propsEl.appendChild(row("Color", inputWithActions(windowColorInput, windowColorPicker, clearWindowColorBtn)));
+      propsEl.appendChild(mutedNote("Use the picker to set the window color. Remove clears the current color."));
+    }
+    if (windowGenerateEventProcField.visible) {
+      propsEl.appendChild(row(
+        "Generate events procedure?",
+        checkboxInput(Boolean(win.generateEventLoop), v => {
         if (!model.window) return;
         win.generateEventLoop = v;
         post({ type: WEBVIEW_TO_EXT_MSG_TYPE.setWindowGenerateEventLoop, windowKey: win.id, enabled: v });
         renderProps();
+      }, {
+        title: windowGenerateEventProcEditState.title,
+        disabled: !windowGenerateEventProcField.valueEditable || !windowGenerateEventProcEditState.valueEditable
       })
-    ));
-    propsEl.appendChild(row(
-      "SelectProc",
+      ));
+    }
+    if (windowSelectProcField.visible) {
+      propsEl.appendChild(row(
+        "SelectProc",
       editableComboInput(
         win.eventProc ?? "",
         getProcedureSuggestions(),
@@ -9453,11 +9837,13 @@ function renderProps() {
           renderProps();
         },
         {
-          title: "Choose an existing procedure or type a procedure name.",
-          placeholder: "Type or pick a procedure"
+          disabled: !windowSelectProcField.valueEditable,
+          title: windowSelectProcField.title,
+          placeholder: windowSelectProcField.placeholder
         }
       )
-    ));
+      ));
+    }
     propsEl.appendChild(createSubSection("Event File"));
     const eventFileInput = textInput(
       win.eventFile ?? "",
@@ -9488,8 +9874,52 @@ function renderProps() {
     propsEl.appendChild(row("File", inputWithActions(eventFileInput, removeEventFileBtn)));
     propsEl.appendChild(mutedNote("Use this field to keep an event include file linked to the window. Remove clears it."));
 
-    propsEl.appendChild(section("Constants"));
-    for (const flag of PBFD_SYMBOLS.windowKnownFlags ?? []) {
+    propsEl.appendChild(createSubSection("Top-Level Structures"));
+    const topLevelActions = document.createElement("div");
+    topLevelActions.className = "miniActions";
+
+    const createMenuBtn = document.createElement("button");
+    createMenuBtn.textContent = "Create Menu";
+    createMenuBtn.disabled = (model.menus?.length ?? 0) > 0;
+    createMenuBtn.title = createMenuBtn.disabled
+      ? "This form already contains a parsed menu root."
+      : "Create a menu root with the original default MenuTitle entry.";
+    createMenuBtn.onclick = () => {
+      if (createMenuBtn.disabled) return;
+      postCreateMenuRoot();
+    };
+    topLevelActions.appendChild(createMenuBtn);
+
+    const createToolBarButtonBtn = document.createElement("button");
+    createToolBarButtonBtn.textContent = "Create Toolbar Button";
+    createToolBarButtonBtn.disabled = (model.toolbars?.length ?? 0) > 0;
+    createToolBarButtonBtn.title = createToolBarButtonBtn.disabled
+      ? "This form already contains a parsed toolbar root."
+      : "Create a toolbar root with the original default button entry.";
+    createToolBarButtonBtn.onclick = () => {
+      if (createToolBarButtonBtn.disabled) return;
+      postCreateToolBarRoot("button");
+    };
+    topLevelActions.appendChild(createToolBarButtonBtn);
+
+    const createStatusBarLabelBtn = document.createElement("button");
+    createStatusBarLabelBtn.textContent = "Create StatusBar Label";
+    createStatusBarLabelBtn.disabled = (model.statusbars?.length ?? 0) > 0;
+    createStatusBarLabelBtn.title = createStatusBarLabelBtn.disabled
+      ? "This form already contains a parsed statusbar root."
+      : "Create a statusbar root with the original default label field.";
+    createStatusBarLabelBtn.onclick = () => {
+      if (createStatusBarLabelBtn.disabled) return;
+      postCreateStatusBarRoot("label");
+    };
+    topLevelActions.appendChild(createStatusBarLabelBtn);
+
+    propsEl.appendChild(topLevelActions);
+
+    if (windowConstantsField.visible) {
+      propsEl.appendChild(section("Constants"));
+    }
+    for (const flag of windowConstantsField.knownFlags) {
       propsEl.appendChild(row(
         flag,
         checkboxInput(knownFlags.has(flag), checked => {
@@ -9497,7 +9927,7 @@ function renderProps() {
           const nextKnown = new Set(model.window.knownFlags ?? []);
           if (checked) nextKnown.add(flag);
           else nextKnown.delete(flag);
-          model.window.knownFlags = (PBFD_SYMBOLS.windowKnownFlags ?? []).filter(entry => nextKnown.has(entry));
+          model.window.knownFlags = windowConstantsField.knownFlags.filter(entry => nextKnown.has(entry));
           const nextExpr = buildWindowFlagsExpr(model.window.knownFlags, (model.window.customFlags ?? []).join(" | "));
           model.window.flagsExpr = nextExpr;
           postWindowOpenArgs(model.window, { flagsExpr: nextExpr ?? "" });
@@ -9505,16 +9935,18 @@ function renderProps() {
         })
       ));
     }
-    propsEl.appendChild(row(
-      "Custom Flags",
-      textInput(customFlagsValue, v => {
+    if (windowConstantsField.customFlagsEditable) {
+      propsEl.appendChild(row(
+        "Custom Flags",
+        textInput(customFlagsValue, v => {
         if (!model.window) return;
         model.window.customFlags = parseWindowCustomFlagsInput(v);
         const nextExpr = buildWindowFlagsExpr(model.window.knownFlags ?? [], v);
         model.window.flagsExpr = nextExpr;
         postWindowOpenArgs(model.window, { flagsExpr: nextExpr ?? "" });
-      }, { placeholder: "#PB_Window_CustomFlagA | #PB_Window_CustomFlagB" })
-    ));
+      }, { placeholder: "#PB_Window_CustomFlagA | #PB_Window_CustomFlagB", title: windowConstantsField.title })
+      ));
+    }
     return;
   }
 
@@ -9546,10 +9978,11 @@ function renderProps() {
       : undefined;
     if (selectedEntry) {
       const selectedCanPatch = typeof selectedEntry.source?.line === "number";
-      const selectedCanEditId = selectedCanPatch && selectedEntry.kind === "MenuItem";
-      const selectedCanEditName = selectedCanPatch && (selectedEntry.kind === "MenuItem" || selectedEntry.kind === "MenuTitle" || selectedEntry.kind === "OpenSubMenu");
-      const selectedCanEditShortcut = selectedCanPatch && selectedEntry.kind === "MenuItem";
-      const selectedCanEditImage = selectedCanPatch && selectedEntry.kind === "MenuItem";
+      const selectedFieldConfig = getSelectedMenuEntryInspectorFieldConfig(selectedEntry, selectedCanPatch);
+      const selectedCanEditId = selectedFieldConfig.constantEditable;
+      const selectedCanEditName = selectedFieldConfig.nameEditable;
+      const selectedCanEditShortcut = selectedFieldConfig.shortcutEditable;
+      const selectedCanEditImage = selectedFieldConfig.imageEditable;
       const selectedEventEditState = getTopLevelSelectProcEditState(hasEventMenuBlock, selectedEntry.idRaw, "menu");
       const selectedCanEditEvent = selectedEventEditState.canEdit;
       const selectedImage = findImageEntryById(selectedEntry.iconId);
@@ -9653,9 +10086,9 @@ function renderProps() {
       propsEl.appendChild(row(
         "Separator",
         checkboxInput(
-          selectedEntry.kind === "MenuBar",
+          selectedFieldConfig.separatorChecked,
           () => {},
-          { disabled: true, title: "Menu separators are represented structurally as MenuBar entries in the parsed model." }
+          { disabled: !selectedFieldConfig.separatorEditable, title: "Menu separators are represented structurally as MenuBar entries in the parsed model." }
         )
       ));
       propsEl.appendChild(row(
@@ -9934,15 +10367,15 @@ function renderProps() {
       const selectedCanPatch = typeof selectedEntry.source?.line === "number";
       const selectedImage = findImageEntryById(selectedEntry.iconId);
       const selectedImageInspectorConfig = getTopLevelSelectedImageInspectorConfig("toolBarEntry");
-      const selectedFieldConfig = getSelectedToolBarInspectorFieldConfig();
-      const canEditSelectedTooltip = selectedCanPatch && canEditToolBarTooltip(selectedEntry) && Boolean(selectedEntry.idRaw);
-      const canEditSelectedToggle = selectedCanPatch && selectedEntry.kind === "ToolBarImageButton";
-      const selectedEventEditState = selectedEntry.kind === "ToolBarToolTip"
-        ? { canEdit: false, title: "This entry type does not participate in Select EventMenu() cases." }
-        : getTopLevelSelectProcEditState(hasEventMenuBlock, selectedEntry.idRaw, "toolbar");
+      const selectedFieldConfig = getSelectedToolBarInspectorFieldConfig(selectedEntry, selectedCanPatch);
+      const canEditSelectedTooltip = selectedFieldConfig.captionEditable;
+      const canEditSelectedToggle = selectedFieldConfig.toggleEditable;
+      const selectedEventEditState = selectedFieldConfig.selectProcParticipates
+        ? getTopLevelSelectProcEditState(hasEventMenuBlock, selectedEntry.idRaw, "toolbar")
+        : { canEdit: false, title: selectedFieldConfig.selectProcDisabledTitle };
       const canEditSelectedEvent = selectedEventEditState.canEdit;
 
-      const canEditSelectedImage = selectedCanPatch && selectedEntry.kind === "ToolBarImageButton";
+      const canEditSelectedImage = selectedFieldConfig.imageEditable;
       const selectedImagePath = selectedImage?.image ?? selectedImage?.imageRaw ?? ((selectedEntry.iconRaw ?? "") === "0" ? "" : (selectedEntry.iconRaw ?? ""));
       const selectedImageUsageCount = selectedEntry.iconId ? countImageUsages(selectedEntry.iconId) : 0;
       const selectedImageEditState = getStatusBarCurrentImageEditState(selectedImage, selectedImageUsageCount);
@@ -9978,7 +10411,7 @@ function renderProps() {
           toggle: patch.toggle ?? selectedEntry.toggle,
         });
       };
-      const canEditSelectedId = selectedCanPatch && selectedEntry.kind !== "ToolBarSeparator";
+      const canEditSelectedId = selectedFieldConfig.variableEditable;
 
       propsEl.appendChild(section("Selected Entry"));
       propsEl.appendChild(row(
@@ -10170,7 +10603,7 @@ function renderProps() {
       propsEl.appendChild(row(
         "ToggleButton",
         checkboxInput(
-          Boolean(selectedEntry.toggle),
+          selectedFieldConfig.toggleChecked,
           v => {
             if (selectedEntry.kind !== "ToolBarImageButton" || typeof selectedEntry.source?.line !== "number") return;
             post({
@@ -10194,9 +10627,9 @@ function renderProps() {
       propsEl.appendChild(row(
         "Separator",
         checkboxInput(
-          selectedEntry.kind === "ToolBarSeparator",
+          selectedFieldConfig.separatorChecked,
           () => {},
-          { disabled: true, title: "Separators are structural entries and cannot be edited here." }
+          { disabled: !selectedFieldConfig.separatorEditable, title: "Separators are structural entries and cannot be edited here." }
         )
       ));
       propsEl.appendChild(row(
@@ -10537,7 +10970,7 @@ function renderProps() {
     if (selectedField) {
       const selectedUi = getStatusBarFieldUi(selectedField);
       const selectedImageInspectorConfig = getTopLevelSelectedImageInspectorConfig("statusBarField");
-      const selectedFieldConfig = getSelectedStatusBarInspectorFieldConfig();
+      const selectedFieldConfig = getSelectedStatusBarInspectorFieldConfig(selectedUi.canPatch);
       const selectedImagePath = selectedUi.statusImage?.image ?? selectedUi.statusImage?.imageRaw ?? selectedField.imageRaw ?? "";
       const selectedImageUsageCount = selectedField.imageId ? countImageUsages(selectedField.imageId) : 0;
       const selectedImageEditState = getStatusBarCurrentImageEditState(selectedUi.statusImage, selectedImageUsageCount);
@@ -10548,11 +10981,11 @@ function renderProps() {
         textInput(
           selectedField.widthRaw ?? "",
           v => {
-            if (!selectedUi.canPatch) return;
+            if (!selectedFieldConfig.widthEditable) return;
             selectedUi.postFieldUpdate({ widthRaw: v.trim() || selectedField.widthRaw });
           },
           {
-            disabled: !selectedUi.canPatch,
+            disabled: !selectedFieldConfig.widthEditable,
             title: "Width of the selected status bar field. Use #PB_Ignore to let the size adjust automatically."
           }
         )
@@ -10562,13 +10995,13 @@ function renderProps() {
         textInput(
           selectedField.text ?? "",
           v => {
-            if (!selectedUi.canPatch) return;
+            if (!selectedFieldConfig.textEditable) return;
             selectedUi.postFieldUpdate({
               textRaw: buildOptionalInspectorLiteralRaw(v)
             });
           },
           {
-            disabled: !selectedUi.canPatch,
+            disabled: !selectedFieldConfig.textEditable,
             title: "Text shown in the selected status bar field."
           }
         )
@@ -10582,6 +11015,8 @@ function renderProps() {
       const currentImageControl = textInput(
         selectedImagePath,
         value => {
+          if (!selectedFieldConfig.currentImageEditable) return;
+
           if (selectedImageEditState.canDirectEdit && selectedUi.statusImage && typeof selectedUi.statusImage.source?.line === "number") {
             clearInfoError();
             post({
@@ -10657,7 +11092,8 @@ function renderProps() {
           title: selectedImageEditState.canDirectEdit
             ? selectedImageEditState.reason
             : "Enter an existing parsed image path or data label to rebind this field, or a quoted/path-like file string to auto-create a new LoadImage entry. Use Create New for inline labels or custom image ids.",
-          placeholder: selectedUi.statusImage?.inline ? "ImgInlineLabel" : "image.png"
+          placeholder: selectedUi.statusImage?.inline ? "ImgInlineLabel" : "image.png",
+          disabled: !selectedFieldConfig.currentImageEditable
         }
       );
       currentImageControl.title = selectedImageEditState.canDirectEdit
@@ -10668,7 +11104,7 @@ function renderProps() {
         propsEl.appendChild(mutedNote("For shared or CatchImage references, you can rebind to an existing image here. For file paths, a new LoadImage entry can be created automatically. Use Create New for inline labels or custom image ids."));
       }
       if (selectedUi.statusImage && typeof selectedUi.statusImage.source?.line === "number") {
-        const canToggle = selectedUi.canPatch && canToggleImagePbAny(selectedUi.statusImage);
+        const canToggle = selectedFieldConfig.currentImageEditable && canToggleImagePbAny(selectedUi.statusImage);
         propsEl.appendChild(row(PB_ANY, checkboxInput(
           Boolean(selectedUi.statusImage.pbAny),
           () => {
@@ -10691,9 +11127,12 @@ function renderProps() {
       selectedImageActions.className = "row-actions";
       const chooseFileBtn = document.createElement("button");
       chooseFileBtn.textContent = selectedImageInspectorConfig.changeImageButtonLabel;
-      chooseFileBtn.disabled = !selectedUi.statusChooseFileImageFn;
+      chooseFileBtn.disabled = !selectedFieldConfig.changeImageEditable || !selectedUi.statusChooseFileImageFn;
       chooseFileBtn.title = selectedImageInspectorConfig.changeImageButtonTitle;
-      chooseFileBtn.onclick = () => selectedUi.statusChooseFileImageFn?.();
+      chooseFileBtn.onclick = () => {
+        if (!selectedFieldConfig.changeImageEditable) return;
+        selectedUi.statusChooseFileImageFn?.();
+      };
       selectedImageActions.appendChild(chooseFileBtn);
       propsEl.appendChild(row("ChangeImage", selectedImageActions));
       if (isImageReferencePickerOpenFor({ kind: "statusBarField", statusBarId: sb.id, fieldIndex: selectedFieldIndex! })) {
@@ -10709,14 +11148,14 @@ function renderProps() {
         checkboxInput(
           Boolean(selectedField.progressBar),
           checked => {
-            if (!selectedUi.canPatch) return;
+            if (!selectedFieldConfig.progressBarEditable) return;
             selectedUi.postFieldUpdate({
               progressBar: checked,
               progressRaw: checked ? (selectedField.progressRaw?.trim() || "0") : ""
             });
           },
           {
-            disabled: !selectedUi.canPatch,
+            disabled: !selectedFieldConfig.progressBarEditable,
             title: "Show this field as a progress bar. The preview value stays at 0 here."
           }
         )
@@ -10729,9 +11168,9 @@ function renderProps() {
         const boxInput = document.createElement("input");
         boxInput.type = "checkbox";
         boxInput.checked = hasPbFlag(selectedField.flagsRaw, flag);
-        boxInput.disabled = !selectedUi.canPatch;
+        boxInput.disabled = !selectedFieldConfig.flagsEditable;
         boxInput.onchange = () => {
-          if (!selectedUi.canPatch) return;
+          if (!selectedFieldConfig.flagsEditable) return;
           selectedUi.postFieldUpdate({ flagsRaw: buildStatusBarFlagsRaw(selectedField.flagsRaw, { [flag]: boxInput.checked }) ?? "" });
         };
         const caption = document.createElement("span");
@@ -10744,11 +11183,14 @@ function renderProps() {
 
       const selectedDeleteStatusFieldBtn = document.createElement("button");
       selectedDeleteStatusFieldBtn.textContent = "Delete Field";
-      selectedDeleteStatusFieldBtn.disabled = !selectedUi.delFn;
+      selectedDeleteStatusFieldBtn.disabled = !selectedFieldConfig.deleteEditable || !selectedUi.delFn;
       selectedDeleteStatusFieldBtn.title = selectedDeleteStatusFieldBtn.disabled
         ? "Only parsed statusbar fields with a source line can be deleted."
         : "Delete the currently selected statusbar field.";
-      selectedDeleteStatusFieldBtn.onclick = () => selectedUi.delFn?.();
+      selectedDeleteStatusFieldBtn.onclick = () => {
+        if (!selectedFieldConfig.deleteEditable) return;
+        selectedUi.delFn?.();
+      };
       propsEl.appendChild(row("Delete", selectedDeleteStatusFieldBtn));
     }
 
@@ -10851,7 +11293,7 @@ function renderProps() {
     const imageDraft = getImageEditorDraft(img);
 
     propsEl.appendChild(row("Id", readonlyInput(img.id)));
-    propsEl.appendChild(row("Kind", readonlyInput(imageEditorOpen ? (imageDraft.inline ? "CatchImage" : "LoadImage") : (img.inline ? "CatchImage" : "LoadImage"))));
+    propsEl.appendChild(row("Kind", readonlyInput(imageEditorOpen ? getFormImageCallName(imageDraft) : getFormImageCallName(img))));
     propsEl.appendChild(row(
       "First Param",
       imageEditorOpen
@@ -11022,7 +11464,7 @@ function renderProps() {
 
     const box = miniList();
     for (const img of model.images ?? []) {
-      const label = `${img.pbAny && img.variable ? `${img.variable} = ` : ""}${img.inline ? "CatchImage" : "LoadImage"}(${img.firstParam}, ${img.imageRaw})`;
+      const label = buildFormImageLineLabel(img);
       const canPatch = typeof img.source?.line === "number";
 
       const rowEl = miniRow(
@@ -11174,7 +11616,7 @@ function renderProps() {
   if (showsColumnsInspector) {
     propsEl.appendChild(row("Columns", readonlyInput(String(g.columns?.length ?? 0))));
   }
-  const isImageCapableGadget = IMAGE_CAPABLE_GADGET_KINDS.has(g.kind);
+  const isImageCapableGadget = canInspectGadgetImageRows(g.kind);
   const gadgetImage = findImageEntryById(g.imageId);
 
   const deleteGadgetBtn = document.createElement("button");
@@ -11257,6 +11699,10 @@ function renderProps() {
   const captionField = getGadgetCaptionFieldConfig(g.kind);
   const canEditColors = canEditGadgetColors(g.kind);
   const canEditChecked = canEditGadgetCheckedState(g.kind);
+  const parentField = getGadgetParentFieldConfig(g.kind, Boolean(g.parentId));
+  const resizeLockField = getGadgetResizeLockFieldConfig(g.kind);
+  const fontField = getGadgetFontFieldConfig(g.kind);
+  const constantsField = getGadgetConstantsFieldConfig(g.kind);
   const hasExpressionVisibility = (Boolean(g.hiddenRaw) && g.hidden === undefined) || (Boolean(g.disabledRaw) && g.disabled === undefined);
   const hasExpressionChecked = canEditChecked && Boolean(g.stateRaw) && g.state === undefined;
 
@@ -11297,26 +11743,39 @@ function renderProps() {
     );
   }
 
-  propsEl.appendChild(
-    row(
-      "Tooltip Is Variable",
-      checkboxInput(Boolean(g.tooltipVariable), v => {
-        applyLocalGadgetTooltipUpdate(g, getGadgetTooltipInspectorValue(g), v);
-      })
-    )
-  );
-  propsEl.appendChild(
-    row(
-      "Tooltip",
-      textInput(
-        getGadgetTooltipInspectorValue(g),
-        v => {
-          applyLocalGadgetTooltipUpdate(g, v, Boolean(g.tooltipVariable));
-        },
-        { title: "Tooltip shown for this gadget. Enable 'Tooltip Is Variable' if this value is a variable name or expression." }
+  const tooltipField = getGadgetTooltipFieldConfig(g.kind);
+  if (tooltipField) {
+    propsEl.appendChild(
+      row(
+        "Tooltip Is Variable",
+        checkboxInput(Boolean(g.tooltipVariable), v => {
+          applyLocalGadgetTooltipUpdate(g, getGadgetTooltipInspectorValue(g), v);
+        }, {
+          disabled: !tooltipField.variableToggleEditable,
+          title: tooltipField.variableToggleEditable
+            ? "Treat this tooltip as a variable or expression instead of a string literal."
+            : "This gadget keeps the original readonly tooltip-variable field behavior."
+        })
       )
-    )
-  );
+    );
+    propsEl.appendChild(
+      row(
+        "Tooltip",
+        textInput(
+          getGadgetTooltipInspectorValue(g),
+          v => {
+            applyLocalGadgetTooltipUpdate(g, v, Boolean(g.tooltipVariable));
+          },
+          {
+            disabled: !tooltipField.valueEditable,
+            title: tooltipField.valueEditable
+              ? "Tooltip shown for this gadget. Enable 'Tooltip Is Variable' if this value is a variable name or expression."
+              : "This gadget keeps the original readonly tooltip field behavior."
+          }
+        )
+      )
+    );
+  }
 
   propsEl.appendChild(section("Layout"));
   propsEl.appendChild(row("X", numberInput(g.x, v => { updateGadgetDisplayField(g, "x", asInt(v)); postGadgetRect(g); render(); renderProps(); })));
@@ -11364,8 +11823,9 @@ function renderProps() {
       })
     )
   );
-  const resizeCtx = getWindowResizeLockContext(g);
-  const currentLockLeft = g.lockLeft !== false;
+  if (resizeLockField) {
+    const resizeCtx = getWindowResizeLockContext(g);
+    const currentLockLeft = g.lockLeft !== false;
   const currentLockRight = g.lockRight === true;
   const currentLockTop = g.lockTop !== false;
   const currentLockBottom = g.lockBottom === true;
@@ -11415,28 +11875,31 @@ function renderProps() {
     ? "These lock options create, update or remove the gadget's ResizeGadget(...) line as needed."
     : "Lock editing is available only when the current layout can be converted to a safe ResizeGadget(...) update."
   ));
+  }
   if (hasExpressionVisibility) {
     propsEl.appendChild(mutedNote("Custom Hidden/Disabled expressions stay unchanged until you edit them here. Editing replaces them with 1 or 0."));
   }
 
-  propsEl.appendChild(
-    row(
-      "Font Raw",
-      textInput(
-        g.gadgetFontRaw ?? "",
-        v => {
-          const trimmed = v.trim();
-          g.gadgetFontRaw = trimmed || undefined;
-          postGadgetProperties(g.id, { gadgetFontRaw: trimmed || undefined });
-          renderProps();
-        },
-        { title: "Edit the font expression used for this gadget." }
+  if (fontField) {
+    propsEl.appendChild(
+      row(
+        "Font Raw",
+        textInput(
+          g.gadgetFontRaw ?? "",
+          v => {
+            const trimmed = v.trim();
+            g.gadgetFontRaw = trimmed || undefined;
+            postGadgetProperties(g.id, { gadgetFontRaw: trimmed || undefined });
+            renderProps();
+          },
+          { disabled: !fontField.rawEditable, title: fontField.title }
+        )
       )
-    )
-  );
-  const gadgetFontSummary = getGadgetFontDisplaySummary(g);
-  if (gadgetFontSummary) {
-    propsEl.appendChild(mutedNote(`Current font: ${gadgetFontSummary}`));
+    );
+    const gadgetFontSummary = getGadgetFontDisplaySummary(g);
+    if (gadgetFontSummary) {
+      propsEl.appendChild(mutedNote(`Current font: ${gadgetFontSummary}`));
+    }
   }
 
   if (canEditColors) {
@@ -11574,7 +12037,8 @@ function renderProps() {
     }
   }
 
-  if (g.kind === GADGET_KIND.CustomGadget) {
+  if (canInspectCustomGadgetCodeRows(g.kind)) {
+    const customSelectPresetField = getCustomGadgetSelectPresetFieldConfig(g.kind);
     propsEl.appendChild(
       row(
         "SelectGadget",
@@ -11586,7 +12050,8 @@ function renderProps() {
             renderProps();
           },
           {
-            title: "Shows the original CustomGadget combobox row. In the current PureBasic source, changing this row does not rewrite InitCode or CreateCode automatically."
+            disabled: !customSelectPresetField?.valueEditable,
+            title: customSelectPresetField?.title ?? "Shows the original CustomGadget combobox row."
           }
         )
       )
@@ -11639,9 +12104,10 @@ function renderProps() {
     propsEl.appendChild(mutedNote("SelectGadget follows the original combobox row. In the available PureBasic source, preset changes there are not written back automatically; InitCode and CreateCode remain the effective saved values."));
   }
 
-  if (g.parentId) {
+  if (parentField?.selectTargetAvailable && g.parentId) {
     const btn = document.createElement("button");
     btn.textContent = "Select Parent";
+    btn.title = parentField.title;
     btn.onclick = () => {
       selection = { kind: "gadget", id: g.parentId! };
       render();
@@ -11651,20 +12117,22 @@ function renderProps() {
     propsEl.appendChild(row("", btn));
   }
 
-  const changeParentBtn = document.createElement("button");
-  const canChangeParent = canOpenGadgetReparentDialog(g);
-  changeParentBtn.textContent = "Change Parent";
-  changeParentBtn.disabled = !canChangeParent;
-  changeParentBtn.title = canChangeParent
-    ? "Open the original-style Select Parent dialog for this gadget."
-    : "This first reparenting cut currently supports normal gadgets, but not SplitterGadget or CustomGadget.";
-  changeParentBtn.onclick = () => {
-    if (!canChangeParent) return;
-    openSelectParentDialog(g);
-  };
-  propsEl.appendChild(row("", changeParentBtn));
+  if (parentField) {
+    const changeParentBtn = document.createElement("button");
+    const canChangeParent = parentField.changeDialogAvailable && canOpenGadgetReparentDialog(g);
+    changeParentBtn.textContent = "Change Parent";
+    changeParentBtn.disabled = !canChangeParent;
+    changeParentBtn.title = canChangeParent
+      ? "Open the original-style Select Parent dialog for this gadget."
+      : "CustomGadget reparenting is blocked until an additional original-source proof exists.";
+    changeParentBtn.onclick = () => {
+      if (!canChangeParent) return;
+      openSelectParentDialog(g);
+    };
+    propsEl.appendChild(row("", changeParentBtn));
+  }
 
-  if (g.kind === GADGET_KIND.SplitterGadget) {
+  if (canInspectGadgetSplitterPosition(g.kind)) {
     propsEl.appendChild(
       row(
         "Splitter Position",
@@ -11747,59 +12215,65 @@ function renderProps() {
     if (pendingEl) propsEl.appendChild(pendingEl);
   }
 
-  propsEl.appendChild(
-    row(
-      "SelectProc",
-      editableComboInput(
-        g.eventProc ?? "",
-        getProcedureSuggestions(),
-        v => {
-          g.eventProc = v.length ? v : undefined;
-          post({
-            type: WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc,
-            id: g.id,
-            eventProc: v.length ? v : undefined
-          });
-          renderProps();
-        },
-        {
-          title: "Choose an existing procedure or type a procedure name.",
-          placeholder: "Type or pick a procedure"
-        }
+  const gadgetSelectProcField = getGadgetSelectProcFieldConfig(g.kind);
+  if (gadgetSelectProcField) {
+    propsEl.appendChild(
+      row(
+        "SelectProc",
+        editableComboInput(
+          g.eventProc ?? "",
+          getProcedureSuggestions(),
+          v => {
+            g.eventProc = v.length ? v : undefined;
+            post({
+              type: WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc,
+              id: g.id,
+              eventProc: v.length ? v : undefined
+            });
+            renderProps();
+          },
+          {
+            disabled: !gadgetSelectProcField.valueEditable,
+            title: gadgetSelectProcField.title,
+            placeholder: gadgetSelectProcField.placeholder
+          }
+        )
       )
-    )
-  );
+    );
+  }
 
-  const gadgetKnownFlags = getGadgetKnownFlags(g.kind);
-  const enabledGadgetFlags = new Set(
-    (g.flagsExpr ?? "")
-      .split("|")
-      .map(part => part.trim())
-      .filter(Boolean)
-  );
+  if (constantsField) {
+    const gadgetKnownFlags = constantsField.knownFlags;
+    const enabledGadgetFlags = new Set(
+      (g.flagsExpr ?? "")
+        .split("|")
+        .map(part => part.trim())
+        .filter(Boolean)
+    );
 
-  propsEl.appendChild(section("Constants"));
-  for (const flag of gadgetKnownFlags) {
-    propsEl.appendChild(row(
-      flag,
-      checkboxInput(enabledGadgetFlags.has(flag), checked => {
-        const nextEnabled = new Set(
-          (g.flagsExpr ?? "")
-            .split("|")
-            .map(part => part.trim())
-            .filter(Boolean)
-            .filter(part => gadgetKnownFlags.includes(part))
-        );
-        if (checked) nextEnabled.add(flag);
-        else nextEnabled.delete(flag);
-        const nextKnown = gadgetKnownFlags.filter(entry => nextEnabled.has(entry));
-        const nextExpr = buildGadgetFlagsExpr(g.kind, nextKnown, g.flagsExpr);
-        g.flagsExpr = nextExpr;
-        postGadgetOpenArgs(g.id, { flagsExpr: nextExpr ?? "" });
-        render();
-        renderProps();
-      })
-    ));
+    propsEl.appendChild(section("Constants"));
+    for (const flag of gadgetKnownFlags) {
+      propsEl.appendChild(row(
+        flag,
+        checkboxInput(enabledGadgetFlags.has(flag), checked => {
+          const nextEnabled = new Set(
+            (g.flagsExpr ?? "")
+              .split("|")
+              .map(part => part.trim())
+              .filter(Boolean)
+              .filter(part => gadgetKnownFlags.includes(part))
+          );
+          if (checked) nextEnabled.add(flag);
+          else nextEnabled.delete(flag);
+          const nextKnown = gadgetKnownFlags.filter(entry => nextEnabled.has(entry));
+          const nextExpr = buildGadgetFlagsExpr(g.kind, nextKnown, g.flagsExpr);
+          g.flagsExpr = nextExpr;
+          postGadgetOpenArgs(g.id, { flagsExpr: nextExpr ?? "" });
+          render();
+          renderProps();
+        }, { title: constantsField.title })
+      ));
+    }
   }
 
   // Items editor (minimal UI)
@@ -12008,7 +12482,7 @@ function createPendingImageReferencePickerEl() {
       pendingImageReferencePicker.selectedImageId,
       (model.images ?? []).map(img => ({
         value: img.id,
-        label: `${img.id} — ${img.inline ? "CatchImage" : "LoadImage"}(${img.firstParam}, ${img.imageRaw})`
+        label: `${img.id} — ${buildFormImageLineLabel(img)}`
       })),
       value => updateImageReferencePicker({ selectedImageId: value })
     )

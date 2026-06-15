@@ -21,6 +21,9 @@ import {
   getStatusBarRect,
   getStatusBarAlignedX,
   getWindowClientSurfaceRects,
+  getWindowPreviewFrameRect,
+  getWindowPreviewResizeButtonRect,
+  hitWindowPreviewResizeButton,
   hitHandlePoints,
   getToolBarRect,
   getWindowContentRect,
@@ -184,6 +187,59 @@ test("computes the Windows client surface fill and border rects from chrome and 
     fillRect: { x: 48, y: 76, w: 304, h: 186 },
     borderRect: { x: 47, y: 75, w: 306, h: 188 }
   });
+});
+
+test("computes the Windows preview frame from the stored client size", () => {
+  const frameRect = getWindowPreviewFrameRect({ x: 10, y: 10 }, 304, 372, 8, 8, 8);
+  const layout = getWindowChromeLayout(frameRect, 8, false, false, false, METRICS, 8, 8);
+
+  assert.deepEqual(frameRect, { x: 10, y: 10, w: 320, h: 388 });
+  assert.deepEqual(layout.contentRect, { x: 18, y: 18, w: 304, h: 372 });
+});
+
+
+test("computes the original window resize button rect outside the preview frame", () => {
+  const frameRect = getWindowPreviewFrameRect({ x: 10, y: 10 }, 304, 372, 8, 8, 8);
+
+  assert.deepEqual(getWindowPreviewResizeButtonRect(frameRect), { x: 328, y: 396, w: 8, h: 8 });
+});
+
+
+test("computes the macOS preview frame with toolbar height outside the stored client height", () => {
+  const frameRect = getWindowPreviewFrameRect({ x: 10, y: 32 }, 304, 372, 26, 0, 0, METRICS.toolBarHeight);
+  const layout = getWindowChromeLayout(frameRect, 26, true, true, true, METRICS, 0, 0, true);
+
+  assert.deepEqual(frameRect, { x: 10, y: 32, w: 304, h: 422 });
+  assert.deepEqual(layout.toolBarRect, { x: 10, y: 58, w: 304, h: 24 });
+  assert.deepEqual(layout.contentRect, { x: 10, y: 82, w: 304, h: 349 });
+});
+
+
+test("keeps the Windows toolbar inside the stored client height", () => {
+  const frameRect = getWindowPreviewFrameRect({ x: 10, y: 10 }, 304, 372, 8, 8, 8);
+  const layout = getWindowChromeLayout(frameRect, 8, false, true, false, METRICS, 8, 8);
+
+  assert.deepEqual(frameRect, { x: 10, y: 10, w: 320, h: 388 });
+  assert.deepEqual(layout.toolBarRect, { x: 18, y: 18, w: 304, h: 24 });
+  assert.deepEqual(layout.contentRect, { x: 18, y: 42, w: 304, h: 348 });
+});
+
+
+test("keeps the Linux toolbar inside the stored client height", () => {
+  const frameRect = getWindowPreviewFrameRect({ x: 10, y: 10 }, 304, 372, 26);
+  const layout = getWindowChromeLayout(frameRect, 26, false, true, false, METRICS);
+
+  assert.deepEqual(frameRect, { x: 10, y: 10, w: 304, h: 398 });
+  assert.deepEqual(layout.toolBarRect, { x: 10, y: 36, w: 304, h: 24 });
+  assert.deepEqual(layout.contentRect, { x: 10, y: 60, w: 304, h: 348 });
+});
+
+
+test("hits the original outside window resize button as the bottom-right handle", () => {
+  const frameRect = getWindowPreviewFrameRect({ x: 10, y: 10 }, 304, 372, 8, 8, 8);
+
+  assert.equal(hitWindowPreviewResizeButton(frameRect, 332, 400), "se");
+  assert.equal(hitWindowPreviewResizeButton(frameRect, 326, 400), null);
 });
 
 

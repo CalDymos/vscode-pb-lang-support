@@ -24,7 +24,7 @@ A Visual Studio Code extension that provides a lightweight editor workflow for P
   `Button_0 = ButtonGadget(#PB_Any, ...)`  
   `Window_0 = OpenWindow(#PB_Any, ...)`
 - Detects Form Designer metadata such as header version and scan range
-- Supports PureBasic 6.30 syntax (`CreateImageMenu`, `CreateToolBar` lowercase b, `Chr(9)` shortcut concatenation)
+- Supports PureBasic Form Designer 6.40 syntax (`CreateImageMenu`, `CreateToolbar` lowercase b, `Chr(9)` shortcut concatenation)
 
 ### Visual Editing & Patching 🧷
 
@@ -37,7 +37,7 @@ A Visual Studio Code extension that provides a lightweight editor workflow for P
   - menu entries, toolbar entries, and status bar fields
   - `ResizeGadget` expressions (LockLeft / LockRight / LockTop / LockBottom)
   - event bindings (gadget, menu, toolbar, window event loop)
-  - image references (`LoadImage`, `CatchImage`, PB 6.30 image blocks)
+  - image references (`LoadImage`, `CatchImage`, PB 6.40 image blocks)
   - font entries (`LoadFont`, `FormFont` enum block)
 - Preserves left-side assignments (if present)
 - Supports multi-line call patching
@@ -104,7 +104,7 @@ The matrix below is based on the currently verified parser, patcher, preview-geo
 | Form Designer block detection and metadata | Verified | Detects the Form Designer header, limits parsing to the designer block, and keeps header/version scan metadata. |
 | Window and gadget parsing / patching | Verified | Covers window geometry, `OpenWindow(...)` args, managed window lines, gadget geometry, gadget constructor args, `#PB_Any` / enum keys, and managed gadget properties such as tooltip, colors, hidden / disabled, state, resize locks, and `#PB_Any` toggle. |
 | Gadget items and columns | Verified | `AddGadgetItem(...)` and `AddGadgetColumn(...)` insert / update / delete roundtrips are covered by dedicated tests. |
-| Images and image references | Verified | Covers `LoadImage(...)`, `CatchImage(...)`, PB 6.30 image blocks, decoder management, enum / `#PB_Any` image ids, cross references from gadgets, menus, toolbars and status bars, and the image `#PB_Any` toggle updating all `ImageID(...)` references. |
+| Images and image references | Verified | Covers `LoadImage(...)`, `CatchImage(...)`, PB 6.40 image blocks, decoder management, enum / `#PB_Any` image ids, cross references from gadgets, menus, toolbars and status bars, and the image `#PB_Any` toggle updating all `ImageID(...)` references. |
 | Menus, toolbars and status bars | Verified | Insert / update / delete / move patch flows are covered, including submenu blocks, toolbar tooltips, status bar decorations and combined top-level chrome roundtrips. |
 | Fonts | Verified | `LoadFont` parsing, insert, update, and delete; `FormFont` enum block kept in sync automatically. |
 | Event bindings | Verified | Covers window include / default handler / `generateEventLoop`, plus gadget, menu and toolbar event proc patching in real fixtures. |

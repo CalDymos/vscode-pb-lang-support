@@ -31,6 +31,7 @@ import {
 } from "../src/core/emitter/patch-emitter";
 import { MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND } from "../src/core/model";
 import { loadFixture } from "./helpers/loadFixture";
+import { stripBomAndToLf } from "./helpers/testUtils";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
 
@@ -44,10 +45,6 @@ const DEFAULT_SECTION_ID = "0";
 const menuId = DEFAULT_SECTION_ID;
 const toolBarId = DEFAULT_SECTION_ID;
 const statusBarId = DEFAULT_SECTION_ID;
-
-function stripBomAndToLf(text: string): string {
-  return text.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
-}
 
 // NOTE: editFactory receives a vscode.TextDocument, not a FakeTextDocument directly.
 // The VSCode Language Server resolves @types/vscode regardless of tsconfig.test.json,
@@ -384,7 +381,7 @@ test("roundtrips menu entry insert into leaf menu item footer by promoting paren
 
 test("roundtrips menu entry insert into empty submenu footer", () => {
   const text = [
-    '; Form Designer for PureBasic - 6.30',
+    '; Form Designer for PureBasic - 6.40',
     'Enumeration FormMenu',
     '  #MenuOpen',
     'EndEnumeration',
@@ -432,7 +429,7 @@ test("roundtrips menu entry insert into empty submenu footer", () => {
 
 test("roundtrips menu entry insert into empty submenu footer with placeholder comment before close", () => {
   const text = [
-    '; Form Designer for PureBasic - 6.30',
+    '; Form Designer for PureBasic - 6.40',
     'Enumeration FormMenu',
     '  #MenuOpen',
     'EndEnumeration',
@@ -516,7 +513,7 @@ test("roundtrips menu entry update", () => {
 
 
 test("preserves raw menu expressions when adding a shortcut to non-literal captions", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 
 Enumeration FormWindow
   #FrmMain
@@ -597,7 +594,7 @@ test("roundtrips menu entry update with preserved shortcut and icon", () => {
 });
 
 
-test("patches menu entries inside CreateImageMenu sections", () => {
+test("patches menu entries inside CreateImageMenu sections and downgrades when no icons remain", () => {
   const text = [
     'Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)',
     '  OpenWindow(#FrmMain, x, y, width, height, "Menu")',
@@ -618,10 +615,11 @@ test("patches menu entries inside CreateImageMenu sections", () => {
   );
 
   const menu = parsed.menus.find((m) => m.id === '0');
-  assert.ok(menu, 'Expected CreateImageMenu section after insert.');
+  assert.ok(menu, 'Expected menu section after insert.');
   assert.equal(menu!.entries.at(-1)?.idRaw, '#MenuSave');
   assert.equal(menu!.entries.at(-1)?.shortcut, 'Ctrl+S');
-  assert.match(patchedText, /CreateImageMenu\(0, WindowID\(#FrmMain\)\)[\s\S]*MenuItem\(#MenuSave, "Save" \+ Chr\(9\) \+ "Ctrl\+S"\)/);
+  assert.match(patchedText, /CreateMenu\(0, WindowID\(#FrmMain\)\)[\s\S]*MenuItem\(#MenuSave, "Save" \+ Chr\(9\) \+ "Ctrl\+S"\)/);
+  assert.doesNotMatch(patchedText, /CreateImageMenu\(/);
 });
 
 test("roundtrips menu subtree move before sibling entry", () => {
@@ -1075,7 +1073,32 @@ test("normalizes rebuilt statusbar sections to per-field Add/Decoration order", 
 });
 
 
-test("core statusbar patcher still preserves explicit progress raw values when used directly", () => {
+test("normalizes rebuilt statusbar decorations to original text-image-progress precedence", () => {
+  const { text, statusBar, statusBarId } = parseStatusFixture();
+  const sourceLine = statusBar.fields[1]?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected source line for statusbar field.");
+
+  const { parsed, patchedText } = patchAndReparse(text, (document) =>
+    applyStatusBarFieldUpdate(document, statusBarId, sourceLine!, {
+      widthRaw: "120",
+      textRaw: '"Done"',
+      imageRaw: "ImageID(#Img_FrmMain_0)",
+      flagsRaw: "#PB_StatusBar_Raised",
+      progressBar: true,
+      progressRaw: "75"
+    })
+  );
+
+  const updatedStatusBar = parsed.statusbars.find((sb) => sb.id === statusBarId);
+  assert.ok(updatedStatusBar, "Expected statusbar after update.");
+  assert.equal(updatedStatusBar!.fields[1]?.text, "Done");
+  assert.equal(updatedStatusBar!.fields[1]?.flagsRaw, "#PB_StatusBar_Raised");
+  assert.match(patchedText, /StatusBarText\(0, 1, "Done", #PB_StatusBar_Raised\)/);
+  assert.doesNotMatch(patchedText, /StatusBarImage\(0, 1,/);
+  assert.doesNotMatch(patchedText, /StatusBarProgress\(0, 1,/);
+});
+
+test("normalizes statusbar progress values to the original Form Designer save format", () => {
   const { text, statusBar, statusBarId } = parseStatusFixture();
   const sourceLine = statusBar.fields[1]?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected source line for progress statusbar field.");
@@ -1925,7 +1948,7 @@ test("roundtrips combined top-level chrome updates in fixture 14", () => {
 
 
 test("trims menu constants during selected-entry style updates", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
   OpenWindow(#FrmMain, x, y, width, height, "Menu")
   CreateMenu(0, WindowID(#FrmMain))
@@ -1945,7 +1968,7 @@ EndProcedure
 });
 
 test("trims toolbar variables during selected-entry style updates", () => {
-  const text = `; Form Designer for PureBasic - 6.30
+  const text = `; Form Designer for PureBasic - 6.40
 Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
   OpenWindow(#FrmMain, x, y, width, height, "Toolbar")
   CreateToolBar(0, WindowID(#FrmMain))

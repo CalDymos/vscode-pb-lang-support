@@ -45,6 +45,8 @@ export const WEBVIEW_TO_EXT_MSG_TYPE = {
   insertGadget: "insertGadget",
   reparentGadget: "reparentGadget",
   deleteGadget: "deleteGadget",
+  duplicateGadget: "duplicateGadget",
+  pasteCopiedGadget: "pasteCopiedGadget",
   insertGadgetItem: "insertGadgetItem",
   updateGadgetItem: "updateGadgetItem",
   deleteGadgetItem: "deleteGadgetItem",
@@ -53,6 +55,7 @@ export const WEBVIEW_TO_EXT_MSG_TYPE = {
   updateGadgetColumn: "updateGadgetColumn",
   deleteGadgetColumn: "deleteGadgetColumn",
 
+  createMenu: "createMenu",
   insertMenuEntry: "insertMenuEntry",
   moveMenuEntry: "moveMenuEntry",
   updateMenuEntry: "updateMenuEntry",
@@ -60,15 +63,19 @@ export const WEBVIEW_TO_EXT_MSG_TYPE = {
   deleteMenu: "deleteMenu",
   setMenuEntryEvent: "setMenuEntryEvent",
 
+  createToolBar: "createToolBar",
   insertToolBarEntry: "insertToolBarEntry",
   updateToolBarEntry: "updateToolBarEntry",
+  moveToolBarEntry: "moveToolBarEntry",
   deleteToolBarEntry: "deleteToolBarEntry",
   deleteToolBar: "deleteToolBar",
   setToolBarEntryEvent: "setToolBarEntryEvent",
   setToolBarEntryTooltip: "setToolBarEntryTooltip",
 
+  createStatusBar: "createStatusBar",
   insertStatusBarField: "insertStatusBarField",
   updateStatusBarField: "updateStatusBarField",
+  moveStatusBarField: "moveStatusBarField",
   deleteStatusBarField: "deleteStatusBarField",
   deleteStatusBar: "deleteStatusBar",
 
@@ -87,6 +94,7 @@ export const WEBVIEW_TO_EXT_MSG_TYPE = {
   chooseFileAndAssignMenuEntryImage: "chooseFileAndAssignMenuEntryImage",
   chooseFileAndAssignToolBarEntryImage: "chooseFileAndAssignToolBarEntryImage",
   chooseFileAndAssignStatusBarFieldImage: "chooseFileAndAssignStatusBarFieldImage",
+  rebindMenuEntryImage: "rebindMenuEntryImage",
   rebindToolBarEntryImage: "rebindToolBarEntryImage",
   rebindStatusBarFieldImage: "rebindStatusBarFieldImage"
 } as const;
@@ -125,7 +133,7 @@ export type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setCustomGadgetCode; id: string; customInitRaw?: string; customCreateRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetProperties; id: string; hiddenRaw?: string; disabledRaw?: string; tooltipRaw?: string; frontColorRaw?: string; backColorRaw?: string; gadgetFontRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc; id: string; eventProc?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetImageRaw; id: string; imageRaw: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetImageRaw; id: string; imageRaw: string; oldImageId?: string; oldImageSourceLine?: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw; id: string; stateRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetResizeRaw; id: string; xRaw?: string; yRaw?: string; wRaw?: string; hRaw?: string; deleteResize?: boolean }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.toggleGadgetPbAny; gadgetId: string; toPbAny: boolean; variableName: string; enumSymbol: string; enumValueRaw?: string }
@@ -143,26 +151,33 @@ export type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadget; kind: string; x: number; y: number; yRaw?: string; parentId?: string; parentItem?: number; gadget1Id?: string; gadget2Id?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.reparentGadget; id: string; parentId?: string; parentItem?: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadget; id: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.duplicateGadget; id: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.pasteCopiedGadget; id: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadgetItem; id: string; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateGadgetItem; id: string; sourceLine: number; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadgetItem; id: string; sourceLine: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadgetColumn; id: string; colRaw: string; titleRaw: string; widthRaw: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateGadgetColumn; id: string; sourceLine: number; colRaw: string; titleRaw: string; widthRaw: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadgetColumn; id: string; sourceLine: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createMenu; kind: string; idRaw?: string; textRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertMenuEntry; menuId: string; kind: string; idRaw?: string; textRaw?: string; parentSourceLine?: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveMenuEntry; menuId: string; sourceLine: number; kind: string; targetSourceLine: number; placement: MenuEntryMovePlacement }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateMenuEntry; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; iconRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteMenuEntry; menuId: string; sourceLine: number; kind: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteMenu; menuId: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setMenuEntryEvent; entryIdRaw: string; eventProc?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createToolBar; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string; toggle?: boolean }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertToolBarEntry; toolBarId: string; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateToolBarEntry; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string; toggle?: boolean }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveToolBarEntry; toolBarId: string; sourceLine: number; kind: string; targetSourceLine: number; placement: MenuEntryMovePlacement }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBarEntry; toolBarId: string; sourceLine: number; kind: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBar; toolBarId: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setToolBarEntryEvent; entryIdRaw: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setToolBarEntryTooltip; toolBarId: string; sourceLine: number; entryIdRaw: string; textRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createStatusBar; widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertStatusBarField; statusBarId: string; widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateStatusBarField; statusBarId: string; sourceLine: number; widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveStatusBarField; statusBarId: string; sourceLine: number; targetSourceLine: number; placement: MenuEntryMovePlacement }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBarField; statusBarId: string; sourceLine: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBar; statusBarId: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertImage; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
@@ -171,13 +186,14 @@ export type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.relativizeImagePath; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseImageFileForEntry; sourceLine: number; inline: boolean; idRaw: string; assignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.toggleImagePbAny; sourceLine: number; toPbAny: boolean }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignGadgetImage; id: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignGadgetImage; id: string; x: number; y: number; resizeToImage: boolean; newImageIdRaw: string; newAssignedVar?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignMenuEntryImage; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignGadgetImage; id: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string; oldImageId?: string; oldImageSourceLine?: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignGadgetImage; id: string; x: number; y: number; resizeToImage: boolean; newImageIdRaw: string; newAssignedVar?: string; oldImageId?: string; oldImageSourceLine?: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignMenuEntryImage; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string; oldImageId?: string; oldImageSourceLine?: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string; oldImageId?: string; oldImageSourceLine?: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string; oldImageId?: string; oldImageSourceLine?: number }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignMenuEntryImage; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; newImageIdRaw: string; newAssignedVar?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; newImageIdRaw: string; newAssignedVar?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; newImageIdRaw: string; newAssignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignMenuEntryImage; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; newImageIdRaw: string; newAssignedVar?: string; oldImageId?: string; oldImageSourceLine?: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; newImageIdRaw: string; newAssignedVar?: string; oldImageId?: string; oldImageSourceLine?: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; newImageIdRaw: string; newAssignedVar?: string; oldImageId?: string; oldImageSourceLine?: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.rebindMenuEntryImage; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; iconRaw: string; oldImageId?: string; oldImageSourceLine?: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.rebindToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; iconRaw: string; oldImageId?: string; oldImageSourceLine?: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.rebindStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; imageRaw: string; oldImageId?: string; oldImageSourceLine?: number };

@@ -12,6 +12,7 @@ import {
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
 import { loadFixture } from "./helpers/loadFixture";
+import { stripBomAndToLf } from "./helpers/testUtils";
 
 function patchAndReparse(
   text: string,
@@ -28,10 +29,6 @@ function patchAndReparse(
     patchedText,
     parsed: parseFormDocument(patchedText),
   };
-}
-
-function toLf(text: string): string {
-  return text.replace(/\r\n/g, "\n");
 }
 
 test("inserts the first image block before the font block and injects the required decoder", () => {
@@ -56,6 +53,127 @@ test("inserts the first image block before the font block and injects the requir
     patchedText,
     /Procedure OpenFrmMain[\s\S]*UsePNGImageDecoder\(\)/s
   );
+});
+
+test("uses the valid PB TGA decoder name instead of the original Form Designer typo", () => {
+  const text = loadFixture("fixtures/roundtrip/26-imageblock-no-images-basic.pbf");
+
+  const args: ImageArgs = {
+    inline: false,
+    idRaw: "#Img_FrmMain_0",
+    imageRaw: '"logo.tga"',
+  };
+
+  const { patchedText } = patchAndReparse(text, document => applyImageInsert(document, args));
+
+  assert.match(patchedText, /UseTGAImageDecoder\(\)/);
+  assert.doesNotMatch(patchedText, /UseJTAImageDecoder\(\)/);
+});
+
+
+test("emits valid PB decoders for GIF and JPEG2000 images", () => {
+  const baseText = loadFixture("fixtures/roundtrip/26-imageblock-no-images-basic.pbf");
+
+  const { patchedText: gifText } = patchAndReparse(baseText, document => applyImageInsert(document, {
+    inline: false,
+    idRaw: "#Img_FrmMain_0",
+    imageRaw: '"logo.gif"',
+  }));
+
+  assert.match(gifText, /UseGIFImageDecoder\(\)/);
+  assert.match(gifText, /LoadImage\(#Img_FrmMain_0,"logo\.gif"\)/);
+
+  const { patchedText: jpeg2000Text } = patchAndReparse(baseText, document => applyImageInsert(document, {
+    inline: false,
+    idRaw: "#Img_FrmMain_0",
+    imageRaw: '"logo.jpeg2000"',
+  }));
+
+  assert.match(jpeg2000Text, /UseJPEG2000ImageDecoder\(\)/);
+  assert.doesNotMatch(jpeg2000Text, /UseJPEGImageDecoder\(\)/);
+  assert.match(jpeg2000Text, /LoadImage\(#Img_FrmMain_0,"logo\.jpeg2000"\)/);
+});
+
+test("uses the file extension instead of matching decoder names inside parent paths", () => {
+  const baseText = loadFixture("fixtures/roundtrip/26-imageblock-no-images-basic.pbf");
+
+  const { patchedText } = patchAndReparse(baseText, document => applyImageInsert(document, {
+    inline: false,
+    idRaw: "#Img_FrmMain_0",
+    imageRaw: '"assets/png-icons/logo.bmp"',
+  }));
+
+  assert.ok(!patchedText.includes("UsePNGImageDecoder()"));
+  assert.ok(!patchedText.includes("UseGIFImageDecoder()"));
+  assert.ok(patchedText.includes('LoadImage(#Img_FrmMain_0,"assets/png-icons/logo.bmp")'));
+});
+
+test("replaces the legacy original TGA decoder typo when rebuilding an existing image block", () => {
+  const text = [
+    "; Form Designer for PureBasic - 6.40",
+    "",
+    "Enumeration FormWindow",
+    "  #FrmMain",
+    "EndEnumeration",
+    "",
+    "Enumeration FormImage",
+    "  #Img_FrmMain_0",
+    "EndEnumeration",
+    "",
+    "UseJTAImageDecoder()",
+    "",
+    'LoadImage(#Img_FrmMain_0,"logo.tga")',
+    "",
+    "Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)",
+    '  OpenWindow(#FrmMain, x, y, width, height, "Images")',
+    "EndProcedure",
+    "",
+  ].join("\n");
+
+  const parsed = parseFormDocument(text);
+  const sourceLine = parsed.images.find((entry) => entry.id === "#Img_FrmMain_0")?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected image source line.");
+
+  const { patchedText } = patchAndReparse(text, document => applyImageUpdate(document, sourceLine!, {
+    inline: false,
+    idRaw: "#Img_FrmMain_0",
+    imageRaw: '"logo.png"',
+  }));
+
+  assert.match(patchedText, /UsePNGImageDecoder\(\)/);
+  assert.doesNotMatch(patchedText, /UseJTAImageDecoder\(\)/);
+  assert.doesNotMatch(patchedText, /UseTGAImageDecoder\(\)/);
+  assert.match(patchedText, /LoadImage\(#Img_FrmMain_0,"logo\.png"\)/);
+});
+
+test("removes stale decoder lines when rebuilding with a non-decoder external extension", () => {
+  const text = loadFixture("fixtures/roundtrip/20-imageblock-enum-single.pbf");
+
+  const parsed = parseFormDocument(text);
+  const sourceLine = parsed.images.find((entry) => entry.id === "#Img_FrmMain_0")?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected image source line.");
+
+  const { patchedText } = patchAndReparse(text, document => applyImageUpdate(document, sourceLine!, {
+    inline: false,
+    idRaw: "#Img_FrmMain_0",
+    imageRaw: '"assets/png-icons/logo.bmp"',
+  }));
+
+  assert.doesNotMatch(patchedText, /UsePNGImageDecoder\(\)/);
+  assert.match(patchedText, /LoadImage\(#Img_FrmMain_0,"assets\/png-icons\/logo\.bmp"\)/);
+});
+
+test("emits the TIFF decoder for .tif external image extensions", () => {
+  const baseText = loadFixture("fixtures/roundtrip/26-imageblock-no-images-basic.pbf");
+
+  const { patchedText } = patchAndReparse(baseText, document => applyImageInsert(document, {
+    inline: false,
+    idRaw: "#Img_FrmMain_0",
+    imageRaw: '"logo.tif"',
+  }));
+
+  assert.match(patchedText, /UseTIFFImageDecoder\(\)/);
+  assert.match(patchedText, /LoadImage\(#Img_FrmMain_0,"logo\.tif"\)/);
 });
 
 test("removes the decoder together with the last remaining image in the block", () => {
@@ -128,7 +246,7 @@ test("creates an Enumeration FormImage block when inserting the first enum image
   };
 
   const { patchedText } = patchAndReparse(text, (document) => applyImageInsert(document, args));
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
 
   assert.ok(normalized.includes(
     [
@@ -160,7 +278,7 @@ test("creates a Global image variable block when inserting the first pbAny image
   };
 
   const { patchedText } = patchAndReparse(text, (document) => applyImageInsert(document, args));
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
 
   assert.ok(normalized.includes(['Global ImgMainLogo', '', 'Enumeration FormWindow'].join("\n")));
   assert.match(patchedText, /ImgMainLogo = LoadImage\(#PB_Any,"logo\.png"\)/);
@@ -180,7 +298,7 @@ test("moves image declarations from FormImage to Global when toggling the last e
     assignedVar: "ImgMainLogo",
     imageRaw: '"logo.png"',
   }));
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
 
   assert.ok(normalized.includes(['Global ImgMainLogo', '', 'Enumeration FormWindow'].join("\n")));
   assert.ok(!normalized.includes(['Enumeration FormImage', '  #Img_FrmMain_0', 'EndEnumeration'].join("\n")));
@@ -199,7 +317,7 @@ test("moves image declarations from Global to FormImage when toggling the last p
     idRaw: "#Img_FrmMain_0",
     imageRaw: '"logo.png"',
   }));
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
 
   assert.ok(!/^Global Img_FrmMain_0$/m.test(patchedText));
   assert.ok(normalized.includes([
@@ -226,7 +344,7 @@ test("inserts an enum image block before Declare boundaries", () => {
   };
 
   const { patchedText } = patchAndReparse(text, (document) => applyImageInsert(document, args));
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
 
   assert.ok(normalized.includes([
     'Enumeration FormImage',
@@ -252,7 +370,7 @@ test("inserts an Enumeration FormImage block before custom gadget initialisation
   };
 
   const { patchedText } = patchAndReparse(text, (document) => applyImageInsert(document, args));
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
 
   assert.ok(normalized.includes([
     'Enumeration FormImage',
@@ -287,7 +405,7 @@ test("moves FormImage before custom gadget initialisation when toggling the last
     idRaw: '#Img_FrmMain_0',
     imageRaw: '"logo.png"',
   }));
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
 
   assert.ok(normalized.includes([
     'Enumeration FormImage',
@@ -313,7 +431,7 @@ test("inserts a pbAny image Global block before custom gadget initialisation", (
   };
 
   const { patchedText } = patchAndReparse(text, (document) => applyImageInsert(document, args));
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
 
   assert.ok(normalized.includes([
     'Global win',
@@ -344,7 +462,7 @@ test("inserts a pbAny image Global block before Declare boundaries", () => {
   };
 
   const { patchedText } = patchAndReparse(text, (document) => applyImageInsert(document, args));
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
 
   assert.ok(normalized.includes([
     'Global ImgMainLogo',
@@ -371,7 +489,7 @@ test("keeps a single blank line before FormFont when updating an existing image 
     imageRaw: '"logo.jpg"',
   }));
 
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
   assert.ok(normalized.includes([
     'LoadImage(#Img_FrmMain_0,"logo.jpg")',
     '',
@@ -394,7 +512,7 @@ test("keeps a single blank line before FormFont when deleting the last image blo
 
   const { patchedText } = patchAndReparse(text, (document) => applyImageDelete(document, sourceLine!));
 
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
   assert.ok(normalized.includes([
     'EndEnumeration',
     '',
@@ -406,4 +524,256 @@ test("keeps a single blank line before FormFont when deleting the last image blo
     '',
     'Enumeration FormFont',
   ].join("\n")));
+});
+
+test("re-indexes remaining image references when deleting an unused earlier image", () => {
+  const text = `; Form Designer for PureBasic - 6.40
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #ImgView
+EndEnumeration
+
+Enumeration FormMenu
+  #MenuSave
+  #TbSave
+EndEnumeration
+
+Enumeration FormImage
+  #Img_FrmMain_0
+  #Img_FrmMain_1
+EndEnumeration
+
+UsePNGImageDecoder()
+
+LoadImage(#Img_FrmMain_0,"unused.png")
+LoadImage(#Img_FrmMain_1,"used.png")
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
+  OpenWindow(#FrmMain, x, y, width, height, "Images")
+  ImageGadget(#ImgView, 10, 10, 64, 64, ImageID(#Img_FrmMain_1))
+  CreateImageMenu(0, WindowID(#FrmMain))
+  MenuItem(#MenuSave, "Save", ImageID(#Img_FrmMain_1))
+  CreateToolBar(0, WindowID(#FrmMain))
+  ToolBarImageButton(#TbSave, ImageID(#Img_FrmMain_1))
+  CreateStatusBar(0, WindowID(#FrmMain))
+  AddStatusBarField(100)
+  StatusBarImage(0, 0, ImageID(#Img_FrmMain_1))
+EndProcedure
+`;
+
+  const parsed = parseFormDocument(text);
+  const sourceLine = parsed.images.find((entry) => entry.id === "#Img_FrmMain_0")?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected unused image source line.");
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) => applyImageDelete(document, sourceLine!));
+
+  assert.equal(updated.images.length, 1);
+  assert.equal(updated.images[0]?.id, "#Img_FrmMain_0");
+  assert.equal(updated.images[0]?.imageRaw, '"used.png"');
+  assert.match(patchedText, /LoadImage\(#Img_FrmMain_0,"used\.png"\)/);
+  assert.doesNotMatch(patchedText, /#Img_FrmMain_1/);
+  assert.match(patchedText, /ImageGadget\(#ImgView, 10, 10, 64, 64, ImageID\(#Img_FrmMain_0\)\)/);
+  assert.match(patchedText, /MenuItem\(#MenuSave, "Save", ImageID\(#Img_FrmMain_0\)\)/);
+  assert.match(patchedText, /ToolBarImageButton\(#TbSave, ImageID\(#Img_FrmMain_0\)\)/);
+  assert.match(patchedText, /StatusBarImage\(0, 0, ImageID\(#Img_FrmMain_0\)\)/);
+});
+
+test("updates existing image references when toggling a pbAny image back to enum mode", () => {
+  const text = `; Form Designer for PureBasic - 6.40
+
+Global Img_FrmMain_0
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #BtnImage
+  #ImgView
+EndEnumeration
+
+Enumeration FormMenu
+  #MenuSave
+  #TbSave
+EndEnumeration
+
+Img_FrmMain_0 = LoadImage(#PB_Any,"used.png")
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
+  OpenWindow(#FrmMain, x, y, width, height, "Images")
+  ButtonImageGadget(#BtnImage, 10, 10, 80, 24, ImageID(Img_FrmMain_0))
+  ImageGadget(#ImgView, 10, 40, 64, 64, ImageID(Img_FrmMain_0))
+  CreateImageMenu(0, WindowID(#FrmMain))
+  MenuItem(#MenuSave, "Save", ImageID(Img_FrmMain_0))
+  CreateToolBar(0, WindowID(#FrmMain))
+  ToolBarImageButton(#TbSave, ImageID(Img_FrmMain_0))
+  CreateStatusBar(0, WindowID(#FrmMain))
+  AddStatusBarField(100)
+  StatusBarImage(0, 0, ImageID(Img_FrmMain_0))
+EndProcedure
+`;
+
+  const parsed = parseFormDocument(text);
+  const sourceLine = parsed.images.find((entry) => entry.id === "Img_FrmMain_0")?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected pbAny image source line.");
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) => applyImageUpdate(document, sourceLine!, {
+    inline: false,
+    idRaw: "#Img_FrmMain_0",
+    imageRaw: '"used.png"',
+  }));
+
+  assert.equal(updated.images[0]?.id, "#Img_FrmMain_0");
+  assert.match(patchedText, /Enumeration FormImage\r?\n  #Img_FrmMain_0\r?\nEndEnumeration/);
+  assert.match(patchedText, /LoadImage\(#Img_FrmMain_0,"used\.png"\)/);
+  assert.doesNotMatch(patchedText, /^Global Img_FrmMain_0$/m);
+  assert.doesNotMatch(patchedText, /ImageID\(Img_FrmMain_0\)/);
+  assert.match(patchedText, /ButtonImageGadget\(#BtnImage, 10, 10, 80, 24, ImageID\(#Img_FrmMain_0\)\)/);
+  assert.match(patchedText, /ImageGadget\(#ImgView, 10, 40, 64, 64, ImageID\(#Img_FrmMain_0\)\)/);
+  assert.match(patchedText, /MenuItem\(#MenuSave, "Save", ImageID\(#Img_FrmMain_0\)\)/);
+  assert.match(patchedText, /ToolBarImageButton\(#TbSave, ImageID\(#Img_FrmMain_0\)\)/);
+  assert.match(patchedText, /StatusBarImage\(0, 0, ImageID\(#Img_FrmMain_0\)\)/);
+});
+
+test("reindexes multiple image references when toggling an enum image to pbAny mode", () => {
+  const text = `; Form Designer for PureBasic - 6.40
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #ImgView
+EndEnumeration
+
+Enumeration FormImage
+  #Img_FrmMain_0
+  #Img_FrmMain_1
+EndEnumeration
+
+Enumeration FormMenu
+  #MenuSave
+  #TbSave
+EndEnumeration
+
+LoadImage(#Img_FrmMain_0,"first.png")
+LoadImage(#Img_FrmMain_1,"second.png")
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
+  OpenWindow(#FrmMain, x, y, width, height, "Images")
+  ImageGadget(#ImgView, 10, 40, 64, 64, ImageID(#Img_FrmMain_0))
+  CreateImageMenu(0, WindowID(#FrmMain))
+  MenuItem(#MenuSave, "Save", ImageID(#Img_FrmMain_1))
+  CreateToolBar(0, WindowID(#FrmMain))
+  ToolBarImageButton(#TbSave, ImageID(#Img_FrmMain_1))
+  CreateStatusBar(0, WindowID(#FrmMain))
+  AddStatusBarField(100)
+  StatusBarImage(0, 0, ImageID(#Img_FrmMain_1))
+EndProcedure
+`;
+
+  const parsed = parseFormDocument(text);
+  const sourceLine = parsed.images.find((entry) => entry.id === "#Img_FrmMain_0")?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected enum image source line.");
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) => applyImageUpdate(document, sourceLine!, {
+    inline: false,
+    idRaw: "#PB_Any",
+    assignedVar: "Img_FrmMain_1",
+    imageRaw: '"first.png"',
+    pbAny: true,
+  }));
+
+  assert.deepEqual(updated.images.map((entry) => entry.id), ["#Img_FrmMain_0", "Img_FrmMain_1"]);
+  assert.match(patchedText, /Enumeration FormImage\r?\n  #Img_FrmMain_0\r?\nEndEnumeration/);
+  assert.match(patchedText, /^Global Img_FrmMain_1$/m);
+  assert.match(patchedText, /LoadImage\(#Img_FrmMain_0,"second\.png"\)/);
+  assert.match(patchedText, /Img_FrmMain_1 = LoadImage\(#PB_Any,"first\.png"\)/);
+  assert.match(patchedText, /ImageGadget\(#ImgView, 10, 40, 64, 64, ImageID\(Img_FrmMain_1\)\)/);
+  assert.match(patchedText, /MenuItem\(#MenuSave, "Save", ImageID\(#Img_FrmMain_0\)\)/);
+  assert.match(patchedText, /ToolBarImageButton\(#TbSave, ImageID\(#Img_FrmMain_0\)\)/);
+  assert.match(patchedText, /StatusBarImage\(0, 0, ImageID\(#Img_FrmMain_0\)\)/);
+});
+
+test("preserves CatchImage when toggling an enum image to pbAny mode", () => {
+  const text = `; Form Designer for PureBasic - 6.40
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormImage
+  #Img_FrmMain_0
+EndEnumeration
+
+CatchImage(#Img_FrmMain_0,?Img_FrmMain_0)
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
+  OpenWindow(#FrmMain, x, y, width, height, "Images")
+EndProcedure
+`;
+
+  const parsed = parseFormDocument(text);
+  const sourceLine = parsed.images.find((entry) => entry.id === "#Img_FrmMain_0")?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected enum image source line.");
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) => applyImageUpdate(document, sourceLine!, {
+    inline: true,
+    idRaw: "#PB_Any",
+    assignedVar: "Img_FrmMain_0",
+    imageRaw: "?Img_FrmMain_0",
+    pbAny: true,
+  }));
+
+  assert.equal(updated.images[0]?.id, "Img_FrmMain_0");
+  assert.equal(updated.images[0]?.inline, true);
+  assert.match(patchedText, /^Global Img_FrmMain_0$/m);
+  assert.match(patchedText, /Img_FrmMain_0 = CatchImage\(#PB_Any,\?Img_FrmMain_0\)/);
+  assert.doesNotMatch(patchedText, /LoadImage\(#PB_Any,\?Img_FrmMain_0\)/);
+});
+
+test("reindexes preserved AddGadgetItem image references when deleting an earlier unreferenced image", () => {
+  const text = `; Form Designer for PureBasic - 6.40
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #TreeMain
+EndEnumeration
+
+Enumeration FormImage
+  #Img_FrmMain_0
+  #Img_FrmMain_1
+EndEnumeration
+
+LoadImage(#Img_FrmMain_0,"unused.png")
+LoadImage(#Img_FrmMain_1,"node.png")
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
+  OpenWindow(#FrmMain, x, y, width, height, "Images")
+  TreeGadget(#TreeMain, 10, 10, 200, 120, 0)
+  AddGadgetItem(#TreeMain, -1, "Root", ImageID(#Img_FrmMain_1), 0)
+EndProcedure
+`;
+
+  const parsed = parseFormDocument(text);
+  const sourceLine = parsed.images.find((entry) => entry.id === "#Img_FrmMain_0")?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected enum image source line.");
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) => applyImageDelete(document, sourceLine!));
+  const tree = updated.gadgets.find((entry) => entry.id === "#TreeMain");
+
+  assert.deepEqual(updated.images.map((entry) => entry.id), ["#Img_FrmMain_0"]);
+  assert.equal(updated.images[0]?.imageRaw, '"node.png"');
+  assert.equal(tree?.items?.[0]?.imageId, "#Img_FrmMain_0");
+  assert.equal(tree?.items?.[0]?.flagsRaw, "0");
+  assert.match(patchedText, /LoadImage\(#Img_FrmMain_0,"node\.png"\)/);
+  assert.match(patchedText, /AddGadgetItem\(#TreeMain, -1, "Root", ImageID\(#Img_FrmMain_0\), 0\)/);
+  assert.doesNotMatch(patchedText, /#Img_FrmMain_1/);
 });
