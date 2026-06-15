@@ -14,6 +14,7 @@ import {
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
 import { loadFixture } from "./helpers/loadFixture";
+import { stripBomAndToLf } from "./helpers/testUtils";
 
 function patchAndReparse(
   text: string,
@@ -133,7 +134,7 @@ test("inserts the first menu icon block before the image decoder and upgrades Cr
     (document) => applyMenuEntryInsert(document, "0", args)
   );
 
-  const normalized = patchedText.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
+  const normalized = stripBomAndToLf(patchedText);
   const expected = [
     '; Form Designer for PureBasic - 6.40',
     '; Warning: this file uses a strict syntax, if you edit it, make sure to respect the Form Designer limitation or it won\'t be opened again.',
@@ -183,7 +184,7 @@ test("inserts FormMenu before an existing FormFont block when no window or gadge
     applyMenuEntryInsert(document, "0", args)
   );
 
-  const normalized = patchedText.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
+  const normalized = stripBomAndToLf(patchedText);
   assert.ok(normalized.includes([
     "Global FrmMain",
     "",
@@ -214,7 +215,7 @@ test("inserts FormMenu before image decoder lines when no enum anchor exists yet
     applyMenuEntryInsert(document, "0", args)
   );
 
-  const normalized = patchedText.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
+  const normalized = stripBomAndToLf(patchedText);
   assert.ok(normalized.includes([
     "Global FrmMain",
     "",
@@ -231,4 +232,47 @@ test("inserts FormMenu before image decoder lines when no enum anchor exists yet
   assert.match(patchedText, /CreateMenu\(0, WindowID\(FrmMain\)\)/);
   assert.match(patchedText, /MenuItem\(#MenuSave, "Save"\)/);
   assert.ok(parsed.menus[0]?.entries.some((entry) => entry.idRaw === "#MenuSave"));
+});
+
+test("downgrades CreateImageMenu to CreateMenu when the last menu icon is removed", () => {
+  const text = `; Form Designer for PureBasic - 6.40
+Enumeration FormMenu
+  #MenuSave
+EndEnumeration
+
+Enumeration FormImage
+  #ImgSave
+EndEnumeration
+
+UsePNGImageDecoder()
+
+LoadImage(#ImgSave,"save.png")
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
+  OpenWindow(#FrmMain, x, y, width, height, "Menu")
+  CreateImageMenu(0, WindowID(#FrmMain))
+  MenuTitle("File")
+  MenuItem(#MenuSave, "Save", ImageID(#ImgSave))
+EndProcedure
+`;
+
+  const parsed = parseFormDocument(text);
+  const target = parsed.menus[0]?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem && entry.idRaw === "#MenuSave");
+  const sourceLine = target?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected source line for menu item.");
+
+  const { patchedText, parsed: updated } = patchAndReparse(text, (document) =>
+    applyMenuEntryUpdate(document, "0", sourceLine!, {
+      kind: MENU_ENTRY_KIND.MenuItem,
+      idRaw: "#MenuSave",
+      textRaw: '"Save"',
+    })
+  );
+
+  const updatedTarget = updated.menus[0]?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem && entry.idRaw === "#MenuSave");
+  assert.match(patchedText, /CreateMenu\(0, WindowID\(#FrmMain\)\)/);
+  assert.doesNotMatch(patchedText, /CreateImageMenu\(/);
+  assert.match(patchedText, /MenuItem\(#MenuSave, "Save"\)/);
+  assert.equal(updatedTarget?.iconRaw, undefined);
+  assert.equal(updatedTarget?.iconId, undefined);
 });

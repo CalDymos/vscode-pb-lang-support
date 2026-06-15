@@ -903,7 +903,57 @@ EndProcedure
 
   assert.ok(img, "Expected a parsed ImageGadget.");
   assert.equal(img?.imageRaw, "imgHandle");
-  assert.equal(img?.imageId, "imgHandle");
+  assert.equal(img?.imageId, undefined);
+});
+
+
+test("keeps non-ImageID image arguments as raw values without resolving them as original image references", () => {
+  const text = `; Form Designer for PureBasic - 6.40
+; Warning: this file uses a strict syntax, if you edit it, make sure to respect the Form Designer limitation or it won't be opened again.
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #ImgLogo
+  #BtnSave
+EndEnumeration
+
+Procedure OpenFrmMain()
+  OpenWindow(#FrmMain, 0, 0, 320, 220, "Main")
+  ImageGadget(#ImgLogo, 10, 40, 64, 64, 0)
+  ButtonImageGadget(#BtnSave, 90, 40, 80, 24, imgHandle)
+  If CreateMenu(0, WindowID(#FrmMain))
+    MenuItem(#MenuOpen, "Open", imgHandle)
+  EndIf
+  If CreateToolBar(0, WindowID(#FrmMain))
+    ToolBarImageButton(#TbOpen, 0)
+  EndIf
+  If CreateStatusBar(0, WindowID(#FrmMain))
+    AddStatusBarField(120)
+    StatusBarImage(0, 0, imgHandle)
+  EndIf
+EndProcedure
+`;
+
+  const doc = parseFormDocument(text);
+  const imageGadget = doc.gadgets.find((g) => g.id === "#ImgLogo");
+  const buttonImageGadget = doc.gadgets.find((g) => g.id === "#BtnSave");
+  const menuItem = doc.menus[0]?.entries.find((entry) => entry.idRaw === "#MenuOpen");
+  const toolBarButton = doc.toolbars[0]?.entries.find((entry) => entry.idRaw === "#TbOpen");
+  const statusField = doc.statusbars[0]?.fields[0];
+
+  assert.equal(imageGadget?.imageRaw, "0");
+  assert.equal(imageGadget?.imageId, undefined);
+  assert.equal(buttonImageGadget?.imageRaw, "imgHandle");
+  assert.equal(buttonImageGadget?.imageId, undefined);
+  assert.equal(menuItem?.iconRaw, "imgHandle");
+  assert.equal(menuItem?.iconId, undefined);
+  assert.equal(toolBarButton?.iconRaw, "0");
+  assert.equal(toolBarButton?.iconId, undefined);
+  assert.equal(statusField?.imageRaw, "imgHandle");
+  assert.equal(statusField?.imageId, undefined);
 });
 
 

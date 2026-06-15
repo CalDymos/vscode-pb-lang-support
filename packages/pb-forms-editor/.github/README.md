@@ -176,19 +176,342 @@ You can configure the Forms Editor via:
 ### Project Structure (Package)
 
 ```text
-packages/pb-forms-editor/
-├── icons
-│   ├── application_view_form.png
-│   └── application_view_text.png
-├── samples
+pb-forms-editor/
+├── .github/
+│   └── README.md
 ├── .vscodeignore
-├── package.json
-├── src/
-├── out/
-├── README.md
-├── tsconfig.json
-├── LICENSE
+├── CHANGELOG.md
+├── fixtures/
+│   ├── roundtrip/
+│   │   ├── 04-gadget-items-columns.pbf
+│   │   ├── 14-combined-regression.pbf
+│   │   ├── 17-menu-title-delete-nested-submenu.pbf
+│   │   ├── 18-toolbar-tooltip-insert-after-button.pbf
+│   │   ├── 19-imageblock-before-font.pbf
+│   │   ├── 20-imageblock-enum-single.pbf
+│   │   ├── 21-imageblock-enum-with-menu.pbf
+│   │   ├── 22-imageblock-pbany-single.pbf
+│   │   ├── 23-imageblock-boundary-declare.pbf
+│   │   ├── 24-imageblock-custom-gadget-base.pbf
+│   │   ├── 25-imageblock-custom-gadget-pbany-single.pbf
+│   │   ├── 26-imageblock-no-images-basic.pbf
+│   │   ├── 27-imageblock-custom-gadget-window-assignment.pbf
+│   │   ├── 28-imageblock-enum-before-font-single.pbf
+│   │   ├── 29-fontblock-top-level-parse.pbf
+│   │   ├── 30-fontblock-before-procedure-after-image.pbf
+│   │   ├── 31-fontblock-basic-no-fonts.pbf
+│   │   ├── 32-fontblock-enum-single.pbf
+│   │   ├── 33-fontblock-pbany-single.pbf
+│   │   ├── 34-fontblock-boundary-declare.pbf
+│   │   ├── 35-fontblock-before-declare-single-blank-line.pbf
+│   │   ├── 36-fontblock-custom-gadget-base.pbf
+│   │   ├── 37-fontblock-custom-gadget-window-assignment.pbf
+│   │   ├── 38-toolbar-menuenum-toolbar-only-custom-gadget-base.pbf
+│   │   ├── 39-toolbar-menuenum-menu-and-toolbar-base.pbf
+│   │   ├── 40-toolbar-menuenum-toolbar-only-last-symbol.pbf
+│   │   ├── 41-toolbar-menuenum-shared-id-base.pbf
+│   │   ├── 42-toolbar-menuenum-before-image-block.pbf
+│   │   ├── 43-menuenum-custom-gadget-base.pbf
+│   │   ├── 45-menuenum-basic-single-symbol.pbf
+│   │   ├── 46-menuenum-before-image-block.pbf
+│   │   ├── 47-menuenum-before-font-block.pbf
+│   │   ├── 48-menuenum-before-image-decoder.pbf
+│   │   ├── 49-windowgadget-resize-existing-basic.pbf
+│   │   ├── 50-windowgadget-resize-create-with-events.pbf
+│   │   ├── 51-windowgadget-resize-create-no-events.pbf
+│   │   ├── 52-windowgadget-resize-delete-last-scaffolding.pbf
+│   │   ├── 53-windowgadget-resize-delete-line-basic.pbf
+│   │   ├── 54-windowgadget-window-enum-before-image-block.pbf
+│   │   ├── 55-windowgadget-window-enum-before-font-block.pbf
+│   │   ├── 56-windowgadget-window-enum-before-image-decoder.pbf
+│   │   ├── 59-windowgadget-window-global-before-gadget-image-globals.pbf
+│   │   ├── 60-windowgadget-window-global-before-custom-init.pbf
+│   │   ├── 61-windowgadget-window-rename-selected-pbany.pbf
+│   │   ├── 62-windowgadget-window-enum-remove-last-global-before-image-block.pbf
+│   │   ├── 63-windowgadget-gadget-enum-before-custom-init.pbf
+│   │   ├── 64-windowgadget-gadget-enum-before-menu-block.pbf
+│   │   ├── 65-windowgadget-gadget-global-between-window-image-globals.pbf
+│   │   ├── 66-custom-gadget-marker-pair-basic.pbf
+│   │   └── 67-head-order-combined-base.pbf
+│   └── smoke/
+│       ├── 01-window-basic.pbf
+│       ├── 03-gadgets-basic.pbf
+│       ├── 05-container-panel.pbf
+│       ├── 06-container-scrollarea.pbf
+│       ├── 07-container-splitter.pbf
+│       ├── 08-menu-basic.pbf
+│       ├── 09-toolbar-basic.pbf
+│       ├── 10-statusbar-basic.pbf
+│       ├── 11-images-crossrefs.pbf
+│       ├── 12-visibility-colors-fonts.pbf
+│       ├── 13-events-and-parent-window.pbf
+│       ├── 15-object-event-bindings.pbf
+│       ├── 16-string-literals-combined.pbf
+│       └── events/
 ├── icon.png
+├── icons/
+│   ├── application_view_form.png
+│   ├── application_view_text.png
+│   ├── ArrowLeft.png
+│   ├── ArrowLeft2.png
+│   ├── ArrowRight.png
+│   ├── ArrowRight2.png
+│   ├── CompileAndRun.png
+│   ├── CompilerOptions.png
+│   ├── CompileToExe.png
+│   ├── DebugBreakPoint.png
+│   ├── DebugContinue.png
+│   ├── DebugCreateReport.png
+│   ├── DebugKill.png
+│   ├── DebugMemoryViewer.png
+│   ├── DebugOnOff.png
+│   ├── DebugOutput.png
+│   ├── DebugStep.png
+│   ├── DebugStepNumber.png
+│   ├── DebugStepOut.png
+│   ├── DebugStepOver.png
+│   ├── DebugStop.png
+│   ├── DebugVariables.png
+│   ├── DebugWatchList.png
+│   ├── DefaultTarget.png
+│   ├── DiffHideFiles.png
+│   ├── DisabledTarget.png
+│   ├── DisplayHelp.png
+│   ├── EditAddBookmark.png
+│   ├── EditCopy.png
+│   ├── EditCut.png
+│   ├── EditFind.png
+│   ├── EditFindAndReplace.png
+│   ├── EditFindInFiles.png
+│   ├── EditGoToBookmark.png
+│   ├── EditGoToLineNumber.png
+│   ├── EditInsertComment.png
+│   ├── EditPaste.png
+│   ├── EditRedo.png
+│   ├── EditRemoveComment.png
+│   ├── EditUndo.png
+│   ├── FileClose.png
+│   ├── FileNew.png
+│   ├── FileOpen.png
+│   ├── FileOpen1.png
+│   ├── FileOpen2.png
+│   ├── FilePreferences.png
+│   ├── FileSave.png
+│   ├── FileSortSources.png
+│   ├── Home.png
+│   ├── mc_backcolor.png
+│   ├── mc_copyclipboard.png
+│   ├── mc_enablefolding.png
+│   ├── mc_filterclear.png
+│   ├── mc_frontcolor.png
+│   ├── mc_hidemodulenames.png
+│   ├── mc_highlightprocedure.png
+│   ├── mc_restorecolor.png
+│   ├── mc_scrollprocedure.png
+│   ├── mc_switchbuttons.png
+│   ├── MultipleFiles.png
+│   ├── Refresh.png
+│   ├── StartVisualDesigner.png
+│   ├── TargetAdd.png
+│   ├── TargetEdit.png
+│   ├── TargetError.png
+│   ├── TargetRemove.png
+│   ├── TargetWarning.png
+│   ├── Template.png
+│   ├── TemplateAdd.png
+│   ├── TemplateAddDir.png
+│   ├── TemplateDirectory.png
+│   ├── TemplateDown.png
+│   ├── TemplateEdit.png
+│   ├── TemplateRemove.png
+│   ├── TemplateRemoveDir.png
+│   ├── TemplateUp.png
+│   ├── ToolsAsciiTable.png
+│   ├── ToolsColorPicker.png
+│   ├── ToolsDiff.png
+│   ├── ToolsExplorer.png
+│   ├── ToolsFileViewer.png
+│   ├── ToolsProcedureBrowser.png
+│   ├── ToolsStructureViewer.png
+│   ├── ToolsVariableViewer.png
+│   ├── vd_buttongadget.png
+│   ├── vd_buttonimagegadget.png
+│   ├── vd_calendargadget.png
+│   ├── vd_canvasgadget.png
+│   ├── vd_checkboxgadget.png
+│   ├── vd_comboboxgadget.png
+│   ├── vd_containergadget.png
+│   ├── vd_cursor.png
+│   ├── vd_dategadget.png
+│   ├── vd_editorgadget.png
+│   ├── vd_explorercombogadget.png
+│   ├── vd_explorerlistgadget.png
+│   ├── vd_explorertreegadget.png
+│   ├── vd_frame3dgadget.png
+│   ├── vd_hyperlinkgadget.png
+│   ├── vd_imagegadget.png
+│   ├── vd_ipaddressgadget.png
+│   ├── vd_listicongadget.png
+│   ├── vd_listviewgadget.png
+│   ├── vd_menu.png
+│   ├── vd_optiongadget.png
+│   ├── vd_panelgadget.png
+│   ├── vd_progressbargadget.png
+│   ├── vd_scrollareagadget.png
+│   ├── vd_scrollbargadget.png
+│   ├── vd_spingadget.png
+│   ├── vd_splittergadget.png
+│   ├── vd_status.png
+│   ├── vd_stringgadget.png
+│   ├── vd_textgadget.png
+│   ├── vd_toolbar.png
+│   ├── vd_trackbargadget.png
+│   ├── vd_treegadget.png
+│   ├── vd_webgadget.png
+│   └── Vertical.png
+├── LICENSE
+├── package.json
+├── package.nls.de.json
+├── package.nls.json
+├── README.md
+├── samples/
+│   ├── .vscode/
+│   │   └── settings.json
+│   ├── all-gadgets.pbf
+│   ├── sample.pbf
+│   └── SelectParentTest.pbf
+├── src/
+│   ├── config/
+│   │   └── settings.ts
+│   ├── core/
+│   │   ├── emitter/
+│   │   │   └── patch-emitter.ts
+│   │   ├── gadget/
+│   │   │   ├── delete.ts
+│   │   │   ├── insert.ts
+│   │   │   ├── inspector.ts
+│   │   │   ├── item-label.ts
+│   │   │   ├── layout.ts
+│   │   │   └── reparent.ts
+│   │   ├── image/
+│   │   │   ├── assignment.ts
+│   │   │   ├── dimension.ts
+│   │   │   └── path.ts
+│   │   ├── model.ts
+│   │   ├── parser/
+│   │   │   ├── call-scanner.ts
+│   │   │   ├── form-parser.ts
+│   │   │   ├── global-scanner.ts
+│   │   │   ├── layout-raw.ts
+│   │   │   ├── pb-color.ts
+│   │   │   ├── pb-font-reference.ts
+│   │   │   ├── pb-image-reference.ts
+│   │   │   ├── pb-image-value.ts
+│   │   │   ├── pb-string.ts
+│   │   │   ├── pb-window-reference.ts
+│   │   │   ├── procedure-scanner.ts
+│   │   │   └── tokenizer.ts
+│   │   ├── preview/
+│   │   │   ├── assets.ts
+│   │   │   ├── chrome.ts
+│   │   │   ├── gadget-font.ts
+│   │   │   └── gadget-text.ts
+│   │   ├── procedures/
+│   │   │   └── list.ts
+│   │   ├── statusbar/
+│   │   │   ├── image-inspector.ts
+│   │   │   ├── inspector.ts
+│   │   │   └── preview.ts
+│   │   ├── toolbox/
+│   │   │   └── panel.ts
+│   │   ├── toplevel/
+│   │   │   ├── context-menu.ts
+│   │   │   ├── image-inspector.ts
+│   │   │   ├── preview.ts
+│   │   │   └── selection.ts
+│   │   ├── utils/
+│   │   │   ├── form-settings-runtime.ts
+│   │   │   ├── layout-dpi.ts
+│   │   │   ├── property-validation.ts
+│   │   │   └── webview-state.ts
+│   │   └── window/
+│   │       ├── color-inspector.ts
+│   │       └── inspector.ts
+│   ├── extension.ts
+│   ├── forms-designer-provider.ts
+│   ├── shared/
+│   │   ├── designer-settings.ts
+│   │   ├── menu.ts
+│   │   └── messages.ts
+│   └── webview/
+│       └── main.ts
+├── test/
+│   ├── color-inspector-utils.test.ts
+│   ├── fixture-originality-audit.test.ts
+│   ├── form-parser-source-range.test.ts
+│   ├── form-settings-runtime-utils.test.ts
+│   ├── gadget-delete-utils.test.ts
+│   ├── gadget-insert-utils.test.ts
+│   ├── gadget-inspector-utils.test.ts
+│   ├── gadget-item-label-utils.test.ts
+│   ├── gadget-layout-utils.test.ts
+│   ├── gadget-preview-font-utils.test.ts
+│   ├── gadget-preview-text-utils.test.ts
+│   ├── gadget-reparent-utils.test.ts
+│   ├── helpers/
+│   │   ├── applyWorkspaceEdit.ts
+│   │   ├── fakeTextDocument.ts
+│   │   ├── loadFixture.ts
+│   │   └── testUtils.ts
+│   ├── image-assignment-utils.test.ts
+│   ├── image-dimension-utils.test.ts
+│   ├── image-path-utils.test.ts
+│   ├── layout-dpi-utils.test.ts
+│   ├── model-constants.test.ts
+│   ├── parser.smoke.test.ts
+│   ├── parser.window-event-legacy.test.ts
+│   ├── patch.combined.test.ts
+│   ├── patch.custom-gadget.test.ts
+│   ├── patch.fontblock.test.ts
+│   ├── patch.head-order.test.ts
+│   ├── patch.imageblock.test.ts
+│   ├── patch.items-columns.test.ts
+│   ├── patch.menuenum.test.ts
+│   ├── patch.toolbar-menuenum.test.ts
+│   ├── patch.toolbar.test.ts
+│   ├── patch.window-event-file-legacy.test.ts
+│   ├── patch.window-gadget.test.ts
+│   ├── pb-font-reference-parser.test.ts
+│   ├── pb-image-reference-parser.test.ts
+│   ├── pb-image-value-parser.test.ts
+│   ├── preview-chrome-utils.test.ts
+│   ├── procedure-list-utils.test.ts
+│   ├── property-validation-utils.test.ts
+│   ├── runtime/
+│   │   └── vscode/
+│   │       └── index.js
+│   ├── scripts/
+│   │   ├── clean-test-outdir.js
+│   │   └── copy-vscode-shim.js
+│   ├── statusbar-image-inspector-utils.test.ts
+│   ├── statusbar-inspector-utils.test.ts
+│   ├── statusbar-preview-utils.test.ts
+│   ├── tokenizer-utils.test.ts
+│   ├── toolbox-panel-utils.test.ts
+│   ├── top-level-context-menu-utils.test.ts
+│   ├── top-level-image-inspector-utils.test.ts
+│   ├── top-level-preview-utils.test.ts
+│   ├── types/
+│   │   ├── node/
+│   │   │   └── index.d.ts
+│   │   ├── node-shims.d.ts
+│   │   └── vscode-shim.d.ts
+│   ├── webview-state-utils.test.ts
+│   └── window-inspector-utils.test.ts
+├── tsconfig.json
+├── tsconfig.test.json
+├── tsconfig.webview.json
+└── webpack.config.js
 └── ...
 ```
 

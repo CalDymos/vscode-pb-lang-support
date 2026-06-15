@@ -30,6 +30,7 @@ export type ToolBarEntryLike = {
   idRaw?: string;
   iconRaw?: string;
   iconId?: string;
+  toggle?: boolean;
 };
 
 export type ToolBarModelLike = {
@@ -90,6 +91,13 @@ export type MenuEntryMoveTargetLike = {
   placement: MenuEntryMovePlacement;
   indicatorRect: PreviewRectLike;
   indicatorOrientation: "horizontal" | "vertical";
+};
+
+export type LinearTopLevelEntryMoveTargetLike = {
+  targetSourceLine: number;
+  placement: Extract<MenuEntryMovePlacement, "before" | "after">;
+  indicatorRect: PreviewRectLike;
+  indicatorOrientation: "vertical";
 };
 
 export type VisibleMenuEntryLike = {
@@ -449,13 +457,52 @@ export function hasStatusBarPreviewAssignedImage(field: StatusBarFieldLike): boo
 }
 
 
+export interface SelectedMenuEntryInspectorFieldConfig {
+  constantEditable: boolean;
+  nameEditable: boolean;
+  shortcutEditable: boolean;
+  imageEditable: boolean;
+  separatorChecked: boolean;
+  separatorEditable: boolean;
+}
+
+export function getSelectedMenuEntryInspectorFieldConfig(
+  entry: MenuEntryLike,
+  canPatch: boolean
+): SelectedMenuEntryInspectorFieldConfig {
+  return {
+    constantEditable: canPatch && entry.kind === "MenuItem",
+    nameEditable: canPatch && (entry.kind === "MenuItem" || entry.kind === "MenuTitle" || entry.kind === "OpenSubMenu"),
+    shortcutEditable: canPatch && entry.kind === "MenuItem",
+    imageEditable: canPatch && entry.kind === "MenuItem",
+    separatorChecked: entry.kind === "MenuBar",
+    separatorEditable: false,
+  };
+}
+
 export interface SelectedToolBarInspectorFieldConfig {
+  variableEditable: boolean;
   captionLabel: string;
+  captionEditable: boolean;
+  imageEditable: boolean;
+  toggleChecked: boolean;
+  toggleEditable: boolean;
+  separatorChecked: boolean;
+  separatorEditable: boolean;
+  selectProcParticipates: boolean;
+  selectProcDisabledTitle: string;
   showTextField: boolean;
   showIconRawField: boolean;
 }
 
 export interface SelectedStatusBarInspectorFieldConfig {
+  widthEditable: boolean;
+  textEditable: boolean;
+  currentImageEditable: boolean;
+  changeImageEditable: boolean;
+  progressBarEditable: boolean;
+  flagsEditable: boolean;
+  deleteEditable: boolean;
   showProgressValueField: boolean;
 }
 
@@ -486,16 +533,41 @@ export function getTopLevelSelectProcEditState(
   };
 }
 
-export function getSelectedToolBarInspectorFieldConfig(): SelectedToolBarInspectorFieldConfig {
+export function getSelectedToolBarInspectorFieldConfig(
+  entry: ToolBarEntryLike,
+  canPatch: boolean
+): SelectedToolBarInspectorFieldConfig {
+  const isImageButton = entry.kind === "ToolBarImageButton";
+  const isSeparator = entry.kind === "ToolBarSeparator";
+  const isToolTip = entry.kind === "ToolBarToolTip";
+
   return {
+    variableEditable: canPatch && !isSeparator,
     captionLabel: "Caption",
+    captionEditable: canPatch && canEditToolBarTooltip(entry),
+    imageEditable: canPatch && isImageButton,
+    toggleChecked: Boolean(entry.toggle),
+    toggleEditable: canPatch && isImageButton,
+    separatorChecked: isSeparator,
+    separatorEditable: false,
+    selectProcParticipates: !isSeparator && !isToolTip,
+    selectProcDisabledTitle: isToolTip
+      ? "This entry type does not participate in Select EventMenu() cases."
+      : "Toolbar separators are structural entries and do not participate in Select EventMenu() cases.",
     showTextField: false,
     showIconRawField: false,
   };
 }
 
-export function getSelectedStatusBarInspectorFieldConfig(): SelectedStatusBarInspectorFieldConfig {
+export function getSelectedStatusBarInspectorFieldConfig(canPatch = true): SelectedStatusBarInspectorFieldConfig {
   return {
+    widthEditable: canPatch,
+    textEditable: canPatch,
+    currentImageEditable: canPatch,
+    changeImageEditable: canPatch,
+    progressBarEditable: canPatch,
+    flagsEditable: canPatch,
+    deleteEditable: canPatch,
     showProgressValueField: false,
   };
 }
@@ -520,11 +592,11 @@ export function getStatusBarPreviewInsertArgs(
 ): { widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string } {
   switch (action) {
     case "image":
-      return { widthRaw: "96", imageRaw: "0", flagsRaw: "#PB_StatusBar_Raised" };
+      return { widthRaw: "50" };
     case "label":
-      return { widthRaw: "120", textRaw: '"StatusBarField"' };
+      return { widthRaw: "50", textRaw: '"Label"' };
     case "progress":
-      return { widthRaw: "120", progressBar: true, progressRaw: "0" };
+      return { widthRaw: "50", progressBar: true, progressRaw: "0" };
   }
 }
 
@@ -764,6 +836,56 @@ export function getMenuFooterRect(
   parentIndex: number
 ): PreviewMenuFooterRectLike | undefined {
   return footerRects.find((entry) => entry.menuId === menuId && entry.parentIndex === parentIndex);
+}
+
+
+export function getLinearTopLevelEntryMoveTarget(args: {
+  sourceEntryIndex: number;
+  x: number;
+  y: number;
+  entryRects: PreviewEntryRectLike[];
+  getSourceLine: (index: number) => number | undefined;
+  edgeTolerance?: number;
+  isNoopMove?: (targetIndex: number, placement: Extract<MenuEntryMovePlacement, "before" | "after">) => boolean;
+}): LinearTopLevelEntryMoveTargetLike | null {
+  const edgeTolerance = args.edgeTolerance ?? 5;
+  const entryRects = [...args.entryRects].sort((left, right) => left.x - right.x || left.index - right.index);
+  if (entryRects.length < 2) return null;
+
+  for (const rect of entryRects) {
+    if (rect.index === args.sourceEntryIndex) continue;
+    if (args.y < rect.y || args.y > rect.y + rect.h) continue;
+    if (args.x > rect.x - edgeTolerance && args.x < rect.x + edgeTolerance) {
+      if (args.isNoopMove?.(rect.index, MenuEntryMovePlacement.Before)) return null;
+      const targetSourceLine = args.getSourceLine(rect.index);
+      if (typeof targetSourceLine !== "number") return null;
+      return {
+        targetSourceLine,
+        placement: MenuEntryMovePlacement.Before,
+        indicatorRect: { x: rect.x - 1, y: rect.y, w: 2, h: rect.h },
+        indicatorOrientation: "vertical"
+      };
+    }
+  }
+
+  const lastRect = entryRects[entryRects.length - 1];
+  if (lastRect.index !== args.sourceEntryIndex
+    && args.y >= lastRect.y
+    && args.y <= lastRect.y + lastRect.h
+    && args.x > lastRect.x + edgeTolerance
+  ) {
+    if (args.isNoopMove?.(lastRect.index, MenuEntryMovePlacement.After)) return null;
+    const targetSourceLine = args.getSourceLine(lastRect.index);
+    if (typeof targetSourceLine !== "number") return null;
+    return {
+      targetSourceLine,
+      placement: MenuEntryMovePlacement.After,
+      indicatorRect: { x: lastRect.x + lastRect.w, y: lastRect.y, w: 2, h: lastRect.h },
+      indicatorOrientation: "vertical"
+    };
+  }
+
+  return null;
 }
 
 export function getMenuVisibleEntries(

@@ -15,6 +15,7 @@ import { MENU_ENTRY_KIND } from "../src/core/model";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
 import { loadFixture } from "./helpers/loadFixture";
+import { stripBomAndToLf } from "./helpers/testUtils";
 
 function patchOnce(
   text: string,
@@ -27,10 +28,6 @@ function patchOnce(
   const edit = editFactory(document.asTextDocument());
   assert.ok(edit, "Expected a WorkspaceEdit result.");
   return applyWorkspaceEditToText(text, edit!);
-}
-
-function toLf(text: string): string {
-  return text.replace(/\r\n/g, "\n");
 }
 
 test("preserves the PB 6.30 top-level head order across menu, image and font insertions", () => {
@@ -58,7 +55,7 @@ test("preserves the PB 6.30 top-level head order across menu, image and font ins
   const withMenu = patchOnce(text, (document) => applyMenuEntryInsert(document, "0", menuArgs));
   const withImage = patchOnce(withMenu, (document) => applyImageInsert(document, imageArgs));
   const patchedText = patchOnce(withImage, (document) => applyFontInsert(document, fontArgs));
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
   const parsed = parseFormDocument(patchedText);
 
   const orderedMarkers = [

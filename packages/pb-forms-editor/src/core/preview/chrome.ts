@@ -903,6 +903,44 @@ export function getStatusBarRect(
 }
 
 
+export function getWindowPreviewResizeButtonRect(windowRect: PreviewRect): PreviewRect {
+  const anchorX = Math.trunc(windowRect.x + windowRect.w + 2);
+  const anchorY = Math.trunc(windowRect.y + windowRect.h + 2);
+
+  return {
+    x: anchorX - 4,
+    y: anchorY - 4,
+    w: 8,
+    h: 8,
+  };
+}
+
+export function hitWindowPreviewResizeButton(windowRect: PreviewRect, x: number, y: number): ResizeHandle | null {
+  return rectContainsPoint(getWindowPreviewResizeButtonRect(windowRect), x, y) ? "se" : null;
+}
+
+export function getWindowPreviewFrameRect(
+  origin: PreviewOffset,
+  clientWidth: number,
+  clientHeight: number,
+  chromeTopPadding: number,
+  clientSidePadding = 0,
+  clientBottomPadding = 0,
+  extraFrameHeight = 0
+): PreviewRect {
+  const insetX = Math.max(0, Math.trunc(clientSidePadding));
+  const insetTop = Math.max(0, Math.trunc(chromeTopPadding));
+  const insetBottom = Math.max(0, Math.trunc(clientBottomPadding));
+  const extraHeight = Math.max(0, Math.trunc(extraFrameHeight));
+
+  return {
+    x: Math.trunc(origin.x),
+    y: Math.trunc(origin.y),
+    w: Math.max(0, Math.trunc(clientWidth) + insetX * 2),
+    h: Math.max(0, Math.trunc(clientHeight) + insetTop + insetBottom + extraHeight),
+  };
+}
+
 export function getWindowClientSurfaceRects(
   windowRect: PreviewRect,
   chromeTopPadding: number,

@@ -33,7 +33,7 @@ import { parseDesignerLayoutRaw } from "./layout-raw";
 import { parsePbColorLiteral } from "./pb-color";
 import { parsePbStringLiteral } from "./pb-string";
 import { normalizePbImageValue } from "./pb-image-value";
-import { parsePbImageReference } from "./pb-image-reference";
+import { parsePbImageIdReference, parsePbImageReference } from "./pb-image-reference";
 import { parsePbFontReference } from "./pb-font-reference";
 import { parsePbWindowReference } from "./pb-window-reference";
 import { asNumber, normalizeProcParamName, splitParams } from "./tokenizer";
@@ -241,7 +241,7 @@ export function parseFormDocument(text: string): FormDocument {
         const idRaw = p[0]?.trim();
         const textRaw = p[1]?.trim();
         const parsedText = parseMenuItemText(textRaw);
-        const parsedIcon = parsePbImageReference(p[2]);
+        const parsedIcon = parsePbImageIdReference(p[2]);
         addMenuEntry({
           kind: MENU_ENTRY_KIND.MenuItem,
           level: menuLevel,
@@ -295,7 +295,7 @@ export function parseFormDocument(text: string): FormDocument {
       case TOOLBAR_ENTRY_KIND.ToolBarStandardButton: {
         if (!curToolBar) break;
         const p = splitParams(c.args);
-        addToolBarEntry({ kind: TOOLBAR_ENTRY_KIND.ToolBarStandardButton, idRaw: p[0]?.trim(), iconRaw: p[1]?.trim(), source: c.range });
+        addToolBarEntry({ kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton, idRaw: p[0]?.trim(), iconRaw: p[1]?.trim(), source: c.range });
         break;
       }
 
@@ -316,7 +316,7 @@ export function parseFormDocument(text: string): FormDocument {
       case TOOLBAR_ENTRY_KIND.ToolBarImageButton: {
         if (!curToolBar) break;
         const p = splitParams(c.args);
-        const parsedIcon = parsePbImageReference(p[1]);
+        const parsedIcon = parsePbImageIdReference(p[1]);
         addToolBarEntry({
           kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton,
           idRaw: p[0]?.trim(),
@@ -394,7 +394,7 @@ export function parseFormDocument(text: string): FormDocument {
         const p = splitParams(c.args);
         const statusBar = findStatusBarByReference(p[0]);
         updateStatusBarField(statusBar, p[1], (field) => {
-          const parsedImage = parsePbImageReference(p[2]);
+          const parsedImage = parsePbImageIdReference(p[2]);
           field.imageRaw = parsedImage.imageRaw;
           field.imageId = parsedImage.imageId;
           field.flagsRaw = p[3]?.trim() || undefined;
@@ -1533,7 +1533,7 @@ function parseGadgetConstructorDetails(kind: GadgetKind, params: string[]): {
 
     case GADGET_KIND.ButtonImageGadget:
     case GADGET_KIND.ImageGadget: {
-      const parsedImage = parsePbImageReference(params[5]);
+      const parsedImage = parsePbImageIdReference(params[5]);
       imageRaw = parsedImage.imageRaw;
       imageId = parsedImage.imageId;
       flagsExpr = params[6]?.trim() || undefined;

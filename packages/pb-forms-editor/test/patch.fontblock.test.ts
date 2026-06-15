@@ -12,6 +12,7 @@ import {
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
 import { loadFixture } from "./helpers/loadFixture";
+import { stripBomAndToLf } from "./helpers/testUtils";
 
 function patchAndReparse(
   text: string,
@@ -28,10 +29,6 @@ function patchAndReparse(
     patchedText,
     parsed: parseFormDocument(patchedText),
   };
-}
-
-function toLf(text: string): string {
-  return text.replace(/\r\n/g, "\n");
 }
 
 test("parses top-level FormFont declarations from the PB 6.40 fixture", () => {
@@ -57,7 +54,7 @@ test("inserts the first enum font block after the image block and before the pro
   };
 
   const { patchedText, parsed } = patchAndReparse(text, (document) => applyFontInsert(document, args));
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
   const font = parsed.fonts.find((entry) => entry.id === "#Font_FrmMain_0");
 
   assert.ok(font, "Expected inserted font entry.");
@@ -86,7 +83,7 @@ test("creates a Global font variable block when inserting the first pbAny font",
   };
 
   const { patchedText } = patchAndReparse(text, (document) => applyFontInsert(document, args));
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
 
   assert.ok(normalized.includes([
     'FontMain = LoadFont(#PB_Any, "Arial", 10)',
@@ -111,7 +108,7 @@ test("moves font declarations from FormFont to Global when toggling the last enu
   };
 
   const { patchedText } = patchAndReparse(text, (document) => applyFontUpdate(document, sourceLine!, args));
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
 
   assert.doesNotMatch(patchedText, /^Global\s+FontMain$/m);
   assert.ok(!normalized.includes(['Enumeration FormFont', '  #Font_FrmMain_0', 'EndEnumeration'].join("\n")));
@@ -133,7 +130,7 @@ test("moves font declarations from Global to FormFont when toggling the last pbA
   };
 
   const { patchedText } = patchAndReparse(text, (document) => applyFontUpdate(document, sourceLine!, args));
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
 
   assert.ok(normalized.includes([
     'Enumeration FormFont',
@@ -155,7 +152,7 @@ test("inserts an enum font block before Declare boundaries", () => {
   };
 
   const { patchedText } = patchAndReparse(text, (document) => applyFontInsert(document, args));
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
 
   assert.ok(normalized.includes([
     'Enumeration FormFont',
@@ -179,7 +176,7 @@ test("inserts a pbAny font Global block before Declare boundaries", () => {
   };
 
   const { patchedText } = patchAndReparse(text, (document) => applyFontInsert(document, args));
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
 
   assert.doesNotMatch(patchedText, /^Global\s+FontMain$/m);
   assert.ok(normalized.includes([
@@ -202,7 +199,7 @@ test("keeps a single blank line before Declare when updating an existing font bl
     sizeRaw: "12",
   }));
 
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
   assert.ok(normalized.includes([
     'LoadFont(#Font_FrmMain_0, "Arial", 12)',
     '',
@@ -225,7 +222,7 @@ test("keeps a single blank line before Declare when deleting the last font block
 
   const { patchedText } = patchAndReparse(text, (document) => applyFontDelete(document, sourceLine!));
 
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
   assert.ok(normalized.includes([
     'EndEnumeration',
     '',
@@ -254,7 +251,7 @@ test("inserts an enum font block after custom gadget initialisation and before P
   assert.ok(edit, 'Expected font insert edit.');
 
   const patchedText = applyWorkspaceEditToText(text, edit!);
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
 
   assert.ok(normalized.includes([
     '; 0 Custom gadget initialisation (do Not remove this line)',
@@ -287,7 +284,7 @@ test("inserts a pbAny font load block after custom gadget initialisation and bef
   assert.ok(edit, 'Expected font insert edit.');
 
   const patchedText = applyWorkspaceEditToText(text, edit!);
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
 
   assert.ok(normalized.includes([
     '; 0 Custom gadget initialisation (do Not remove this line)',
@@ -315,7 +312,7 @@ test("inserts an enum font block after custom gadget initialisation even without
   assert.ok(edit, 'Expected font insert edit.');
 
   const patchedText = applyWorkspaceEditToText(text, edit!);
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
 
   assert.ok(normalized.includes([
     'Global CustomGadget',
@@ -349,7 +346,7 @@ test("inserts a pbAny font load block after custom gadget initialisation even wi
   assert.ok(edit, 'Expected font insert edit.');
 
   const patchedText = applyWorkspaceEditToText(text, edit!);
-  const normalized = toLf(patchedText);
+  const normalized = stripBomAndToLf(patchedText);
 
   assert.ok(normalized.includes([
     '; 0 Custom gadget initialisation (do Not remove this line)',

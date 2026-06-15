@@ -7,6 +7,8 @@ type ReparentDialogGadgetLike = {
   kind: string;
   variable?: string;
   parentId?: string;
+  gadget1Id?: string;
+  gadget2Id?: string;
   items?: Array<{ text?: string; textRaw?: string }>;
 };
 
@@ -59,6 +61,17 @@ export function getGadgetReparentParentOptions(
 ): GadgetReparentParentOption[] {
   const blockedIds = collectDescendantIds(gadgets, gadgetId);
   blockedIds.add(gadgetId);
+
+  const selectedGadget = gadgets.find(gadget => gadget.id === gadgetId);
+  if (selectedGadget?.kind === GADGET_KIND.SplitterGadget) {
+    for (const linkedId of [selectedGadget.gadget1Id, selectedGadget.gadget2Id]) {
+      if (!linkedId) continue;
+      blockedIds.add(linkedId);
+      for (const descendantId of collectDescendantIds(gadgets, linkedId)) {
+        blockedIds.add(descendantId);
+      }
+    }
+  }
 
   const options: GadgetReparentParentOption[] = [
     {
