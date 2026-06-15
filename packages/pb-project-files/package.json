@@ -161,9 +161,17 @@
             "filenamePattern": "*.pbp"
           }
         ],
-        "priority": "default"
+        "priority": "option"
       }
-    ]
+    ],
+    "configurationDefaults": {
+      "workbench.diffEditorAssociations": {
+        "*.pbp": "default"
+      },
+      "workbench.editorAssociations": {
+        "*.pbp": "pbProjectFiles.pbpEditor"
+      }
+    }
   },
   "scripts": {
     "compile": "tsc -p ./ && webpack --mode development --config webpack.config.js",

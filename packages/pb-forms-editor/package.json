@@ -57,9 +57,17 @@
             "filenamePattern": "*.pbf"
           }
         ],
-        "priority": "default"
+        "priority": "option"
       }
     ],
+    "configurationDefaults": {
+      "workbench.diffEditorAssociations": {
+        "*.pbf": "default"
+      },
+      "workbench.editorAssociations": {
+        "*.pbf": "purebasic.formDesigner"
+      }
+    },
     "commands": [
       {
         "command": "purebasic.formDesigner.openAsText",
