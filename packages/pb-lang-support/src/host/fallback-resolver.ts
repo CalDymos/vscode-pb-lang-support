@@ -100,10 +100,13 @@ export class FallbackResolver {
             if (!cfg) return null;
 
             const base = wsFolder.uri.fsPath;
+            const warnings: string[] = [];
             const program = typeof cfg.program === 'string' && cfg.program.trim()
-                ? this.expandLaunchPath(base, uri.fsPath, cfg.program.trim())
+                ? await this.resolveLaunchProgram(base, uri.fsPath, cfg.program.trim(), warnings)
                 : uri.fsPath;
-            const outputFile = cfg.output ? this.expandLaunchPath(base, uri.fsPath, cfg.output as string) : undefined;
+            const outputFile = typeof cfg.output === 'string' && cfg.output.trim()
+                ? this.expandLaunchPath(base, uri.fsPath, cfg.output.trim())
+                : undefined;
 
             return {
                 source: 'launchJson',
@@ -111,6 +114,7 @@ export class FallbackResolver {
                 inputFile: program,
                 workingDir: path.dirname(program),
                 outputFile,
+                warnings,
             };
         } catch {
             return null;
@@ -235,11 +239,49 @@ export class FallbackResolver {
         return readHostSettings().build.fallbackSource;
     }
 
+    private async resolveLaunchProgram(
+        base: string,
+        activeFile: string,
+        value: string,
+        warnings: string[],
+    ): Promise<string> {
+        const program = this.expandLaunchPath(base, activeFile, value);
+        if (await this.isExistingFile(program)) {
+            return program;
+        }
+
+        warnings.push(`launch.json program does not point to an existing file; using active file instead: ${value}`);
+        return activeFile;
+    }
+
     private expandLaunchPath(base: string, activeFile: string, value: string): string {
         const expanded = value
             .replace(/\$\{file\}/g, activeFile)
             .replace(/\$\{workspaceFolder\}/g, base);
-        return this.abs(base, expanded);
+        return this.abs(base, this.unwrapLaunchPath(expanded));
+    }
+
+    private unwrapLaunchPath(value: string): string {
+        let normalized = value.trim();
+
+        if (normalized.startsWith('^')) {
+            normalized = normalized.slice(1).trimStart();
+        }
+
+        if (normalized.length >= 2 && normalized.startsWith('"') && normalized.endsWith('"')) {
+            normalized = normalized.slice(1, -1);
+        }
+
+        return normalized;
+    }
+
+    private async isExistingFile(filePath: string): Promise<boolean> {
+        try {
+            const stat = await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
+            return (stat.type & vscode.FileType.Directory) === 0;
+        } catch {
+            return false;
+        }
     }
 
     private abs(base: string, p: string): string {
