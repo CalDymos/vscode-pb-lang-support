@@ -9,7 +9,11 @@ import { serializeCompilerStandbyCommand } from '../../../../src/host/pbcompiler
 import { PassThrough } from 'stream';
 import { EventEmitter } from 'events';
 import type * as cp from 'child_process';
-import { CompilerStandbySession, detectPureBasicHome } from '../../../../src/host/pbcompiler/standby/compiler-standby-session';
+import {
+    CompilerStandbySession,
+    detectPureBasicHome,
+    formatCompilerStandbyCommandForLog,
+} from '../../../../src/host/pbcompiler/standby/compiler-standby-session';
 
 function makeTarget(partial: Partial<PbpTarget> = {}): PbpTarget {
     return {
@@ -147,6 +151,47 @@ describe('compiler standby command builder', () => {
         expect(result.warnings).toEqual(['Multiple resources are configured; compiler standby RESOURCE uses the first entry.']);
     });
 
+    test('expands dollar-prefixed constant values like the PureBasic IDE', () => {
+        const previousValue = process.env.PB_LANG_SUPPORT_TEST_SECRET;
+        const previousUnknownValue = process.env.PB_LANG_SUPPORT_UNKNOWN_SECRET;
+        process.env.PB_LANG_SUPPORT_TEST_SECRET = 'super-secret-value';
+        delete process.env.PB_LANG_SUPPORT_UNKNOWN_SECRET;
+
+        try {
+            const target = makeTarget({
+                constants: [
+                    { enabled: true, value: '#API_TOKEN = "$PB_LANG_SUPPORT_TEST_SECRET"' },
+                    { enabled: true, value: '#UNKNOWN_VALUE = "prefix-$PB_LANG_SUPPORT_UNKNOWN_SECRET-suffix"' },
+                ],
+            });
+
+            const result = buildCompilerStandbyCommands({
+                platform: 'linux',
+                sourceFile: '/project/main.pb',
+                targetFile: '/tmp/check',
+                target,
+                checkSyntax: true,
+                createExecutable: false,
+            });
+
+            const serialized = result.commands.map(serializeCompilerStandbyCommand);
+            expect(serialized).toContain('CONSTANT\tAPI_TOKEN=super-secret-value');
+            expect(serialized).toContain('CONSTANT\tUNKNOWN_VALUE=prefix--suffix');
+        } finally {
+            if (previousValue === undefined) {
+                delete process.env.PB_LANG_SUPPORT_TEST_SECRET;
+            } else {
+                process.env.PB_LANG_SUPPORT_TEST_SECRET = previousValue;
+            }
+
+            if (previousUnknownValue === undefined) {
+                delete process.env.PB_LANG_SUPPORT_UNKNOWN_SECRET;
+            } else {
+                process.env.PB_LANG_SUPPORT_UNKNOWN_SECRET = previousUnknownValue;
+            }
+        }
+    });
+
     test('uses source alias directory as include path for temporary syntax check source', () => {
         const ctx: UnifiedContext = {
             mode: 'fallback',
@@ -193,6 +238,17 @@ describe('compiler standby command builder', () => {
             'INCLUDEPATH\t/project',
             'COMPILE\tPROGRESS\tWARNINGS\tDEBUGGER\tCHECKSYNTAX',
         ]);
+    });
+
+    test('redacts sensitive command arguments in standby command logs', () => {
+        expect(formatCompilerStandbyCommandForLog({ name: 'CONSTANT', args: ['API_TOKEN=super-secret-value'] })).toBe(
+            'CONSTANT <redacted>',
+        );
+        expect(formatCompilerStandbyCommandForLog({ name: 'SOURCE', args: ['/project/main.pb'] })).toBe('SOURCE <redacted>');
+        expect(formatCompilerStandbyCommandForLog({ name: 'TARGET', args: ['/tmp/check.exe'] })).toBe('TARGET <redacted>');
+        expect(formatCompilerStandbyCommandForLog({ name: 'COMPILE', args: ['PROGRESS', 'WARNINGS', 'CHECKSYNTAX'] })).toBe(
+            'COMPILE PROGRESS WARNINGS CHECKSYNTAX',
+        );
     });
 
     test('detects PureBasic home from compiler path', () => {
@@ -246,13 +302,21 @@ describe('compiler standby session', () => {
 
         const result = await session.run([
             { name: 'SOURCE', args: ['main.pb'] },
+            { name: 'CONSTANT', args: ['API_TOKEN=super-secret-value'] },
             { name: 'COMPILE', args: ['PROGRESS', 'WARNINGS', 'CHECKSYNTAX'] },
         ]);
 
         expect(spawnCalls).toEqual([{ command: 'pbcompiler', args: ['/STANDBY'], cwd: '/project' }]);
-        expect(fakeProcess.writtenInput).toBe('SOURCE\tmain.pb\nCOMPILE\tPROGRESS\tWARNINGS\tCHECKSYNTAX\n');
+        expect(fakeProcess.writtenInput).toBe(
+            'SOURCE\tmain.pb\nCONSTANT\tAPI_TOKEN=super-secret-value\nCOMPILE\tPROGRESS\tWARNINGS\tCHECKSYNTAX\n',
+        );
         expect(result.parseResult.terminal).toEqual({ kind: 'success', rawLine: 'SUCCESS' });
         expect(outputLines).toContain('cmd: pbcompiler /STANDBY');
+        expect(outputLines).toContain('> SOURCE <redacted>');
+        expect(outputLines).toContain('> CONSTANT <redacted>');
+        expect(outputLines).toContain('> COMPILE PROGRESS WARNINGS CHECKSYNTAX');
+        expect(outputLines.join('\n')).not.toContain('main.pb');
+        expect(outputLines.join('\n')).not.toContain('super-secret-value');
 
         fakeProcess.emit('close', 0, null);
         await session.dispose();

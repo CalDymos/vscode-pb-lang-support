@@ -348,7 +348,8 @@ function resolveOptionalProjectFile(projectDir: string | undefined, rawPath: str
 }
 
 function normalizePureBasicConstantDefinition(value: string): string {
-    const trimmed = value.trim();
+    const expanded = expandEnvironmentReferences(value);
+    const trimmed = expanded.trim();
     if (!trimmed) return '';
 
     const equalIndex = trimmed.indexOf('=');
@@ -358,14 +359,46 @@ function normalizePureBasicConstantDefinition(value: string): string {
 
     const name = trimmed.slice(0, equalIndex).replace(/^#+/, '').trim();
     const rawValue = trimmed.slice(equalIndex + 1).trim();
-    const normalizedValue = stripSinglePairOfDoubleQuotes(expandEnvironmentReferences(rawValue));
+    const normalizedValue = stripSinglePairOfDoubleQuotes(rawValue);
 
     if (!name) return '';
     return `${name}=${normalizedValue}`;
 }
 
 function expandEnvironmentReferences(value: string): string {
-    return value.replace(/\$([A-Za-z_][A-Za-z0-9_]*)/g, (_match, name: string) => process.env[name] ?? '');
+    let expanded = '';
+    let index = 0;
+
+    while (index < value.length) {
+        const curChr = value[index];
+
+        if (curChr !== '$') {
+            expanded += curChr;
+            index += 1;
+            continue;
+        }
+
+        index += 1;
+
+        let name = '';
+        while (index < value.length && isPureBasicIdentifierCharacter(value.charCodeAt(index))) {
+            name += value[index];
+            index += 1;
+        }
+
+        expanded += process.env[name] ?? '';
+    }
+
+    return expanded;
+}
+
+function isPureBasicIdentifierCharacter(charCode: number): boolean {
+    return (
+        (charCode >= 48 && charCode <= 57) ||
+        (charCode >= 65 && charCode <= 90) ||
+        (charCode >= 97 && charCode <= 122) ||
+        charCode === 95
+    );
 }
 
 function stripSinglePairOfDoubleQuotes(value: string): string {

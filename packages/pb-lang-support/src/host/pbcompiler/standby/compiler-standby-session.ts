@@ -51,6 +51,41 @@ export type CompilerStandbySpawnFunction = (
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 
+const REDACTED_COMMAND_ARGS = new Set([
+    'SOURCE',
+    'TARGET',
+    'INCLUDEPATH',
+    'SOURCEALIAS',
+    'CONSTANT',
+    'RESOURCE',
+    'ICON',
+    'LINKER',
+]);
+
+/**
+ * Formats a standby command for logs without exposing source paths, target
+ * paths, resources, icons, linker files or constant values.
+ */
+export function formatCompilerStandbyCommandForLog(command: CompilerStandbyCommand): string {
+    const name = command.name;
+    const upperName = name.toUpperCase();
+    const args = command.args ?? [];
+
+    if (args.length === 0) {
+        return name;
+    }
+
+    if (upperName === 'COMPILE') {
+        return `${name} ${args.join(' ')}`;
+    }
+
+    if (REDACTED_COMMAND_ARGS.has(upperName)) {
+        return `${name} <redacted>`;
+    }
+
+    return `${name} <redacted>`;
+}
+
 export class CompilerStandbySession {
     private proc: cp.ChildProcessWithoutNullStreams | undefined;
     private stdout = '';
@@ -136,7 +171,7 @@ export class CompilerStandbySession {
             try {
                 for (const command of commands) {
                     const line = serializeCompilerStandbyCommand(command);
-                    this.opt.outputChannel?.appendLine(`> ${line}`);
+                    this.opt.outputChannel?.appendLine(`> ${formatCompilerStandbyCommandForLog(command)}`);
                     proc.stdin.write(`${line}\n`, 'utf8');
                 }
             } catch (err) {

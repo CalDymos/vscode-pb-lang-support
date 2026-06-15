@@ -285,6 +285,7 @@ export class FallbackResolver {
     }
 
     private abs(base: string, p: string): string {
-        return path.isAbsolute(p) ? p : path.resolve(base, p);
+        const resolved = path.isAbsolute(p) ? p : path.resolve(base, p);
+        return path.normalize(resolved);
     }
 }
