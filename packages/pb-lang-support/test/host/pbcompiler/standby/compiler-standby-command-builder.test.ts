@@ -14,6 +14,7 @@ import {
     detectPureBasicHome,
     formatCompilerStandbyCommandForLog,
 } from '../../../../src/host/pbcompiler/standby/compiler-standby-session';
+import { fileURLToPath } from 'node:url';
 
 function makeTarget(partial: Partial<PbpTarget> = {}): PbpTarget {
     return {
@@ -287,7 +288,8 @@ describe('compiler standby session', () => {
         const outputLines: string[] = [];
 
         const spawn = ((command, args, options) => {
-            spawnCalls.push({ command, args, cwd: options.cwd });
+            const cwd = options.cwd instanceof URL ? fileURLToPath(options.cwd) : options.cwd;
+            spawnCalls.push({ command, args, cwd });
             setImmediate(() => fakeProcess.stdout.write('SUCCESS\n'));
             return fakeProcess as unknown as cp.ChildProcessWithoutNullStreams;
         }) satisfies (command: string, args: readonly string[], options: cp.SpawnOptionsWithoutStdio) => cp.ChildProcessWithoutNullStreams;
