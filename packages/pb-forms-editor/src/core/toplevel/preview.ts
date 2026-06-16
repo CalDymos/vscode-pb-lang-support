@@ -902,10 +902,12 @@ export function getLinearTopLevelEntryMoveTarget(args: {
   entryRects: PreviewEntryRectLike[];
   getSourceLine: (index: number) => number | undefined;
   edgeTolerance?: number;
+  indicatorHeight?: number;
   isNoopMove?: (targetIndex: number, placement: LinearTopLevelEntryMovePlacement) => boolean;
 }): LinearTopLevelEntryMoveTargetLike | null {
   const edgeTolerance = args.edgeTolerance ?? 5;
   const entryRects = [...args.entryRects].sort((left, right) => left.x - right.x || left.index - right.index);
+  const getIndicatorHeight = (rect: PreviewRectLike): number => Math.max(0, Math.trunc(args.indicatorHeight ?? rect.h));
   if (entryRects.length < 2) return null;
 
   for (const rect of entryRects) {
@@ -918,7 +920,7 @@ export function getLinearTopLevelEntryMoveTarget(args: {
       return {
         targetSourceLine,
         placement: MenuEntryMovePlacement.Before,
-        indicatorRect: { x: rect.x - 1, y: rect.y, w: 2, h: rect.h },
+        indicatorRect: { x: rect.x - 1, y: rect.y, w: 2, h: getIndicatorHeight(rect) },
         indicatorOrientation: "vertical"
       };
     }
@@ -936,7 +938,7 @@ export function getLinearTopLevelEntryMoveTarget(args: {
     return {
       targetSourceLine,
       placement: MenuEntryMovePlacement.After,
-      indicatorRect: { x: lastRect.x + lastRect.w, y: lastRect.y, w: 2, h: lastRect.h },
+      indicatorRect: { x: lastRect.x + lastRect.w, y: lastRect.y, w: 2, h: getIndicatorHeight(lastRect) },
       indicatorOrientation: "vertical"
     };
   }

@@ -4272,6 +4272,7 @@ window.addEventListener("mousemove", (e) => {
         y: my,
         entryRects,
         getSourceLine: index => statusBar.fields?.[index]?.source?.line,
+        indicatorHeight: 16,
         isNoopMove: (targetIndex, placement) => getPredictedLinearMoveIndex(
           statusBar.fields?.length ?? 0,
           d.fieldIndex,

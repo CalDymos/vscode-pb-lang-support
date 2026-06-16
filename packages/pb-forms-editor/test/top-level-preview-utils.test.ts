@@ -766,6 +766,47 @@ test("resolves menu move targets from visible flyout entries", () => {
 
 
 
+test("keeps statusbar move indicators at the original 16px line height", () => {
+  const rects = [
+    { ownerId: "sb-1", index: 0, x: 10, y: 180, w: 80, h: 23 },
+    { ownerId: "sb-1", index: 1, x: 90, y: 180, w: 120, h: 23 },
+  ];
+
+  assert.deepEqual(
+    getLinearTopLevelEntryMoveTarget({
+      sourceEntryIndex: 1,
+      x: 11,
+      y: 190,
+      entryRects: rects,
+      getSourceLine: index => 300 + index,
+      indicatorHeight: 16
+    }),
+    {
+      targetSourceLine: 300,
+      placement: "before",
+      indicatorRect: { x: 9, y: 180, w: 2, h: 16 },
+      indicatorOrientation: "vertical"
+    }
+  );
+
+  assert.deepEqual(
+    getLinearTopLevelEntryMoveTarget({
+      sourceEntryIndex: 0,
+      x: 216,
+      y: 190,
+      entryRects: rects,
+      getSourceLine: index => 300 + index,
+      indicatorHeight: 16
+    }),
+    {
+      targetSourceLine: 301,
+      placement: "after",
+      indicatorRect: { x: 210, y: 180, w: 2, h: 16 },
+      indicatorOrientation: "vertical"
+    }
+  );
+});
+
 test("resolves linear top-level entry move targets at item edges", () => {
   const rects = [
     { ownerId: "tb-1", index: 0, x: 10, y: 20, w: 16, h: 16 },
