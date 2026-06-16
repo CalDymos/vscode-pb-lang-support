@@ -971,7 +971,7 @@ test('window preview add and submenu icon metrics follow the original image asse
 });
 
 
-test('window preview root menu entry rect keeps the original trailing menu spacing in selection geometry', () => {
+test('window preview root menu entry rect keeps the conscious menu-bar-height selection geometry and original trailing menu spacing', () => {
   assert.deepEqual(getWindowPreviewMenuRootEntryRect(15, 2, 54, 22), {
     x: 14,
     y: 1,

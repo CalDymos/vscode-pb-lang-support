@@ -755,6 +755,43 @@ export function getToolBarSeparatorSelectedOutlineRect(entryRect: PreviewRectLik
   };
 }
 
+export function getTopLevelClampedAddIconX(
+  bandRect: PreviewRectLike,
+  currentX: number,
+  leftInset = 6,
+  rightInset = 20
+): number {
+  const minX = bandRect.x + leftInset;
+  const maxX = Math.max(minX, bandRect.x + Math.max(0, bandRect.w) - rightInset);
+  return Math.min(Math.max(minX, currentX), maxX);
+}
+
+export type StatusBarAddButtonPreviewLayout = {
+  hitRect: PreviewRectLike;
+  iconX: number;
+  iconY: number;
+};
+
+export function getStatusBarAddButtonPreviewLayout(
+  statusBarRect: PreviewRectLike,
+  currentX: number,
+  iconWidth = 16,
+  iconOffsetY = 4
+): StatusBarAddButtonPreviewLayout {
+  const x = Math.trunc(currentX);
+  const y = Math.trunc(statusBarRect.y);
+  return {
+    hitRect: {
+      x,
+      y,
+      w: Math.max(0, Math.trunc(iconWidth)),
+      h: Math.max(0, Math.trunc(statusBarRect.h)),
+    },
+    iconX: x,
+    iconY: y + Math.trunc(iconOffsetY),
+  };
+}
+
 
 function rectContainsPoint(rect: PreviewRectLike, x: number, y: number): boolean {
   return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;

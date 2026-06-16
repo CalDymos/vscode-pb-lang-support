@@ -34,6 +34,7 @@ import {
   getMenuPreviewLabel,
   getPredictedMenuEntryMoveIndex,
   getMenuVisibleEntries,
+  getStatusBarAddButtonPreviewLayout,
   getStatusBarFieldWidths,
   getStatusBarPreviewInsertArgs,
   getSelectedMenuEntryInspectorFieldConfig,
@@ -47,6 +48,7 @@ import {
   getToolBarPreviewInsertArgs,
   getToolBarSeparatorPreviewRect,
   getToolBarSeparatorSelectedOutlineRect,
+  getTopLevelClampedAddIconX,
   hasPbFlag,
   unquotePbString,
   getVisibleToolBarEntryCount,
@@ -274,6 +276,25 @@ test("uses the original toolbar separator hit and selection geometry", () => {
     w: 8,
     h: 18,
   });
+});
+
+test("keeps top-level menu and toolbar add icons clamped inside their preview band", () => {
+  const band = { x: 20, y: 10, w: 80, h: 22 };
+
+  assert.equal(getTopLevelClampedAddIconX(band, 12), 26);
+  assert.equal(getTopLevelClampedAddIconX(band, 50), 50);
+  assert.equal(getTopLevelClampedAddIconX(band, 120), 80);
+});
+
+test("keeps the statusbar add hit rectangle full-height while drawing the plus icon at the original image offset", () => {
+  assert.deepEqual(
+    getStatusBarAddButtonPreviewLayout({ x: 20, y: 180, w: 240, h: 23 }, 206),
+    {
+      hitRect: { x: 206, y: 180, w: 16, h: 23 },
+      iconX: 206,
+      iconY: 184,
+    }
+  );
 });
 
 test("builds default toolbar insert ids and preview insert args", () => {

@@ -107,6 +107,7 @@ import {
   getMenuPreviewLabel,
   getMenuVisibleEntries,
   getPredictedMenuEntryMoveIndex,
+  getStatusBarAddButtonPreviewLayout,
   getStatusBarFieldWidths,
   getStatusBarPreviewInsertArgs,
   getSelectedMenuEntryInspectorFieldConfig,
@@ -118,6 +119,7 @@ import {
   getToolBarPreviewInsertArgs,
   getToolBarSeparatorPreviewRect,
   getToolBarSeparatorSelectedOutlineRect,
+  getTopLevelClampedAddIconX,
   hasPbFlag,
   hasStatusBarPreviewAssignedImage,
   resolveMenuFooterHit,
@@ -7938,7 +7940,7 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
   ctx.restore();
 
   const addIconMetrics = getWindowPreviewAddIconMetrics();
-  const addRectX = Math.min(Math.max(rect.x + 6, x), Math.max(rect.x + 6, rect.x + rect.w - 20));
+  const addRectX = getTopLevelClampedAddIconX(rect, x);
   const addRect: PreviewMenuAddRect = {
     menuId: menu.id,
     x: addRectX,
@@ -8108,7 +8110,7 @@ function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
   }
 
   const addIconMetrics = getWindowPreviewAddIconMetrics();
-  const addRectX = Math.min(Math.max(rect.x + 6, x), Math.max(rect.x + 6, rect.x + rect.w - 20));
+  const addRectX = getTopLevelClampedAddIconX(rect, x);
   const addRect: PreviewToolBarAddRect = {
     toolBarId: toolbar.id,
     x: addRectX,
@@ -8285,15 +8287,13 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
   }
 
   const addIconMetrics = getWindowPreviewAddIconMetrics();
+  const addButtonLayout = getStatusBarAddButtonPreviewLayout(rect, x, addIconMetrics.width);
   const addRect: PreviewStatusBarAddRect = {
     statusBarId: statusbar.id,
-    x,
-    y: rect.y + 4,
-    w: addIconMetrics.width,
-    h: addIconMetrics.height
+    ...addButtonLayout.hitRect
   };
   statusBarAddPreviewRect = addRect;
-  drawPreviewPlusIcon(ctx, addRect.x, addRect.y);
+  drawPreviewPlusIcon(ctx, addButtonLayout.iconX, addButtonLayout.iconY);
 }
 
 function render() {
