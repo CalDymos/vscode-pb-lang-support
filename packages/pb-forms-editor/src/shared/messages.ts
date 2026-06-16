@@ -6,7 +6,7 @@
  *   EXT_TO_WEBVIEW_MSG_TYPE  — messages sent by the extension → webview
  *   WEBVIEW_TO_EXT_MSG_TYPE  — messages sent by the webview → extension
  */
-import type { MenuEntryMovePlacement } from "./menu";
+import type { LinearTopLevelEntryMovePlacement, MenuEntryMovePlacement } from "./menu";
 import type { DesignerSettings } from "./designer-settings";
 
 export const EXT_TO_WEBVIEW_MSG_TYPE = {
@@ -169,7 +169,7 @@ export type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createToolBar; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string; toggle?: boolean }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertToolBarEntry; toolBarId: string; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateToolBarEntry; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string; toggle?: boolean }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveToolBarEntry; toolBarId: string; sourceLine: number; kind: string; targetSourceLine: number; placement: MenuEntryMovePlacement }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveToolBarEntry; toolBarId: string; sourceLine: number; kind: string; targetSourceLine: number; placement: LinearTopLevelEntryMovePlacement }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBarEntry; toolBarId: string; sourceLine: number; kind: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBar; toolBarId: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setToolBarEntryEvent; entryIdRaw: string; eventProc?: string }
@@ -177,7 +177,7 @@ export type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createStatusBar; widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertStatusBarField; statusBarId: string; widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateStatusBarField; statusBarId: string; sourceLine: number; widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveStatusBarField; statusBarId: string; sourceLine: number; targetSourceLine: number; placement: MenuEntryMovePlacement }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveStatusBarField; statusBarId: string; sourceLine: number; targetSourceLine: number; placement: LinearTopLevelEntryMovePlacement }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBarField; statusBarId: string; sourceLine: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBar; statusBarId: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertImage; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }

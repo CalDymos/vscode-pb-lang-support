@@ -3,6 +3,7 @@ import { quotePbString } from "../parser/tokenizer";
 import type { DesignerTopLevelContainerSelection, DesignerTopLevelEntrySelection } from "./selection";
 import { parseStatusBarWidth } from "../statusbar/preview";
 import { MenuEntryMovePlacement } from "../../shared/menu";
+import type { LinearTopLevelEntryMovePlacement } from "../../shared/menu";
 import type { FormToolBarEntry } from "../model";
 
 export type SourceLineLike = {
@@ -95,7 +96,7 @@ export type MenuEntryMoveTargetLike = {
 
 export type LinearTopLevelEntryMoveTargetLike = {
   targetSourceLine: number;
-  placement: Extract<MenuEntryMovePlacement, "before" | "after">;
+  placement: LinearTopLevelEntryMovePlacement;
   indicatorRect: PreviewRectLike;
   indicatorOrientation: "vertical";
 };
@@ -846,7 +847,7 @@ export function getLinearTopLevelEntryMoveTarget(args: {
   entryRects: PreviewEntryRectLike[];
   getSourceLine: (index: number) => number | undefined;
   edgeTolerance?: number;
-  isNoopMove?: (targetIndex: number, placement: Extract<MenuEntryMovePlacement, "before" | "after">) => boolean;
+  isNoopMove?: (targetIndex: number, placement: LinearTopLevelEntryMovePlacement) => boolean;
 }): LinearTopLevelEntryMoveTargetLike | null {
   const edgeTolerance = args.edgeTolerance ?? 5;
   const entryRects = [...args.entryRects].sort((left, right) => left.x - right.x || left.index - right.index);

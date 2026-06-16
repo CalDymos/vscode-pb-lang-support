@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL, WINDOW_PREVIEW_PAGE_PADDING, buildWindowFlagsExpr, getWindowBaseRowsFieldConfig, getWindowBooleanInspectorState, getWindowColorFieldConfig, getWindowConstantsFieldConfig, getWindowGenerateEventProcFieldConfig, getWindowGenerateEventProcEditState, getWindowHiddenFieldConfig, getWindowDisabledFieldConfig, getWindowEnumValueFieldConfig, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentFieldConfig, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewAddIconMetrics, getWindowPreviewBodyDecoration, getWindowPreviewCanvasOrigin, getWindowPreviewChromeTopPadding, getWindowPreviewClientBottomPadding, getWindowPreviewClientSidePadding, getWindowPreviewFrameDecoration, getWindowPreviewFrameStrokeRect, getWindowPreviewMenuBarDecoration, getWindowPreviewMenuFlyoutDecoration, getWindowPreviewMenuRootEntryRect, getWindowPreviewMenuSubmenuIconMetrics, getWindowPreviewStatusBarDecoration, getWindowPreviewStatusBarProgressDecoration, getWindowPreviewTitleBarDecoration, getWindowPreviewTitleBarHeight, getWindowPreviewTitleBarMetrics, getWindowPreviewTitleButtonAssetKind, getWindowPreviewTitleButtonLayout, getWindowPreviewTitleButtonSize, getWindowPreviewTitleButtons, getWindowPreviewTitleButtonSlots, getWindowPreviewTitleIconSize, getWindowPreviewTitleTextLayout, getWindowPreviewToolBarDecoration, usesWindowPreviewExternalMenuBar, getWindowSelectProcFieldConfig, getWindowVariableInspectorValue, hasWindowPreviewResizeGrip, hasWindowPreviewTitleBar, hasWindowPreviewTitleIcon, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput } from '../src/core/window/inspector';
+import { WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL, WINDOW_PREVIEW_PAGE_PADDING, buildWindowFlagsExpr, getWindowBaseRowsFieldConfig, getWindowBooleanInspectorState, getWindowColorFieldConfig, getWindowConstantsFieldConfig, getWindowGenerateEventProcFieldConfig, getWindowGenerateEventProcEditState, getWindowHiddenFieldConfig, getWindowDisabledFieldConfig, getWindowEnumValueFieldConfig, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentFieldConfig, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewAddIconMetrics, getWindowPreviewBodyDecoration, getWindowPreviewCanvasOrigin, getWindowPreviewCanvasCssSize, getWindowPreviewChromeTopPadding, getWindowPreviewClientBottomPadding, getWindowPreviewClientSidePadding, getWindowPreviewFormScrollbarWidth, getWindowPreviewFrameDecoration, getWindowPreviewFrameStrokeRect, getWindowPreviewMenuBarDecoration, getWindowPreviewMenuFlyoutDecoration, getWindowPreviewMenuRootEntryRect, getWindowPreviewMenuSubmenuIconMetrics, getWindowPreviewStatusBarDecoration, getWindowPreviewScrollContentSize, getWindowPreviewStatusBarProgressDecoration, getWindowPreviewTitleBarDecoration, getWindowPreviewTitleBarHeight, getWindowPreviewTitleBarMetrics, getWindowPreviewTitleButtonAssetKind, getWindowPreviewTitleButtonLayout, getWindowPreviewTitleButtonSize, getWindowPreviewTitleButtons, getWindowPreviewTitleButtonSlots, getWindowPreviewTitleIconSize, getWindowPreviewTitleTextLayout, getWindowPreviewToolBarDecoration, usesWindowPreviewExternalMenuBar, getWindowSelectProcFieldConfig, getWindowVariableInspectorValue, hasWindowPreviewResizeGrip, hasWindowPreviewTitleBar, hasWindowPreviewTitleIcon, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput } from '../src/core/window/inspector';
 import { parsePbWindowReference } from '../src/core/parser/pb-window-reference';
 
 test('buildWindowFlagsExpr keeps original known window flag order and appends custom flags', () => {
@@ -283,6 +283,95 @@ test('window preview canvas origin keeps the original #Page_Padding base offset'
   assert.equal(WINDOW_PREVIEW_PAGE_PADDING, 10);
   assert.deepEqual(getWindowPreviewCanvasOrigin(0, 0), { x: 10, y: 10 });
   assert.deepEqual(getWindowPreviewCanvasOrigin(12, -3), { x: 22, y: 7 });
+});
+
+
+test('window preview form scrollbar width follows the original grid scrollbar width per platform', () => {
+  assert.equal(getWindowPreviewFormScrollbarWidth('macos'), 16);
+  assert.equal(getWindowPreviewFormScrollbarWidth('windows'), 18);
+  assert.equal(getWindowPreviewFormScrollbarWidth('linux'), 18);
+});
+
+test('window preview scroll content size mirrors FD_UpdateScrollbars platform formulas', () => {
+  assert.deepEqual(
+    getWindowPreviewScrollContentSize({
+      platformSkin: 'macos',
+      flagsExpr: '#PB_Window_SystemMenu',
+      clientWidth: 304,
+      clientHeight: 372,
+      titleBarHeight: 22,
+      menuHeight: 23,
+      hasMenu: true,
+      hasToolbar: true,
+    }),
+    { width: 324, height: 461 }
+  );
+
+  assert.deepEqual(
+    getWindowPreviewScrollContentSize({
+      platformSkin: 'windows',
+      flagsExpr: '#PB_Window_SystemMenu',
+      clientWidth: 304,
+      clientHeight: 372,
+      titleBarHeight: 29,
+      menuHeight: 22,
+      hasMenu: true,
+      hasToolbar: true,
+    }),
+    { width: 340, height: 429 }
+  );
+
+  assert.deepEqual(
+    getWindowPreviewScrollContentSize({
+      platformSkin: 'linux',
+      flagsExpr: '#PB_Window_TitleBar',
+      clientWidth: 304,
+      clientHeight: 372,
+      titleBarHeight: 28,
+      menuHeight: 28,
+      hasMenu: true,
+      hasToolbar: true,
+    }),
+    { width: 324, height: 392 }
+  );
+});
+
+test('window preview canvas css size uses the original scrollbar visibility threshold', () => {
+  assert.deepEqual(
+    getWindowPreviewCanvasCssSize({
+      viewportWidth: 320,
+      viewportHeight: 240,
+      scrollContentWidth: 303,
+      scrollContentHeight: 222,
+      scrollbarWidth: 18,
+    }),
+    {
+      width: 321,
+      height: 240,
+      scrollContentWidth: 303,
+      scrollContentHeight: 222,
+      showHorizontalScrollbar: true,
+      showVerticalScrollbar: false,
+    }
+  );
+
+  assert.deepEqual(
+    getWindowPreviewCanvasCssSize({
+      viewportWidth: 320,
+      viewportHeight: 240,
+      scrollContentWidth: 302,
+      scrollContentHeight: 222,
+      scrollbarWidth: 18,
+    }),
+    {
+      width: 320,
+      height: 240,
+      scrollContentWidth: 302,
+      scrollContentHeight: 222,
+      showHorizontalScrollbar: false,
+      showVerticalScrollbar: false,
+    }
+  );
 });
 
 

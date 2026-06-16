@@ -1896,7 +1896,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
 
       .canvasWrap {
         position: relative;
-        overflow: hidden;
+        overflow: auto;
         background: var(--pbfd-canvas-bg);
       }
 

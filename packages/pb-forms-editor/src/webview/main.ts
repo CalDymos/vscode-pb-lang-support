@@ -264,6 +264,9 @@ import {
   getWindowPreviewClientBottomPadding,
   getWindowPreviewClientSidePadding,
   getWindowPreviewCanvasOrigin,
+  getWindowPreviewCanvasCssSize,
+  getWindowPreviewFormScrollbarWidth,
+  getWindowPreviewScrollContentSize,
   getWindowPreviewTitleButtonAssetKind,
   getWindowPreviewTitleButtonLayout,
   getWindowPreviewTitleBarDecoration,
@@ -2672,14 +2675,79 @@ function applySettings(s: DesignerSettings) {
   renderProps();
 }
 
-function resizeCanvas() {
+function getPreviewCanvasViewportSize(): { width: number; height: number } {
+  const rect = canvasWrap.getBoundingClientRect();
+  return {
+    width: Math.max(1, Math.floor(rect.width)),
+    height: Math.max(1, Math.floor(rect.height)),
+  };
+}
+
+function getPreviewCanvasScrollContentSize(): { width: number; height: number } {
+  const viewport = getPreviewCanvasViewportSize();
+  const win = model.window;
+  if (!win) {
+    return viewport;
+  }
+
+  const platformSkin = resolvePbFormSkinPlatform();
+  const originalContent = getWindowPreviewScrollContentSize({
+    platformSkin,
+    flagsExpr: win.flagsExpr,
+    clientWidth: win.w,
+    clientHeight: win.h,
+    titleBarHeight: previewChromeMetrics.titleBarHeight,
+    menuHeight: previewChromeMetrics.menuHeight,
+    hasMenu: hasParsedMenuChrome(),
+    hasToolbar: hasParsedToolbarChrome(),
+  });
+
+  return {
+    width: originalContent.width + Math.max(0, asInt(win.x ?? 0)),
+    height: originalContent.height + Math.max(0, asInt(win.y ?? 0)),
+  };
+}
+
+function syncPreviewCanvasElementSize(): void {
+  const viewport = getPreviewCanvasViewportSize();
+  const content = getPreviewCanvasScrollContentSize();
+  const scrollbarWidth = getWindowPreviewFormScrollbarWidth(resolvePbFormSkinPlatform());
+  const cssSize = getWindowPreviewCanvasCssSize({
+    viewportWidth: viewport.width,
+    viewportHeight: viewport.height,
+    scrollContentWidth: content.width,
+    scrollContentHeight: content.height,
+    scrollbarWidth,
+  });
+
+  const widthCss = `${cssSize.width}px`;
+  const heightCss = `${cssSize.height}px`;
+  if (canvas.style.width !== widthCss) {
+    canvas.style.width = widthCss;
+  }
+  if (canvas.style.height !== heightCss) {
+    canvas.style.height = heightCss;
+  }
+}
+
+function ensureCanvasBitmapSizeForRender(): void {
   ensureLayoutScaleState();
+  syncPreviewCanvasElementSize();
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
-  canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-  canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+  const width = Math.max(1, Math.floor(rect.width * dpr));
+  const height = Math.max(1, Math.floor(rect.height * dpr));
+  if (canvas.width !== width) {
+    canvas.width = width;
+  }
+  if (canvas.height !== height) {
+    canvas.height = height;
+  }
   const ctx = canvas.getContext("2d")!;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function resizeCanvas() {
   render();
 }
 
@@ -8229,6 +8297,8 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
 }
 
 function render() {
+  ensureCanvasBitmapSizeForRender();
+
   menuEntryPreviewRects = [];
   menuFooterPreviewRects = [];
   menuAddPreviewRect = null;
