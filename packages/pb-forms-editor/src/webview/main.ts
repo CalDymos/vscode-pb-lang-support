@@ -110,6 +110,7 @@ import {
   getPredictedMenuEntryMoveIndex,
   getStatusBarAddButtonPreviewLayout,
   getStatusBarFieldPreviewRect,
+  getStatusBarFieldMoveTarget,
   getStatusBarFieldWidths,
   getStatusBarPreviewInsertArgs,
   getSelectedMenuEntryInspectorFieldConfig,
@@ -4268,7 +4269,7 @@ window.addEventListener("mousemove", (e) => {
     if (moved) {
       const statusBar = (model.statusbars ?? []).find(entry => entry.id === d.statusBarId);
       const entryRects = statusBarFieldPreviewRects.filter(rect => rect.ownerId === d.statusBarId);
-      d.moveTarget = statusBar ? getLinearTopLevelEntryMoveTarget({
+      d.moveTarget = statusBar ? getStatusBarFieldMoveTarget({
         sourceEntryIndex: d.fieldIndex,
         x: mx,
         y: my,

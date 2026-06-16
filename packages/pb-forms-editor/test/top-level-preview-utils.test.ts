@@ -36,6 +36,7 @@ import {
   getMenuVisibleEntries,
   getStatusBarAddButtonPreviewLayout,
   getStatusBarFieldPreviewRect,
+  getStatusBarFieldMoveTarget,
   getStatusBarFieldWidths,
   getStatusBarPreviewInsertArgs,
   getSelectedMenuEntryInspectorFieldConfig,
@@ -843,6 +844,61 @@ test("keeps statusbar move indicators at the original 16px line height", () => {
       targetSourceLine: 301,
       placement: "after",
       indicatorRect: { x: 210, y: 180, w: 2, h: 16 },
+      indicatorOrientation: "vertical"
+    }
+  );
+});
+
+
+test("uses the original statusbar field body zones for move targets", () => {
+  const rects = [
+    { ownerId: "sb-1", index: 0, x: 10, y: 180, w: 80, h: 23 },
+    { ownerId: "sb-1", index: 1, x: 90, y: 180, w: 120, h: 23 },
+    { ownerId: "sb-1", index: 2, x: 210, y: 180, w: 70, h: 23 },
+  ];
+
+  assert.deepEqual(
+    getStatusBarFieldMoveTarget({
+      sourceEntryIndex: 2,
+      x: 70,
+      y: 190,
+      entryRects: rects,
+      getSourceLine: index => 300 + index,
+      indicatorHeight: 16
+    }),
+    {
+      targetSourceLine: 300,
+      placement: "before",
+      indicatorRect: { x: 9, y: 180, w: 2, h: 16 },
+      indicatorOrientation: "vertical"
+    }
+  );
+
+  assert.equal(
+    getStatusBarFieldMoveTarget({
+      sourceEntryIndex: 2,
+      x: 70,
+      y: 210,
+      entryRects: rects,
+      getSourceLine: index => 300 + index,
+      indicatorHeight: 16
+    }),
+    null
+  );
+
+  assert.deepEqual(
+    getStatusBarFieldMoveTarget({
+      sourceEntryIndex: 0,
+      x: 276,
+      y: 190,
+      entryRects: rects,
+      getSourceLine: index => 300 + index,
+      indicatorHeight: 16
+    }),
+    {
+      targetSourceLine: 302,
+      placement: "after",
+      indicatorRect: { x: 280, y: 180, w: 2, h: 16 },
       indicatorOrientation: "vertical"
     }
   );

@@ -982,6 +982,57 @@ export function getLinearTopLevelEntryMoveTarget(args: {
   return null;
 }
 
+export function getStatusBarFieldMoveTarget(args: {
+  sourceEntryIndex: number;
+  x: number;
+  y: number;
+  entryRects: PreviewEntryRectLike[];
+  getSourceLine: (index: number) => number | undefined;
+  edgeTolerance?: number;
+  indicatorHeight?: number;
+  isNoopMove?: (targetIndex: number, placement: LinearTopLevelEntryMovePlacement) => boolean;
+}): LinearTopLevelEntryMoveTargetLike | null {
+  const edgeTolerance = args.edgeTolerance ?? 5;
+  const entryRects = [...args.entryRects].sort((left, right) => left.x - right.x || left.index - right.index);
+  if (entryRects.length < 2) return null;
+
+  const getIndicatorHeight = (rect: PreviewRectLike): number => Math.max(0, Math.trunc(args.indicatorHeight ?? rect.h));
+
+  for (const rect of entryRects) {
+    if (rect.index === args.sourceEntryIndex) continue;
+    if (args.y < rect.y || args.y > rect.y + rect.h) continue;
+    if (args.x > rect.x - edgeTolerance && args.x < rect.x + rect.w - edgeTolerance) {
+      if (args.isNoopMove?.(rect.index, MenuEntryMovePlacement.Before)) return null;
+      const targetSourceLine = args.getSourceLine(rect.index);
+      if (typeof targetSourceLine !== "number") return null;
+      return {
+        targetSourceLine,
+        placement: MenuEntryMovePlacement.Before,
+        indicatorRect: { x: rect.x - 1, y: rect.y, w: 2, h: getIndicatorHeight(rect) },
+        indicatorOrientation: "vertical"
+      };
+    }
+  }
+
+  const lastRect = entryRects[entryRects.length - 1];
+  if (lastRect.index !== args.sourceEntryIndex
+    && args.y >= lastRect.y
+    && args.y <= lastRect.y + lastRect.h
+    && args.x > lastRect.x) {
+    if (args.isNoopMove?.(lastRect.index, MenuEntryMovePlacement.After)) return null;
+    const targetSourceLine = args.getSourceLine(lastRect.index);
+    if (typeof targetSourceLine !== "number") return null;
+    return {
+      targetSourceLine,
+      placement: MenuEntryMovePlacement.After,
+      indicatorRect: { x: lastRect.x + lastRect.w, y: lastRect.y, w: 2, h: getIndicatorHeight(lastRect) },
+      indicatorOrientation: "vertical"
+    };
+  }
+
+  return null;
+}
+
 export function getMenuVisibleEntries(
   menu: MenuModelLike,
   entryRects: PreviewEntryRectLike[]
