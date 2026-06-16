@@ -791,8 +791,8 @@ test("resolves menu move targets from visible flyout entries", () => {
       menu: emptySubMenu,
       sourceEntryIndex: 3,
       x: 95,
-      y: 50,
-      menuBarBottom: 38,
+      y: 45,
+      menuBarBottom: 80,
       visibleEntries: emptyVisibleEntries,
       footerRects,
       selectedEntryIndex: 1

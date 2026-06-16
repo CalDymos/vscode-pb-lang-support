@@ -1076,6 +1076,9 @@ export function getMenuEntryMoveTarget(args: {
   if (!visibleEntries.length) return null;
 
   const firstVisibleRoot = visibleEntries.find((item) => getMenuEntryLevel(item.entry) === 0);
+  const appendChildThresholdY = firstVisibleRoot
+    ? firstVisibleRoot.rect.y + firstVisibleRoot.rect.h
+    : args.menuBarBottom;
   if (
     firstVisibleRoot
     && firstVisibleRoot.index !== args.sourceEntryIndex
@@ -1145,7 +1148,7 @@ export function getMenuEntryMoveTarget(args: {
         && visibleEntry.index !== args.sourceEntryIndex
         && isSelectedEmptyOpenSubmenu
         && args.x > rect.x + rect.w
-        && args.y > args.menuBarBottom
+        && args.y > appendChildThresholdY
       ) {
         return {
           targetSourceLine,
