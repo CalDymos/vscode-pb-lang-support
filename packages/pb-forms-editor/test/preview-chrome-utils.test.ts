@@ -35,6 +35,7 @@ import {
   rectContainsPoint,
   resolvePanelActiveItem,
   resolvePreviewChromeMetrics,
+  resolvePreviewChromeMetricsForOsSkin,
   toWindowGlobalPoint,
   toWindowLocalPoint,
   usesOriginalMacRoundedButtonChrome,
@@ -52,6 +53,7 @@ import {
 } from "../src/core/preview/chrome";
 
 const METRICS: PreviewChromeMetrics = {
+  titleBarHeight: 29,
   panelHeight: 22,
   scrollAreaWidth: 20,
   splitterWidth: 9,
@@ -125,41 +127,42 @@ test("computes scrollarea thumb rects from inner size and offset", () => {
 test("computes top-level menu, toolbar and statusbar rects from window chrome", () => {
   const windowRect: PreviewRect = { x: 40, y: 50, w: 320, h: 220 };
 
-  assert.deepEqual(getMenuBarRect(windowRect, 26, METRICS), { x: 40, y: 76, w: 320, h: 22 });
-  assert.deepEqual(getToolBarRect(windowRect, 26, true, METRICS), { x: 40, y: 98, w: 320, h: 24 });
+  assert.deepEqual(getMenuBarRect(windowRect, METRICS.titleBarHeight, METRICS), { x: 40, y: 79, w: 320, h: 22 });
+  assert.deepEqual(getToolBarRect(windowRect, METRICS.titleBarHeight, true, METRICS), { x: 40, y: 101, w: 320, h: 24 });
   assert.deepEqual(getStatusBarRect(windowRect, METRICS), { x: 40, y: 247, w: 320, h: 23 });
 });
 
 test("computes the window content rect below title, menu and toolbar and above statusbar", () => {
   const windowRect: PreviewRect = { x: 0, y: 0, w: 320, h: 220 };
-  const content = getWindowContentRect(windowRect, 26, true, true, true, METRICS);
+  const content = getWindowContentRect(windowRect, METRICS.titleBarHeight, true, true, true, METRICS);
 
-  assert.deepEqual(content, { x: 0, y: 72, w: 320, h: 125 });
+  assert.deepEqual(content, { x: 0, y: 75, w: 320, h: 122 });
 });
 
 test("computes combined window chrome layout from title and top-level bands", () => {
   const windowRect: PreviewRect = { x: 40, y: 50, w: 320, h: 220 };
-  const layout = getWindowChromeLayout(windowRect, 26, true, true, true, METRICS);
+  const layout = getWindowChromeLayout(windowRect, METRICS.titleBarHeight, true, true, true, METRICS);
 
   assert.deepEqual(layout, {
-    menuBarRect: { x: 40, y: 76, w: 320, h: 22 },
-    toolBarRect: { x: 40, y: 98, w: 320, h: 24 },
+    menuBarRect: { x: 40, y: 79, w: 320, h: 22 },
+    toolBarRect: { x: 40, y: 101, w: 320, h: 24 },
     statusBarRect: { x: 40, y: 247, w: 320, h: 23 },
-    contentRect: { x: 40, y: 122, w: 320, h: 125 }
+    contentRect: { x: 40, y: 125, w: 320, h: 122 }
   });
 });
 
 test("computes macOS menu bar chrome outside the rounded window body", () => {
-  const windowRect: PreviewRect = { x: 40, y: 72, w: 320, h: 220 };
+  const macMetrics = resolvePreviewChromeMetricsForOsSkin("macos");
+  const windowRect: PreviewRect = { x: 40, y: 73, w: 320, h: 220 };
 
-  assert.deepEqual(getMenuBarRect(windowRect, 26, METRICS, 0, true), { x: 40, y: 50, w: 320, h: 22 });
-  assert.deepEqual(getToolBarRect(windowRect, 26, true, METRICS, 0, true), { x: 40, y: 98, w: 320, h: 24 });
-  assert.deepEqual(getWindowContentRect(windowRect, 26, true, true, true, METRICS, 0, 0, true), { x: 40, y: 122, w: 320, h: 147 });
-  assert.deepEqual(getWindowChromeLayout(windowRect, 26, true, true, true, METRICS, 0, 0, true), {
-    menuBarRect: { x: 40, y: 50, w: 320, h: 22 },
-    toolBarRect: { x: 40, y: 98, w: 320, h: 24 },
-    statusBarRect: { x: 40, y: 269, w: 320, h: 23 },
-    contentRect: { x: 40, y: 122, w: 320, h: 147 }
+  assert.deepEqual(getMenuBarRect(windowRect, macMetrics.titleBarHeight, macMetrics, 0, true), { x: 40, y: 50, w: 320, h: 23 });
+  assert.deepEqual(getToolBarRect(windowRect, macMetrics.titleBarHeight, true, macMetrics, 0, true), { x: 40, y: 95, w: 320, h: 36 });
+  assert.deepEqual(getWindowContentRect(windowRect, macMetrics.titleBarHeight, true, true, true, macMetrics, 0, 0, true), { x: 40, y: 131, w: 320, h: 138 });
+  assert.deepEqual(getWindowChromeLayout(windowRect, macMetrics.titleBarHeight, true, true, true, macMetrics, 0, 0, true), {
+    menuBarRect: { x: 40, y: 50, w: 320, h: 23 },
+    toolBarRect: { x: 40, y: 95, w: 320, h: 36 },
+    statusBarRect: { x: 40, y: 269, w: 320, h: 24 },
+    contentRect: { x: 40, y: 131, w: 320, h: 138 }
   });
 });
 
@@ -169,23 +172,23 @@ test("computes the macOS external menu band across the full preview canvas width
 
 test("computes combined window chrome layout with Windows client-side and bottom insets", () => {
   const windowRect: PreviewRect = { x: 40, y: 50, w: 320, h: 220 };
-  const layout = getWindowChromeLayout(windowRect, 26, true, true, true, METRICS, 8, 8);
+  const layout = getWindowChromeLayout(windowRect, METRICS.titleBarHeight, true, true, true, METRICS, 8, 8);
 
   assert.deepEqual(layout, {
-    menuBarRect: { x: 48, y: 76, w: 304, h: 22 },
-    toolBarRect: { x: 48, y: 98, w: 304, h: 24 },
+    menuBarRect: { x: 48, y: 79, w: 304, h: 22 },
+    toolBarRect: { x: 48, y: 101, w: 304, h: 24 },
     statusBarRect: { x: 48, y: 239, w: 304, h: 23 },
-    contentRect: { x: 48, y: 122, w: 304, h: 117 }
+    contentRect: { x: 48, y: 125, w: 304, h: 114 }
   });
 });
 
 test("computes the Windows client surface fill and border rects from chrome and bottom padding", () => {
   const windowRect: PreviewRect = { x: 40, y: 50, w: 320, h: 220 };
-  const rects = getWindowClientSurfaceRects(windowRect, 26, 8, 8);
+  const rects = getWindowClientSurfaceRects(windowRect, METRICS.titleBarHeight, 8, 8);
 
   assert.deepEqual(rects, {
-    fillRect: { x: 48, y: 76, w: 304, h: 186 },
-    borderRect: { x: 47, y: 75, w: 306, h: 188 }
+    fillRect: { x: 48, y: 79, w: 304, h: 183 },
+    borderRect: { x: 47, y: 78, w: 306, h: 185 }
   });
 });
 
@@ -206,12 +209,13 @@ test("computes the original window resize button rect outside the preview frame"
 
 
 test("computes the macOS preview frame with toolbar height outside the stored client height", () => {
-  const frameRect = getWindowPreviewFrameRect({ x: 10, y: 32 }, 304, 372, 26, 0, 0, METRICS.toolBarHeight);
-  const layout = getWindowChromeLayout(frameRect, 26, true, true, true, METRICS, 0, 0, true);
+  const macMetrics = resolvePreviewChromeMetricsForOsSkin("macos");
+  const frameRect = getWindowPreviewFrameRect({ x: 10, y: 33 }, 304, 372, macMetrics.titleBarHeight, 0, 0, macMetrics.toolBarHeight);
+  const layout = getWindowChromeLayout(frameRect, macMetrics.titleBarHeight, true, true, true, macMetrics, 0, 0, true);
 
-  assert.deepEqual(frameRect, { x: 10, y: 32, w: 304, h: 422 });
-  assert.deepEqual(layout.toolBarRect, { x: 10, y: 58, w: 304, h: 24 });
-  assert.deepEqual(layout.contentRect, { x: 10, y: 82, w: 304, h: 349 });
+  assert.deepEqual(frameRect, { x: 10, y: 33, w: 304, h: 430 });
+  assert.deepEqual(layout.toolBarRect, { x: 10, y: 55, w: 304, h: 36 });
+  assert.deepEqual(layout.contentRect, { x: 10, y: 91, w: 304, h: 348 });
 });
 
 
@@ -226,12 +230,13 @@ test("keeps the Windows toolbar inside the stored client height", () => {
 
 
 test("keeps the Linux toolbar inside the stored client height", () => {
-  const frameRect = getWindowPreviewFrameRect({ x: 10, y: 10 }, 304, 372, 26);
-  const layout = getWindowChromeLayout(frameRect, 26, false, true, false, METRICS);
+  const linuxMetrics = resolvePreviewChromeMetricsForOsSkin("linux");
+  const frameRect = getWindowPreviewFrameRect({ x: 10, y: 10 }, 304, 372, linuxMetrics.titleBarHeight);
+  const layout = getWindowChromeLayout(frameRect, linuxMetrics.titleBarHeight, false, true, false, linuxMetrics);
 
-  assert.deepEqual(frameRect, { x: 10, y: 10, w: 304, h: 398 });
-  assert.deepEqual(layout.toolBarRect, { x: 10, y: 36, w: 304, h: 24 });
-  assert.deepEqual(layout.contentRect, { x: 10, y: 60, w: 304, h: 348 });
+  assert.deepEqual(frameRect, { x: 10, y: 10, w: 304, h: 400 });
+  assert.deepEqual(layout.toolBarRect, { x: 10, y: 38, w: 304, h: 38 });
+  assert.deepEqual(layout.contentRect, { x: 10, y: 76, w: 304, h: 334 });
 });
 
 
@@ -329,8 +334,33 @@ test("applies resize deltas for east and north-west handles", () => {
 });
 
 
+
+test("resolves preview chrome metrics directly from the selected FormSkin mode", () => {
+  assert.deepEqual(resolvePreviewChromeMetricsForOsSkin("windows7"), METRICS);
+  assert.deepEqual(resolvePreviewChromeMetricsForOsSkin("windows8"), METRICS);
+  assert.deepEqual(resolvePreviewChromeMetricsForOsSkin("macos"), {
+    titleBarHeight: 22,
+    panelHeight: 31,
+    scrollAreaWidth: 14,
+    splitterWidth: 12,
+    menuHeight: 23,
+    toolBarHeight: 36,
+    statusBarHeight: 24
+  });
+  assert.deepEqual(resolvePreviewChromeMetricsForOsSkin("linux"), {
+    titleBarHeight: 28,
+    panelHeight: 29,
+    scrollAreaWidth: 20,
+    splitterWidth: 9,
+    menuHeight: 28,
+    toolBarHeight: 38,
+    statusBarHeight: 26
+  });
+});
+
 test("resolves default preview chrome metrics from user-agent hints", () => {
   assert.deepEqual(resolvePreviewChromeMetrics("Mozilla/5.0 (Macintosh; Intel Mac OS X)"), {
+    titleBarHeight: 22,
     panelHeight: 31,
     scrollAreaWidth: 14,
     splitterWidth: 12,
@@ -339,6 +369,7 @@ test("resolves default preview chrome metrics from user-agent hints", () => {
     statusBarHeight: 24
   });
   assert.deepEqual(resolvePreviewChromeMetrics("Mozilla/5.0 (X11; Linux x86_64)"), {
+    titleBarHeight: 28,
     panelHeight: 29,
     scrollAreaWidth: 20,
     splitterWidth: 9,

@@ -39,7 +39,7 @@ import {
   getWindowPreviewResizeButtonRect,
   hitWindowPreviewResizeButton,
   getWindowClientSurfaceRects,
-  resolvePreviewChromeMetrics,
+  resolvePreviewChromeMetricsForOsSkin,
   usesOriginalMacRoundedButtonChrome,
   getPreviewComboArrowLayout,
   getPreviewDateArrowLayout,
@@ -1046,7 +1046,7 @@ let settings: DesignerSettings = {
 
   windowFillOpacity: 0.05,
   outsideDimOpacity: 0.12,
-  titleBarHeight: 26,
+  titleBarHeight: 29,
   windowPreviewWindowsCaptionlessTopPadding: 8,
   windowPreviewWindowsClientSidePadding: 8,
   windowPreviewWindowsClientBottomPadding: 8,
@@ -1063,7 +1063,7 @@ let settings: DesignerSettings = {
   warningVersionDowngrade: WARNING_PRESENCE_MODE_KEY.always
 };
 
-const previewChromeMetrics = resolvePreviewChromeMetrics(typeof navigator !== "undefined" ? navigator.userAgent : "");
+let previewChromeMetrics = resolvePreviewChromeMetricsForOsSkin(settings.osSkin);
 
 // Cache for resolved CSS system color keywords (e.g. "ButtonFace").
 // Invalidated whenever osSkin changes via applySettings().
@@ -2654,6 +2654,7 @@ function applySettings(s: DesignerSettings) {
     clearSystemColorCache();
   }
   settings = s;
+  previewChromeMetrics = resolvePreviewChromeMetricsForOsSkin(settings.osSkin);
 
   const bg = (settings.canvasBackground ?? "").trim();
   const bgReadonly = (settings.canvasReadonlyBackground ?? "").trim();
@@ -2916,12 +2917,7 @@ function escapeHtml(s: string): string {
 function getWindowPreviewFramePadding(): { top: number; side: number; bottom: number } {
   const platformSkin = resolvePbFormSkinPlatform();
   return {
-    top: getWindowPreviewChromeTopPadding(
-      platformSkin,
-      model.window?.flagsExpr,
-      asInt(settings.titleBarHeight),
-      asInt(settings.windowPreviewWindowsCaptionlessTopPadding)
-    ),
+    top: getWindowPreviewChromeTopPaddingForCurrentSkin(),
     side: getWindowPreviewClientSidePadding(platformSkin, asInt(settings.windowPreviewWindowsClientSidePadding)),
     bottom: getWindowPreviewClientBottomPadding(platformSkin, asInt(settings.windowPreviewWindowsClientBottomPadding)),
   };
@@ -2931,6 +2927,27 @@ function getWindowPreviewFrameExtraHeight(): number {
   return resolvePbFormSkinPlatform() === "macos" && hasParsedToolbarChrome()
     ? previewChromeMetrics.toolBarHeight
     : 0;
+}
+
+function getWindowPreviewTitleBarHeightForCurrentSkin(): number {
+  const platformSkin = resolvePbFormSkinPlatform();
+  const titleBarHeight = platformSkin === "windows"
+    ? asInt(settings.titleBarHeight)
+    : previewChromeMetrics.titleBarHeight;
+  return getWindowPreviewTitleBarHeight(model.window?.flagsExpr, titleBarHeight);
+}
+
+function getWindowPreviewChromeTopPaddingForCurrentSkin(): number {
+  const platformSkin = resolvePbFormSkinPlatform();
+  const titleBarHeight = platformSkin === "windows"
+    ? asInt(settings.titleBarHeight)
+    : previewChromeMetrics.titleBarHeight;
+  return getWindowPreviewChromeTopPadding(
+    platformSkin,
+    model.window?.flagsExpr,
+    titleBarHeight,
+    asInt(settings.windowPreviewWindowsCaptionlessTopPadding)
+  );
 }
 
 function getWindowPreviewFrameForStoredSize(origin: { x: number; y: number }, clientWidth: number, clientHeight: number): PreviewRect {
@@ -2969,7 +2986,7 @@ function getWinRect(): { x: number; y: number; w: number; h: number; title: stri
     h: frameRect.h,
     title: model.window.title ?? "",
     id: model.window.id,
-    tbH: getWindowPreviewTitleBarHeight(model.window.flagsExpr, asInt(settings.titleBarHeight))
+    tbH: getWindowPreviewTitleBarHeightForCurrentSkin()
   };
 }
 
@@ -3014,12 +3031,7 @@ function getWindowLocalChromeLayout(metrics: PreviewChromeMetrics): WindowChrome
   const platformSkin = resolvePbFormSkinPlatform();
   return getWindowChromeLayout(
     getWindowLocalRect(),
-    getWindowPreviewChromeTopPadding(
-      platformSkin,
-      model.window?.flagsExpr,
-      asInt(settings.titleBarHeight),
-      asInt(settings.windowPreviewWindowsCaptionlessTopPadding)
-    ),
+    getWindowPreviewChromeTopPaddingForCurrentSkin(),
     hasParsedMenuChrome(),
     hasParsedToolbarChrome(),
     hasParsedStatusbarChrome(),
@@ -3037,12 +3049,7 @@ function getWindowGlobalChromeLayout(metrics: PreviewChromeMetrics): WindowChrom
   const externalMenuBar = usesWindowPreviewExternalMenuBar(settings.osSkin) && hasParsedMenuChrome();
   const layout = getWindowChromeLayout(
     { x: wr.x, y: wr.y, w: wr.w, h: wr.h },
-    getWindowPreviewChromeTopPadding(
-      platformSkin,
-      model.window?.flagsExpr,
-      asInt(settings.titleBarHeight),
-      asInt(settings.windowPreviewWindowsCaptionlessTopPadding)
-    ),
+    getWindowPreviewChromeTopPaddingForCurrentSkin(),
     hasParsedMenuChrome(),
     hasParsedToolbarChrome(),
     hasParsedStatusbarChrome(),
@@ -8316,12 +8323,7 @@ function render() {
   }
 
   const chromeMetrics = previewChromeMetrics;
-  const chromeTopPadding = getWindowPreviewChromeTopPadding(
-    platformSkin,
-    model.window?.flagsExpr,
-    asInt(settings.titleBarHeight),
-    asInt(settings.windowPreviewWindowsCaptionlessTopPadding)
-  );
+  const chromeTopPadding = getWindowPreviewChromeTopPaddingForCurrentSkin();
   const windowClientSidePadding = getWindowPreviewClientSidePadding(platformSkin, asInt(settings.windowPreviewWindowsClientSidePadding));
   const windowClientBottomPadding = getWindowPreviewClientBottomPadding(platformSkin, asInt(settings.windowPreviewWindowsClientBottomPadding));
   const localChromeLayout = getWindowLocalChromeLayout(chromeMetrics);

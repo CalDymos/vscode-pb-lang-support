@@ -4,6 +4,7 @@ export type PreviewRect = { x: number; y: number; w: number; h: number };
 export type PreviewOffset = { x: number; y: number };
 
 export type PreviewChromeMetrics = {
+  titleBarHeight: number;
   panelHeight: number;
   scrollAreaWidth: number;
   splitterWidth: number;
@@ -477,11 +478,12 @@ export function getPreviewTrackBarThumbAssetLayout(args: {
     : { assetKind: "windowsHorizontal", x, y, width: 10, height: 18 };
 }
 
-export function resolvePreviewChromeMetrics(userAgent = ""): PreviewChromeMetrics {
-  const ua = userAgent.toLowerCase();
+export type PreviewChromeMetricsOsSkin = "windows7" | "windows8" | "macos" | "linux";
 
-  if (ua.includes("mac")) {
+export function resolvePreviewChromeMetricsForOsSkin(osSkin: PreviewChromeMetricsOsSkin): PreviewChromeMetrics {
+  if (osSkin === "macos") {
     return {
+      titleBarHeight: 22,
       panelHeight: 31,
       scrollAreaWidth: 14,
       splitterWidth: 12,
@@ -491,8 +493,9 @@ export function resolvePreviewChromeMetrics(userAgent = ""): PreviewChromeMetric
     };
   }
 
-  if (ua.includes("linux")) {
+  if (osSkin === "linux") {
     return {
+      titleBarHeight: 28,
       panelHeight: 29,
       scrollAreaWidth: 20,
       splitterWidth: 9,
@@ -503,6 +506,7 @@ export function resolvePreviewChromeMetrics(userAgent = ""): PreviewChromeMetric
   }
 
   return {
+    titleBarHeight: 29,
     panelHeight: 22,
     scrollAreaWidth: 20,
     splitterWidth: 9,
@@ -510,6 +514,20 @@ export function resolvePreviewChromeMetrics(userAgent = ""): PreviewChromeMetric
     toolBarHeight: 24,
     statusBarHeight: 23
   };
+}
+
+export function resolvePreviewChromeMetrics(userAgent = ""): PreviewChromeMetrics {
+  const ua = userAgent.toLowerCase();
+
+  if (ua.includes("mac")) {
+    return resolvePreviewChromeMetricsForOsSkin("macos");
+  }
+
+  if (ua.includes("linux")) {
+    return resolvePreviewChromeMetricsForOsSkin("linux");
+  }
+
+  return resolvePreviewChromeMetricsForOsSkin("windows7");
 }
 
 export function clampRect(
