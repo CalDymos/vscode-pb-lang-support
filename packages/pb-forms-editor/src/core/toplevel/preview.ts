@@ -632,6 +632,24 @@ export function getStatusBarFieldWidths(
   });
 }
 
+export function getStatusBarFieldPreviewRect(
+  ownerId: string,
+  index: number,
+  x: number,
+  y: number,
+  width: number,
+  height: number
+): PreviewEntryRectLike {
+  return {
+    ownerId,
+    index,
+    x: Math.trunc(x),
+    y: Math.trunc(y),
+    w: Math.max(0, Math.trunc(width)),
+    h: Math.max(0, Math.trunc(height)),
+  };
+}
+
 export function getMenuFlyoutPanelRect(
   menu: MenuModelLike,
   parentIndex: number,

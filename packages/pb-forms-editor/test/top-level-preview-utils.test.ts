@@ -35,6 +35,7 @@ import {
   getPredictedMenuEntryMoveIndex,
   getMenuVisibleEntries,
   getStatusBarAddButtonPreviewLayout,
+  getStatusBarFieldPreviewRect,
   getStatusBarFieldWidths,
   getStatusBarPreviewInsertArgs,
   getSelectedMenuEntryInspectorFieldConfig,
@@ -284,6 +285,14 @@ test("keeps top-level menu and toolbar add icons clamped inside their preview ba
   assert.equal(getTopLevelClampedAddIconX(band, 12), 26);
   assert.equal(getTopLevelClampedAddIconX(band, 50), 50);
   assert.equal(getTopLevelClampedAddIconX(band, 120), 80);
+});
+
+
+test("uses the original statusbar field hit and selection geometry", () => {
+  assert.deepEqual(
+    getStatusBarFieldPreviewRect("StatusBar_0", 2, 42.8, 180.2, 64.9, 23.9),
+    { ownerId: "StatusBar_0", index: 2, x: 42, y: 180, w: 64, h: 23 }
+  );
 });
 
 test("keeps the statusbar add hit rectangle full-height while drawing the plus icon at the original image offset", () => {

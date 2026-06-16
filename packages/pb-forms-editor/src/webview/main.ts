@@ -108,6 +108,7 @@ import {
   getMenuVisibleEntries,
   getPredictedMenuEntryMoveIndex,
   getStatusBarAddButtonPreviewLayout,
+  getStatusBarFieldPreviewRect,
   getStatusBarFieldWidths,
   getStatusBarPreviewInsertArgs,
   getSelectedMenuEntryInspectorFieldConfig,
@@ -8193,7 +8194,7 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
   for (let i = 0; i < statusbar.fields.length; i++) {
     const field = statusbar.fields[i];
     const fieldW = fieldWidths[i] ?? 18;
-    const fieldRect = { ownerId: statusbar.id, index: i, x, y: rect.y + 1, w: Math.max(0, fieldW), h: Math.max(0, rect.h - 2) };
+    const fieldRect = getStatusBarFieldPreviewRect(statusbar.id, i, x, rect.y, fieldW, rect.h);
     statusBarFieldPreviewRects.push(fieldRect);
     const isSelectedField = selection?.kind === "statusBarField"
       && selection.statusBarId === statusbar.id
