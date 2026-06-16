@@ -1079,12 +1079,16 @@ export function getMenuEntryMoveTarget(args: {
   const appendChildThresholdY = firstVisibleRoot
     ? firstVisibleRoot.rect.y + firstVisibleRoot.rect.h
     : args.menuBarBottom;
+  const canUseBeforeAfterTarget = (targetIndex: number, placement: MenuEntryMovePlacement): boolean => {
+    return getPredictedMenuEntryMoveIndex(args.menu, args.sourceEntryIndex, targetIndex, placement) !== null;
+  };
   if (
     firstVisibleRoot
     && firstVisibleRoot.index !== args.sourceEntryIndex
     && args.x <= firstVisibleRoot.rect.x
     && args.y >= firstVisibleRoot.rect.y
     && args.y < firstVisibleRoot.rect.y + firstVisibleRoot.rect.h
+    && canUseBeforeAfterTarget(firstVisibleRoot.index, MenuEntryMovePlacement.Before)
   ) {
     const targetSourceLine = getMenuEntrySourceLine(args.menu, firstVisibleRoot.index);
     if (typeof targetSourceLine === "number") {
@@ -1111,6 +1115,7 @@ export function getMenuEntryMoveTarget(args: {
       && args.y < rect.y + 1
       && args.x > rect.x
       && args.x <= rect.x + rect.w
+      && canUseBeforeAfterTarget(visibleEntry.index, MenuEntryMovePlacement.Before)
     ) {
       return {
         targetSourceLine,
@@ -1122,10 +1127,12 @@ export function getMenuEntryMoveTarget(args: {
 
     if (
       typeof targetSourceLine === "number"
+      && visibleEntry.index !== args.sourceEntryIndex
       && args.x > rect.x
       && args.x <= rect.x + rect.w
       && args.y > rect.y + 1
       && args.y <= rect.y + rect.h
+      && canUseBeforeAfterTarget(visibleEntry.index, MenuEntryMovePlacement.After)
     ) {
       return {
         targetSourceLine,

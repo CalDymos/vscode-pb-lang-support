@@ -807,6 +807,52 @@ test("resolves menu move targets from visible flyout entries", () => {
 });
 
 
+test("suppresses menu move targets that would be no-op structural moves", () => {
+  const menu = {
+    id: "menu-1",
+    entries: [
+      { kind: "MenuTitle", textRaw: '"File"', level: 0, source: { line: 10 } },
+      { kind: "OpenSubMenu", textRaw: '"Export"', level: 1, source: { line: 11 } },
+      { kind: "MenuItem", textRaw: '"PNG"', level: 2, source: { line: 12 } },
+      { kind: "CloseSubMenu", level: 1, source: { line: 13 } },
+      { kind: "MenuItem", textRaw: '"Quit"', level: 1, source: { line: 14 } }
+    ]
+  };
+  const visibleEntries = [
+    { index: 0, entry: menu.entries[0], rect: { ownerId: "menu-1", index: 0, x: 10, y: 20, w: 40, h: 18 } },
+    { index: 1, entry: menu.entries[1], rect: { ownerId: "menu-1", index: 1, x: 20, y: 40, w: 70, h: 20 } },
+    { index: 2, entry: menu.entries[2], rect: { ownerId: "menu-1", index: 2, x: 30, y: 60, w: 80, h: 20 } },
+    { index: 4, entry: menu.entries[4], rect: { ownerId: "menu-1", index: 4, x: 20, y: 80, w: 70, h: 20 } }
+  ];
+
+  assert.equal(
+    getMenuEntryMoveTarget({
+      menu,
+      sourceEntryIndex: 0,
+      x: 49,
+      y: 25,
+      menuBarBottom: 38,
+      visibleEntries,
+      footerRects: []
+    }),
+    null
+  );
+
+  assert.equal(
+    getMenuEntryMoveTarget({
+      menu,
+      sourceEntryIndex: 1,
+      x: 100,
+      y: 79,
+      menuBarBottom: 38,
+      visibleEntries,
+      footerRects: []
+    }),
+    null
+  );
+});
+
+
 
 test("keeps statusbar move indicators at the original 16px line height", () => {
   const rects = [
