@@ -945,6 +945,31 @@ test("resolves linear top-level entry move targets at item edges", () => {
   );
 });
 
+
+test("supports the original toolbar before-indicator offset", () => {
+  const rects = [
+    { ownerId: "tb-1", index: 0, x: 10, y: 20, w: 16, h: 16 },
+    { ownerId: "tb-1", index: 1, x: 32, y: 20, w: 16, h: 16 },
+  ];
+
+  assert.deepEqual(
+    getLinearTopLevelEntryMoveTarget({
+      sourceEntryIndex: 1,
+      x: 11,
+      y: 25,
+      entryRects: rects,
+      getSourceLine: index => 100 + index,
+      beforeIndicatorOffsetX: -3
+    }),
+    {
+      targetSourceLine: 100,
+      placement: "before",
+      indicatorRect: { x: 7, y: 20, w: 2, h: 16 },
+      indicatorOrientation: "vertical"
+    }
+  );
+});
+
 test("ignores linear top-level moves onto the source edge", () => {
   const rects = [
     { ownerId: "sb-1", index: 0, x: 10, y: 50, w: 80, h: 18 },

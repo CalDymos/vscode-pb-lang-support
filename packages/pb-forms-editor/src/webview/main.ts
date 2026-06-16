@@ -4248,6 +4248,7 @@ window.addEventListener("mousemove", (e) => {
         y: my,
         entryRects,
         getSourceLine: index => toolBar.entries?.[index]?.source?.line,
+        beforeIndicatorOffsetX: -3,
         isNoopMove: (targetIndex, placement) => {
           const sourceEndIndex = getToolBarEntryMoveBlockEndIndex(toolBar, d.entryIndex);
           const targetEndIndex = getToolBarEntryMoveBlockEndIndex(toolBar, targetIndex);
