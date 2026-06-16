@@ -21,10 +21,11 @@ Features include:
 - language server diagnostics
 - hover and signature help
 - PureBasic API function dataset
-- build and run integration
+- PureBasic Residents index (constants and structures via `purebasic.residentsPath`)
+- build, run, and syntax check integration
 - debugger integration
 - optional `.pbp` project integration via **pb-project-files**
-- text editing support for **PureBasic Forms (`.pbf`)**
+- text editing support for **PureBasic Forms (`.pbf`)** including IntelliSense
 
 ### [pb-project-files](packages/pb-project-files)
 
@@ -35,6 +36,7 @@ Features include:
 - `.pbp` project file editor
 - project and target discovery
 - active target selection
+- Status Bar project menu with direct actions (open project, reveal directory, disable context, select target)
 - project template support for creating new PureBasic projects
 - customizable Raw XML view for project files
 
@@ -59,29 +61,42 @@ Provides a visual designer for PureBasic forms and supports switching between:
 - graphical form designer
 - raw `.pbf` text editing
 
+The visual designer includes:
+
+- platform-accurate canvas preview (Windows 7/8, macOS, Linux skins)
+- gadget inspector with property editing and write-back to source
+- insert, delete, duplicate, copy/paste, and reparent gadgets
+- menu, toolbar, and statusbar editing with drag-to-reorder
+- image and font management
+- resize lock editing with automatic scaffolding generation
+- PureBasic 6.40 form designer compatibility
+
 When **pb-lang-support** is installed, the text editor mode supports syntax highlighting for the `purebasic-form` language.
 
 ## Feature Matrix
 
-| Feature | pb-lang-support | pb-project-files | pb-project-core | pb-forms-editor |
-|--------|-----------------|------------------|-----------------|-----------------|
-| PureBasic syntax highlighting [`.pb`, `.pbi`, `.pbf`] | ✅ | – | – | – |
-| Language Server (hover, signatures, diagnostics) [`.pb`, `.pbi`] | ✅ | – | – | – |
-| PureBasic API function dataset | ✅ | – | – | – |
-| Build / Run integration | ✅ | – | – | – |
-| Debugger integration | ✅ | – | – | – |
-| `.pbp` project discovery | – | ✅ | – | – |
-| Active target selection | – | ✅ | – | – |
-| `.pbp` project editor | – | ✅ | – | – |
-| Create new project from template | – | ✅ | – | – |
-| `.pbp` parser | – | – | ✅ | – |
-| `.pbp` writer | – | – | ✅ | – |
-| Target / build path resolution | – | – | ✅ | – |
-| Project validation utilities | – | – | ✅ | – |
-| `.pbf` visual form designer | – | – | – | ✅ |
-| `.pbf` text editor mode | – | – | – | ✅ |
-| `.pbf` syntax highlighting (via pb-lang-support) | ✅ | – | – | ✅ |
-| Integration with PureBasic projects | ✅ | ✅ | ✅ | – |
+| Feature                                                          | pb-lang-support | pb-project-files | pb-project-core | pb-forms-editor |
+|------------------------------------------------------------------|-----------------|------------------|-----------------|-----------------|
+| PureBasic syntax highlighting [`.pb`, `.pbi`, `.pbf`]            | ✅              | –                | –               | –               |
+| Language Server (hover, signatures, diagnostics) [`.pb`, `.pbi`] | ✅              | –                | –               | –               |
+| PureBasic API function dataset                                   | ✅              | –                | –               | –               |
+| PureBasic Residents IntelliSense                                 | ✅              | –                | –               | –               |
+| Build / Run integration                                          | ✅              | –                | –               | –               |
+| Compiler Syntax Check integration                                | ✅              | –                | –               | –               |
+| Debugger integration                                             | ✅              | –                | –               | –               |
+| `.pbp` project discovery                                         | –               | ✅               | –               | –               |
+| Active target selection                                          | –               | ✅               | –               | –               |
+| Status Bar project menu                                          | –               | ✅               | –               | –               |
+| `.pbp` project editor                                            | –               | ✅               | –               | –               |
+| Create new project from template                                 | –               | ✅               | –               | –               |
+| `.pbp` parser                                                    | –               | –                | ✅              | –               |
+| `.pbp` writer                                                    | –               | –                | ✅              | –               |
+| Target / build path resolution                                   | –               | –                | ✅              | –               |
+| Project validation utilities                                     | –               | –                | ✅              | –               |
+| `.pbf` visual form designer                                      | –               | –                | –               | ✅              |
+| `.pbf` text editor mode                                          | –               | –                | –               | ✅              |
+| `.pbf` syntax highlighting (via pb-lang-support)                 | ✅              | –                | –               | ✅              |
+| Integration with PureBasic projects                              | ✅              | ✅               | ✅              | –               |
 
 ## Architecture Overview
 
