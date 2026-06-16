@@ -841,7 +841,7 @@ export function getStatusBarAddButtonPreviewLayout(
 function getMenuRootVerticalMoveIndicatorRect(rect: PreviewRectLike, placement: "before" | "after"): PreviewRectLike {
   return {
     x: placement === MenuEntryMovePlacement.Before ? rect.x - 1 : rect.x + rect.w,
-    y: rect.y + 1,
+    y: rect.y,
     w: 2,
     h: ORIGINAL_MENU_ROOT_MOVE_INDICATOR_HEIGHT,
   };

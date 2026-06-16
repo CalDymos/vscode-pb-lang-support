@@ -748,7 +748,7 @@ test("resolves menu move targets from visible flyout entries", () => {
     {
       targetSourceLine: 10,
       placement: "before",
-      indicatorRect: { x: 9, y: 21, w: 2, h: 16 },
+      indicatorRect: { x: 9, y: 20, w: 2, h: 16 },
       indicatorOrientation: "vertical"
     }
   );
@@ -781,7 +781,7 @@ test("resolves menu move targets from visible flyout entries", () => {
     {
       targetSourceLine: 10,
       placement: "after",
-      indicatorRect: { x: 50, y: 21, w: 2, h: 16 },
+      indicatorRect: { x: 50, y: 20, w: 2, h: 16 },
       indicatorOrientation: "vertical"
     }
   );
