@@ -970,6 +970,30 @@ test("supports the original toolbar before-indicator offset", () => {
   );
 });
 
+test("supports the original toolbar after-indicator offset for narrow separator rects", () => {
+  const rects = [
+    { ownerId: "tb-1", index: 0, x: 10, y: 20, w: 16, h: 16 },
+    { ownerId: "tb-1", index: 1, x: 32, y: 20, w: 6, h: 16 },
+  ];
+
+  assert.deepEqual(
+    getLinearTopLevelEntryMoveTarget({
+      sourceEntryIndex: 0,
+      x: 40,
+      y: 25,
+      entryRects: rects,
+      getSourceLine: index => 100 + index,
+      afterIndicatorOffsetX: 16
+    }),
+    {
+      targetSourceLine: 101,
+      placement: "after",
+      indicatorRect: { x: 48, y: 20, w: 2, h: 16 },
+      indicatorOrientation: "vertical"
+    }
+  );
+});
+
 test("ignores linear top-level moves onto the source edge", () => {
   const rects = [
     { ownerId: "sb-1", index: 0, x: 10, y: 50, w: 80, h: 18 },

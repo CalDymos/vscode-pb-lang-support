@@ -940,12 +940,14 @@ export function getLinearTopLevelEntryMoveTarget(args: {
   edgeTolerance?: number;
   indicatorHeight?: number;
   beforeIndicatorOffsetX?: number;
+  afterIndicatorOffsetX?: number;
   isNoopMove?: (targetIndex: number, placement: LinearTopLevelEntryMovePlacement) => boolean;
 }): LinearTopLevelEntryMoveTargetLike | null {
   const edgeTolerance = args.edgeTolerance ?? 5;
   const entryRects = [...args.entryRects].sort((left, right) => left.x - right.x || left.index - right.index);
   const getIndicatorHeight = (rect: PreviewRectLike): number => Math.max(0, Math.trunc(args.indicatorHeight ?? rect.h));
   const beforeIndicatorOffsetX = Math.trunc(args.beforeIndicatorOffsetX ?? -1);
+  const getAfterIndicatorX = (rect: PreviewRectLike): number => rect.x + Math.trunc(args.afterIndicatorOffsetX ?? rect.w);
   if (entryRects.length < 2) return null;
 
   for (const rect of entryRects) {
@@ -976,7 +978,7 @@ export function getLinearTopLevelEntryMoveTarget(args: {
     return {
       targetSourceLine,
       placement: MenuEntryMovePlacement.After,
-      indicatorRect: { x: lastRect.x + lastRect.w, y: lastRect.y, w: 2, h: getIndicatorHeight(lastRect) },
+      indicatorRect: { x: getAfterIndicatorX(lastRect), y: lastRect.y, w: 2, h: getIndicatorHeight(lastRect) },
       indicatorOrientation: "vertical"
     };
   }
