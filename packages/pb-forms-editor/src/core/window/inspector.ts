@@ -1079,11 +1079,14 @@ export function getWindowPreviewMenuRootEntryRect(
   y: number,
   textWidth: number,
   menuBarHeight: number,
+  itemSpacing = 7,
 ): WindowPreviewMenuRootEntryRect {
+  const labelWidth = Math.ceil(Math.max(0, textWidth));
+  const spacing = Math.max(0, Math.trunc(itemSpacing));
   return {
     x: Math.trunc(x) - 1,
     y: Math.trunc(y) - 1,
-    w: Math.max(24, Math.ceil(textWidth) + 6) + 1,
+    w: Math.max(0, labelWidth + spacing),
     h: Math.max(0, Math.trunc(menuBarHeight) - 4),
   };
 }

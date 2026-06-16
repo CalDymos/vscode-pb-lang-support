@@ -7845,8 +7845,7 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
     if (!label.length) continue;
     const metrics = ctx.measureText(label);
     const textWidth = Math.ceil(metrics.width);
-    const itemW = Math.max(24, textWidth + 6);
-    const entryRect = getWindowPreviewMenuRootEntryRect(x, textY, textWidth, rect.h);
+    const entryRect = getWindowPreviewMenuRootEntryRect(x, textY, textWidth, rect.h, menuBarDecoration.itemSpacing);
 
     menuEntryPreviewRects.push({
       ownerId: menu.id, index: entryIndex,
@@ -7865,7 +7864,7 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
       ctx.restore();
     }
 
-    x += itemW + menuBarDecoration.itemSpacing;
+    x += entryRect.w;
     if (x >= rect.x + rect.w - 20) break;
   }
   ctx.restore();
