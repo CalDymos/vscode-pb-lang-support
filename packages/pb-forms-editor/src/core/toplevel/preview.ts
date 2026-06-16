@@ -101,6 +101,15 @@ export type LinearTopLevelEntryMoveTargetLike = {
   indicatorOrientation: "vertical";
 };
 
+export type TopLevelMoveIndicatorRenderMode = "original" | "contrast";
+
+export type TopLevelMoveIndicatorStroke = {
+  role: "halo" | "core";
+  lineWidth: number;
+  fallbackColor: string;
+  cssVariable?: string;
+};
+
 export type VisibleMenuEntryLike = {
   index: number;
   entry: MenuEntryLike;
@@ -117,6 +126,17 @@ export type Windows7MenuBarPalette = {
   separatorMiddle: string;
   separatorLower: string;
 };
+
+const ORIGINAL_MENU_ROOT_MOVE_INDICATOR_HEIGHT = 16;
+
+const ORIGINAL_TOP_LEVEL_MOVE_INDICATOR_STROKES: TopLevelMoveIndicatorStroke[] = [
+  { role: "core", lineWidth: 2, fallbackColor: "#0000ff", cssVariable: "--vscode-editorInfo-foreground" },
+];
+
+const CONTRAST_TOP_LEVEL_MOVE_INDICATOR_STROKES: TopLevelMoveIndicatorStroke[] = [
+  { role: "halo", lineWidth: 6, fallbackColor: "rgba(255, 255, 255, 0.95)" },
+  { role: "core", lineWidth: 2, fallbackColor: "rgb(255, 149, 0)", cssVariable: "--vscode-editorWarning-foreground" },
+];
 
 const ORIGINAL_WINDOWS7_MENU_BAR_PALETTE: Windows7MenuBarPalette = {
   topFill: "rgb(245, 245, 245)",
@@ -175,6 +195,13 @@ function averagePreviewRgbColor(colorA: PreviewRgbColor, colorB: PreviewRgbColor
     g: Math.round((colorA.g + colorB.g) / 2),
     b: Math.round((colorA.b + colorB.b) / 2),
   };
+}
+
+export function getTopLevelMoveIndicatorStrokes(mode: TopLevelMoveIndicatorRenderMode): TopLevelMoveIndicatorStroke[] {
+  return (mode === "contrast"
+    ? CONTRAST_TOP_LEVEL_MOVE_INDICATOR_STROKES
+    : ORIGINAL_TOP_LEVEL_MOVE_INDICATOR_STROKES
+  ).map((stroke) => ({ ...stroke }));
 }
 
 export function deriveWindows7MenuBarPalette(menuColor?: string, menuBarColor?: string): Windows7MenuBarPalette {
@@ -811,6 +838,15 @@ export function getStatusBarAddButtonPreviewLayout(
 }
 
 
+function getMenuRootVerticalMoveIndicatorRect(rect: PreviewRectLike, placement: "before" | "after"): PreviewRectLike {
+  return {
+    x: placement === MenuEntryMovePlacement.Before ? rect.x - 1 : rect.x + rect.w,
+    y: rect.y + 1,
+    w: 2,
+    h: ORIGINAL_MENU_ROOT_MOVE_INDICATOR_HEIGHT,
+  };
+}
+
 function rectContainsPoint(rect: PreviewRectLike, x: number, y: number): boolean {
   return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
 }
@@ -997,7 +1033,7 @@ export function getMenuEntryMoveTarget(args: {
       return {
         targetSourceLine,
         placement: MenuEntryMovePlacement.Before,
-        indicatorRect: { x: firstVisibleRoot.rect.x - 1, y: firstVisibleRoot.rect.y, w: 2, h: firstVisibleRoot.rect.h },
+        indicatorRect: getMenuRootVerticalMoveIndicatorRect(firstVisibleRoot.rect, MenuEntryMovePlacement.Before),
         indicatorOrientation: "vertical"
       };
     }
@@ -1037,7 +1073,7 @@ export function getMenuEntryMoveTarget(args: {
         targetSourceLine,
         placement: MenuEntryMovePlacement.After,
         indicatorRect: level === 0
-          ? { x: rect.x + rect.w, y: rect.y, w: 2, h: rect.h }
+          ? getMenuRootVerticalMoveIndicatorRect(rect, MenuEntryMovePlacement.After)
           : { x: rect.x, y: rect.y + rect.h, w: rect.w, h: 2 },
         indicatorOrientation: level === 0 ? "vertical" : "horizontal"
       };

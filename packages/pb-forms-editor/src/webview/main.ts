@@ -83,6 +83,7 @@ import {
   type LinearTopLevelEntryMoveTargetLike,
   type StatusBarPreviewInsertAction,
   type ToolBarPreviewInsertAction,
+  type TopLevelMoveIndicatorRenderMode,
   canEditToolBarTooltip,
   deriveWindows7MenuBarPalette,
   getDefaultMenuItemInsertArgs,
@@ -121,6 +122,7 @@ import {
   getToolBarSeparatorPreviewRect,
   getToolBarSeparatorSelectedOutlineRect,
   getTopLevelClampedAddIconX,
+  getTopLevelMoveIndicatorStrokes,
   hasPbFlag,
   hasStatusBarPreviewAssignedImage,
   resolveMenuFooterHit,
@@ -7538,24 +7540,31 @@ function buildPendingMenuEntrySelection(
 }
 
 
-function drawTopLevelMoveIndicator(ctx: CanvasRenderingContext2D, target: { indicatorRect: PreviewRect; indicatorOrientation: "horizontal" | "vertical" }): void {
-  const indicatorColor = getCssVar("--vscode-editorInfo-foreground") || "#0000ff";
+function drawTopLevelMoveIndicator(
+  ctx: CanvasRenderingContext2D,
+  target: { indicatorRect: PreviewRect; indicatorOrientation: "horizontal" | "vertical" },
+  mode: TopLevelMoveIndicatorRenderMode = "original"
+): void {
   const indicator = target.indicatorRect;
+  const strokes = getTopLevelMoveIndicatorStrokes(mode);
   ctx.save();
-  ctx.strokeStyle = indicatorColor;
-  ctx.lineWidth = 2;
-  if (target.indicatorOrientation === "vertical") {
-    const x = indicator.x + Math.max(0, Math.trunc(indicator.w / 2));
-    ctx.beginPath();
-    ctx.moveTo(x + 0.5, indicator.y);
-    ctx.lineTo(x + 0.5, indicator.y + indicator.h);
-    ctx.stroke();
-  } else {
-    const y = indicator.y + Math.max(0, Math.trunc(indicator.h / 2));
-    ctx.beginPath();
-    ctx.moveTo(indicator.x, y + 0.5);
-    ctx.lineTo(indicator.x + indicator.w, y + 0.5);
-    ctx.stroke();
+  ctx.lineCap = "butt";
+  for (const stroke of strokes) {
+    ctx.strokeStyle = (stroke.cssVariable ? getCssVar(stroke.cssVariable) : "") || stroke.fallbackColor;
+    ctx.lineWidth = stroke.lineWidth;
+    if (target.indicatorOrientation === "vertical") {
+      const x = indicator.x + Math.max(0, Math.trunc(indicator.w / 2));
+      ctx.beginPath();
+      ctx.moveTo(x + 0.5, indicator.y);
+      ctx.lineTo(x + 0.5, indicator.y + indicator.h);
+      ctx.stroke();
+    } else {
+      const y = indicator.y + Math.max(0, Math.trunc(indicator.h / 2));
+      ctx.beginPath();
+      ctx.moveTo(indicator.x, y + 0.5);
+      ctx.lineTo(indicator.x + indicator.w, y + 0.5);
+      ctx.stroke();
+    }
   }
   ctx.restore();
 }
@@ -8818,7 +8827,7 @@ function render() {
       }
     }
     if (drag?.target === "statusBarField" && drag.moved && drag.moveTarget) {
-      drawTopLevelMoveIndicator(ctx, drag.moveTarget);
+      drawTopLevelMoveIndicator(ctx, drag.moveTarget, "contrast");
     }
   }
 
@@ -9110,25 +9119,8 @@ function render() {
     }
 
     if (drag?.target === "menuEntry" && drag.moved && drag.moveTarget) {
-      const indicatorColor = getCssVar("--vscode-editorInfo-foreground") || "#0000ff";
-      const indicator = drag.moveTarget.indicatorRect;
-      ctx.save();
-      ctx.strokeStyle = indicatorColor;
-      ctx.lineWidth = 2;
-      if (drag.moveTarget.indicatorOrientation === "vertical") {
-        const x = indicator.x + Math.max(0, Math.trunc(indicator.w / 2));
-        ctx.beginPath();
-        ctx.moveTo(x + 0.5, indicator.y);
-        ctx.lineTo(x + 0.5, indicator.y + indicator.h);
-        ctx.stroke();
-      } else {
-        const y = indicator.y + Math.max(0, Math.trunc(indicator.h / 2));
-        ctx.beginPath();
-        ctx.moveTo(indicator.x, y + 0.5);
-        ctx.lineTo(indicator.x + indicator.w, y + 0.5);
-        ctx.stroke();
-      }
-      ctx.restore();
+      const indicatorMode = drag.moveTarget.indicatorOrientation === "vertical" ? "contrast" : "original";
+      drawTopLevelMoveIndicator(ctx, drag.moveTarget, indicatorMode);
     }
   }
 }

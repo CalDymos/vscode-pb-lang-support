@@ -50,6 +50,7 @@ import {
   getToolBarSeparatorPreviewRect,
   getToolBarSeparatorSelectedOutlineRect,
   getTopLevelClampedAddIconX,
+  getTopLevelMoveIndicatorStrokes,
   hasPbFlag,
   unquotePbString,
   getVisibleToolBarEntryCount,
@@ -287,6 +288,28 @@ test("keeps top-level menu and toolbar add icons clamped inside their preview ba
   assert.equal(getTopLevelClampedAddIconX(band, 120), 80);
 });
 
+
+
+test("exposes contrast move-indicator strokes without changing original geometry helpers", () => {
+  assert.deepEqual(
+    getTopLevelMoveIndicatorStrokes("original"),
+    [
+      { role: "core", lineWidth: 2, fallbackColor: "#0000ff", cssVariable: "--vscode-editorInfo-foreground" },
+    ]
+  );
+
+  assert.deepEqual(
+    getTopLevelMoveIndicatorStrokes("contrast"),
+    [
+      { role: "halo", lineWidth: 6, fallbackColor: "rgba(255, 255, 255, 0.95)" },
+      { role: "core", lineWidth: 2, fallbackColor: "rgb(255, 149, 0)", cssVariable: "--vscode-editorWarning-foreground" },
+    ]
+  );
+
+  const contrastStrokes = getTopLevelMoveIndicatorStrokes("contrast");
+  contrastStrokes[0].lineWidth = 99;
+  assert.equal(getTopLevelMoveIndicatorStrokes("contrast")[0].lineWidth, 6);
+});
 
 test("uses the original statusbar field hit and selection geometry", () => {
   assert.deepEqual(
@@ -724,7 +747,7 @@ test("resolves menu move targets from visible flyout entries", () => {
     {
       targetSourceLine: 10,
       placement: "before",
-      indicatorRect: { x: 9, y: 20, w: 2, h: 18 },
+      indicatorRect: { x: 9, y: 21, w: 2, h: 16 },
       indicatorOrientation: "vertical"
     }
   );
@@ -743,6 +766,24 @@ test("resolves menu move targets from visible flyout entries", () => {
     { index: 1, entry: emptySubMenu.entries[1], rect: { ownerId: "menu-1", index: 1, x: 20, y: 40, w: 70, h: 20 } },
     { index: 3, entry: emptySubMenu.entries[3], rect: { ownerId: "menu-1", index: 3, x: 20, y: 80, w: 70, h: 20 } }
   ];
+
+  assert.deepEqual(
+    getMenuEntryMoveTarget({
+      menu,
+      sourceEntryIndex: 1,
+      x: 49,
+      y: 25,
+      menuBarBottom: 38,
+      visibleEntries,
+      footerRects
+    }),
+    {
+      targetSourceLine: 10,
+      placement: "after",
+      indicatorRect: { x: 50, y: 21, w: 2, h: 16 },
+      indicatorOrientation: "vertical"
+    }
+  );
 
   assert.deepEqual(
     getMenuEntryMoveTarget({
