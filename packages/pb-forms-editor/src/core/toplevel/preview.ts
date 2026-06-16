@@ -1,6 +1,6 @@
 import { parsePbStringLiteral } from "../parser/pb-string";
 import { quotePbString } from "../parser/tokenizer";
-import type { DesignerTopLevelContainerSelection, DesignerTopLevelEntrySelection } from "./selection";
+import type { DesignerTopLevelContainerSelection, DesignerTopLevelEntrySelection, DesignerTopLevelSelection } from "./selection";
 import { parseStatusBarWidth } from "../statusbar/preview";
 import { MenuEntryMovePlacement } from "../../shared/menu";
 import type { LinearTopLevelEntryMovePlacement } from "../../shared/menu";
@@ -363,6 +363,14 @@ export function getMenuAncestorChain(menu: MenuModelLike, entryIndex: number): n
 
 export function getMenuEntrySourceLine(menu: MenuModelLike, entryIndex: number): number | undefined {
   return menu.entries?.[entryIndex]?.source?.line;
+}
+
+export function getMenuEntrySelectedIndexAtDragStart(
+  menuId: string,
+  previousSelection: DesignerTopLevelSelection | null | undefined
+): number | undefined {
+  if (!previousSelection || previousSelection.kind !== "menuEntry") return undefined;
+  return previousSelection.menuId === menuId ? previousSelection.entryIndex : undefined;
 }
 
 export function getMenuEntryBlockEndIndex(entries: MenuEntryLike[], entryIndex: number): number {

@@ -98,6 +98,7 @@ import {
   getMenuEntryBlockEndIndex,
   getMenuEntryLevel,
   getMenuEntrySourceLine,
+  getMenuEntrySelectedIndexAtDragStart,
   getMenuFlyoutEntryTextLayout,
   getMenuFlyoutFooterOpacity,
   getMenuFlyoutFooterTextPosition,
@@ -2600,6 +2601,7 @@ type DragState =
       startMy: number;
       moved: boolean;
       moveTarget: MenuEntryMoveTargetLike | null;
+      selectedEntryIndexAtDragStart?: number;
     }
   | {
       target: "toolBarEntry";
@@ -3784,6 +3786,7 @@ canvas.addEventListener("mousedown", (e) => {
   const rect = canvas.getBoundingClientRect();
   const mx = e.clientX - rect.left;
   const my = e.clientY - rect.top;
+  const previousSelection = selection;
 
   if (pendingInsertGadgetKind) {
     const placement = resolveGadgetInsertPlacement(mx, my);
@@ -3905,7 +3908,11 @@ canvas.addEventListener("mousedown", (e) => {
           startMx: mx,
           startMy: my,
           moved: false,
-          moveTarget: null
+          moveTarget: null,
+          selectedEntryIndexAtDragStart: getMenuEntrySelectedIndexAtDragStart(
+            menu.id,
+            previousSelection?.kind === "menuEntry" ? previousSelection : null
+          )
         };
         canvas.style.cursor = "move";
         renderSelectionUiWithoutParentSelector();
@@ -4225,7 +4232,7 @@ window.addEventListener("mousemove", (e) => {
         menuBarBottom,
         visibleEntries: getMenuVisibleEntries(menu, menuEntryPreviewRects),
         footerRects: menuFooterPreviewRects,
-        selectedEntryIndex: selection && selection.kind === "menuEntry" && selection.menuId === menu.id ? selection.entryIndex : undefined
+        selectedEntryIndex: d.selectedEntryIndexAtDragStart
       }) : null;
     } else {
       d.moveTarget = null;

@@ -26,6 +26,7 @@ import {
   getMenuFlyoutSeparatorPreviewRect,
   getMenuFlyoutShortcutOpacity,
   getMenuEntrySourceLine,
+  getMenuEntrySelectedIndexAtDragStart,
   getMenuEntryMoveTarget,
   getLinearTopLevelEntryMoveTarget,
   getMenuEntryRect,
@@ -716,6 +717,22 @@ test("resolves visible menu entry and footer rectangles from preview caches", ()
   );
 });
 
+
+test("captures the original propgrid-menu selection target before menu drag selection changes", () => {
+  assert.equal(
+    getMenuEntrySelectedIndexAtDragStart("menu-1", { kind: "menuEntry", menuId: "menu-1", entryIndex: 1 }),
+    1
+  );
+  assert.equal(
+    getMenuEntrySelectedIndexAtDragStart("menu-1", { kind: "menuEntry", menuId: "other-menu", entryIndex: 1 }),
+    undefined
+  );
+  assert.equal(
+    getMenuEntrySelectedIndexAtDragStart("menu-1", { kind: "toolbar", id: "tb-1" }),
+    undefined
+  );
+});
+
 test("resolves menu move targets from visible flyout entries", () => {
   const menu = {
     id: "menu-1",
@@ -896,6 +913,37 @@ test("keeps statusbar move indicators at the original 16px line height", () => {
 });
 
 
+test("keeps statusbar move targets inside the visible statusbar band", () => {
+  const rects = [
+    { ownerId: "sb-1", index: 0, x: 10, y: 180, w: 80, h: 23 },
+    { ownerId: "sb-1", index: 1, x: 90, y: 180, w: 120, h: 23 },
+  ];
+
+  assert.equal(
+    getStatusBarFieldMoveTarget({
+      sourceEntryIndex: 1,
+      x: 70,
+      y: 179,
+      entryRects: rects,
+      getSourceLine: index => 300 + index,
+      indicatorHeight: 16
+    }),
+    null
+  );
+
+  assert.equal(
+    getStatusBarFieldMoveTarget({
+      sourceEntryIndex: 1,
+      x: 70,
+      y: 204,
+      entryRects: rects,
+      getSourceLine: index => 300 + index,
+      indicatorHeight: 16
+    }),
+    null
+  );
+});
+
 test("uses the original statusbar field body zones for move targets", () => {
   const rects = [
     { ownerId: "sb-1", index: 0, x: 10, y: 180, w: 80, h: 23 },
@@ -1037,6 +1085,39 @@ test("supports the original toolbar after-indicator offset for narrow separator 
       indicatorRect: { x: 48, y: 20, w: 2, h: 16 },
       indicatorOrientation: "vertical"
     }
+  );
+});
+
+test("keeps toolbar move targets inside the visible toolbar band", () => {
+  const rects = [
+    { ownerId: "tb-1", index: 0, x: 10, y: 20, w: 16, h: 16 },
+    { ownerId: "tb-1", index: 1, x: 32, y: 20, w: 16, h: 16 },
+  ];
+
+  assert.equal(
+    getLinearTopLevelEntryMoveTarget({
+      sourceEntryIndex: 1,
+      x: 11,
+      y: 19,
+      entryRects: rects,
+      getSourceLine: index => 100 + index,
+      beforeIndicatorOffsetX: -3,
+      afterIndicatorOffsetX: 16
+    }),
+    null
+  );
+
+  assert.equal(
+    getLinearTopLevelEntryMoveTarget({
+      sourceEntryIndex: 1,
+      x: 11,
+      y: 37,
+      entryRects: rects,
+      getSourceLine: index => 100 + index,
+      beforeIndicatorOffsetX: -3,
+      afterIndicatorOffsetX: 16
+    }),
+    null
   );
 });
 
