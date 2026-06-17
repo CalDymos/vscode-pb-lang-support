@@ -11,6 +11,7 @@ import {
   getCanvasMenuBarRect,
   getMenuBarRect,
   getPanelTabLayouts,
+  getPanelTabVisibleHitRect,
   getPanelContentRect,
   getPanelHeaderRect,
   clampScrollAreaOffset,
@@ -371,14 +372,25 @@ test("computes macOS panel tab hit layouts from the centered original path", () 
   ]);
 });
 
-test("computes Linux panel tab hit layouts without the rendered inter-tab gap", () => {
+test("computes Linux panel tab hit layouts from the visible FD_DrawGadget tab geometry", () => {
   const linuxMetrics = resolvePreviewChromeMetricsForOsSkin("linux");
   const tabs = getPanelTabLayouts(["One", "Two"], RECT, linuxMetrics, 1, (label) => label.length * 6, "linux");
 
   assert.deepEqual(tabs, [
-    { index: 0, label: "One", active: false, rect: { x: 10, y: 20, w: 30, h: 29 } },
-    { index: 1, label: "Two", active: true, rect: { x: 40, y: 20, w: 30, h: 29 } }
+    { index: 0, label: "One", active: false, rect: { x: 10, y: 20, w: 32, h: 29 } },
+    { index: 1, label: "Two", active: true, rect: { x: 50, y: 20, w: 32, h: 29 } }
   ]);
+});
+
+test("rejects zero-area clipped panel tab hit rects", () => {
+  assert.deepEqual(
+    getPanelTabVisibleHitRect({ x: 124, y: 20, w: 60, h: 22 }, { x: 10, y: 20, w: 120, h: 80 }),
+    { x: 124, y: 20, w: 6, h: 22 }
+  );
+  assert.equal(
+    getPanelTabVisibleHitRect({ x: 130, y: 20, w: 60, h: 22 }, { x: 10, y: 20, w: 120, h: 80 }),
+    null
+  );
 });
 
 

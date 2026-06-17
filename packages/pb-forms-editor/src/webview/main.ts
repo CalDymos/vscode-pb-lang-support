@@ -31,6 +31,7 @@ import {
   getScrollAreaHorizontalThumbRect,
   resolvePanelActiveItem,
   getPanelTabLayouts,
+  getPanelTabVisibleHitRect,
   getSplitterBarRect,
   getSplitterChromeHitZone,
   getSplitterPaneRect,
@@ -4735,9 +4736,12 @@ function hitTestPanelTab(mx: number, my: number, metrics: PreviewChromeMetrics):
       if (g.kind !== GADGET_KIND.PanelGadget) continue;
       const layout = getGadgetPreviewLayout(g, metrics, cache);
       if (!layout.visible) continue;
+      if (!rectContainsPoint(layout.rect, lx, ly)) continue;
+      if (!rectContainsPoint(layout.clip, lx, ly)) continue;
       const tabs = getPanelTabRects(ctx, g, layout.rect, metrics);
       for (const tab of tabs) {
-        if (rectContainsPoint(intersectRect(tab.rect, layout.clip), lx, ly)) {
+        const visibleTabRect = getPanelTabVisibleHitRect(tab.rect, layout.clip);
+        if (visibleTabRect && rectContainsPoint(visibleTabRect, lx, ly)) {
           return { panel: g, index: tab.index };
         }
       }

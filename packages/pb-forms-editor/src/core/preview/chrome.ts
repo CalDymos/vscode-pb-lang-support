@@ -644,17 +644,22 @@ export function getPanelTabLayouts(
   let tabX = rect.x;
   for (let i = 0; i < resolvedLabels.length; i++) {
     const label = resolvedLabels[i];
-    const tabW = Math.ceil(measureText(label)) + 12;
+    const tabW = Math.ceil(measureText(label)) + (osSkin === "linux" ? 14 : 12);
     tabRects.push({
       index: i,
       label,
       active: i === resolvedActiveIndex,
       rect: { x: tabX, y: rect.y, w: tabW, h: panelHeight }
     });
-    tabX += tabW;
+    tabX += tabW + (osSkin === "linux" ? 8 : 0);
   }
 
   return tabRects;
+}
+
+export function getPanelTabVisibleHitRect(tabRect: PreviewRect, clip: PreviewRect): PreviewRect | null {
+  const visibleRect = intersectRect(tabRect, clip);
+  return visibleRect.w > 0 && visibleRect.h > 0 ? visibleRect : null;
 }
 
 
