@@ -1252,12 +1252,13 @@ function syncModelDisplayLayout(currentModel: Model | undefined): void {
   }
 }
 
-function ensureLayoutScaleState(): void {
+function ensureLayoutScaleState(): boolean {
   const scale = getActiveLayoutDpiScale();
-  if (Math.abs(scale - lastLayoutDpiScale) < 0.001) return;
+  if (Math.abs(scale - lastLayoutDpiScale) < 0.001) return false;
   lastLayoutDpiScale = scale;
   layoutDisplayOverrides.clear();
   syncModelDisplayLayout(model);
+  return true;
 }
 
 function toUnscaledLayoutRaw(displayValue: number): string {
@@ -1321,6 +1322,7 @@ function shouldShowReadonlyUnscaledLayoutRows(): boolean {
 function updateWindowDisplayField(win: FormWindow, field: "x" | "y" | "w" | "h", displayValue: number): void {
   const committed = commitDisplayedLayoutValue(displayValue, getActiveLayoutDpiScale());
   storeLayoutDisplayOverride("window", win.id, field, committed.displayValue, committed.raw);
+  markPreviewCanvasScrollContentSizeDirty();
   switch (field) {
     case "x":
       win.x = committed.displayValue;
@@ -1432,6 +1434,7 @@ function postWindowPositionRaw(win: FormWindow, axis: "x" | "y", rawValue: strin
       win.y = parsed.previewValue;
       postWindowOpenArgs(win, { yRaw: parsed.raw });
     }
+    markPreviewCanvasScrollContentSizeDirty();
     render();
     renderProps();
     return;
@@ -1460,6 +1463,7 @@ function postWindowPositionRaw(win: FormWindow, axis: "x" | "y", rawValue: strin
     postWindowOpenArgs(win, { yRaw: parsed.raw });
   }
 
+  markPreviewCanvasScrollContentSizeDirty();
   render();
   renderProps();
 }
@@ -2679,11 +2683,32 @@ function applySettings(s: DesignerSettings) {
     bgReadonly.length ? bgReadonly : "var(--vscode-readonly-input-background)"
   );
 
+  markPreviewCanvasScrollContentSizeDirty();
   render();
   renderProps();
 }
 
-function getPreviewCanvasViewportSize(): { width: number; height: number } {
+type PreviewCanvasCachedSize = { width: number; height: number };
+
+let previewCanvasViewportSizeCache: PreviewCanvasCachedSize | null = null;
+let previewCanvasScrollContentSizeCache: PreviewCanvasCachedSize | null = null;
+let previewCanvasCssSizeCache: PreviewCanvasCachedSize | null = null;
+let previewCanvasViewportSizeDirty = true;
+let previewCanvasScrollContentSizeDirty = true;
+let previewCanvasElementSizeDirty = true;
+
+function markPreviewCanvasViewportSizeDirty(): void {
+  previewCanvasViewportSizeDirty = true;
+  previewCanvasScrollContentSizeDirty = true;
+  previewCanvasElementSizeDirty = true;
+}
+
+function markPreviewCanvasScrollContentSizeDirty(): void {
+  previewCanvasScrollContentSizeDirty = true;
+  previewCanvasElementSizeDirty = true;
+}
+
+function getPreviewCanvasViewportSize(): PreviewCanvasCachedSize {
   const rect = canvasWrap.getBoundingClientRect();
   return {
     width: Math.max(1, Math.floor(rect.width)),
@@ -2691,8 +2716,7 @@ function getPreviewCanvasViewportSize(): { width: number; height: number } {
   };
 }
 
-function getPreviewCanvasScrollContentSize(): { width: number; height: number } {
-  const viewport = getPreviewCanvasViewportSize();
+function getPreviewCanvasScrollContentSize(viewport: PreviewCanvasCachedSize): PreviewCanvasCachedSize {
   const win = model.window;
   if (!win) {
     return viewport;
@@ -2717,9 +2741,29 @@ function getPreviewCanvasScrollContentSize(): { width: number; height: number } 
   };
 }
 
-function syncPreviewCanvasElementSize(): void {
-  const viewport = getPreviewCanvasViewportSize();
-  const content = getPreviewCanvasScrollContentSize();
+function getCachedPreviewCanvasViewportSize(): PreviewCanvasCachedSize {
+  if (previewCanvasViewportSizeDirty || !previewCanvasViewportSizeCache) {
+    previewCanvasViewportSizeCache = getPreviewCanvasViewportSize();
+    previewCanvasViewportSizeDirty = false;
+  }
+  return previewCanvasViewportSizeCache;
+}
+
+function getCachedPreviewCanvasScrollContentSize(viewport: PreviewCanvasCachedSize): PreviewCanvasCachedSize {
+  if (previewCanvasScrollContentSizeDirty || !previewCanvasScrollContentSizeCache) {
+    previewCanvasScrollContentSizeCache = getPreviewCanvasScrollContentSize(viewport);
+    previewCanvasScrollContentSizeDirty = false;
+  }
+  return previewCanvasScrollContentSizeCache;
+}
+
+function syncPreviewCanvasElementSizeIfNeeded(): PreviewCanvasCachedSize {
+  if (!previewCanvasElementSizeDirty && previewCanvasCssSizeCache) {
+    return previewCanvasCssSizeCache;
+  }
+
+  const viewport = getCachedPreviewCanvasViewportSize();
+  const content = getCachedPreviewCanvasScrollContentSize(viewport);
   const scrollbarWidth = getWindowPreviewFormScrollbarWidth(resolvePbFormSkinPlatform());
   const cssSize = getWindowPreviewCanvasCssSize({
     viewportWidth: viewport.width,
@@ -2737,15 +2781,21 @@ function syncPreviewCanvasElementSize(): void {
   if (canvas.style.height !== heightCss) {
     canvas.style.height = heightCss;
   }
+
+  previewCanvasCssSizeCache = cssSize;
+  previewCanvasElementSizeDirty = false;
+  return cssSize;
 }
 
-function ensureCanvasBitmapSizeForRender(): void {
-  ensureLayoutScaleState();
-  syncPreviewCanvasElementSize();
+function ensureCanvasBitmapSizeForRender(): PreviewCanvasCachedSize {
+  if (ensureLayoutScaleState()) {
+    markPreviewCanvasScrollContentSizeDirty();
+  }
+
+  const cssSize = syncPreviewCanvasElementSizeIfNeeded();
   const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.getBoundingClientRect();
-  const width = Math.max(1, Math.floor(rect.width * dpr));
-  const height = Math.max(1, Math.floor(rect.height * dpr));
+  const width = Math.max(1, Math.floor(cssSize.width * dpr));
+  const height = Math.max(1, Math.floor(cssSize.height * dpr));
   if (canvas.width !== width) {
     canvas.width = width;
   }
@@ -2754,9 +2804,11 @@ function ensureCanvasBitmapSizeForRender(): void {
   }
   const ctx = canvas.getContext("2d")!;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return cssSize;
 }
 
 function resizeCanvas() {
+  markPreviewCanvasViewportSizeDirty();
   render();
 }
 
@@ -2798,6 +2850,7 @@ window.addEventListener("message", (ev: MessageEvent<ExtensionToWebviewMessage<M
     ensureLayoutScaleState();
     model = msg.model;
     syncModelDisplayLayout(model);
+    markPreviewCanvasScrollContentSizeDirty();
     windowParentAsRawExpressionOverrides.clear();
     const retainedPanelItems = retainPanelActiveItems(panelActiveItems, model.gadgets);
     panelActiveItems.clear();
@@ -4365,6 +4418,7 @@ window.addEventListener("mousemove", (e) => {
   model.window.w = nw;
   model.window.h = nh;
 
+  markPreviewCanvasScrollContentSizeDirty();
   canvas.style.cursor = getHandleCursor(d.handle);
 
   render();
@@ -8319,7 +8373,7 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
 }
 
 function render() {
-  ensureCanvasBitmapSizeForRender();
+  const canvasCssSize = ensureCanvasBitmapSizeForRender();
 
   menuEntryPreviewRects = [];
   menuFooterPreviewRects = [];
@@ -8330,8 +8384,7 @@ function render() {
   statusBarFieldPreviewRects = [];
 
   const ctx = canvas.getContext("2d")!;
-  const rect = canvas.getBoundingClientRect();
-  ctx.clearRect(0, 0, rect.width, rect.height);
+  ctx.clearRect(0, 0, canvasCssSize.width, canvasCssSize.height);
 
   const fg = getComputedStyle(document.body).color;
   const focus = getCssVar("--vscode-focusBorder") || fg;
@@ -8354,7 +8407,7 @@ function render() {
     ctx.save();
     ctx.globalAlpha = clamp(settings.outsideDimOpacity, 0, 1);
     ctx.fillStyle = fg;
-    ctx.fillRect(0, 0, rect.width, rect.height);
+    ctx.fillRect(0, 0, canvasCssSize.width, canvasCssSize.height);
     ctx.restore();
   }
 
@@ -10007,6 +10060,8 @@ function renderProps() {
           const nextExpr = buildWindowFlagsExpr(model.window.knownFlags, (model.window.customFlags ?? []).join(" | "));
           model.window.flagsExpr = nextExpr;
           postWindowOpenArgs(model.window, { flagsExpr: nextExpr ?? "" });
+          markPreviewCanvasScrollContentSizeDirty();
+          render();
           renderProps();
         })
       ));
@@ -10020,6 +10075,8 @@ function renderProps() {
         const nextExpr = buildWindowFlagsExpr(model.window.knownFlags ?? [], v);
         model.window.flagsExpr = nextExpr;
         postWindowOpenArgs(model.window, { flagsExpr: nextExpr ?? "" });
+        markPreviewCanvasScrollContentSizeDirty();
+        render();
       }, { placeholder: "#PB_Window_CustomFlagA | #PB_Window_CustomFlagB", title: windowConstantsField.title })
       ));
     }
