@@ -608,38 +608,58 @@ export function getPanelTabLayouts(
   rect: PreviewRect,
   metrics: PreviewChromeMetrics,
   activeIndex: number,
-  measureText: (label: string) => number
+  measureText: (label: string) => number,
+  osSkin: PreviewChromeMetricsOsSkin = "windows7"
 ): PanelTabLayout[] {
-  const panelHeight = Math.min(metrics.panelHeight, Math.max(18, rect.h));
+  const panelHeight = metrics.panelHeight;
   const tabRects: PanelTabLayout[] = [];
+
+  if (labels.length === 0) {
+    return tabRects;
+  }
+
+  const resolvedLabels = labels.map((label, index) => label || `Tab ${index + 1}`);
+  const resolvedActiveIndex = resolvePanelActiveItem(activeIndex, resolvedLabels.length);
+
+  if (osSkin === "macos") {
+    const widths = resolvedLabels.map((label) => Math.ceil(measureText(label)) + 24);
+    const totalWidth = widths.reduce((sum, width) => sum + width, 0);
+    let tabX = rect.x + Math.trunc((rect.w - totalWidth) / 2);
+
+    for (let i = 0; i < resolvedLabels.length; i++) {
+      const label = resolvedLabels[i];
+      const tabW = widths[i];
+      tabRects.push({
+        index: i,
+        label,
+        active: i === resolvedActiveIndex,
+        rect: { x: tabX, y: rect.y, w: tabW, h: panelHeight }
+      });
+      tabX += tabW;
+    }
+
+    return tabRects;
+  }
+
   let tabX = rect.x;
-
-  for (let i = 0; i < labels.length; i++) {
-    const label = labels[i] || `Tab ${i}`;
-    const tabW = Math.max(46, Math.ceil(measureText(label)) + 14);
-    const active = i === activeIndex;
-    const tabH = Math.max(16, panelHeight - (active ? 1 : 4));
-    const tabY = rect.y + (active ? 0 : 2);
-    const nextRight = tabX + tabW;
-
-    if (tabX >= rect.x + rect.w - 12) break;
-
+  for (let i = 0; i < resolvedLabels.length; i++) {
+    const label = resolvedLabels[i];
+    const tabW = Math.ceil(measureText(label)) + (osSkin === "linux" ? 14 : 12);
     tabRects.push({
       index: i,
       label,
-      active,
-      rect: {
-        x: tabX,
-        y: tabY,
-        w: Math.max(0, Math.min(tabW, rect.x + rect.w - tabX)),
-        h: tabH
-      }
+      active: i === resolvedActiveIndex,
+      rect: { x: tabX, y: rect.y, w: tabW, h: panelHeight }
     });
-
-    tabX = nextRight;
+    tabX += tabW + (osSkin === "linux" ? 8 : 0);
   }
 
   return tabRects;
+}
+
+export function getPanelTabVisibleHitRect(tabRect: PreviewRect, clip: PreviewRect): PreviewRect | null {
+  const visibleRect = intersectRect(tabRect, clip);
+  return visibleRect.w > 0 && visibleRect.h > 0 ? visibleRect : null;
 }
 
 
@@ -675,21 +695,49 @@ export function getScrollAreaBarSize(rect: PreviewRect, metrics: PreviewChromeMe
 export function getScrollAreaVerticalBarRect(rect: PreviewRect, metrics: PreviewChromeMetrics): PreviewRect {
   const bar = getScrollAreaBarSize(rect, metrics);
   return {
-    x: rect.x + rect.w - bar,
-    y: rect.y,
+    x: rect.x + Math.max(0, rect.w - bar - 2),
+    y: rect.y + 1,
     w: bar,
-    h: Math.max(0, rect.h - bar)
+    h: Math.max(0, rect.h - bar - 3)
   };
 }
 
 export function getScrollAreaHorizontalBarRect(rect: PreviewRect, metrics: PreviewChromeMetrics): PreviewRect {
   const bar = getScrollAreaBarSize(rect, metrics);
   return {
-    x: rect.x,
-    y: rect.y + rect.h - bar,
-    w: Math.max(0, rect.w - bar),
+    x: rect.x + 1,
+    y: rect.y + Math.max(0, rect.h - bar - 2),
+    w: Math.max(0, rect.w - bar - 3),
     h: bar
   };
+}
+
+
+export type ScrollAreaChromeHitZone = "scrollAreaVBar" | "scrollAreaHBar";
+
+// The preview keeps ScrollArea drag hits on the drawn tracks instead of the broader FD_LeftDown() thresholds.
+export function getScrollAreaChromeHitZone(
+  rect: PreviewRect,
+  metrics: PreviewChromeMetrics,
+  x: number,
+  y: number,
+  clip: PreviewRect | null = null
+): ScrollAreaChromeHitZone | null {
+  const verticalBar = clip
+    ? intersectRect(getScrollAreaVerticalBarRect(rect, metrics), clip)
+    : getScrollAreaVerticalBarRect(rect, metrics);
+  if (rectContainsPoint(verticalBar, x, y)) {
+    return "scrollAreaVBar";
+  }
+
+  const horizontalBar = clip
+    ? intersectRect(getScrollAreaHorizontalBarRect(rect, metrics), clip)
+    : getScrollAreaHorizontalBarRect(rect, metrics);
+  if (rectContainsPoint(horizontalBar, x, y)) {
+    return "scrollAreaHBar";
+  }
+
+  return null;
 }
 
 export function getScrollAreaViewportRect(rect: PreviewRect, metrics: PreviewChromeMetrics): PreviewRect {
@@ -788,29 +836,98 @@ export function getScrollAreaHorizontalThumbRect(
 }
 
 
-export function getGadgetContentRect(
+export function getPanelHeaderRect(rect: PreviewRect, metrics: PreviewChromeMetrics): PreviewRect {
+  const panelHeight = Math.min(metrics.panelHeight, Math.max(18, rect.h));
+  return {
+    x: rect.x,
+    y: rect.y,
+    w: rect.w,
+    h: panelHeight
+  };
+}
+
+export function getPanelContentRect(rect: PreviewRect, metrics: PreviewChromeMetrics): PreviewRect {
+  const headerRect = getPanelHeaderRect(rect, metrics);
+  return {
+    x: rect.x,
+    y: rect.y + headerRect.h,
+    w: rect.w,
+    h: Math.max(0, rect.h - headerRect.h)
+  };
+}
+
+export function getContainerContentRect(
   kind: string,
   rect: PreviewRect,
   metrics: PreviewChromeMetrics
 ): PreviewRect {
   switch (kind) {
-    case GADGET_KIND.PanelGadget: {
-      const panelHeight = Math.min(metrics.panelHeight, Math.max(18, rect.h));
-      return {
-        x: rect.x,
-        y: rect.y + panelHeight,
-        w: rect.w,
-        h: Math.max(0, rect.h - panelHeight)
-      };
-    }
+    case GADGET_KIND.PanelGadget:
+      return getPanelContentRect(rect, metrics);
 
-    case GADGET_KIND.ScrollAreaGadget: {
+    case GADGET_KIND.ScrollAreaGadget:
       return getScrollAreaViewportRect(rect, metrics);
-    }
+
+    case GADGET_KIND.ContainerGadget:
+    case GADGET_KIND.FrameGadget:
+      // FD_Redraw() applies no additional child-origin inset for ContainerGadget or Frame3DGadget.
+      return rect;
 
     default:
       return rect;
   }
+}
+
+export function getGadgetContentRect(
+  kind: string,
+  rect: PreviewRect,
+  metrics: PreviewChromeMetrics
+): PreviewRect {
+  return getContainerContentRect(kind, rect, metrics);
+}
+
+export type ContainerChromeHitZone = "panelHeader" | "containerBorder";
+
+export function isContainerChromeGadgetKind(kind: string): boolean {
+  return kind === GADGET_KIND.ContainerGadget
+    || kind === GADGET_KIND.PanelGadget
+    || kind === GADGET_KIND.ScrollAreaGadget
+    || kind === GADGET_KIND.FrameGadget;
+}
+
+export function getContainerChromeHitZone(
+  kind: string,
+  rect: PreviewRect,
+  metrics: PreviewChromeMetrics,
+  x: number,
+  y: number,
+  borderMargin = 4
+): ContainerChromeHitZone | null {
+  if (kind === GADGET_KIND.PanelGadget && rectContainsPoint(getPanelHeaderRect(rect, metrics), x, y)) {
+    return "panelHeader";
+  }
+
+  if (isContainerChromeGadgetKind(kind) && isPointOnRectBorder(rect, x, y, borderMargin)) {
+    return "containerBorder";
+  }
+
+  return null;
+}
+
+export function getSplitterResolvedPosition(
+  splitterRect: PreviewRect,
+  vertical: boolean,
+  splitterWidth: number,
+  state: number | undefined
+): number {
+  const bar = Math.max(0, Math.trunc(splitterWidth));
+  const range = Math.max(0, (vertical ? splitterRect.w : splitterRect.h) - bar);
+  const rawPos = typeof state === "number" ? Math.trunc(state) : Math.trunc(range / 2);
+
+  // The original FD_UpdateSplitter() writes the pane coordinates directly from state.
+  // The preview keeps its existing clamp so malformed or externally edited states cannot
+  // produce negative pane sizes while still matching the original for valid states.
+  return Math.max(0, Math.min(rawPos, range));
 }
 
 export function getSplitterPaneRect(
@@ -820,10 +937,8 @@ export function getSplitterPaneRect(
   state: number | undefined,
   pane: "first" | "second"
 ): PreviewRect {
-  const bar = splitterWidth;
-  const range = Math.max(0, (vertical ? splitterRect.w : splitterRect.h) - bar);
-  const rawPos = typeof state === "number" ? Math.trunc(state) : Math.trunc(range / 2);
-  const pos = Math.max(0, Math.min(rawPos, range));
+  const bar = Math.max(0, Math.trunc(splitterWidth));
+  const pos = getSplitterResolvedPosition(splitterRect, vertical, bar, state);
 
   if (pane === "first") {
     return vertical
@@ -852,13 +967,39 @@ export function getSplitterBarRect(
   splitterWidth: number,
   state?: number
 ): PreviewRect {
-  const bar = splitterWidth;
-  const range = Math.max(0, (vertical ? splitterRect.w : splitterRect.h) - bar);
-  const rawPos = typeof state === "number" ? Math.trunc(state) : Math.trunc(range / 2);
-  const pos = Math.max(0, Math.min(rawPos, range));
+  const bar = Math.max(0, Math.trunc(splitterWidth));
+  const pos = getSplitterResolvedPosition(splitterRect, vertical, bar, state);
   return vertical
     ? { x: splitterRect.x + pos, y: splitterRect.y, w: bar, h: splitterRect.h }
     : { x: splitterRect.x, y: splitterRect.y + pos, w: splitterRect.w, h: bar };
+}
+
+export type SplitterChromeHitZone = "containerBorder" | "splitterBar";
+
+export function getSplitterChromeHitZone(
+  splitterRect: PreviewRect,
+  vertical: boolean,
+  metrics: Pick<PreviewChromeMetrics, "splitterWidth">,
+  state: number | undefined,
+  x: number,
+  y: number,
+  clip: PreviewRect | null = null,
+  borderMargin = 4
+): SplitterChromeHitZone | null {
+  // FD_LeftDown() treats both the outer splitter frame and the splitter bar as splitter selection/move zones.
+  if (isPointOnRectBorder(splitterRect, x, y, borderMargin)) {
+    return "containerBorder";
+  }
+
+  const barRect = clip
+    ? intersectRect(getSplitterBarRect(splitterRect, vertical, metrics.splitterWidth, state), clip)
+    : getSplitterBarRect(splitterRect, vertical, metrics.splitterWidth, state);
+
+  if (rectContainsPoint(barRect, x, y)) {
+    return "splitterBar";
+  }
+
+  return null;
 }
 
 export function getMenuBarRect(

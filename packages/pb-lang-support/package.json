@@ -505,6 +505,7 @@
   "scripts": {
     "vscode:prepublish": "npm run typecheck && npm run webpack:prod",
     "typecheck": "tsc -p ./ --noEmit",
+    "typecheck:unused": "tsc -p tsconfig.typecheck.json",
     "compile": "tsc -p ./",
     "watch": "tsc -w",
     "webpack": "webpack --mode development --config webpack.config.js",

@@ -1,0 +1,4 @@
+// test/tsconfig.json
+{
+  "extends": "../tsconfig.test.json"
+}

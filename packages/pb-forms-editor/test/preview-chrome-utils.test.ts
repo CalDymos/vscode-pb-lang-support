@@ -2,21 +2,30 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   getGadgetContentRect,
+  getContainerContentRect,
+  getContainerChromeHitZone,
+  isContainerChromeGadgetKind,
   getRectHandlePoints,
   clampRect,
   applyResize,
   getCanvasMenuBarRect,
   getMenuBarRect,
   getPanelTabLayouts,
+  getPanelTabVisibleHitRect,
+  getPanelContentRect,
+  getPanelHeaderRect,
   clampScrollAreaOffset,
   getScrollAreaHorizontalBarRect,
+  getScrollAreaChromeHitZone,
   getScrollAreaHorizontalThumbRect,
   getScrollAreaMaxOffsetX,
   getScrollAreaMaxOffsetY,
   getScrollAreaVerticalBarRect,
   getScrollAreaVerticalThumbRect,
   getSplitterBarRect,
+  getSplitterChromeHitZone,
   getSplitterPaneRect,
+  getSplitterResolvedPosition,
   getScrollAreaViewportRect,
   getStatusBarRect,
   getStatusBarAlignedX,
@@ -71,23 +80,61 @@ test("detects points on rect border but not in the inner area", () => {
   assert.equal(isPointOnRectBorder(RECT, 200, 200), false);
 });
 
-test("computes scrollarea chrome bars without overlapping the viewport corner", () => {
+test("computes scrollarea chrome bars inside the original inner frame", () => {
   const vertical = getScrollAreaVerticalBarRect(RECT, METRICS);
   const horizontal = getScrollAreaHorizontalBarRect(RECT, METRICS);
   const overlap = intersectRect(vertical, horizontal);
 
-  assert.deepEqual(vertical, { x: 110, y: 20, w: 20, h: 60 });
-  assert.deepEqual(horizontal, { x: 10, y: 80, w: 100, h: 20 });
+  assert.deepEqual(vertical, { x: 108, y: 21, w: 20, h: 57 });
+  assert.deepEqual(horizontal, { x: 11, y: 78, w: 97, h: 20 });
   assert.equal(overlap.w, 0);
   assert.equal(overlap.h, 0);
 });
 
-test("computes gadget content rects for panel and scrollarea containers", () => {
+test("computes panel header and content rects from the same original Panel_Height basis", () => {
+  assert.deepEqual(getPanelHeaderRect(RECT, METRICS), { x: 10, y: 20, w: 120, h: 22 });
+  assert.deepEqual(getPanelContentRect(RECT, METRICS), { x: 10, y: 42, w: 120, h: 58 });
   assert.deepEqual(getGadgetContentRect("PanelGadget", RECT, METRICS), { x: 10, y: 42, w: 120, h: 58 });
+});
+
+test("computes gadget content rects for container-like parents", () => {
+  assert.deepEqual(getContainerContentRect("PanelGadget", RECT, METRICS), { x: 10, y: 42, w: 120, h: 58 });
+  assert.deepEqual(getContainerContentRect("ScrollAreaGadget", RECT, METRICS), { x: 10, y: 20, w: 100, h: 60 });
+  assert.deepEqual(getContainerContentRect("ContainerGadget", RECT, METRICS), RECT);
+  assert.deepEqual(getContainerContentRect("FrameGadget", RECT, METRICS), RECT);
+
   assert.deepEqual(getGadgetContentRect("ScrollAreaGadget", RECT, METRICS), { x: 10, y: 20, w: 100, h: 60 });
   assert.deepEqual(getGadgetContentRect("StringGadget", RECT, METRICS), RECT);
 });
 
+test("classifies original container chrome hit zones without changing content hits", () => {
+  assert.equal(isContainerChromeGadgetKind("ContainerGadget"), true);
+  assert.equal(isContainerChromeGadgetKind("PanelGadget"), true);
+  assert.equal(isContainerChromeGadgetKind("ScrollAreaGadget"), true);
+  assert.equal(isContainerChromeGadgetKind("FrameGadget"), true);
+  assert.equal(isContainerChromeGadgetKind("ButtonGadget"), false);
+
+  assert.equal(getContainerChromeHitZone("PanelGadget", RECT, METRICS, 60, 30), "panelHeader");
+  assert.equal(getContainerChromeHitZone("PanelGadget", RECT, METRICS, 10, 60), "containerBorder");
+  assert.equal(getContainerChromeHitZone("PanelGadget", RECT, METRICS, 60, 60), null);
+  assert.equal(getContainerChromeHitZone("ScrollAreaGadget", RECT, METRICS, 10, 60), "containerBorder");
+  assert.equal(getContainerChromeHitZone("FrameGadget", RECT, METRICS, 60, 60), null);
+  assert.equal(getContainerChromeHitZone("ButtonGadget", RECT, METRICS, 10, 60), null);
+});
+
+
+test("classifies scrollarea drag chrome using the drawn scrollbar tracks", () => {
+  assert.equal(getScrollAreaChromeHitZone(RECT, METRICS, 110, 40), "scrollAreaVBar");
+  assert.equal(getScrollAreaChromeHitZone(RECT, METRICS, 40, 80), "scrollAreaHBar");
+
+  // FD_LeftDown() uses broader ScrollAreaW thresholds, but the preview keeps
+  // the existing precise visual-track hit zones to avoid grabbing content area.
+  assert.equal(getScrollAreaChromeHitZone(RECT, METRICS, 109, 80), null);
+  assert.equal(getScrollAreaChromeHitZone(RECT, METRICS, 110, 79), null);
+
+  const clipped: PreviewRect = { x: 10, y: 20, w: 97, h: 58 };
+  assert.equal(getScrollAreaChromeHitZone(RECT, METRICS, 110, 40, clipped), null);
+});
 
 test("computes scrollarea viewport rect from chrome metrics", () => {
   assert.deepEqual(getScrollAreaViewportRect(RECT, METRICS), { x: 10, y: 20, w: 100, h: 60 });
@@ -113,6 +160,49 @@ test("computes a horizontal splitter bar and clamps oversized state", () => {
 });
 
 
+test("detects splitter chrome hits with border precedence over the bar", () => {
+  assert.equal(getSplitterChromeHitZone(RECT, true, METRICS, 30, 10, 50), "containerBorder");
+  assert.equal(getSplitterChromeHitZone(RECT, true, METRICS, 30, 44, 21), "containerBorder");
+  assert.equal(getSplitterChromeHitZone(RECT, true, METRICS, 30, 44, 50), "splitterBar");
+  assert.equal(getSplitterChromeHitZone(RECT, true, METRICS, 30, 70, 50), null);
+
+  const clippedBeforeBar: PreviewRect = { x: 10, y: 20, w: 29, h: 80 };
+  assert.equal(getSplitterChromeHitZone(RECT, true, METRICS, 30, 44, 50, clippedBeforeBar), null);
+});
+
+
+test("computes splitter panes from the original FD_UpdateSplitter geometry", () => {
+  assert.equal(getSplitterResolvedPosition(RECT, true, METRICS.splitterWidth, 30), 30);
+  assert.deepEqual(
+    getSplitterPaneRect(RECT, true, METRICS.splitterWidth, 30, "first"),
+    { x: 10, y: 20, w: 30, h: 80 }
+  );
+  assert.deepEqual(
+    getSplitterPaneRect(RECT, true, METRICS.splitterWidth, 30, "second"),
+    { x: 49, y: 20, w: 81, h: 80 }
+  );
+
+  assert.deepEqual(
+    getSplitterPaneRect(RECT, false, METRICS.splitterWidth, 35, "first"),
+    { x: 10, y: 20, w: 120, h: 35 }
+  );
+  assert.deepEqual(
+    getSplitterPaneRect(RECT, false, METRICS.splitterWidth, 35, "second"),
+    { x: 10, y: 64, w: 120, h: 36 }
+  );
+});
+
+test("keeps the safer preview clamp around invalid splitter states", () => {
+  assert.equal(getSplitterResolvedPosition(RECT, true, METRICS.splitterWidth, -25), 0);
+  assert.equal(getSplitterResolvedPosition(RECT, true, METRICS.splitterWidth, 999), 111);
+
+  assert.deepEqual(
+    getSplitterPaneRect(RECT, true, METRICS.splitterWidth, 999, "second"),
+    { x: 130, y: 20, w: 0, h: 80 }
+  );
+});
+
+
 test("computes scrollarea thumb rects from inner size and offset", () => {
   assert.equal(getScrollAreaMaxOffsetX(RECT, METRICS, 240), 140);
   assert.equal(getScrollAreaMaxOffsetY(RECT, METRICS, 180), 120);
@@ -120,8 +210,8 @@ test("computes scrollarea thumb rects from inner size and offset", () => {
   const verticalThumb = getScrollAreaVerticalThumbRect(RECT, METRICS, 180, 60);
   const horizontalThumb = getScrollAreaHorizontalThumbRect(RECT, METRICS, 240, 70);
 
-  assert.deepEqual(verticalThumb, { x: 110, y: 40, w: 20, h: 20 });
-  assert.deepEqual(horizontalThumb, { x: 39, y: 80, w: 42, h: 20 });
+  assert.deepEqual(verticalThumb, { x: 108, y: 40, w: 20, h: 19 });
+  assert.deepEqual(horizontalThumb, { x: 40, y: 78, w: 40, h: 20 });
 });
 
 test("computes top-level menu, toolbar and statusbar rects from window chrome", () => {
@@ -262,13 +352,45 @@ test("resolves active panel item from stored preview state", () => {
   assert.equal(resolvePanelActiveItem(8, 2), 0);
 });
 
-test("computes panel tab layouts from labels and measured widths", () => {
-  const tabs = getPanelTabLayouts(["General", "Advanced", "Overflow"], RECT, METRICS, 1, (label) => label.length * 6);
+test("computes Windows panel tab hit layouts from the original FD_LeftDown path", () => {
+  const tabs = getPanelTabLayouts(["General", "Advanced", "Overflow"], RECT, METRICS, 1, (label) => label.length * 6, "windows7");
 
   assert.deepEqual(tabs, [
-    { index: 0, label: "General", active: false, rect: { x: 10, y: 22, w: 56, h: 18 } },
-    { index: 1, label: "Advanced", active: true, rect: { x: 66, y: 20, w: 62, h: 21 } }
+    { index: 0, label: "General", active: false, rect: { x: 10, y: 20, w: 54, h: 22 } },
+    { index: 1, label: "Advanced", active: true, rect: { x: 64, y: 20, w: 60, h: 22 } },
+    { index: 2, label: "Overflow", active: false, rect: { x: 124, y: 20, w: 60, h: 22 } }
   ]);
+});
+
+test("computes macOS panel tab hit layouts from the centered original path", () => {
+  const macMetrics = resolvePreviewChromeMetricsForOsSkin("macos");
+  const tabs = getPanelTabLayouts(["One", "Two"], RECT, macMetrics, 0, (label) => label.length * 6, "macos");
+
+  assert.deepEqual(tabs, [
+    { index: 0, label: "One", active: true, rect: { x: 28, y: 20, w: 42, h: 31 } },
+    { index: 1, label: "Two", active: false, rect: { x: 70, y: 20, w: 42, h: 31 } }
+  ]);
+});
+
+test("computes Linux panel tab hit layouts from the visible FD_DrawGadget tab geometry", () => {
+  const linuxMetrics = resolvePreviewChromeMetricsForOsSkin("linux");
+  const tabs = getPanelTabLayouts(["One", "Two"], RECT, linuxMetrics, 1, (label) => label.length * 6, "linux");
+
+  assert.deepEqual(tabs, [
+    { index: 0, label: "One", active: false, rect: { x: 10, y: 20, w: 32, h: 29 } },
+    { index: 1, label: "Two", active: true, rect: { x: 50, y: 20, w: 32, h: 29 } }
+  ]);
+});
+
+test("rejects zero-area clipped panel tab hit rects", () => {
+  assert.deepEqual(
+    getPanelTabVisibleHitRect({ x: 124, y: 20, w: 60, h: 22 }, { x: 10, y: 20, w: 120, h: 80 }),
+    { x: 124, y: 20, w: 6, h: 22 }
+  );
+  assert.equal(
+    getPanelTabVisibleHitRect({ x: 130, y: 20, w: 60, h: 22 }, { x: 10, y: 20, w: 120, h: 80 }),
+    null
+  );
 });
 
 

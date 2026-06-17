@@ -175,6 +175,7 @@
   },
   "scripts": {
     "compile": "tsc -p ./ && webpack --mode development --config webpack.config.js",
+    "typecheck:unused": "tsc -p ./ --noEmit",
     "watch": "concurrently \"tsc -w -p ./\" \"webpack --mode development --watch --config webpack.config.js\"",
     "webpack:prod": "webpack --mode production --config webpack.config.js",
     "webpack:dev": "webpack --mode development --config webpack.config.js",

@@ -18,9 +18,11 @@ import {
   intersectRect,
   rectContainsPoint,
   isPointOnRectBorder,
+  getContainerChromeHitZone,
   getScrollAreaBarSize,
   getScrollAreaVerticalBarRect,
   getScrollAreaHorizontalBarRect,
+  getScrollAreaChromeHitZone,
   getScrollAreaViewportRect,
   clampScrollAreaOffset,
   getScrollAreaMaxOffsetX,
@@ -29,8 +31,11 @@ import {
   getScrollAreaHorizontalThumbRect,
   resolvePanelActiveItem,
   getPanelTabLayouts,
+  getPanelTabVisibleHitRect,
   getSplitterBarRect,
+  getSplitterChromeHitZone,
   getSplitterPaneRect,
+  getSplitterResolvedPosition,
   getGadgetContentRect,
   getStatusBarAlignedX,
   getCanvasMenuBarRect,
@@ -4598,8 +4603,8 @@ function getPanelTabRects(
   rect: PreviewRect,
   metrics: PreviewChromeMetrics
 ): PanelTabRect[] {
-  const labels = (g.items ?? []).map((item, index) => (item.text ?? unquotePbString(item.textRaw)) || `Tab ${index}`);
-  return getPanelTabLayouts(labels, rect, metrics, getPanelActiveItem(g), (label) => ctx.measureText(label).width);
+  const labels = (g.items ?? []).map((item, index) => (item.text ?? unquotePbString(item.textRaw)) || `Tab ${index + 1}`);
+  return getPanelTabLayouts(labels, rect, metrics, getPanelActiveItem(g), (label) => ctx.measureText(label).width, settings.osSkin);
 }
 
 function getGadgetPreviewLayout(
@@ -4685,38 +4690,30 @@ function hitTestPreviewChrome(mx: number, my: number, metrics: PreviewChromeMetr
     if (!rectContainsPoint(layout.clip, lx, ly)) continue;
 
     if (g.kind === GADGET_KIND.SplitterGadget) {
-      if (isPointOnRectBorder(layout.rect, lx, ly)) {
-        return { gadget: g, zone: "containerBorder" };
-      }
-      const barRect = intersectRect(getSplitterBarRect(layout.rect, hasPbFlag(g.flagsExpr, "#PB_Splitter_Vertical"), metrics.splitterWidth, g.state), layout.clip);
-      if (rectContainsPoint(barRect, lx, ly)) {
-        return { gadget: g, zone: "splitterBar" };
+      const splitterZone = getSplitterChromeHitZone(
+        layout.rect,
+        hasPbFlag(g.flagsExpr, "#PB_Splitter_Vertical"),
+        metrics,
+        g.state,
+        lx,
+        ly,
+        layout.clip
+      );
+      if (splitterZone) {
+        return { gadget: g, zone: splitterZone };
       }
       continue;
     }
 
-    if (g.kind === GADGET_KIND.PanelGadget) {
-      const panelHeight = Math.min(metrics.panelHeight, Math.max(18, layout.rect.h));
-      const headerRect = intersectRect({ x: layout.rect.x, y: layout.rect.y, w: layout.rect.w, h: panelHeight }, layout.clip);
-      if (rectContainsPoint(headerRect, lx, ly)) {
-        return { gadget: g, zone: "panelHeader" };
-      }
-    }
-
-    if (g.kind === GADGET_KIND.ContainerGadget || g.kind === GADGET_KIND.PanelGadget || g.kind === GADGET_KIND.ScrollAreaGadget || g.kind === GADGET_KIND.FrameGadget) {
-      if (isPointOnRectBorder(layout.rect, lx, ly)) {
-        return { gadget: g, zone: "containerBorder" };
-      }
+    const containerZone = getContainerChromeHitZone(g.kind, layout.rect, metrics, lx, ly);
+    if (containerZone) {
+      return { gadget: g, zone: containerZone };
     }
 
     if (g.kind === GADGET_KIND.ScrollAreaGadget) {
-      const verticalBar = intersectRect(getScrollAreaVerticalBarRect(layout.rect, metrics), layout.clip);
-      if (rectContainsPoint(verticalBar, lx, ly)) {
-        return { gadget: g, zone: "scrollAreaVBar" };
-      }
-      const horizontalBar = intersectRect(getScrollAreaHorizontalBarRect(layout.rect, metrics), layout.clip);
-      if (rectContainsPoint(horizontalBar, lx, ly)) {
-        return { gadget: g, zone: "scrollAreaHBar" };
+      const scrollAreaZone = getScrollAreaChromeHitZone(layout.rect, metrics, lx, ly, layout.clip);
+      if (scrollAreaZone) {
+        return { gadget: g, zone: scrollAreaZone };
       }
     }
   }
@@ -4739,9 +4736,12 @@ function hitTestPanelTab(mx: number, my: number, metrics: PreviewChromeMetrics):
       if (g.kind !== GADGET_KIND.PanelGadget) continue;
       const layout = getGadgetPreviewLayout(g, metrics, cache);
       if (!layout.visible) continue;
+      if (!rectContainsPoint(layout.rect, lx, ly)) continue;
+      if (!rectContainsPoint(layout.clip, lx, ly)) continue;
       const tabs = getPanelTabRects(ctx, g, layout.rect, metrics);
       for (const tab of tabs) {
-        if (rectContainsPoint(intersectRect(tab.rect, layout.clip), lx, ly)) {
+        const visibleTabRect = getPanelTabVisibleHitRect(tab.rect, layout.clip);
+        if (visibleTabRect && rectContainsPoint(visibleTabRect, lx, ly)) {
           return { panel: g, index: tab.index };
         }
       }
@@ -6931,9 +6931,7 @@ function drawSplitterChrome(
   const vertical = hasPbFlag(g.flagsExpr, "#PB_Splitter_Vertical");
   const separator = hasPbFlag(g.flagsExpr, "#PB_Splitter_Separator");
   const bar = metrics.splitterWidth;
-  const range = Math.max(0, (vertical ? w : h) - bar);
-  const rawPos = typeof g.state === "number" ? Math.trunc(g.state) : Math.trunc(range / 2);
-  const pos = clamp(rawPos, 0, range);
+  const pos = getSplitterResolvedPosition({ x, y, w, h }, vertical, bar, g.state);
   const fillColor = osSkin === "macos"
     ? "rgb(237, 237, 237)"
     : (osSkin === "linux" ? "rgb(242, 241, 240)" : "rgb(240, 240, 240)");
