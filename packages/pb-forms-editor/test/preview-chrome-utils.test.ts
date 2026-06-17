@@ -262,12 +262,33 @@ test("resolves active panel item from stored preview state", () => {
   assert.equal(resolvePanelActiveItem(8, 2), 0);
 });
 
-test("computes panel tab layouts from labels and measured widths", () => {
-  const tabs = getPanelTabLayouts(["General", "Advanced", "Overflow"], RECT, METRICS, 1, (label) => label.length * 6);
+test("computes Windows panel tab hit layouts from the original FD_LeftDown path", () => {
+  const tabs = getPanelTabLayouts(["General", "Advanced", "Overflow"], RECT, METRICS, 1, (label) => label.length * 6, "windows7");
 
   assert.deepEqual(tabs, [
-    { index: 0, label: "General", active: false, rect: { x: 10, y: 22, w: 56, h: 18 } },
-    { index: 1, label: "Advanced", active: true, rect: { x: 66, y: 20, w: 62, h: 21 } }
+    { index: 0, label: "General", active: false, rect: { x: 10, y: 20, w: 54, h: 22 } },
+    { index: 1, label: "Advanced", active: true, rect: { x: 64, y: 20, w: 60, h: 22 } },
+    { index: 2, label: "Overflow", active: false, rect: { x: 124, y: 20, w: 60, h: 22 } }
+  ]);
+});
+
+test("computes macOS panel tab hit layouts from the centered original path", () => {
+  const macMetrics = resolvePreviewChromeMetricsForOsSkin("macos");
+  const tabs = getPanelTabLayouts(["One", "Two"], RECT, macMetrics, 0, (label) => label.length * 6, "macos");
+
+  assert.deepEqual(tabs, [
+    { index: 0, label: "One", active: true, rect: { x: 28, y: 20, w: 42, h: 31 } },
+    { index: 1, label: "Two", active: false, rect: { x: 70, y: 20, w: 42, h: 31 } }
+  ]);
+});
+
+test("computes Linux panel tab hit layouts without the rendered inter-tab gap", () => {
+  const linuxMetrics = resolvePreviewChromeMetricsForOsSkin("linux");
+  const tabs = getPanelTabLayouts(["One", "Two"], RECT, linuxMetrics, 1, (label) => label.length * 6, "linux");
+
+  assert.deepEqual(tabs, [
+    { index: 0, label: "One", active: false, rect: { x: 10, y: 20, w: 30, h: 29 } },
+    { index: 1, label: "Two", active: true, rect: { x: 40, y: 20, w: 30, h: 29 } }
   ]);
 });
 

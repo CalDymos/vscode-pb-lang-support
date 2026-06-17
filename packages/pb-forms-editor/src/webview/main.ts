@@ -4598,8 +4598,8 @@ function getPanelTabRects(
   rect: PreviewRect,
   metrics: PreviewChromeMetrics
 ): PanelTabRect[] {
-  const labels = (g.items ?? []).map((item, index) => (item.text ?? unquotePbString(item.textRaw)) || `Tab ${index}`);
-  return getPanelTabLayouts(labels, rect, metrics, getPanelActiveItem(g), (label) => ctx.measureText(label).width);
+  const labels = (g.items ?? []).map((item, index) => (item.text ?? unquotePbString(item.textRaw)) || `Tab ${index + 1}`);
+  return getPanelTabLayouts(labels, rect, metrics, getPanelActiveItem(g), (label) => ctx.measureText(label).width, settings.osSkin);
 }
 
 function getGadgetPreviewLayout(

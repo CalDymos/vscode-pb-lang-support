@@ -608,35 +608,50 @@ export function getPanelTabLayouts(
   rect: PreviewRect,
   metrics: PreviewChromeMetrics,
   activeIndex: number,
-  measureText: (label: string) => number
+  measureText: (label: string) => number,
+  osSkin: PreviewChromeMetricsOsSkin = "windows7"
 ): PanelTabLayout[] {
-  const panelHeight = Math.min(metrics.panelHeight, Math.max(18, rect.h));
+  const panelHeight = metrics.panelHeight;
   const tabRects: PanelTabLayout[] = [];
+
+  if (labels.length === 0) {
+    return tabRects;
+  }
+
+  const resolvedLabels = labels.map((label, index) => label || `Tab ${index + 1}`);
+  const resolvedActiveIndex = resolvePanelActiveItem(activeIndex, resolvedLabels.length);
+
+  if (osSkin === "macos") {
+    const widths = resolvedLabels.map((label) => Math.ceil(measureText(label)) + 24);
+    const totalWidth = widths.reduce((sum, width) => sum + width, 0);
+    let tabX = rect.x + Math.trunc((rect.w - totalWidth) / 2);
+
+    for (let i = 0; i < resolvedLabels.length; i++) {
+      const label = resolvedLabels[i];
+      const tabW = widths[i];
+      tabRects.push({
+        index: i,
+        label,
+        active: i === resolvedActiveIndex,
+        rect: { x: tabX, y: rect.y, w: tabW, h: panelHeight }
+      });
+      tabX += tabW;
+    }
+
+    return tabRects;
+  }
+
   let tabX = rect.x;
-
-  for (let i = 0; i < labels.length; i++) {
-    const label = labels[i] || `Tab ${i}`;
-    const tabW = Math.max(46, Math.ceil(measureText(label)) + 14);
-    const active = i === activeIndex;
-    const tabH = Math.max(16, panelHeight - (active ? 1 : 4));
-    const tabY = rect.y + (active ? 0 : 2);
-    const nextRight = tabX + tabW;
-
-    if (tabX >= rect.x + rect.w - 12) break;
-
+  for (let i = 0; i < resolvedLabels.length; i++) {
+    const label = resolvedLabels[i];
+    const tabW = Math.ceil(measureText(label)) + 12;
     tabRects.push({
       index: i,
       label,
-      active,
-      rect: {
-        x: tabX,
-        y: tabY,
-        w: Math.max(0, Math.min(tabW, rect.x + rect.w - tabX)),
-        h: tabH
-      }
+      active: i === resolvedActiveIndex,
+      rect: { x: tabX, y: rect.y, w: tabW, h: panelHeight }
     });
-
-    tabX = nextRight;
+    tabX += tabW;
   }
 
   return tabRects;
