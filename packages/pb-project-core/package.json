@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p ./ --noEmit",
     "clean": "rimraf dist",
     "test": "jest"
   },
