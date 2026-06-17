@@ -690,19 +690,19 @@ export function getScrollAreaBarSize(rect: PreviewRect, metrics: PreviewChromeMe
 export function getScrollAreaVerticalBarRect(rect: PreviewRect, metrics: PreviewChromeMetrics): PreviewRect {
   const bar = getScrollAreaBarSize(rect, metrics);
   return {
-    x: rect.x + rect.w - bar,
-    y: rect.y,
+    x: rect.x + Math.max(0, rect.w - bar - 2),
+    y: rect.y + 1,
     w: bar,
-    h: Math.max(0, rect.h - bar)
+    h: Math.max(0, rect.h - bar - 3)
   };
 }
 
 export function getScrollAreaHorizontalBarRect(rect: PreviewRect, metrics: PreviewChromeMetrics): PreviewRect {
   const bar = getScrollAreaBarSize(rect, metrics);
   return {
-    x: rect.x,
-    y: rect.y + rect.h - bar,
-    w: Math.max(0, rect.w - bar),
+    x: rect.x + 1,
+    y: rect.y + Math.max(0, rect.h - bar - 2),
+    w: Math.max(0, rect.w - bar - 3),
     h: bar
   };
 }

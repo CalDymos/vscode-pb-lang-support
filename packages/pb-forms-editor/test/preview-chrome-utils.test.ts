@@ -71,13 +71,13 @@ test("detects points on rect border but not in the inner area", () => {
   assert.equal(isPointOnRectBorder(RECT, 200, 200), false);
 });
 
-test("computes scrollarea chrome bars without overlapping the viewport corner", () => {
+test("computes scrollarea chrome bars inside the original inner frame", () => {
   const vertical = getScrollAreaVerticalBarRect(RECT, METRICS);
   const horizontal = getScrollAreaHorizontalBarRect(RECT, METRICS);
   const overlap = intersectRect(vertical, horizontal);
 
-  assert.deepEqual(vertical, { x: 110, y: 20, w: 20, h: 60 });
-  assert.deepEqual(horizontal, { x: 10, y: 80, w: 100, h: 20 });
+  assert.deepEqual(vertical, { x: 108, y: 21, w: 20, h: 57 });
+  assert.deepEqual(horizontal, { x: 11, y: 78, w: 97, h: 20 });
   assert.equal(overlap.w, 0);
   assert.equal(overlap.h, 0);
 });
@@ -120,8 +120,8 @@ test("computes scrollarea thumb rects from inner size and offset", () => {
   const verticalThumb = getScrollAreaVerticalThumbRect(RECT, METRICS, 180, 60);
   const horizontalThumb = getScrollAreaHorizontalThumbRect(RECT, METRICS, 240, 70);
 
-  assert.deepEqual(verticalThumb, { x: 110, y: 40, w: 20, h: 20 });
-  assert.deepEqual(horizontalThumb, { x: 39, y: 80, w: 42, h: 20 });
+  assert.deepEqual(verticalThumb, { x: 108, y: 40, w: 20, h: 19 });
+  assert.deepEqual(horizontalThumb, { x: 40, y: 78, w: 40, h: 20 });
 });
 
 test("computes top-level menu, toolbar and statusbar rects from window chrome", () => {
