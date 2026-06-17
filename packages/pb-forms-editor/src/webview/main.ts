@@ -106,9 +106,11 @@ import {
   getMenuEntrySelectedIndexAtDragStart,
   getMenuFlyoutEntryTextLayout,
   getMenuFlyoutFooterOpacity,
+  getMenuFlyoutFooterPreviewRect,
   getMenuFlyoutFooterTextPosition,
   getMenuFlyoutSeparatorLineY,
   getMenuFlyoutSeparatorPreviewRect,
+  getMenuFlyoutEntryPreviewRect,
   getMenuFlyoutShortcutOpacity,
   getMenuFooterRect,
   getMenuPreviewLabel,
@@ -7788,7 +7790,7 @@ function drawMenuFlyoutPanelPreview(
       continue;
     }
 
-    const entryRect: PreviewEntryRect = { ownerId: menu.id, index: childIndex, x: panelRect.x, y: posY, w: panelRect.w, h: 20 };
+    const entryRect: PreviewEntryRect = getMenuFlyoutEntryPreviewRect(menu.id, childIndex, panelRect.x, posY, panelRect.w);
     menuEntryPreviewRects.push(entryRect);
 
     const isSelectedEntry = selection?.kind === "menuEntry"
@@ -7840,10 +7842,10 @@ function drawMenuFlyoutPanelPreview(
       ctx.restore();
     }
 
-    posY += 20;
+    posY += entryRect.h;
   }
 
-  const footerRect: PreviewMenuFooterRect = { menuId: menu.id, parentIndex, x: panelRect.x, y: posY, w: panelRect.w, h: 20 };
+  const footerRect: PreviewMenuFooterRect = getMenuFlyoutFooterPreviewRect(menu.id, parentIndex, panelRect.x, posY, panelRect.w);
   menuFooterPreviewRects.push(footerRect);
   const footerTextPosition = getMenuFlyoutFooterTextPosition(footerRect);
 

@@ -21,9 +21,11 @@ import {
   getMenuFlyoutAnchorRect,
   getMenuFlyoutEntryTextLayout,
   getMenuFlyoutFooterOpacity,
+  getMenuFlyoutFooterPreviewRect,
   getMenuFlyoutFooterTextPosition,
   getMenuFlyoutSeparatorLineY,
   getMenuFlyoutSeparatorPreviewRect,
+  getMenuFlyoutEntryPreviewRect,
   getMenuFlyoutShortcutOpacity,
   getMenuEntrySourceLine,
   getMenuEntrySelectedIndexAtDragStart,
@@ -210,6 +212,27 @@ test("uses the original flyout separator hit rectangle and separator line offset
   const entryRect = getMenuFlyoutSeparatorPreviewRect(120, 48, 160);
   assert.deepEqual(entryRect, { x: 120, y: 48, w: 160, h: 12 });
   assert.equal(getMenuFlyoutSeparatorLineY(entryRect), 54);
+});
+
+
+test("uses original menu flyout entry and footer registered heights", () => {
+  assert.deepEqual(getMenuFlyoutEntryPreviewRect("#Menu", 3, 120, 48, 160), {
+    ownerId: "#Menu",
+    index: 3,
+    x: 120,
+    y: 48,
+    w: 160,
+    h: 20,
+  });
+
+  assert.deepEqual(getMenuFlyoutFooterPreviewRect("#Menu", 0, 120, 108, 160), {
+    menuId: "#Menu",
+    parentIndex: 0,
+    x: 120,
+    y: 108,
+    w: 160,
+    h: 20,
+  });
 });
 
 test("uses the restored flyout text baseline and menu-bar anchored flyout positions", () => {

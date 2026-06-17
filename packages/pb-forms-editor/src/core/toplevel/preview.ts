@@ -128,6 +128,9 @@ export type Windows7MenuBarPalette = {
 };
 
 const ORIGINAL_MENU_ROOT_MOVE_INDICATOR_HEIGHT = 16;
+const ORIGINAL_MENU_FLYOUT_ENTRY_HEIGHT = 20;
+const ORIGINAL_MENU_FLYOUT_SEPARATOR_HEIGHT = 12;
+const ORIGINAL_MENU_FLYOUT_FOOTER_HEIGHT = 20;
 
 const ORIGINAL_TOP_LEVEL_MOVE_INDICATOR_STROKES: TopLevelMoveIndicatorStroke[] = [
   { role: "core", lineWidth: 2, fallbackColor: "#0000ff", cssVariable: "--vscode-editorInfo-foreground" },
@@ -694,12 +697,12 @@ export function getMenuFlyoutPanelRect(
   const childIndices = getDirectMenuChildIndices(menu, parentIndex);
 
   let innerWidth = 0;
-  let height = 20;
+  let height = ORIGINAL_MENU_FLYOUT_FOOTER_HEIGHT;
   for (const childIndex of childIndices) {
     const entry = menu.entries?.[childIndex];
     if (!entry) continue;
     if (entry.kind === "MenuBar") {
-      height += 12;
+      height += ORIGINAL_MENU_FLYOUT_SEPARATOR_HEIGHT;
       continue;
     }
 
@@ -709,7 +712,7 @@ export function getMenuFlyoutPanelRect(
     }
     textWidth += 24;
     innerWidth = Math.max(innerWidth, textWidth);
-    height += 20;
+    height += ORIGINAL_MENU_FLYOUT_ENTRY_HEIGHT;
   }
 
   const width = Math.max(100, innerWidth + 40);
@@ -760,7 +763,41 @@ export function getMenuFlyoutSeparatorPreviewRect(x: number, y: number, width: n
     x,
     y,
     w: Math.max(0, width),
-    h: 12,
+    h: ORIGINAL_MENU_FLYOUT_SEPARATOR_HEIGHT,
+  };
+}
+
+export function getMenuFlyoutEntryPreviewRect(
+  ownerId: string,
+  index: number,
+  x: number,
+  y: number,
+  width: number
+): PreviewEntryRectLike {
+  return {
+    ownerId,
+    index,
+    x,
+    y,
+    w: Math.max(0, Math.trunc(width)),
+    h: ORIGINAL_MENU_FLYOUT_ENTRY_HEIGHT,
+  };
+}
+
+export function getMenuFlyoutFooterPreviewRect(
+  menuId: string,
+  parentIndex: number,
+  x: number,
+  y: number,
+  width: number
+): PreviewMenuFooterRectLike {
+  return {
+    menuId,
+    parentIndex,
+    x,
+    y,
+    w: Math.max(0, Math.trunc(width)),
+    h: ORIGINAL_MENU_FLYOUT_FOOTER_HEIGHT,
   };
 }
 
