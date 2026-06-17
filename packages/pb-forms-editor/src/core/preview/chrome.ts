@@ -823,7 +823,7 @@ export function getPanelContentRect(rect: PreviewRect, metrics: PreviewChromeMet
   };
 }
 
-export function getGadgetContentRect(
+export function getContainerContentRect(
   kind: string,
   rect: PreviewRect,
   metrics: PreviewChromeMetrics
@@ -835,9 +835,22 @@ export function getGadgetContentRect(
     case GADGET_KIND.ScrollAreaGadget:
       return getScrollAreaViewportRect(rect, metrics);
 
+    case GADGET_KIND.ContainerGadget:
+    case GADGET_KIND.FrameGadget:
+      // FD_Redraw() applies no additional child-origin inset for ContainerGadget or Frame3DGadget.
+      return rect;
+
     default:
       return rect;
   }
+}
+
+export function getGadgetContentRect(
+  kind: string,
+  rect: PreviewRect,
+  metrics: PreviewChromeMetrics
+): PreviewRect {
+  return getContainerContentRect(kind, rect, metrics);
 }
 
 export type ContainerChromeHitZone = "panelHeader" | "containerBorder";

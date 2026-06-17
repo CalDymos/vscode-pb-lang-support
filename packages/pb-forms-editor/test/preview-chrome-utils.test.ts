@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   getGadgetContentRect,
+  getContainerContentRect,
   getContainerChromeHitZone,
   isContainerChromeGadgetKind,
   getRectHandlePoints,
@@ -93,7 +94,12 @@ test("computes panel header and content rects from the same original Panel_Heigh
   assert.deepEqual(getGadgetContentRect("PanelGadget", RECT, METRICS), { x: 10, y: 42, w: 120, h: 58 });
 });
 
-test("computes gadget content rects for scrollarea containers and regular gadgets", () => {
+test("computes gadget content rects for container-like parents", () => {
+  assert.deepEqual(getContainerContentRect("PanelGadget", RECT, METRICS), { x: 10, y: 42, w: 120, h: 58 });
+  assert.deepEqual(getContainerContentRect("ScrollAreaGadget", RECT, METRICS), { x: 10, y: 20, w: 100, h: 60 });
+  assert.deepEqual(getContainerContentRect("ContainerGadget", RECT, METRICS), RECT);
+  assert.deepEqual(getContainerContentRect("FrameGadget", RECT, METRICS), RECT);
+
   assert.deepEqual(getGadgetContentRect("ScrollAreaGadget", RECT, METRICS), { x: 10, y: 20, w: 100, h: 60 });
   assert.deepEqual(getGadgetContentRect("StringGadget", RECT, METRICS), RECT);
 });
