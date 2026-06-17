@@ -31,6 +31,7 @@ import {
   getPanelTabLayouts,
   getSplitterBarRect,
   getSplitterPaneRect,
+  getSplitterResolvedPosition,
   getGadgetContentRect,
   getStatusBarAlignedX,
   getCanvasMenuBarRect,
@@ -6931,9 +6932,7 @@ function drawSplitterChrome(
   const vertical = hasPbFlag(g.flagsExpr, "#PB_Splitter_Vertical");
   const separator = hasPbFlag(g.flagsExpr, "#PB_Splitter_Separator");
   const bar = metrics.splitterWidth;
-  const range = Math.max(0, (vertical ? w : h) - bar);
-  const rawPos = typeof g.state === "number" ? Math.trunc(g.state) : Math.trunc(range / 2);
-  const pos = clamp(rawPos, 0, range);
+  const pos = getSplitterResolvedPosition({ x, y, w, h }, vertical, bar, g.state);
   const fillColor = osSkin === "macos"
     ? "rgb(237, 237, 237)"
     : (osSkin === "linux" ? "rgb(242, 241, 240)" : "rgb(240, 240, 240)");
