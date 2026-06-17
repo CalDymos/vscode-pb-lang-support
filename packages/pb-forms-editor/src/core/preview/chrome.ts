@@ -707,6 +707,34 @@ export function getScrollAreaHorizontalBarRect(rect: PreviewRect, metrics: Previ
   };
 }
 
+
+export type ScrollAreaChromeHitZone = "scrollAreaVBar" | "scrollAreaHBar";
+
+// The preview keeps ScrollArea drag hits on the drawn tracks instead of the broader FD_LeftDown() thresholds.
+export function getScrollAreaChromeHitZone(
+  rect: PreviewRect,
+  metrics: PreviewChromeMetrics,
+  x: number,
+  y: number,
+  clip: PreviewRect | null = null
+): ScrollAreaChromeHitZone | null {
+  const verticalBar = clip
+    ? intersectRect(getScrollAreaVerticalBarRect(rect, metrics), clip)
+    : getScrollAreaVerticalBarRect(rect, metrics);
+  if (rectContainsPoint(verticalBar, x, y)) {
+    return "scrollAreaVBar";
+  }
+
+  const horizontalBar = clip
+    ? intersectRect(getScrollAreaHorizontalBarRect(rect, metrics), clip)
+    : getScrollAreaHorizontalBarRect(rect, metrics);
+  if (rectContainsPoint(horizontalBar, x, y)) {
+    return "scrollAreaHBar";
+  }
+
+  return null;
+}
+
 export function getScrollAreaViewportRect(rect: PreviewRect, metrics: PreviewChromeMetrics): PreviewRect {
   const bar = getScrollAreaBarSize(rect, metrics);
   return {

@@ -15,6 +15,7 @@ import {
   getPanelHeaderRect,
   clampScrollAreaOffset,
   getScrollAreaHorizontalBarRect,
+  getScrollAreaChromeHitZone,
   getScrollAreaHorizontalThumbRect,
   getScrollAreaMaxOffsetX,
   getScrollAreaMaxOffsetY,
@@ -119,6 +120,19 @@ test("classifies original container chrome hit zones without changing content hi
   assert.equal(getContainerChromeHitZone("ButtonGadget", RECT, METRICS, 10, 60), null);
 });
 
+
+test("classifies scrollarea drag chrome using the drawn scrollbar tracks", () => {
+  assert.equal(getScrollAreaChromeHitZone(RECT, METRICS, 110, 40), "scrollAreaVBar");
+  assert.equal(getScrollAreaChromeHitZone(RECT, METRICS, 40, 80), "scrollAreaHBar");
+
+  // FD_LeftDown() uses broader ScrollAreaW thresholds, but the preview keeps
+  // the existing precise visual-track hit zones to avoid grabbing content area.
+  assert.equal(getScrollAreaChromeHitZone(RECT, METRICS, 109, 80), null);
+  assert.equal(getScrollAreaChromeHitZone(RECT, METRICS, 110, 79), null);
+
+  const clipped: PreviewRect = { x: 10, y: 20, w: 97, h: 58 };
+  assert.equal(getScrollAreaChromeHitZone(RECT, METRICS, 110, 40, clipped), null);
+});
 
 test("computes scrollarea viewport rect from chrome metrics", () => {
   assert.deepEqual(getScrollAreaViewportRect(RECT, METRICS), { x: 10, y: 20, w: 100, h: 60 });

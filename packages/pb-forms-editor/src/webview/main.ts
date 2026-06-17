@@ -22,6 +22,7 @@ import {
   getScrollAreaBarSize,
   getScrollAreaVerticalBarRect,
   getScrollAreaHorizontalBarRect,
+  getScrollAreaChromeHitZone,
   getScrollAreaViewportRect,
   clampScrollAreaOffset,
   getScrollAreaMaxOffsetX,
@@ -4703,13 +4704,9 @@ function hitTestPreviewChrome(mx: number, my: number, metrics: PreviewChromeMetr
     }
 
     if (g.kind === GADGET_KIND.ScrollAreaGadget) {
-      const verticalBar = intersectRect(getScrollAreaVerticalBarRect(layout.rect, metrics), layout.clip);
-      if (rectContainsPoint(verticalBar, lx, ly)) {
-        return { gadget: g, zone: "scrollAreaVBar" };
-      }
-      const horizontalBar = intersectRect(getScrollAreaHorizontalBarRect(layout.rect, metrics), layout.clip);
-      if (rectContainsPoint(horizontalBar, lx, ly)) {
-        return { gadget: g, zone: "scrollAreaHBar" };
+      const scrollAreaZone = getScrollAreaChromeHitZone(layout.rect, metrics, lx, ly, layout.clip);
+      if (scrollAreaZone) {
+        return { gadget: g, zone: scrollAreaZone };
       }
     }
   }
