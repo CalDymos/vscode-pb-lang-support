@@ -26,6 +26,7 @@ import {
   getMenuFlyoutSeparatorPreviewRect,
   getMenuFlyoutShortcutOpacity,
   getMenuEntrySourceLine,
+  getMenuEntrySelectedIndexAtDragStart,
   getMenuEntryMoveTarget,
   getLinearTopLevelEntryMoveTarget,
   getMenuEntryRect,
@@ -34,6 +35,9 @@ import {
   getMenuPreviewLabel,
   getPredictedMenuEntryMoveIndex,
   getMenuVisibleEntries,
+  getStatusBarAddButtonPreviewLayout,
+  getStatusBarFieldPreviewRect,
+  getStatusBarFieldMoveTarget,
   getStatusBarFieldWidths,
   getStatusBarPreviewInsertArgs,
   getSelectedMenuEntryInspectorFieldConfig,
@@ -47,6 +51,8 @@ import {
   getToolBarPreviewInsertArgs,
   getToolBarSeparatorPreviewRect,
   getToolBarSeparatorSelectedOutlineRect,
+  getTopLevelClampedAddIconX,
+  getTopLevelMoveIndicatorStrokes,
   hasPbFlag,
   unquotePbString,
   getVisibleToolBarEntryCount,
@@ -274,6 +280,55 @@ test("uses the original toolbar separator hit and selection geometry", () => {
     w: 8,
     h: 18,
   });
+});
+
+test("keeps top-level menu and toolbar add icons clamped inside their preview band", () => {
+  const band = { x: 20, y: 10, w: 80, h: 22 };
+
+  assert.equal(getTopLevelClampedAddIconX(band, 12), 26);
+  assert.equal(getTopLevelClampedAddIconX(band, 50), 50);
+  assert.equal(getTopLevelClampedAddIconX(band, 120), 80);
+});
+
+
+
+test("exposes contrast move-indicator strokes without changing original geometry helpers", () => {
+  assert.deepEqual(
+    getTopLevelMoveIndicatorStrokes("original"),
+    [
+      { role: "core", lineWidth: 2, fallbackColor: "#0000ff", cssVariable: "--vscode-editorInfo-foreground" },
+    ]
+  );
+
+  assert.deepEqual(
+    getTopLevelMoveIndicatorStrokes("contrast"),
+    [
+      { role: "halo", lineWidth: 6, fallbackColor: "rgba(255, 255, 255, 0.95)" },
+      { role: "core", lineWidth: 2, fallbackColor: "rgb(255, 149, 0)", cssVariable: "--vscode-editorWarning-foreground" },
+    ]
+  );
+
+  const contrastStrokes = getTopLevelMoveIndicatorStrokes("contrast");
+  contrastStrokes[0].lineWidth = 99;
+  assert.equal(getTopLevelMoveIndicatorStrokes("contrast")[0].lineWidth, 6);
+});
+
+test("uses the original statusbar field hit and selection geometry", () => {
+  assert.deepEqual(
+    getStatusBarFieldPreviewRect("StatusBar_0", 2, 42.8, 180.2, 64.9, 23.9),
+    { ownerId: "StatusBar_0", index: 2, x: 42, y: 180, w: 64, h: 23 }
+  );
+});
+
+test("keeps the statusbar add hit rectangle full-height while drawing the plus icon at the original image offset", () => {
+  assert.deepEqual(
+    getStatusBarAddButtonPreviewLayout({ x: 20, y: 180, w: 240, h: 23 }, 206),
+    {
+      hitRect: { x: 206, y: 180, w: 16, h: 23 },
+      iconX: 206,
+      iconY: 184,
+    }
+  );
 });
 
 test("builds default toolbar insert ids and preview insert args", () => {
@@ -662,6 +717,22 @@ test("resolves visible menu entry and footer rectangles from preview caches", ()
   );
 });
 
+
+test("captures the original propgrid-menu selection target before menu drag selection changes", () => {
+  assert.equal(
+    getMenuEntrySelectedIndexAtDragStart("menu-1", { kind: "menuEntry", menuId: "menu-1", entryIndex: 1 }),
+    1
+  );
+  assert.equal(
+    getMenuEntrySelectedIndexAtDragStart("menu-1", { kind: "menuEntry", menuId: "other-menu", entryIndex: 1 }),
+    undefined
+  );
+  assert.equal(
+    getMenuEntrySelectedIndexAtDragStart("menu-1", { kind: "toolbar", id: "tb-1" }),
+    undefined
+  );
+});
+
 test("resolves menu move targets from visible flyout entries", () => {
   const menu = {
     id: "menu-1",
@@ -694,7 +765,7 @@ test("resolves menu move targets from visible flyout entries", () => {
     {
       targetSourceLine: 10,
       placement: "before",
-      indicatorRect: { x: 9, y: 20, w: 2, h: 18 },
+      indicatorRect: { x: 9, y: 20, w: 2, h: 16 },
       indicatorOrientation: "vertical"
     }
   );
@@ -716,11 +787,29 @@ test("resolves menu move targets from visible flyout entries", () => {
 
   assert.deepEqual(
     getMenuEntryMoveTarget({
+      menu,
+      sourceEntryIndex: 1,
+      x: 49,
+      y: 25,
+      menuBarBottom: 38,
+      visibleEntries,
+      footerRects
+    }),
+    {
+      targetSourceLine: 10,
+      placement: "after",
+      indicatorRect: { x: 50, y: 20, w: 2, h: 16 },
+      indicatorOrientation: "vertical"
+    }
+  );
+
+  assert.deepEqual(
+    getMenuEntryMoveTarget({
       menu: emptySubMenu,
       sourceEntryIndex: 3,
       x: 95,
-      y: 50,
-      menuBarBottom: 38,
+      y: 45,
+      menuBarBottom: 80,
       visibleEntries: emptyVisibleEntries,
       footerRects,
       selectedEntryIndex: 1
@@ -732,9 +821,209 @@ test("resolves menu move targets from visible flyout entries", () => {
       indicatorOrientation: "horizontal"
     }
   );
+
+  assert.equal(
+    getMenuEntryMoveTarget({
+      menu: emptySubMenu,
+      sourceEntryIndex: 3,
+      x: 95,
+      y: 45,
+      menuBarBottom: 80,
+      visibleEntries: emptyVisibleEntries,
+      footerRects
+    }),
+    null
+  );
+
+  assert.equal(
+    getMenuEntryMoveTarget({
+      menu: emptySubMenu,
+      sourceEntryIndex: 3,
+      x: 95,
+      y: 45,
+      menuBarBottom: 80,
+      visibleEntries: emptyVisibleEntries,
+      footerRects,
+      selectedEntryIndex: 0
+    }),
+    null
+  );
 });
 
 
+test("suppresses menu move targets that would be no-op structural moves", () => {
+  const menu = {
+    id: "menu-1",
+    entries: [
+      { kind: "MenuTitle", textRaw: '"File"', level: 0, source: { line: 10 } },
+      { kind: "OpenSubMenu", textRaw: '"Export"', level: 1, source: { line: 11 } },
+      { kind: "MenuItem", textRaw: '"PNG"', level: 2, source: { line: 12 } },
+      { kind: "CloseSubMenu", level: 1, source: { line: 13 } },
+      { kind: "MenuItem", textRaw: '"Quit"', level: 1, source: { line: 14 } }
+    ]
+  };
+  const visibleEntries = [
+    { index: 0, entry: menu.entries[0], rect: { ownerId: "menu-1", index: 0, x: 10, y: 20, w: 40, h: 18 } },
+    { index: 1, entry: menu.entries[1], rect: { ownerId: "menu-1", index: 1, x: 20, y: 40, w: 70, h: 20 } },
+    { index: 2, entry: menu.entries[2], rect: { ownerId: "menu-1", index: 2, x: 30, y: 60, w: 80, h: 20 } },
+    { index: 4, entry: menu.entries[4], rect: { ownerId: "menu-1", index: 4, x: 20, y: 80, w: 70, h: 20 } }
+  ];
+
+  assert.equal(
+    getMenuEntryMoveTarget({
+      menu,
+      sourceEntryIndex: 0,
+      x: 49,
+      y: 25,
+      menuBarBottom: 38,
+      visibleEntries,
+      footerRects: []
+    }),
+    null
+  );
+
+  assert.equal(
+    getMenuEntryMoveTarget({
+      menu,
+      sourceEntryIndex: 1,
+      x: 100,
+      y: 79,
+      menuBarBottom: 38,
+      visibleEntries,
+      footerRects: []
+    }),
+    null
+  );
+});
+
+
+
+test("keeps statusbar move indicators at the original 16px line height", () => {
+  const rects = [
+    { ownerId: "sb-1", index: 0, x: 10, y: 180, w: 80, h: 23 },
+    { ownerId: "sb-1", index: 1, x: 90, y: 180, w: 120, h: 23 },
+  ];
+
+  assert.deepEqual(
+    getLinearTopLevelEntryMoveTarget({
+      sourceEntryIndex: 1,
+      x: 11,
+      y: 190,
+      entryRects: rects,
+      getSourceLine: index => 300 + index,
+      indicatorHeight: 16
+    }),
+    {
+      targetSourceLine: 300,
+      placement: "before",
+      indicatorRect: { x: 9, y: 180, w: 2, h: 16 },
+      indicatorOrientation: "vertical"
+    }
+  );
+
+  assert.deepEqual(
+    getLinearTopLevelEntryMoveTarget({
+      sourceEntryIndex: 0,
+      x: 216,
+      y: 190,
+      entryRects: rects,
+      getSourceLine: index => 300 + index,
+      indicatorHeight: 16
+    }),
+    {
+      targetSourceLine: 301,
+      placement: "after",
+      indicatorRect: { x: 210, y: 180, w: 2, h: 16 },
+      indicatorOrientation: "vertical"
+    }
+  );
+});
+
+
+test("keeps statusbar move targets inside the visible statusbar band", () => {
+  const rects = [
+    { ownerId: "sb-1", index: 0, x: 10, y: 180, w: 80, h: 23 },
+    { ownerId: "sb-1", index: 1, x: 90, y: 180, w: 120, h: 23 },
+  ];
+
+  assert.equal(
+    getStatusBarFieldMoveTarget({
+      sourceEntryIndex: 1,
+      x: 70,
+      y: 179,
+      entryRects: rects,
+      getSourceLine: index => 300 + index,
+      indicatorHeight: 16
+    }),
+    null
+  );
+
+  assert.equal(
+    getStatusBarFieldMoveTarget({
+      sourceEntryIndex: 1,
+      x: 70,
+      y: 204,
+      entryRects: rects,
+      getSourceLine: index => 300 + index,
+      indicatorHeight: 16
+    }),
+    null
+  );
+});
+
+test("uses the original statusbar field body zones for move targets", () => {
+  const rects = [
+    { ownerId: "sb-1", index: 0, x: 10, y: 180, w: 80, h: 23 },
+    { ownerId: "sb-1", index: 1, x: 90, y: 180, w: 120, h: 23 },
+    { ownerId: "sb-1", index: 2, x: 210, y: 180, w: 70, h: 23 },
+  ];
+
+  assert.deepEqual(
+    getStatusBarFieldMoveTarget({
+      sourceEntryIndex: 2,
+      x: 70,
+      y: 190,
+      entryRects: rects,
+      getSourceLine: index => 300 + index,
+      indicatorHeight: 16
+    }),
+    {
+      targetSourceLine: 300,
+      placement: "before",
+      indicatorRect: { x: 9, y: 180, w: 2, h: 16 },
+      indicatorOrientation: "vertical"
+    }
+  );
+
+  assert.equal(
+    getStatusBarFieldMoveTarget({
+      sourceEntryIndex: 2,
+      x: 70,
+      y: 210,
+      entryRects: rects,
+      getSourceLine: index => 300 + index,
+      indicatorHeight: 16
+    }),
+    null
+  );
+
+  assert.deepEqual(
+    getStatusBarFieldMoveTarget({
+      sourceEntryIndex: 0,
+      x: 276,
+      y: 190,
+      entryRects: rects,
+      getSourceLine: index => 300 + index,
+      indicatorHeight: 16
+    }),
+    {
+      targetSourceLine: 302,
+      placement: "after",
+      indicatorRect: { x: 280, y: 180, w: 2, h: 16 },
+      indicatorOrientation: "vertical"
+    }
+  );
+});
 
 test("resolves linear top-level entry move targets at item edges", () => {
   const rects = [
@@ -774,6 +1063,88 @@ test("resolves linear top-level entry move targets at item edges", () => {
       indicatorRect: { x: 64, y: 20, w: 2, h: 16 },
       indicatorOrientation: "vertical"
     }
+  );
+});
+
+
+test("supports the original toolbar before-indicator offset", () => {
+  const rects = [
+    { ownerId: "tb-1", index: 0, x: 10, y: 20, w: 16, h: 16 },
+    { ownerId: "tb-1", index: 1, x: 32, y: 20, w: 16, h: 16 },
+  ];
+
+  assert.deepEqual(
+    getLinearTopLevelEntryMoveTarget({
+      sourceEntryIndex: 1,
+      x: 11,
+      y: 25,
+      entryRects: rects,
+      getSourceLine: index => 100 + index,
+      beforeIndicatorOffsetX: -3
+    }),
+    {
+      targetSourceLine: 100,
+      placement: "before",
+      indicatorRect: { x: 7, y: 20, w: 2, h: 16 },
+      indicatorOrientation: "vertical"
+    }
+  );
+});
+
+test("supports the original toolbar after-indicator offset for narrow separator rects", () => {
+  const rects = [
+    { ownerId: "tb-1", index: 0, x: 10, y: 20, w: 16, h: 16 },
+    { ownerId: "tb-1", index: 1, x: 32, y: 20, w: 6, h: 16 },
+  ];
+
+  assert.deepEqual(
+    getLinearTopLevelEntryMoveTarget({
+      sourceEntryIndex: 0,
+      x: 40,
+      y: 25,
+      entryRects: rects,
+      getSourceLine: index => 100 + index,
+      afterIndicatorOffsetX: 16
+    }),
+    {
+      targetSourceLine: 101,
+      placement: "after",
+      indicatorRect: { x: 48, y: 20, w: 2, h: 16 },
+      indicatorOrientation: "vertical"
+    }
+  );
+});
+
+test("keeps toolbar move targets inside the visible toolbar band", () => {
+  const rects = [
+    { ownerId: "tb-1", index: 0, x: 10, y: 20, w: 16, h: 16 },
+    { ownerId: "tb-1", index: 1, x: 32, y: 20, w: 16, h: 16 },
+  ];
+
+  assert.equal(
+    getLinearTopLevelEntryMoveTarget({
+      sourceEntryIndex: 1,
+      x: 11,
+      y: 19,
+      entryRects: rects,
+      getSourceLine: index => 100 + index,
+      beforeIndicatorOffsetX: -3,
+      afterIndicatorOffsetX: 16
+    }),
+    null
+  );
+
+  assert.equal(
+    getLinearTopLevelEntryMoveTarget({
+      sourceEntryIndex: 1,
+      x: 11,
+      y: 37,
+      entryRects: rects,
+      getSourceLine: index => 100 + index,
+      beforeIndicatorOffsetX: -3,
+      afterIndicatorOffsetX: 16
+    }),
+    null
   );
 });
 

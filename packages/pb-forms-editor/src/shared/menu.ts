@@ -6,3 +6,9 @@ export const MenuEntryMovePlacement = {
 } as const;
 export type MenuEntryMovePlacement =
   typeof MenuEntryMovePlacement[keyof typeof MenuEntryMovePlacement];
+
+/** Placement of moved top-level toolbar/statusbar entries. */
+export type LinearTopLevelEntryMovePlacement = Extract<
+  MenuEntryMovePlacement,
+  typeof MenuEntryMovePlacement.Before | typeof MenuEntryMovePlacement.After
+>;

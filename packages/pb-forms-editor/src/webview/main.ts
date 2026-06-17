@@ -39,7 +39,7 @@ import {
   getWindowPreviewResizeButtonRect,
   hitWindowPreviewResizeButton,
   getWindowClientSurfaceRects,
-  resolvePreviewChromeMetrics,
+  resolvePreviewChromeMetricsForOsSkin,
   usesOriginalMacRoundedButtonChrome,
   getPreviewComboArrowLayout,
   getPreviewDateArrowLayout,
@@ -83,6 +83,7 @@ import {
   type LinearTopLevelEntryMoveTargetLike,
   type StatusBarPreviewInsertAction,
   type ToolBarPreviewInsertAction,
+  type TopLevelMoveIndicatorRenderMode,
   canEditToolBarTooltip,
   deriveWindows7MenuBarPalette,
   getDefaultMenuItemInsertArgs,
@@ -97,6 +98,7 @@ import {
   getMenuEntryBlockEndIndex,
   getMenuEntryLevel,
   getMenuEntrySourceLine,
+  getMenuEntrySelectedIndexAtDragStart,
   getMenuFlyoutEntryTextLayout,
   getMenuFlyoutFooterOpacity,
   getMenuFlyoutFooterTextPosition,
@@ -107,6 +109,9 @@ import {
   getMenuPreviewLabel,
   getMenuVisibleEntries,
   getPredictedMenuEntryMoveIndex,
+  getStatusBarAddButtonPreviewLayout,
+  getStatusBarFieldPreviewRect,
+  getStatusBarFieldMoveTarget,
   getStatusBarFieldWidths,
   getStatusBarPreviewInsertArgs,
   getSelectedMenuEntryInspectorFieldConfig,
@@ -118,6 +123,8 @@ import {
   getToolBarPreviewInsertArgs,
   getToolBarSeparatorPreviewRect,
   getToolBarSeparatorSelectedOutlineRect,
+  getTopLevelClampedAddIconX,
+  getTopLevelMoveIndicatorStrokes,
   hasPbFlag,
   hasStatusBarPreviewAssignedImage,
   resolveMenuFooterHit,
@@ -264,6 +271,9 @@ import {
   getWindowPreviewClientBottomPadding,
   getWindowPreviewClientSidePadding,
   getWindowPreviewCanvasOrigin,
+  getWindowPreviewCanvasCssSize,
+  getWindowPreviewFormScrollbarWidth,
+  getWindowPreviewScrollContentSize,
   getWindowPreviewTitleButtonAssetKind,
   getWindowPreviewTitleButtonLayout,
   getWindowPreviewTitleBarDecoration,
@@ -1046,7 +1056,7 @@ let settings: DesignerSettings = {
 
   windowFillOpacity: 0.05,
   outsideDimOpacity: 0.12,
-  titleBarHeight: 26,
+  titleBarHeight: 29,
   windowPreviewWindowsCaptionlessTopPadding: 8,
   windowPreviewWindowsClientSidePadding: 8,
   windowPreviewWindowsClientBottomPadding: 8,
@@ -1063,7 +1073,7 @@ let settings: DesignerSettings = {
   warningVersionDowngrade: WARNING_PRESENCE_MODE_KEY.always
 };
 
-const previewChromeMetrics = resolvePreviewChromeMetrics(typeof navigator !== "undefined" ? navigator.userAgent : "");
+let previewChromeMetrics = resolvePreviewChromeMetricsForOsSkin(settings.osSkin);
 
 // Cache for resolved CSS system color keywords (e.g. "ButtonFace").
 // Invalidated whenever osSkin changes via applySettings().
@@ -1242,12 +1252,13 @@ function syncModelDisplayLayout(currentModel: Model | undefined): void {
   }
 }
 
-function ensureLayoutScaleState(): void {
+function ensureLayoutScaleState(): boolean {
   const scale = getActiveLayoutDpiScale();
-  if (Math.abs(scale - lastLayoutDpiScale) < 0.001) return;
+  if (Math.abs(scale - lastLayoutDpiScale) < 0.001) return false;
   lastLayoutDpiScale = scale;
   layoutDisplayOverrides.clear();
   syncModelDisplayLayout(model);
+  return true;
 }
 
 function toUnscaledLayoutRaw(displayValue: number): string {
@@ -1311,6 +1322,7 @@ function shouldShowReadonlyUnscaledLayoutRows(): boolean {
 function updateWindowDisplayField(win: FormWindow, field: "x" | "y" | "w" | "h", displayValue: number): void {
   const committed = commitDisplayedLayoutValue(displayValue, getActiveLayoutDpiScale());
   storeLayoutDisplayOverride("window", win.id, field, committed.displayValue, committed.raw);
+  markPreviewCanvasScrollContentSizeDirty();
   switch (field) {
     case "x":
       win.x = committed.displayValue;
@@ -1422,6 +1434,7 @@ function postWindowPositionRaw(win: FormWindow, axis: "x" | "y", rawValue: strin
       win.y = parsed.previewValue;
       postWindowOpenArgs(win, { yRaw: parsed.raw });
     }
+    markPreviewCanvasScrollContentSizeDirty();
     render();
     renderProps();
     return;
@@ -1450,6 +1463,7 @@ function postWindowPositionRaw(win: FormWindow, axis: "x" | "y", rawValue: strin
     postWindowOpenArgs(win, { yRaw: parsed.raw });
   }
 
+  markPreviewCanvasScrollContentSizeDirty();
   render();
   renderProps();
 }
@@ -2591,6 +2605,7 @@ type DragState =
       startMy: number;
       moved: boolean;
       moveTarget: MenuEntryMoveTargetLike | null;
+      selectedEntryIndexAtDragStart?: number;
     }
   | {
       target: "toolBarEntry";
@@ -2654,6 +2669,7 @@ function applySettings(s: DesignerSettings) {
     clearSystemColorCache();
   }
   settings = s;
+  previewChromeMetrics = resolvePreviewChromeMetricsForOsSkin(settings.osSkin);
 
   const bg = (settings.canvasBackground ?? "").trim();
   const bgReadonly = (settings.canvasReadonlyBackground ?? "").trim();
@@ -2667,18 +2683,132 @@ function applySettings(s: DesignerSettings) {
     bgReadonly.length ? bgReadonly : "var(--vscode-readonly-input-background)"
   );
 
+  markPreviewCanvasScrollContentSizeDirty();
   render();
   renderProps();
 }
 
-function resizeCanvas() {
-  ensureLayoutScaleState();
+type PreviewCanvasCachedSize = { width: number; height: number };
+
+let previewCanvasViewportSizeCache: PreviewCanvasCachedSize | null = null;
+let previewCanvasScrollContentSizeCache: PreviewCanvasCachedSize | null = null;
+let previewCanvasCssSizeCache: PreviewCanvasCachedSize | null = null;
+let previewCanvasViewportSizeDirty = true;
+let previewCanvasScrollContentSizeDirty = true;
+let previewCanvasElementSizeDirty = true;
+
+function markPreviewCanvasViewportSizeDirty(): void {
+  previewCanvasViewportSizeDirty = true;
+  previewCanvasScrollContentSizeDirty = true;
+  previewCanvasElementSizeDirty = true;
+}
+
+function markPreviewCanvasScrollContentSizeDirty(): void {
+  previewCanvasScrollContentSizeDirty = true;
+  previewCanvasElementSizeDirty = true;
+}
+
+function getPreviewCanvasViewportSize(): PreviewCanvasCachedSize {
+  const rect = canvasWrap.getBoundingClientRect();
+  return {
+    width: Math.max(1, Math.floor(rect.width)),
+    height: Math.max(1, Math.floor(rect.height)),
+  };
+}
+
+function getPreviewCanvasScrollContentSize(viewport: PreviewCanvasCachedSize): PreviewCanvasCachedSize {
+  const win = model.window;
+  if (!win) {
+    return viewport;
+  }
+
+  const platformSkin = resolvePbFormSkinPlatform();
+  const originalContent = getWindowPreviewScrollContentSize({
+    platformSkin,
+    flagsExpr: win.flagsExpr,
+    clientWidth: win.w,
+    clientHeight: win.h,
+    titleBarHeight: previewChromeMetrics.titleBarHeight,
+    captionlessTopPadding: asInt(settings.windowPreviewWindowsCaptionlessTopPadding),
+    menuHeight: previewChromeMetrics.menuHeight,
+    hasMenu: hasParsedMenuChrome(),
+    hasToolbar: hasParsedToolbarChrome(),
+  });
+
+  return {
+    width: originalContent.width + Math.max(0, asInt(win.x ?? 0)),
+    height: originalContent.height + Math.max(0, asInt(win.y ?? 0)),
+  };
+}
+
+function getCachedPreviewCanvasViewportSize(): PreviewCanvasCachedSize {
+  if (previewCanvasViewportSizeDirty || !previewCanvasViewportSizeCache) {
+    previewCanvasViewportSizeCache = getPreviewCanvasViewportSize();
+    previewCanvasViewportSizeDirty = false;
+  }
+  return previewCanvasViewportSizeCache;
+}
+
+function getCachedPreviewCanvasScrollContentSize(viewport: PreviewCanvasCachedSize): PreviewCanvasCachedSize {
+  if (previewCanvasScrollContentSizeDirty || !previewCanvasScrollContentSizeCache) {
+    previewCanvasScrollContentSizeCache = getPreviewCanvasScrollContentSize(viewport);
+    previewCanvasScrollContentSizeDirty = false;
+  }
+  return previewCanvasScrollContentSizeCache;
+}
+
+function syncPreviewCanvasElementSizeIfNeeded(): PreviewCanvasCachedSize {
+  if (!previewCanvasElementSizeDirty && previewCanvasCssSizeCache) {
+    return previewCanvasCssSizeCache;
+  }
+
+  const viewport = getCachedPreviewCanvasViewportSize();
+  const content = getCachedPreviewCanvasScrollContentSize(viewport);
+  const scrollbarWidth = getWindowPreviewFormScrollbarWidth(resolvePbFormSkinPlatform());
+  const cssSize = getWindowPreviewCanvasCssSize({
+    viewportWidth: viewport.width,
+    viewportHeight: viewport.height,
+    scrollContentWidth: content.width,
+    scrollContentHeight: content.height,
+    scrollbarWidth,
+  });
+
+  const widthCss = `${cssSize.width}px`;
+  const heightCss = `${cssSize.height}px`;
+  if (canvas.style.width !== widthCss) {
+    canvas.style.width = widthCss;
+  }
+  if (canvas.style.height !== heightCss) {
+    canvas.style.height = heightCss;
+  }
+
+  previewCanvasCssSizeCache = cssSize;
+  previewCanvasElementSizeDirty = false;
+  return cssSize;
+}
+
+function ensureCanvasBitmapSizeForRender(): PreviewCanvasCachedSize {
+  if (ensureLayoutScaleState()) {
+    markPreviewCanvasScrollContentSizeDirty();
+  }
+
+  const cssSize = syncPreviewCanvasElementSizeIfNeeded();
   const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.getBoundingClientRect();
-  canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-  canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+  const width = Math.max(1, Math.floor(cssSize.width * dpr));
+  const height = Math.max(1, Math.floor(cssSize.height * dpr));
+  if (canvas.width !== width) {
+    canvas.width = width;
+  }
+  if (canvas.height !== height) {
+    canvas.height = height;
+  }
   const ctx = canvas.getContext("2d")!;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return cssSize;
+}
+
+function resizeCanvas() {
+  markPreviewCanvasViewportSizeDirty();
   render();
 }
 
@@ -2720,6 +2850,7 @@ window.addEventListener("message", (ev: MessageEvent<ExtensionToWebviewMessage<M
     ensureLayoutScaleState();
     model = msg.model;
     syncModelDisplayLayout(model);
+    markPreviewCanvasScrollContentSizeDirty();
     windowParentAsRawExpressionOverrides.clear();
     const retainedPanelItems = retainPanelActiveItems(panelActiveItems, model.gadgets);
     panelActiveItems.clear();
@@ -2916,12 +3047,7 @@ function escapeHtml(s: string): string {
 function getWindowPreviewFramePadding(): { top: number; side: number; bottom: number } {
   const platformSkin = resolvePbFormSkinPlatform();
   return {
-    top: getWindowPreviewChromeTopPadding(
-      platformSkin,
-      model.window?.flagsExpr,
-      asInt(settings.titleBarHeight),
-      asInt(settings.windowPreviewWindowsCaptionlessTopPadding)
-    ),
+    top: getWindowPreviewChromeTopPaddingForCurrentSkin(),
     side: getWindowPreviewClientSidePadding(platformSkin, asInt(settings.windowPreviewWindowsClientSidePadding)),
     bottom: getWindowPreviewClientBottomPadding(platformSkin, asInt(settings.windowPreviewWindowsClientBottomPadding)),
   };
@@ -2931,6 +3057,27 @@ function getWindowPreviewFrameExtraHeight(): number {
   return resolvePbFormSkinPlatform() === "macos" && hasParsedToolbarChrome()
     ? previewChromeMetrics.toolBarHeight
     : 0;
+}
+
+function getWindowPreviewTitleBarHeightForCurrentSkin(): number {
+  const platformSkin = resolvePbFormSkinPlatform();
+  const titleBarHeight = platformSkin === "windows"
+    ? asInt(settings.titleBarHeight)
+    : previewChromeMetrics.titleBarHeight;
+  return getWindowPreviewTitleBarHeight(model.window?.flagsExpr, titleBarHeight);
+}
+
+function getWindowPreviewChromeTopPaddingForCurrentSkin(): number {
+  const platformSkin = resolvePbFormSkinPlatform();
+  const titleBarHeight = platformSkin === "windows"
+    ? asInt(settings.titleBarHeight)
+    : previewChromeMetrics.titleBarHeight;
+  return getWindowPreviewChromeTopPadding(
+    platformSkin,
+    model.window?.flagsExpr,
+    titleBarHeight,
+    asInt(settings.windowPreviewWindowsCaptionlessTopPadding)
+  );
 }
 
 function getWindowPreviewFrameForStoredSize(origin: { x: number; y: number }, clientWidth: number, clientHeight: number): PreviewRect {
@@ -2969,7 +3116,7 @@ function getWinRect(): { x: number; y: number; w: number; h: number; title: stri
     h: frameRect.h,
     title: model.window.title ?? "",
     id: model.window.id,
-    tbH: getWindowPreviewTitleBarHeight(model.window.flagsExpr, asInt(settings.titleBarHeight))
+    tbH: getWindowPreviewTitleBarHeightForCurrentSkin()
   };
 }
 
@@ -3014,12 +3161,7 @@ function getWindowLocalChromeLayout(metrics: PreviewChromeMetrics): WindowChrome
   const platformSkin = resolvePbFormSkinPlatform();
   return getWindowChromeLayout(
     getWindowLocalRect(),
-    getWindowPreviewChromeTopPadding(
-      platformSkin,
-      model.window?.flagsExpr,
-      asInt(settings.titleBarHeight),
-      asInt(settings.windowPreviewWindowsCaptionlessTopPadding)
-    ),
+    getWindowPreviewChromeTopPaddingForCurrentSkin(),
     hasParsedMenuChrome(),
     hasParsedToolbarChrome(),
     hasParsedStatusbarChrome(),
@@ -3037,12 +3179,7 @@ function getWindowGlobalChromeLayout(metrics: PreviewChromeMetrics): WindowChrom
   const externalMenuBar = usesWindowPreviewExternalMenuBar(settings.osSkin) && hasParsedMenuChrome();
   const layout = getWindowChromeLayout(
     { x: wr.x, y: wr.y, w: wr.w, h: wr.h },
-    getWindowPreviewChromeTopPadding(
-      platformSkin,
-      model.window?.flagsExpr,
-      asInt(settings.titleBarHeight),
-      asInt(settings.windowPreviewWindowsCaptionlessTopPadding)
-    ),
+    getWindowPreviewChromeTopPaddingForCurrentSkin(),
     hasParsedMenuChrome(),
     hasParsedToolbarChrome(),
     hasParsedStatusbarChrome(),
@@ -3703,6 +3840,7 @@ canvas.addEventListener("mousedown", (e) => {
   const rect = canvas.getBoundingClientRect();
   const mx = e.clientX - rect.left;
   const my = e.clientY - rect.top;
+  const previousSelection = selection;
 
   if (pendingInsertGadgetKind) {
     const placement = resolveGadgetInsertPlacement(mx, my);
@@ -3824,7 +3962,11 @@ canvas.addEventListener("mousedown", (e) => {
           startMx: mx,
           startMy: my,
           moved: false,
-          moveTarget: null
+          moveTarget: null,
+          selectedEntryIndexAtDragStart: getMenuEntrySelectedIndexAtDragStart(
+            menu.id,
+            previousSelection?.kind === "menuEntry" ? previousSelection : null
+          )
         };
         canvas.style.cursor = "move";
         renderSelectionUiWithoutParentSelector();
@@ -4144,7 +4286,7 @@ window.addEventListener("mousemove", (e) => {
         menuBarBottom,
         visibleEntries: getMenuVisibleEntries(menu, menuEntryPreviewRects),
         footerRects: menuFooterPreviewRects,
-        selectedEntryIndex: selection && selection.kind === "menuEntry" && selection.menuId === menu.id ? selection.entryIndex : undefined
+        selectedEntryIndex: d.selectedEntryIndexAtDragStart
       }) : null;
     } else {
       d.moveTarget = null;
@@ -4167,6 +4309,8 @@ window.addEventListener("mousemove", (e) => {
         y: my,
         entryRects,
         getSourceLine: index => toolBar.entries?.[index]?.source?.line,
+        beforeIndicatorOffsetX: -3,
+        afterIndicatorOffsetX: 16,
         isNoopMove: (targetIndex, placement) => {
           const sourceEndIndex = getToolBarEntryMoveBlockEndIndex(toolBar, d.entryIndex);
           const targetEndIndex = getToolBarEntryMoveBlockEndIndex(toolBar, targetIndex);
@@ -4188,12 +4332,13 @@ window.addEventListener("mousemove", (e) => {
     if (moved) {
       const statusBar = (model.statusbars ?? []).find(entry => entry.id === d.statusBarId);
       const entryRects = statusBarFieldPreviewRects.filter(rect => rect.ownerId === d.statusBarId);
-      d.moveTarget = statusBar ? getLinearTopLevelEntryMoveTarget({
+      d.moveTarget = statusBar ? getStatusBarFieldMoveTarget({
         sourceEntryIndex: d.fieldIndex,
         x: mx,
         y: my,
         entryRects,
         getSourceLine: index => statusBar.fields?.[index]?.source?.line,
+        indicatorHeight: 16,
         isNoopMove: (targetIndex, placement) => getPredictedLinearMoveIndex(
           statusBar.fields?.length ?? 0,
           d.fieldIndex,
@@ -4273,6 +4418,7 @@ window.addEventListener("mousemove", (e) => {
   model.window.w = nw;
   model.window.h = nh;
 
+  markPreviewCanvasScrollContentSizeDirty();
   canvas.style.cursor = getHandleCursor(d.handle);
 
   render();
@@ -7459,24 +7605,31 @@ function buildPendingMenuEntrySelection(
 }
 
 
-function drawTopLevelMoveIndicator(ctx: CanvasRenderingContext2D, target: { indicatorRect: PreviewRect; indicatorOrientation: "horizontal" | "vertical" }): void {
-  const indicatorColor = getCssVar("--vscode-editorInfo-foreground") || "#0000ff";
+function drawTopLevelMoveIndicator(
+  ctx: CanvasRenderingContext2D,
+  target: { indicatorRect: PreviewRect; indicatorOrientation: "horizontal" | "vertical" },
+  mode: TopLevelMoveIndicatorRenderMode = "original"
+): void {
   const indicator = target.indicatorRect;
+  const strokes = getTopLevelMoveIndicatorStrokes(mode);
   ctx.save();
-  ctx.strokeStyle = indicatorColor;
-  ctx.lineWidth = 2;
-  if (target.indicatorOrientation === "vertical") {
-    const x = indicator.x + Math.max(0, Math.trunc(indicator.w / 2));
-    ctx.beginPath();
-    ctx.moveTo(x + 0.5, indicator.y);
-    ctx.lineTo(x + 0.5, indicator.y + indicator.h);
-    ctx.stroke();
-  } else {
-    const y = indicator.y + Math.max(0, Math.trunc(indicator.h / 2));
-    ctx.beginPath();
-    ctx.moveTo(indicator.x, y + 0.5);
-    ctx.lineTo(indicator.x + indicator.w, y + 0.5);
-    ctx.stroke();
+  ctx.lineCap = "butt";
+  for (const stroke of strokes) {
+    ctx.strokeStyle = (stroke.cssVariable ? getCssVar(stroke.cssVariable) : "") || stroke.fallbackColor;
+    ctx.lineWidth = stroke.lineWidth;
+    if (target.indicatorOrientation === "vertical") {
+      const x = indicator.x + Math.max(0, Math.trunc(indicator.w / 2));
+      ctx.beginPath();
+      ctx.moveTo(x + 0.5, indicator.y);
+      ctx.lineTo(x + 0.5, indicator.y + indicator.h);
+      ctx.stroke();
+    } else {
+      const y = indicator.y + Math.max(0, Math.trunc(indicator.h / 2));
+      ctx.beginPath();
+      ctx.moveTo(indicator.x, y + 0.5);
+      ctx.lineTo(indicator.x + indicator.w, y + 0.5);
+      ctx.stroke();
+    }
   }
   ctx.restore();
 }
@@ -7838,8 +7991,7 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
     if (!label.length) continue;
     const metrics = ctx.measureText(label);
     const textWidth = Math.ceil(metrics.width);
-    const itemW = Math.max(24, textWidth + 6);
-    const entryRect = getWindowPreviewMenuRootEntryRect(x, textY, textWidth, rect.h);
+    const entryRect = getWindowPreviewMenuRootEntryRect(x, textY, textWidth, rect.h, menuBarDecoration.itemSpacing);
 
     menuEntryPreviewRects.push({
       ownerId: menu.id, index: entryIndex,
@@ -7858,13 +8010,13 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
       ctx.restore();
     }
 
-    x += itemW + menuBarDecoration.itemSpacing;
+    x += entryRect.w;
     if (x >= rect.x + rect.w - 20) break;
   }
   ctx.restore();
 
   const addIconMetrics = getWindowPreviewAddIconMetrics();
-  const addRectX = Math.min(Math.max(rect.x + 6, x), Math.max(rect.x + 6, rect.x + rect.w - 20));
+  const addRectX = getTopLevelClampedAddIconX(rect, x);
   const addRect: PreviewMenuAddRect = {
     menuId: menu.id,
     x: addRectX,
@@ -8034,7 +8186,7 @@ function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
   }
 
   const addIconMetrics = getWindowPreviewAddIconMetrics();
-  const addRectX = Math.min(Math.max(rect.x + 6, x), Math.max(rect.x + 6, rect.x + rect.w - 20));
+  const addRectX = getTopLevelClampedAddIconX(rect, x);
   const addRect: PreviewToolBarAddRect = {
     toolBarId: toolbar.id,
     x: addRectX,
@@ -8117,7 +8269,7 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
   for (let i = 0; i < statusbar.fields.length; i++) {
     const field = statusbar.fields[i];
     const fieldW = fieldWidths[i] ?? 18;
-    const fieldRect = { ownerId: statusbar.id, index: i, x, y: rect.y + 1, w: Math.max(0, fieldW), h: Math.max(0, rect.h - 2) };
+    const fieldRect = getStatusBarFieldPreviewRect(statusbar.id, i, x, rect.y, fieldW, rect.h);
     statusBarFieldPreviewRects.push(fieldRect);
     const isSelectedField = selection?.kind === "statusBarField"
       && selection.statusBarId === statusbar.id
@@ -8211,18 +8363,18 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
   }
 
   const addIconMetrics = getWindowPreviewAddIconMetrics();
+  const addButtonLayout = getStatusBarAddButtonPreviewLayout(rect, x, addIconMetrics.width);
   const addRect: PreviewStatusBarAddRect = {
     statusBarId: statusbar.id,
-    x,
-    y: rect.y + 4,
-    w: addIconMetrics.width,
-    h: addIconMetrics.height
+    ...addButtonLayout.hitRect
   };
   statusBarAddPreviewRect = addRect;
-  drawPreviewPlusIcon(ctx, addRect.x, addRect.y);
+  drawPreviewPlusIcon(ctx, addButtonLayout.iconX, addButtonLayout.iconY);
 }
 
 function render() {
+  const canvasCssSize = ensureCanvasBitmapSizeForRender();
+
   menuEntryPreviewRects = [];
   menuFooterPreviewRects = [];
   menuAddPreviewRect = null;
@@ -8232,8 +8384,7 @@ function render() {
   statusBarFieldPreviewRects = [];
 
   const ctx = canvas.getContext("2d")!;
-  const rect = canvas.getBoundingClientRect();
-  ctx.clearRect(0, 0, rect.width, rect.height);
+  ctx.clearRect(0, 0, canvasCssSize.width, canvasCssSize.height);
 
   const fg = getComputedStyle(document.body).color;
   const focus = getCssVar("--vscode-focusBorder") || fg;
@@ -8256,7 +8407,7 @@ function render() {
     ctx.save();
     ctx.globalAlpha = clamp(settings.outsideDimOpacity, 0, 1);
     ctx.fillStyle = fg;
-    ctx.fillRect(0, 0, rect.width, rect.height);
+    ctx.fillRect(0, 0, canvasCssSize.width, canvasCssSize.height);
     ctx.restore();
   }
 
@@ -8316,12 +8467,7 @@ function render() {
   }
 
   const chromeMetrics = previewChromeMetrics;
-  const chromeTopPadding = getWindowPreviewChromeTopPadding(
-    platformSkin,
-    model.window?.flagsExpr,
-    asInt(settings.titleBarHeight),
-    asInt(settings.windowPreviewWindowsCaptionlessTopPadding)
-  );
+  const chromeTopPadding = getWindowPreviewChromeTopPaddingForCurrentSkin();
   const windowClientSidePadding = getWindowPreviewClientSidePadding(platformSkin, asInt(settings.windowPreviewWindowsClientSidePadding));
   const windowClientBottomPadding = getWindowPreviewClientBottomPadding(platformSkin, asInt(settings.windowPreviewWindowsClientBottomPadding));
   const localChromeLayout = getWindowLocalChromeLayout(chromeMetrics);
@@ -8745,7 +8891,7 @@ function render() {
       }
     }
     if (drag?.target === "statusBarField" && drag.moved && drag.moveTarget) {
-      drawTopLevelMoveIndicator(ctx, drag.moveTarget);
+      drawTopLevelMoveIndicator(ctx, drag.moveTarget, "contrast");
     }
   }
 
@@ -9037,25 +9183,8 @@ function render() {
     }
 
     if (drag?.target === "menuEntry" && drag.moved && drag.moveTarget) {
-      const indicatorColor = getCssVar("--vscode-editorInfo-foreground") || "#0000ff";
-      const indicator = drag.moveTarget.indicatorRect;
-      ctx.save();
-      ctx.strokeStyle = indicatorColor;
-      ctx.lineWidth = 2;
-      if (drag.moveTarget.indicatorOrientation === "vertical") {
-        const x = indicator.x + Math.max(0, Math.trunc(indicator.w / 2));
-        ctx.beginPath();
-        ctx.moveTo(x + 0.5, indicator.y);
-        ctx.lineTo(x + 0.5, indicator.y + indicator.h);
-        ctx.stroke();
-      } else {
-        const y = indicator.y + Math.max(0, Math.trunc(indicator.h / 2));
-        ctx.beginPath();
-        ctx.moveTo(indicator.x, y + 0.5);
-        ctx.lineTo(indicator.x + indicator.w, y + 0.5);
-        ctx.stroke();
-      }
-      ctx.restore();
+      const indicatorMode = drag.moveTarget.indicatorOrientation === "vertical" ? "contrast" : "original";
+      drawTopLevelMoveIndicator(ctx, drag.moveTarget, indicatorMode);
     }
   }
 }
@@ -9931,6 +10060,8 @@ function renderProps() {
           const nextExpr = buildWindowFlagsExpr(model.window.knownFlags, (model.window.customFlags ?? []).join(" | "));
           model.window.flagsExpr = nextExpr;
           postWindowOpenArgs(model.window, { flagsExpr: nextExpr ?? "" });
+          markPreviewCanvasScrollContentSizeDirty();
+          render();
           renderProps();
         })
       ));
@@ -9944,6 +10075,8 @@ function renderProps() {
         const nextExpr = buildWindowFlagsExpr(model.window.knownFlags ?? [], v);
         model.window.flagsExpr = nextExpr;
         postWindowOpenArgs(model.window, { flagsExpr: nextExpr ?? "" });
+        markPreviewCanvasScrollContentSizeDirty();
+        render();
       }, { placeholder: "#PB_Window_CustomFlagA | #PB_Window_CustomFlagB", title: windowConstantsField.title })
       ));
     }

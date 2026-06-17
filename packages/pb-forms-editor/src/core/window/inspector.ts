@@ -181,6 +181,101 @@ export type WindowPreviewFrameStrokeRect = {
 };
 
 export const WINDOW_PREVIEW_PAGE_PADDING = 10;
+export const WINDOW_PREVIEW_FORM_TOOLBAR_SCROLL_PADDING = 24;
+
+export type WindowPreviewFormScrollbarWidthPlatform = WindowPreviewPlatformSkin;
+
+export function getWindowPreviewFormScrollbarWidth(platformSkin: WindowPreviewFormScrollbarWidthPlatform | undefined): number {
+  return platformSkin === "macos" ? 16 : 18;
+}
+
+export type WindowPreviewScrollContentSize = {
+  width: number;
+  height: number;
+};
+
+export type WindowPreviewScrollContentSizeArgs = {
+  platformSkin: WindowPreviewPlatformSkin | undefined;
+  flagsExpr: string | undefined;
+  clientWidth: number;
+  clientHeight: number;
+  titleBarHeight: number;
+  captionlessTopPadding: number;
+  menuHeight: number;
+  hasMenu: boolean;
+  hasToolbar: boolean;
+};
+
+export type WindowPreviewCanvasCssSize = {
+  width: number;
+  height: number;
+  scrollContentWidth: number;
+  scrollContentHeight: number;
+  showHorizontalScrollbar: boolean;
+  showVerticalScrollbar: boolean;
+};
+
+export function getWindowPreviewScrollContentSize(args: WindowPreviewScrollContentSizeArgs): WindowPreviewScrollContentSize {
+  const platformSkin = args.platformSkin;
+  const clientWidth = Math.max(0, Math.trunc(args.clientWidth));
+  const clientHeight = Math.max(0, Math.trunc(args.clientHeight));
+  const titleBarHeight = Math.max(0, Math.trunc(args.titleBarHeight));
+  const captionlessTopPadding = Math.max(0, Math.trunc(args.captionlessTopPadding));
+  const menuHeight = Math.max(0, Math.trunc(args.menuHeight));
+  // Scroll content must cover the actually rendered FD_Redraw() chrome geometry.
+  const topWindowPadding = getWindowPreviewChromeTopPadding(
+    platformSkin,
+    args.flagsExpr,
+    titleBarHeight,
+    captionlessTopPadding
+  );
+  const topMenuPadding = args.hasMenu ? menuHeight : 0;
+  const topToolbarPadding = args.hasToolbar ? WINDOW_PREVIEW_FORM_TOOLBAR_SCROLL_PADDING : 0;
+
+  if (platformSkin === "macos") {
+    return {
+      width: clientWidth + WINDOW_PREVIEW_PAGE_PADDING * 2,
+      height: clientHeight + topWindowPadding + topMenuPadding + topToolbarPadding + WINDOW_PREVIEW_PAGE_PADDING * 2,
+    };
+  }
+
+  if (platformSkin === "windows") {
+    return {
+      width: clientWidth + WINDOW_PREVIEW_PAGE_PADDING * 2 + 16,
+      height: clientHeight + topWindowPadding + 8 + WINDOW_PREVIEW_PAGE_PADDING * 2,
+    };
+  }
+
+  return {
+    width: clientWidth + WINDOW_PREVIEW_PAGE_PADDING * 2,
+    height: clientHeight + topWindowPadding + WINDOW_PREVIEW_PAGE_PADDING * 2,
+  };
+}
+
+export function getWindowPreviewCanvasCssSize(args: {
+  viewportWidth: number;
+  viewportHeight: number;
+  scrollContentWidth: number;
+  scrollContentHeight: number;
+  scrollbarWidth: number;
+}): WindowPreviewCanvasCssSize {
+  const viewportWidth = Math.max(1, Math.trunc(args.viewportWidth));
+  const viewportHeight = Math.max(1, Math.trunc(args.viewportHeight));
+  const scrollContentWidth = Math.max(1, Math.trunc(args.scrollContentWidth));
+  const scrollContentHeight = Math.max(1, Math.trunc(args.scrollContentHeight));
+  const scrollbarWidth = Math.max(0, Math.trunc(args.scrollbarWidth));
+  const showHorizontalScrollbar = scrollContentWidth > viewportWidth - scrollbarWidth;
+  const showVerticalScrollbar = scrollContentHeight > viewportHeight - scrollbarWidth;
+
+  return {
+    width: Math.max(viewportWidth, scrollContentWidth + (showHorizontalScrollbar ? scrollbarWidth : 0)),
+    height: Math.max(viewportHeight, scrollContentHeight + (showVerticalScrollbar ? scrollbarWidth : 0)),
+    scrollContentWidth,
+    scrollContentHeight,
+    showHorizontalScrollbar,
+    showVerticalScrollbar,
+  };
+}
 
 export type WindowPreviewCanvasOrigin = {
   x: number;
@@ -1079,11 +1174,14 @@ export function getWindowPreviewMenuRootEntryRect(
   y: number,
   textWidth: number,
   menuBarHeight: number,
+  itemSpacing = 7,
 ): WindowPreviewMenuRootEntryRect {
+  const labelWidth = Math.ceil(Math.max(0, textWidth));
+  const spacing = Math.max(0, Math.trunc(itemSpacing));
   return {
     x: Math.trunc(x) - 1,
     y: Math.trunc(y) - 1,
-    w: Math.max(24, Math.ceil(textWidth) + 6) + 1,
+    w: Math.max(0, labelWidth + spacing),
     h: Math.max(0, Math.trunc(menuBarHeight) - 4),
   };
 }

@@ -1,8 +1,9 @@
 import { parsePbStringLiteral } from "../parser/pb-string";
 import { quotePbString } from "../parser/tokenizer";
-import type { DesignerTopLevelContainerSelection, DesignerTopLevelEntrySelection } from "./selection";
+import type { DesignerTopLevelContainerSelection, DesignerTopLevelEntrySelection, DesignerTopLevelSelection } from "./selection";
 import { parseStatusBarWidth } from "../statusbar/preview";
 import { MenuEntryMovePlacement } from "../../shared/menu";
+import type { LinearTopLevelEntryMovePlacement } from "../../shared/menu";
 import type { FormToolBarEntry } from "../model";
 
 export type SourceLineLike = {
@@ -95,9 +96,18 @@ export type MenuEntryMoveTargetLike = {
 
 export type LinearTopLevelEntryMoveTargetLike = {
   targetSourceLine: number;
-  placement: Extract<MenuEntryMovePlacement, "before" | "after">;
+  placement: LinearTopLevelEntryMovePlacement;
   indicatorRect: PreviewRectLike;
   indicatorOrientation: "vertical";
+};
+
+export type TopLevelMoveIndicatorRenderMode = "original" | "contrast";
+
+export type TopLevelMoveIndicatorStroke = {
+  role: "halo" | "core";
+  lineWidth: number;
+  fallbackColor: string;
+  cssVariable?: string;
 };
 
 export type VisibleMenuEntryLike = {
@@ -116,6 +126,17 @@ export type Windows7MenuBarPalette = {
   separatorMiddle: string;
   separatorLower: string;
 };
+
+const ORIGINAL_MENU_ROOT_MOVE_INDICATOR_HEIGHT = 16;
+
+const ORIGINAL_TOP_LEVEL_MOVE_INDICATOR_STROKES: TopLevelMoveIndicatorStroke[] = [
+  { role: "core", lineWidth: 2, fallbackColor: "#0000ff", cssVariable: "--vscode-editorInfo-foreground" },
+];
+
+const CONTRAST_TOP_LEVEL_MOVE_INDICATOR_STROKES: TopLevelMoveIndicatorStroke[] = [
+  { role: "halo", lineWidth: 6, fallbackColor: "rgba(255, 255, 255, 0.95)" },
+  { role: "core", lineWidth: 2, fallbackColor: "rgb(255, 149, 0)", cssVariable: "--vscode-editorWarning-foreground" },
+];
 
 const ORIGINAL_WINDOWS7_MENU_BAR_PALETTE: Windows7MenuBarPalette = {
   topFill: "rgb(245, 245, 245)",
@@ -174,6 +195,13 @@ function averagePreviewRgbColor(colorA: PreviewRgbColor, colorB: PreviewRgbColor
     g: Math.round((colorA.g + colorB.g) / 2),
     b: Math.round((colorA.b + colorB.b) / 2),
   };
+}
+
+export function getTopLevelMoveIndicatorStrokes(mode: TopLevelMoveIndicatorRenderMode): TopLevelMoveIndicatorStroke[] {
+  return (mode === "contrast"
+    ? CONTRAST_TOP_LEVEL_MOVE_INDICATOR_STROKES
+    : ORIGINAL_TOP_LEVEL_MOVE_INDICATOR_STROKES
+  ).map((stroke) => ({ ...stroke }));
 }
 
 export function deriveWindows7MenuBarPalette(menuColor?: string, menuBarColor?: string): Windows7MenuBarPalette {
@@ -335,6 +363,14 @@ export function getMenuAncestorChain(menu: MenuModelLike, entryIndex: number): n
 
 export function getMenuEntrySourceLine(menu: MenuModelLike, entryIndex: number): number | undefined {
   return menu.entries?.[entryIndex]?.source?.line;
+}
+
+export function getMenuEntrySelectedIndexAtDragStart(
+  menuId: string,
+  previousSelection: DesignerTopLevelSelection | null | undefined
+): number | undefined {
+  if (!previousSelection || previousSelection.kind !== "menuEntry") return undefined;
+  return previousSelection.menuId === menuId ? previousSelection.entryIndex : undefined;
 }
 
 export function getMenuEntryBlockEndIndex(entries: MenuEntryLike[], entryIndex: number): number {
@@ -631,6 +667,24 @@ export function getStatusBarFieldWidths(
   });
 }
 
+export function getStatusBarFieldPreviewRect(
+  ownerId: string,
+  index: number,
+  x: number,
+  y: number,
+  width: number,
+  height: number
+): PreviewEntryRectLike {
+  return {
+    ownerId,
+    index,
+    x: Math.trunc(x),
+    y: Math.trunc(y),
+    w: Math.max(0, Math.trunc(width)),
+    h: Math.max(0, Math.trunc(height)),
+  };
+}
+
 export function getMenuFlyoutPanelRect(
   menu: MenuModelLike,
   parentIndex: number,
@@ -754,6 +808,52 @@ export function getToolBarSeparatorSelectedOutlineRect(entryRect: PreviewRectLik
   };
 }
 
+export function getTopLevelClampedAddIconX(
+  bandRect: PreviewRectLike,
+  currentX: number,
+  leftInset = 6,
+  rightInset = 20
+): number {
+  const minX = bandRect.x + leftInset;
+  const maxX = Math.max(minX, bandRect.x + Math.max(0, bandRect.w) - rightInset);
+  return Math.min(Math.max(minX, currentX), maxX);
+}
+
+export type StatusBarAddButtonPreviewLayout = {
+  hitRect: PreviewRectLike;
+  iconX: number;
+  iconY: number;
+};
+
+export function getStatusBarAddButtonPreviewLayout(
+  statusBarRect: PreviewRectLike,
+  currentX: number,
+  iconWidth = 16,
+  iconOffsetY = 4
+): StatusBarAddButtonPreviewLayout {
+  const x = Math.trunc(currentX);
+  const y = Math.trunc(statusBarRect.y);
+  return {
+    hitRect: {
+      x,
+      y,
+      w: Math.max(0, Math.trunc(iconWidth)),
+      h: Math.max(0, Math.trunc(statusBarRect.h)),
+    },
+    iconX: x,
+    iconY: y + Math.trunc(iconOffsetY),
+  };
+}
+
+
+function getMenuRootVerticalMoveIndicatorRect(rect: PreviewRectLike, placement: "before" | "after"): PreviewRectLike {
+  return {
+    x: placement === MenuEntryMovePlacement.Before ? rect.x - 1 : rect.x + rect.w,
+    y: rect.y,
+    w: 2,
+    h: ORIGINAL_MENU_ROOT_MOVE_INDICATOR_HEIGHT,
+  };
+}
 
 function rectContainsPoint(rect: PreviewRectLike, x: number, y: number): boolean {
   return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
@@ -846,10 +946,16 @@ export function getLinearTopLevelEntryMoveTarget(args: {
   entryRects: PreviewEntryRectLike[];
   getSourceLine: (index: number) => number | undefined;
   edgeTolerance?: number;
-  isNoopMove?: (targetIndex: number, placement: Extract<MenuEntryMovePlacement, "before" | "after">) => boolean;
+  indicatorHeight?: number;
+  beforeIndicatorOffsetX?: number;
+  afterIndicatorOffsetX?: number;
+  isNoopMove?: (targetIndex: number, placement: LinearTopLevelEntryMovePlacement) => boolean;
 }): LinearTopLevelEntryMoveTargetLike | null {
   const edgeTolerance = args.edgeTolerance ?? 5;
   const entryRects = [...args.entryRects].sort((left, right) => left.x - right.x || left.index - right.index);
+  const getIndicatorHeight = (rect: PreviewRectLike): number => Math.max(0, Math.trunc(args.indicatorHeight ?? rect.h));
+  const beforeIndicatorOffsetX = Math.trunc(args.beforeIndicatorOffsetX ?? -1);
+  const getAfterIndicatorX = (rect: PreviewRectLike): number => rect.x + Math.trunc(args.afterIndicatorOffsetX ?? rect.w);
   if (entryRects.length < 2) return null;
 
   for (const rect of entryRects) {
@@ -862,7 +968,7 @@ export function getLinearTopLevelEntryMoveTarget(args: {
       return {
         targetSourceLine,
         placement: MenuEntryMovePlacement.Before,
-        indicatorRect: { x: rect.x - 1, y: rect.y, w: 2, h: rect.h },
+        indicatorRect: { x: rect.x + beforeIndicatorOffsetX, y: rect.y, w: 2, h: getIndicatorHeight(rect) },
         indicatorOrientation: "vertical"
       };
     }
@@ -880,7 +986,58 @@ export function getLinearTopLevelEntryMoveTarget(args: {
     return {
       targetSourceLine,
       placement: MenuEntryMovePlacement.After,
-      indicatorRect: { x: lastRect.x + lastRect.w, y: lastRect.y, w: 2, h: lastRect.h },
+      indicatorRect: { x: getAfterIndicatorX(lastRect), y: lastRect.y, w: 2, h: getIndicatorHeight(lastRect) },
+      indicatorOrientation: "vertical"
+    };
+  }
+
+  return null;
+}
+
+export function getStatusBarFieldMoveTarget(args: {
+  sourceEntryIndex: number;
+  x: number;
+  y: number;
+  entryRects: PreviewEntryRectLike[];
+  getSourceLine: (index: number) => number | undefined;
+  edgeTolerance?: number;
+  indicatorHeight?: number;
+  isNoopMove?: (targetIndex: number, placement: LinearTopLevelEntryMovePlacement) => boolean;
+}): LinearTopLevelEntryMoveTargetLike | null {
+  const edgeTolerance = args.edgeTolerance ?? 5;
+  const entryRects = [...args.entryRects].sort((left, right) => left.x - right.x || left.index - right.index);
+  if (entryRects.length < 2) return null;
+
+  const getIndicatorHeight = (rect: PreviewRectLike): number => Math.max(0, Math.trunc(args.indicatorHeight ?? rect.h));
+
+  for (const rect of entryRects) {
+    if (rect.index === args.sourceEntryIndex) continue;
+    if (args.y < rect.y || args.y > rect.y + rect.h) continue;
+    if (args.x > rect.x - edgeTolerance && args.x < rect.x + rect.w - edgeTolerance) {
+      if (args.isNoopMove?.(rect.index, MenuEntryMovePlacement.Before)) return null;
+      const targetSourceLine = args.getSourceLine(rect.index);
+      if (typeof targetSourceLine !== "number") return null;
+      return {
+        targetSourceLine,
+        placement: MenuEntryMovePlacement.Before,
+        indicatorRect: { x: rect.x - 1, y: rect.y, w: 2, h: getIndicatorHeight(rect) },
+        indicatorOrientation: "vertical"
+      };
+    }
+  }
+
+  const lastRect = entryRects[entryRects.length - 1];
+  if (lastRect.index !== args.sourceEntryIndex
+    && args.y >= lastRect.y
+    && args.y <= lastRect.y + lastRect.h
+    && args.x > lastRect.x) {
+    if (args.isNoopMove?.(lastRect.index, MenuEntryMovePlacement.After)) return null;
+    const targetSourceLine = args.getSourceLine(lastRect.index);
+    if (typeof targetSourceLine !== "number") return null;
+    return {
+      targetSourceLine,
+      placement: MenuEntryMovePlacement.After,
+      indicatorRect: { x: lastRect.x + lastRect.w, y: lastRect.y, w: 2, h: getIndicatorHeight(lastRect) },
       indicatorOrientation: "vertical"
     };
   }
@@ -927,19 +1084,26 @@ export function getMenuEntryMoveTarget(args: {
   if (!visibleEntries.length) return null;
 
   const firstVisibleRoot = visibleEntries.find((item) => getMenuEntryLevel(item.entry) === 0);
+  const appendChildThresholdY = firstVisibleRoot
+    ? firstVisibleRoot.rect.y + firstVisibleRoot.rect.h
+    : args.menuBarBottom;
+  const canUseBeforeAfterTarget = (targetIndex: number, placement: MenuEntryMovePlacement): boolean => {
+    return getPredictedMenuEntryMoveIndex(args.menu, args.sourceEntryIndex, targetIndex, placement) !== null;
+  };
   if (
     firstVisibleRoot
     && firstVisibleRoot.index !== args.sourceEntryIndex
     && args.x <= firstVisibleRoot.rect.x
     && args.y >= firstVisibleRoot.rect.y
     && args.y < firstVisibleRoot.rect.y + firstVisibleRoot.rect.h
+    && canUseBeforeAfterTarget(firstVisibleRoot.index, MenuEntryMovePlacement.Before)
   ) {
     const targetSourceLine = getMenuEntrySourceLine(args.menu, firstVisibleRoot.index);
     if (typeof targetSourceLine === "number") {
       return {
         targetSourceLine,
         placement: MenuEntryMovePlacement.Before,
-        indicatorRect: { x: firstVisibleRoot.rect.x - 1, y: firstVisibleRoot.rect.y, w: 2, h: firstVisibleRoot.rect.h },
+        indicatorRect: getMenuRootVerticalMoveIndicatorRect(firstVisibleRoot.rect, MenuEntryMovePlacement.Before),
         indicatorOrientation: "vertical"
       };
     }
@@ -959,6 +1123,7 @@ export function getMenuEntryMoveTarget(args: {
       && args.y < rect.y + 1
       && args.x > rect.x
       && args.x <= rect.x + rect.w
+      && canUseBeforeAfterTarget(visibleEntry.index, MenuEntryMovePlacement.Before)
     ) {
       return {
         targetSourceLine,
@@ -970,16 +1135,18 @@ export function getMenuEntryMoveTarget(args: {
 
     if (
       typeof targetSourceLine === "number"
+      && visibleEntry.index !== args.sourceEntryIndex
       && args.x > rect.x
       && args.x <= rect.x + rect.w
       && args.y > rect.y + 1
       && args.y <= rect.y + rect.h
+      && canUseBeforeAfterTarget(visibleEntry.index, MenuEntryMovePlacement.After)
     ) {
       return {
         targetSourceLine,
         placement: MenuEntryMovePlacement.After,
         indicatorRect: level === 0
-          ? { x: rect.x + rect.w, y: rect.y, w: 2, h: rect.h }
+          ? getMenuRootVerticalMoveIndicatorRect(rect, MenuEntryMovePlacement.After)
           : { x: rect.x, y: rect.y + rect.h, w: rect.w, h: 2 },
         indicatorOrientation: level === 0 ? "vertical" : "horizontal"
       };
@@ -996,7 +1163,7 @@ export function getMenuEntryMoveTarget(args: {
         && visibleEntry.index !== args.sourceEntryIndex
         && isSelectedEmptyOpenSubmenu
         && args.x > rect.x + rect.w
-        && args.y > args.menuBarBottom
+        && args.y > appendChildThresholdY
       ) {
         return {
           targetSourceLine,

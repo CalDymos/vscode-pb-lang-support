@@ -97,7 +97,7 @@ A Visual Studio Code extension that provides a lightweight editor workflow for P
 ## Verified Support Matrix
 
 The matrix below is based on the currently verified parser, patcher, preview-geometry and regression tests in this repository.  
-**Verified** means there is a tested code path in the current suite. **Partial** means a working path exists, but parity or UX is still incomplete. **Not yet** means no verified end-to-end support is documented yet.
+**Verified** means there is a tested code path in the current suite. **Partial** means a working path exists, but parity or UX is still incomplete. **Not yet** means no verified end-to-end support is documented yet. 
 
 | Area | Status | Verified scope / current limitation |
 | --- | --- | --- |
@@ -111,14 +111,14 @@ The matrix below is based on the currently verified parser, patcher, preview-geo
 | Container patching | Verified | Combined real-fixture patch / reparse flows are covered for `PanelGadget`, `ScrollAreaGadget` and `SplitterGadget`. |
 | Toolbox and gadget insert / delete / reparent | Verified | Insert from toolbox with canvas click, delete with atomic cleanup, reparent into nested containers, SplitterGadget two-child picker. |
 | Gadget `#PB_Any` / enum toggle | Verified | Full roundtrip: enum ↔ `#PB_Any` switch rewrites enum block, `Global` declaration, constructor, and all in-procedure usages. |
-| Preview chrome geometry and hit zones | Partial | Geometry helpers for menu / toolbar / status bar bands, scroll areas and splitter bars are tested, but remaining rendering details and full visual parity are still in progress. |
-| Platform-accurate window chrome | Partial | Windows 7, Windows 8, macOS, and Linux skins are implemented for title bar, frame, toolbar, statusbar, menu bar, and flyouts; Windows system colors are read from the registry. Full pixel-level parity with the original is still ongoing. |
-| Native gadget chrome | Partial | All gadget kinds render with skin-specific chrome; image gadgets show resolved images. Full visual parity and remaining rendering details are still in progress (`FD-055`). |
-| Structural menu editing in the preview | Partial | Visible submenu flyouts, subtree move, structural delete and generated `OpenSubMenu(...)` / `CloseSubMenu()` insertion are implemented. Custom footer entry kinds are not yet verified. |
-| Preview-only local UI state | Partial | Active panel tabs and scroll offsets are currently local webview state and are not written back into the `.pbf` source. |
-| Undo / Redo | Not yet | No verified undo/redo support is implemented yet. |
+| Top-level preview chrome geometry and hit zones | Verified | Window frame, title bar, menu bar, toolbar, statusbar, resize button, preview scrollbars and top-level menu / toolbar / statusbar reordering are covered by dedicated geometry and regression tests; documented Webview UX deviations are intentional. |
+| Platform-accurate window chrome | Verified | Windows 7, Windows 8, macOS, and Linux skins are implemented for title bar, frame, toolbar, statusbar, menu bar, flyouts and top-level hit zones; Windows system colors are read from the registry where available. |
+| Native gadget chrome | Partial | All gadget kinds render with skin-specific chrome; image gadgets show resolved images. Remaining container / panel / scrollarea / splitter and fine rendering details are tracked separately. |
+| Structural menu editing in the preview | Partial | Visible submenu flyouts, subtree move, structural delete and generated `OpenSubMenu(...)` / `CloseSubMenu()` insertion are implemented and tested. Custom footer entry kinds remain blocked until additional original evidence exists. |
+| Preview-only local UI state | Partial | Active panel tabs are retained / synchronized by tested Webview state helpers; ScrollArea offsets are runtime-local Webview state and reset on model refresh. No `.pbf` source persistence is currently documented or verified for these UI-only values. |
+| Undo / Redo | Not yet | No verified undo/redo support is implemented yet; the planned scope remains. |
 | Performance validation on large forms | Not yet | Dedicated performance and stress validation for large forms and deeply nested containers is still open. |
-| Full original Form Designer parity | Partial | The extension has broad tested coverage for the currently implemented parser / patch / preview paths, but the migration is still ongoing and should not yet be treated as full parity. |
+| Full original Form Designer parity | Partial | The extension has broad tested coverage for implemented parser / patch / preview paths, but the migration remains ongoing. Release-candidate parity review is tracked separately. |
 
 > ⚠️ Still in development
 
@@ -176,7 +176,7 @@ You can configure the Forms Editor via:
   "purebasicFormsDesigner.canvasReadonlyBackground": "",
   "purebasicFormsDesigner.windowFillOpacity": 0.05,
   "purebasicFormsDesigner.outsideDimOpacity": 0.12,
-  "purebasicFormsDesigner.titleBarHeight": 26,
+  "purebasicFormsDesigner.titleBarHeight": 29,
   "purebasicFormsDesigner.windowPreviewWindowsCaptionlessTopPadding": 8,
   "purebasicFormsDesigner.windowPreviewWindowsClientSidePadding": 8,
   "purebasicFormsDesigner.windowPreviewWindowsClientBottomPadding": 8
