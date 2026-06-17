@@ -49,8 +49,11 @@ import {
   resolveTopLevelChromeHit,
   getSelectedToolBarInspectorFieldConfig,
   getToolBarPreviewInsertArgs,
+  getToolBarEntryAdvance,
+  getToolBarImageButtonPreviewRect,
   getToolBarSeparatorPreviewRect,
   getToolBarSeparatorSelectedOutlineRect,
+  getToolBarSeparatorSlotRect,
   getTopLevelClampedAddIconX,
   getTopLevelMoveIndicatorStrokes,
   hasPbFlag,
@@ -271,10 +274,14 @@ test("predicts menu block end indices and move targets for subtree moves", () =>
 });
 
 
-test("uses the original toolbar separator hit and selection geometry", () => {
-  const entryRect = getToolBarSeparatorPreviewRect(42, 17);
-  assert.deepEqual(entryRect, { x: 42, y: 17, w: 6, h: 16 });
-  assert.deepEqual(getToolBarSeparatorSelectedOutlineRect(entryRect), {
+test("separates toolbar separator visible geometry from the original hit slot", () => {
+  const separatorRect = getToolBarSeparatorPreviewRect(42, 17);
+  assert.deepEqual(separatorRect, { x: 42, y: 17, w: 6, h: 16 });
+  assert.deepEqual(getToolBarSeparatorSlotRect(42, 17), { x: 42, y: 17, w: 10, h: 16 });
+  assert.deepEqual(getToolBarImageButtonPreviewRect(60, 17), { x: 60, y: 17, w: 16, h: 16 });
+  assert.equal(getToolBarEntryAdvance("ToolBarSeparator"), 10);
+  assert.equal(getToolBarEntryAdvance("ToolBarImageButton"), 22);
+  assert.deepEqual(getToolBarSeparatorSelectedOutlineRect(separatorRect), {
     x: 41,
     y: 16,
     w: 8,

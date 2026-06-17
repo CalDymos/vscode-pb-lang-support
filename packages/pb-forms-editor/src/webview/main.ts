@@ -126,8 +126,11 @@ import {
   buildOptionalInspectorLiteralRaw,
   buildOptionalInspectorPlainValue,
   getToolBarPreviewInsertArgs,
+  getToolBarEntryAdvance,
+  getToolBarImageButtonPreviewRect,
   getToolBarSeparatorPreviewRect,
   getToolBarSeparatorSelectedOutlineRect,
+  getToolBarSeparatorSlotRect,
   getTopLevelClampedAddIconX,
   getTopLevelMoveIndicatorStrokes,
   hasPbFlag,
@@ -8046,6 +8049,16 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
   }
 }
 
+function getToolBarSelectionFocusRect(entryRect: PreviewEntryRect): PreviewRect {
+  const toolbar = getPrimaryToolbar();
+  const entry = toolbar?.id === entryRect.ownerId ? toolbar.entries?.[entryRect.index] : undefined;
+  if (entry?.kind === "ToolBarSeparator") {
+    return { ...entryRect, ...getToolBarSeparatorPreviewRect(entryRect.x, entryRect.y) };
+  }
+
+  return entryRect;
+}
+
 function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg: string, osSkin: DesignerSettings["osSkin"]) {
   const toolbar = getPrimaryToolbar();
   toolBarEntryPreviewRects = [];
@@ -8117,7 +8130,8 @@ function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
   for (const [entryIndex, entry] of toolbar.entries.entries()) {
     if (entry.kind === "ToolBarToolTip") continue;
     if (entry.kind === "ToolBarSeparator") {
-      const entryRect = { ownerId: toolbar.id, index: entryIndex, ...getToolBarSeparatorPreviewRect(x, y) };
+      const separatorRect = getToolBarSeparatorPreviewRect(x, y);
+      const entryRect = { ownerId: toolbar.id, index: entryIndex, ...getToolBarSeparatorSlotRect(x, y) };
       toolBarEntryPreviewRects.push(entryRect);
       const isSelectedEntry = selection?.kind === "toolBarEntry"
         && selection.toolBarId === toolbar.id
@@ -8132,17 +8146,17 @@ function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
         ctx.restore();
       }
       if (isSelectedEntry) {
-        const outlineRect = getToolBarSeparatorSelectedOutlineRect(entryRect);
+        const outlineRect = getToolBarSeparatorSelectedOutlineRect(separatorRect);
         ctx.save();
         ctx.strokeStyle = toolbarSelectedOutlineColor;
         ctx.strokeRect(outlineRect.x + 0.5, outlineRect.y + 0.5, outlineRect.w, outlineRect.h);
         ctx.restore();
       }
-      x += 10;
+      x += getToolBarEntryAdvance(entry.kind);
       continue;
     }
 
-    const entryRect = { ownerId: toolbar.id, index: entryIndex, x, y, w: 16, h: 16 };
+    const entryRect = { ownerId: toolbar.id, index: entryIndex, ...getToolBarImageButtonPreviewRect(x, y) };
     toolBarEntryPreviewRects.push(entryRect);
     const isSelectedEntry = selection?.kind === "toolBarEntry"
       && selection.toolBarId === toolbar.id
@@ -8179,7 +8193,7 @@ function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
       ctx.restore();
     }
 
-    x += 22;
+    x += getToolBarEntryAdvance(entry.kind);
     if (x >= rect.x + rect.w - 18) break;
   }
 
@@ -8856,10 +8870,11 @@ function render() {
       const sel = selection;
       const entryRect = toolBarEntryPreviewRects.find(entry => entry.ownerId === sel.toolBarId && entry.index === sel.entryIndex);
       if (entryRect) {
+        const focusRect = getToolBarSelectionFocusRect(entryRect);
         ctx.save();
         ctx.strokeStyle = focus;
         ctx.lineWidth = 2;
-        ctx.strokeRect(entryRect.x + 0.5, entryRect.y + 0.5, entryRect.w - 1, entryRect.h - 1);
+        ctx.strokeRect(focusRect.x + 0.5, focusRect.y + 0.5, focusRect.w - 1, focusRect.h - 1);
         ctx.restore();
       }
     }

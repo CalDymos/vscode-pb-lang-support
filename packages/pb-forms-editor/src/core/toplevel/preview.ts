@@ -799,6 +799,28 @@ export function getToolBarSeparatorPreviewRect(x: number, y: number): PreviewRec
   };
 }
 
+export function getToolBarSeparatorSlotRect(x: number, y: number): PreviewRectLike {
+  return {
+    x,
+    y,
+    w: 10,
+    h: 16,
+  };
+}
+
+export function getToolBarImageButtonPreviewRect(x: number, y: number): PreviewRectLike {
+  return {
+    x,
+    y,
+    w: 16,
+    h: 16,
+  };
+}
+
+export function getToolBarEntryAdvance(entryKind: ToolBarEntryLike["kind"]): number {
+  return entryKind === "ToolBarSeparator" ? 10 : 22;
+}
+
 export function getToolBarSeparatorSelectedOutlineRect(entryRect: PreviewRectLike): PreviewRectLike {
   return {
     x: entryRect.x - 1,
