@@ -97,7 +97,7 @@ A Visual Studio Code extension that provides a lightweight editor workflow for P
 ## Verified Support Matrix
 
 The matrix below is based on the currently verified parser, patcher, preview-geometry and regression tests in this repository.  
-**Verified** means there is a tested code path in the current suite. **Partial** means a working path exists, but parity or UX is still incomplete. **Not yet** means no verified end-to-end support is documented yet. 
+**Verified** means there is a tested code path in the current suite. **Partial** means a working path exists, but parity or UX is still incomplete. **Not yet** means no verified end-to-end support is documented yet.
 
 | Area | Status | Verified scope / current limitation |
 | --- | --- | --- |
