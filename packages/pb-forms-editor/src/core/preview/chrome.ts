@@ -828,6 +828,22 @@ export function getGadgetContentRect(
   }
 }
 
+export function getSplitterResolvedPosition(
+  splitterRect: PreviewRect,
+  vertical: boolean,
+  splitterWidth: number,
+  state: number | undefined
+): number {
+  const bar = Math.max(0, Math.trunc(splitterWidth));
+  const range = Math.max(0, (vertical ? splitterRect.w : splitterRect.h) - bar);
+  const rawPos = typeof state === "number" ? Math.trunc(state) : Math.trunc(range / 2);
+
+  // The original FD_UpdateSplitter() writes the pane coordinates directly from state.
+  // The preview keeps its existing clamp so malformed or externally edited states cannot
+  // produce negative pane sizes while still matching the original for valid states.
+  return Math.max(0, Math.min(rawPos, range));
+}
+
 export function getSplitterPaneRect(
   splitterRect: PreviewRect,
   vertical: boolean,
@@ -835,10 +851,8 @@ export function getSplitterPaneRect(
   state: number | undefined,
   pane: "first" | "second"
 ): PreviewRect {
-  const bar = splitterWidth;
-  const range = Math.max(0, (vertical ? splitterRect.w : splitterRect.h) - bar);
-  const rawPos = typeof state === "number" ? Math.trunc(state) : Math.trunc(range / 2);
-  const pos = Math.max(0, Math.min(rawPos, range));
+  const bar = Math.max(0, Math.trunc(splitterWidth));
+  const pos = getSplitterResolvedPosition(splitterRect, vertical, bar, state);
 
   if (pane === "first") {
     return vertical
@@ -867,10 +881,8 @@ export function getSplitterBarRect(
   splitterWidth: number,
   state?: number
 ): PreviewRect {
-  const bar = splitterWidth;
-  const range = Math.max(0, (vertical ? splitterRect.w : splitterRect.h) - bar);
-  const rawPos = typeof state === "number" ? Math.trunc(state) : Math.trunc(range / 2);
-  const pos = Math.max(0, Math.min(rawPos, range));
+  const bar = Math.max(0, Math.trunc(splitterWidth));
+  const pos = getSplitterResolvedPosition(splitterRect, vertical, bar, state);
   return vertical
     ? { x: splitterRect.x + pos, y: splitterRect.y, w: bar, h: splitterRect.h }
     : { x: splitterRect.x, y: splitterRect.y + pos, w: splitterRect.w, h: bar };

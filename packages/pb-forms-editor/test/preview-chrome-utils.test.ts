@@ -17,6 +17,7 @@ import {
   getScrollAreaVerticalThumbRect,
   getSplitterBarRect,
   getSplitterPaneRect,
+  getSplitterResolvedPosition,
   getScrollAreaViewportRect,
   getStatusBarRect,
   getStatusBarAlignedX,
@@ -110,6 +111,38 @@ test("computes a horizontal splitter bar and clamps oversized state", () => {
   assert.deepEqual(bar, { x: 10, y: 91, w: 120, h: 9 });
   assert.equal(rectContainsPoint(bar, 60, 95), true);
   assert.equal(rectContainsPoint(bar, 60, 70), false);
+});
+
+
+test("computes splitter panes from the original FD_UpdateSplitter geometry", () => {
+  assert.equal(getSplitterResolvedPosition(RECT, true, METRICS.splitterWidth, 30), 30);
+  assert.deepEqual(
+    getSplitterPaneRect(RECT, true, METRICS.splitterWidth, 30, "first"),
+    { x: 10, y: 20, w: 30, h: 80 }
+  );
+  assert.deepEqual(
+    getSplitterPaneRect(RECT, true, METRICS.splitterWidth, 30, "second"),
+    { x: 49, y: 20, w: 81, h: 80 }
+  );
+
+  assert.deepEqual(
+    getSplitterPaneRect(RECT, false, METRICS.splitterWidth, 35, "first"),
+    { x: 10, y: 20, w: 120, h: 35 }
+  );
+  assert.deepEqual(
+    getSplitterPaneRect(RECT, false, METRICS.splitterWidth, 35, "second"),
+    { x: 10, y: 64, w: 120, h: 36 }
+  );
+});
+
+test("keeps the safer preview clamp around invalid splitter states", () => {
+  assert.equal(getSplitterResolvedPosition(RECT, true, METRICS.splitterWidth, -25), 0);
+  assert.equal(getSplitterResolvedPosition(RECT, true, METRICS.splitterWidth, 999), 111);
+
+  assert.deepEqual(
+    getSplitterPaneRect(RECT, true, METRICS.splitterWidth, 999, "second"),
+    { x: 130, y: 20, w: 0, h: 80 }
+  );
 });
 
 
