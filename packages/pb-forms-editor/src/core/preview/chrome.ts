@@ -969,6 +969,34 @@ export function getSplitterBarRect(
     : { x: splitterRect.x, y: splitterRect.y + pos, w: splitterRect.w, h: bar };
 }
 
+export type SplitterChromeHitZone = "containerBorder" | "splitterBar";
+
+export function getSplitterChromeHitZone(
+  splitterRect: PreviewRect,
+  vertical: boolean,
+  metrics: Pick<PreviewChromeMetrics, "splitterWidth">,
+  state: number | undefined,
+  x: number,
+  y: number,
+  clip: PreviewRect | null = null,
+  borderMargin = 4
+): SplitterChromeHitZone | null {
+  // FD_LeftDown() treats both the outer splitter frame and the splitter bar as splitter selection/move zones.
+  if (isPointOnRectBorder(splitterRect, x, y, borderMargin)) {
+    return "containerBorder";
+  }
+
+  const barRect = clip
+    ? intersectRect(getSplitterBarRect(splitterRect, vertical, metrics.splitterWidth, state), clip)
+    : getSplitterBarRect(splitterRect, vertical, metrics.splitterWidth, state);
+
+  if (rectContainsPoint(barRect, x, y)) {
+    return "splitterBar";
+  }
+
+  return null;
+}
+
 export function getMenuBarRect(
   windowRect: PreviewRect,
   titleBarHeight: number,

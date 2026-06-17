@@ -32,6 +32,7 @@ import {
   resolvePanelActiveItem,
   getPanelTabLayouts,
   getSplitterBarRect,
+  getSplitterChromeHitZone,
   getSplitterPaneRect,
   getSplitterResolvedPosition,
   getGadgetContentRect,
@@ -4688,12 +4689,17 @@ function hitTestPreviewChrome(mx: number, my: number, metrics: PreviewChromeMetr
     if (!rectContainsPoint(layout.clip, lx, ly)) continue;
 
     if (g.kind === GADGET_KIND.SplitterGadget) {
-      if (isPointOnRectBorder(layout.rect, lx, ly)) {
-        return { gadget: g, zone: "containerBorder" };
-      }
-      const barRect = intersectRect(getSplitterBarRect(layout.rect, hasPbFlag(g.flagsExpr, "#PB_Splitter_Vertical"), metrics.splitterWidth, g.state), layout.clip);
-      if (rectContainsPoint(barRect, lx, ly)) {
-        return { gadget: g, zone: "splitterBar" };
+      const splitterZone = getSplitterChromeHitZone(
+        layout.rect,
+        hasPbFlag(g.flagsExpr, "#PB_Splitter_Vertical"),
+        metrics,
+        g.state,
+        lx,
+        ly,
+        layout.clip
+      );
+      if (splitterZone) {
+        return { gadget: g, zone: splitterZone };
       }
       continue;
     }

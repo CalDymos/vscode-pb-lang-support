@@ -22,6 +22,7 @@ import {
   getScrollAreaVerticalBarRect,
   getScrollAreaVerticalThumbRect,
   getSplitterBarRect,
+  getSplitterChromeHitZone,
   getSplitterPaneRect,
   getSplitterResolvedPosition,
   getScrollAreaViewportRect,
@@ -155,6 +156,17 @@ test("computes a horizontal splitter bar and clamps oversized state", () => {
   assert.deepEqual(bar, { x: 10, y: 91, w: 120, h: 9 });
   assert.equal(rectContainsPoint(bar, 60, 95), true);
   assert.equal(rectContainsPoint(bar, 60, 70), false);
+});
+
+
+test("detects splitter chrome hits with border precedence over the bar", () => {
+  assert.equal(getSplitterChromeHitZone(RECT, true, METRICS, 30, 10, 50), "containerBorder");
+  assert.equal(getSplitterChromeHitZone(RECT, true, METRICS, 30, 44, 21), "containerBorder");
+  assert.equal(getSplitterChromeHitZone(RECT, true, METRICS, 30, 44, 50), "splitterBar");
+  assert.equal(getSplitterChromeHitZone(RECT, true, METRICS, 30, 70, 50), null);
+
+  const clippedBeforeBar: PreviewRect = { x: 10, y: 20, w: 29, h: 80 };
+  assert.equal(getSplitterChromeHitZone(RECT, true, METRICS, 30, 44, 50, clippedBeforeBar), null);
 });
 
 
