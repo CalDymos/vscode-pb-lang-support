@@ -298,7 +298,8 @@
   },
   "scripts": {
     "compile": "webpack --mode development --config webpack.config.js",
-    "typecheck": "tsc -p tsconfig.typecheck.json",
+    "typecheck": "tsc -p ./ --noEmit",
+    "typecheck:unused": "tsc -p tsconfig.typecheck.json",
     "watch": "webpack --mode development --watch --config webpack.config.js",
     "webpack:prod": "webpack --mode production --config webpack.config.js",
     "vscode:prepublish": "npm run webpack:prod",
