@@ -2705,6 +2705,7 @@ function getPreviewCanvasScrollContentSize(): { width: number; height: number } 
     clientWidth: win.w,
     clientHeight: win.h,
     titleBarHeight: previewChromeMetrics.titleBarHeight,
+    captionlessTopPadding: asInt(settings.windowPreviewWindowsCaptionlessTopPadding),
     menuHeight: previewChromeMetrics.menuHeight,
     hasMenu: hasParsedMenuChrome(),
     hasToolbar: hasParsedToolbarChrome(),

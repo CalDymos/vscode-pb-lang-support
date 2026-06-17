@@ -200,6 +200,7 @@ export type WindowPreviewScrollContentSizeArgs = {
   clientWidth: number;
   clientHeight: number;
   titleBarHeight: number;
+  captionlessTopPadding: number;
   menuHeight: number;
   hasMenu: boolean;
   hasToolbar: boolean;
@@ -219,8 +220,15 @@ export function getWindowPreviewScrollContentSize(args: WindowPreviewScrollConte
   const clientWidth = Math.max(0, Math.trunc(args.clientWidth));
   const clientHeight = Math.max(0, Math.trunc(args.clientHeight));
   const titleBarHeight = Math.max(0, Math.trunc(args.titleBarHeight));
+  const captionlessTopPadding = Math.max(0, Math.trunc(args.captionlessTopPadding));
   const menuHeight = Math.max(0, Math.trunc(args.menuHeight));
-  const topWindowPadding = splitFlags(args.flagsExpr).includes("#PB_Window_SystemMenu") ? titleBarHeight : 0;
+  // Scroll content must cover the actually rendered FD_Redraw() chrome geometry.
+  const topWindowPadding = getWindowPreviewChromeTopPadding(
+    platformSkin,
+    args.flagsExpr,
+    titleBarHeight,
+    captionlessTopPadding
+  );
   const topMenuPadding = args.hasMenu ? menuHeight : 0;
   const topToolbarPadding = args.hasToolbar ? WINDOW_PREVIEW_FORM_TOOLBAR_SCROLL_PADDING : 0;
 

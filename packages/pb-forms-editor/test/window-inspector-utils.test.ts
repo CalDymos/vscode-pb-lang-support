@@ -292,7 +292,7 @@ test('window preview form scrollbar width follows the original grid scrollbar wi
   assert.equal(getWindowPreviewFormScrollbarWidth('linux'), 18);
 });
 
-test('window preview scroll content size mirrors FD_UpdateScrollbars platform formulas', () => {
+test('window preview scroll content size follows the rendered FD_Redraw chrome top padding', () => {
   assert.deepEqual(
     getWindowPreviewScrollContentSize({
       platformSkin: 'macos',
@@ -300,6 +300,7 @@ test('window preview scroll content size mirrors FD_UpdateScrollbars platform fo
       clientWidth: 304,
       clientHeight: 372,
       titleBarHeight: 22,
+      captionlessTopPadding: 8,
       menuHeight: 23,
       hasMenu: true,
       hasToolbar: true,
@@ -314,6 +315,7 @@ test('window preview scroll content size mirrors FD_UpdateScrollbars platform fo
       clientWidth: 304,
       clientHeight: 372,
       titleBarHeight: 29,
+      captionlessTopPadding: 8,
       menuHeight: 22,
       hasMenu: true,
       hasToolbar: true,
@@ -328,11 +330,27 @@ test('window preview scroll content size mirrors FD_UpdateScrollbars platform fo
       clientWidth: 304,
       clientHeight: 372,
       titleBarHeight: 28,
+      captionlessTopPadding: 8,
       menuHeight: 28,
       hasMenu: true,
       hasToolbar: true,
     }),
-    { width: 324, height: 392 }
+    { width: 324, height: 420 }
+  );
+
+  assert.deepEqual(
+    getWindowPreviewScrollContentSize({
+      platformSkin: 'windows',
+      flagsExpr: '#PB_Window_BorderLess',
+      clientWidth: 304,
+      clientHeight: 372,
+      titleBarHeight: 29,
+      captionlessTopPadding: 8,
+      menuHeight: 22,
+      hasMenu: false,
+      hasToolbar: false,
+    }),
+    { width: 340, height: 408 }
   );
 });
 
