@@ -840,6 +840,34 @@ export function getGadgetContentRect(
   }
 }
 
+export type ContainerChromeHitZone = "panelHeader" | "containerBorder";
+
+export function isContainerChromeGadgetKind(kind: string): boolean {
+  return kind === GADGET_KIND.ContainerGadget
+    || kind === GADGET_KIND.PanelGadget
+    || kind === GADGET_KIND.ScrollAreaGadget
+    || kind === GADGET_KIND.FrameGadget;
+}
+
+export function getContainerChromeHitZone(
+  kind: string,
+  rect: PreviewRect,
+  metrics: PreviewChromeMetrics,
+  x: number,
+  y: number,
+  borderMargin = 4
+): ContainerChromeHitZone | null {
+  if (kind === GADGET_KIND.PanelGadget && rectContainsPoint(getPanelHeaderRect(rect, metrics), x, y)) {
+    return "panelHeader";
+  }
+
+  if (isContainerChromeGadgetKind(kind) && isPointOnRectBorder(rect, x, y, borderMargin)) {
+    return "containerBorder";
+  }
+
+  return null;
+}
+
 export function getSplitterResolvedPosition(
   splitterRect: PreviewRect,
   vertical: boolean,

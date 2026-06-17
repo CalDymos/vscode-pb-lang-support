@@ -18,6 +18,7 @@ import {
   intersectRect,
   rectContainsPoint,
   isPointOnRectBorder,
+  getContainerChromeHitZone,
   getScrollAreaBarSize,
   getScrollAreaVerticalBarRect,
   getScrollAreaHorizontalBarRect,
@@ -29,7 +30,6 @@ import {
   getScrollAreaHorizontalThumbRect,
   resolvePanelActiveItem,
   getPanelTabLayouts,
-  getPanelHeaderRect,
   getSplitterBarRect,
   getSplitterPaneRect,
   getSplitterResolvedPosition,
@@ -4697,17 +4697,9 @@ function hitTestPreviewChrome(mx: number, my: number, metrics: PreviewChromeMetr
       continue;
     }
 
-    if (g.kind === GADGET_KIND.PanelGadget) {
-      const headerRect = intersectRect(getPanelHeaderRect(layout.rect, metrics), layout.clip);
-      if (rectContainsPoint(headerRect, lx, ly)) {
-        return { gadget: g, zone: "panelHeader" };
-      }
-    }
-
-    if (g.kind === GADGET_KIND.ContainerGadget || g.kind === GADGET_KIND.PanelGadget || g.kind === GADGET_KIND.ScrollAreaGadget || g.kind === GADGET_KIND.FrameGadget) {
-      if (isPointOnRectBorder(layout.rect, lx, ly)) {
-        return { gadget: g, zone: "containerBorder" };
-      }
+    const containerZone = getContainerChromeHitZone(g.kind, layout.rect, metrics, lx, ly);
+    if (containerZone) {
+      return { gadget: g, zone: containerZone };
     }
 
     if (g.kind === GADGET_KIND.ScrollAreaGadget) {

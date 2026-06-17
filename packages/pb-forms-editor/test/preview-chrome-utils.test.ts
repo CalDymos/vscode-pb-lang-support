@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   getGadgetContentRect,
+  getContainerChromeHitZone,
+  isContainerChromeGadgetKind,
   getRectHandlePoints,
   clampRect,
   applyResize,
@@ -94,6 +96,21 @@ test("computes panel header and content rects from the same original Panel_Heigh
 test("computes gadget content rects for scrollarea containers and regular gadgets", () => {
   assert.deepEqual(getGadgetContentRect("ScrollAreaGadget", RECT, METRICS), { x: 10, y: 20, w: 100, h: 60 });
   assert.deepEqual(getGadgetContentRect("StringGadget", RECT, METRICS), RECT);
+});
+
+test("classifies original container chrome hit zones without changing content hits", () => {
+  assert.equal(isContainerChromeGadgetKind("ContainerGadget"), true);
+  assert.equal(isContainerChromeGadgetKind("PanelGadget"), true);
+  assert.equal(isContainerChromeGadgetKind("ScrollAreaGadget"), true);
+  assert.equal(isContainerChromeGadgetKind("FrameGadget"), true);
+  assert.equal(isContainerChromeGadgetKind("ButtonGadget"), false);
+
+  assert.equal(getContainerChromeHitZone("PanelGadget", RECT, METRICS, 60, 30), "panelHeader");
+  assert.equal(getContainerChromeHitZone("PanelGadget", RECT, METRICS, 10, 60), "containerBorder");
+  assert.equal(getContainerChromeHitZone("PanelGadget", RECT, METRICS, 60, 60), null);
+  assert.equal(getContainerChromeHitZone("ScrollAreaGadget", RECT, METRICS, 10, 60), "containerBorder");
+  assert.equal(getContainerChromeHitZone("FrameGadget", RECT, METRICS, 60, 60), null);
+  assert.equal(getContainerChromeHitZone("ButtonGadget", RECT, METRICS, 10, 60), null);
 });
 
 
