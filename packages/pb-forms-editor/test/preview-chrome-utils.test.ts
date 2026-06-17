@@ -8,6 +8,8 @@ import {
   getCanvasMenuBarRect,
   getMenuBarRect,
   getPanelTabLayouts,
+  getPanelContentRect,
+  getPanelHeaderRect,
   clampScrollAreaOffset,
   getScrollAreaHorizontalBarRect,
   getScrollAreaHorizontalThumbRect,
@@ -83,8 +85,13 @@ test("computes scrollarea chrome bars inside the original inner frame", () => {
   assert.equal(overlap.h, 0);
 });
 
-test("computes gadget content rects for panel and scrollarea containers", () => {
+test("computes panel header and content rects from the same original Panel_Height basis", () => {
+  assert.deepEqual(getPanelHeaderRect(RECT, METRICS), { x: 10, y: 20, w: 120, h: 22 });
+  assert.deepEqual(getPanelContentRect(RECT, METRICS), { x: 10, y: 42, w: 120, h: 58 });
   assert.deepEqual(getGadgetContentRect("PanelGadget", RECT, METRICS), { x: 10, y: 42, w: 120, h: 58 });
+});
+
+test("computes gadget content rects for scrollarea containers and regular gadgets", () => {
   assert.deepEqual(getGadgetContentRect("ScrollAreaGadget", RECT, METRICS), { x: 10, y: 20, w: 100, h: 60 });
   assert.deepEqual(getGadgetContentRect("StringGadget", RECT, METRICS), RECT);
 });

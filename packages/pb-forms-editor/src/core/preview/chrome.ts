@@ -803,25 +803,37 @@ export function getScrollAreaHorizontalThumbRect(
 }
 
 
+export function getPanelHeaderRect(rect: PreviewRect, metrics: PreviewChromeMetrics): PreviewRect {
+  const panelHeight = Math.min(metrics.panelHeight, Math.max(18, rect.h));
+  return {
+    x: rect.x,
+    y: rect.y,
+    w: rect.w,
+    h: panelHeight
+  };
+}
+
+export function getPanelContentRect(rect: PreviewRect, metrics: PreviewChromeMetrics): PreviewRect {
+  const headerRect = getPanelHeaderRect(rect, metrics);
+  return {
+    x: rect.x,
+    y: rect.y + headerRect.h,
+    w: rect.w,
+    h: Math.max(0, rect.h - headerRect.h)
+  };
+}
+
 export function getGadgetContentRect(
   kind: string,
   rect: PreviewRect,
   metrics: PreviewChromeMetrics
 ): PreviewRect {
   switch (kind) {
-    case GADGET_KIND.PanelGadget: {
-      const panelHeight = Math.min(metrics.panelHeight, Math.max(18, rect.h));
-      return {
-        x: rect.x,
-        y: rect.y + panelHeight,
-        w: rect.w,
-        h: Math.max(0, rect.h - panelHeight)
-      };
-    }
+    case GADGET_KIND.PanelGadget:
+      return getPanelContentRect(rect, metrics);
 
-    case GADGET_KIND.ScrollAreaGadget: {
+    case GADGET_KIND.ScrollAreaGadget:
       return getScrollAreaViewportRect(rect, metrics);
-    }
 
     default:
       return rect;

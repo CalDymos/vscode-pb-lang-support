@@ -29,6 +29,7 @@ import {
   getScrollAreaHorizontalThumbRect,
   resolvePanelActiveItem,
   getPanelTabLayouts,
+  getPanelHeaderRect,
   getSplitterBarRect,
   getSplitterPaneRect,
   getSplitterResolvedPosition,
@@ -4697,8 +4698,7 @@ function hitTestPreviewChrome(mx: number, my: number, metrics: PreviewChromeMetr
     }
 
     if (g.kind === GADGET_KIND.PanelGadget) {
-      const panelHeight = Math.min(metrics.panelHeight, Math.max(18, layout.rect.h));
-      const headerRect = intersectRect({ x: layout.rect.x, y: layout.rect.y, w: layout.rect.w, h: panelHeight }, layout.clip);
+      const headerRect = intersectRect(getPanelHeaderRect(layout.rect, metrics), layout.clip);
       if (rectContainsPoint(headerRect, lx, ly)) {
         return { gadget: g, zone: "panelHeader" };
       }
