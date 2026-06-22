@@ -101,6 +101,7 @@ import {
   getMenuAncestorChain,
   getMenuEntryBlockEndIndex,
   getMenuEntryLevel,
+  getMenuInsertLevel,
   getMenuEntrySourceLine,
   getMenuEntrySelectedIndexAtDragStart,
   getMenuFlyoutEntryTextLayout,
@@ -129,9 +130,15 @@ import {
   getTopLevelSelectProcEditState,
   buildOptionalInspectorLiteralRaw,
   buildOptionalInspectorPlainValue,
+  buildPendingMenuEntryInsertSelection,
   buildPendingMenuEntrySelection,
+  buildPendingMenuRootSelection,
+  buildPendingStatusBarFieldInsertSelection,
   buildPendingStatusBarFieldMoveSelection,
+  buildPendingStatusBarRootSelection,
+  buildPendingToolBarEntryInsertSelection,
   buildPendingToolBarEntryMoveSelection,
+  buildPendingToolBarRootSelection,
   resolvePendingMenuEntrySelectionIndex,
   resolvePendingStatusBarFieldSelectionIndex,
   resolvePendingToolBarEntrySelectionIndex,
@@ -1765,22 +1772,9 @@ function toPbString(v: string): string {
   return quotePbString(v ?? "");
 }
 
-function getMenuInsertLevel(menu: FormMenu, parentSourceLine?: number): number {
-  if (typeof parentSourceLine !== "number") return 0;
-  const parentEntry = (menu.entries ?? []).find(entry => entry.source?.line === parentSourceLine);
-  if (!parentEntry) return 0;
-  return Math.max(0, getMenuEntryLevel(parentEntry) + 1);
-}
-
 function postCreateMenuRoot(): void {
   const args = { kind: "MenuTitle" as FormMenuEntry["kind"], textRaw: toPbString("MenuTitle") };
-  pendingMenuEntrySelection = {
-    menuId: "0",
-    preferredIndex: 0,
-    kind: args.kind,
-    level: 0,
-    textRaw: args.textRaw,
-  };
+  pendingMenuEntrySelection = buildPendingMenuRootSelection(args);
   vscode.postMessage({
     type: WEBVIEW_TO_EXT_MSG_TYPE.createMenu,
     kind: args.kind,
@@ -1790,14 +1784,7 @@ function postCreateMenuRoot(): void {
 
 function postCreateToolBarRoot(action: ToolBarPreviewInsertAction): void {
   const args = getToolBarPreviewInsertArgs({ entries: [] }, action);
-  pendingToolBarEntrySelection = {
-    toolBarId: "0",
-    preferredIndex: 0,
-    kind: args.kind,
-    idRaw: args.idRaw,
-    iconRaw: args.iconRaw,
-    toggle: args.toggle,
-  };
+  pendingToolBarEntrySelection = buildPendingToolBarRootSelection(args);
   vscode.postMessage({
     type: WEBVIEW_TO_EXT_MSG_TYPE.createToolBar,
     kind: args.kind,
@@ -1809,16 +1796,7 @@ function postCreateToolBarRoot(action: ToolBarPreviewInsertAction): void {
 
 function postCreateStatusBarRoot(action: StatusBarPreviewInsertAction): void {
   const args = getStatusBarPreviewInsertArgs(action);
-  pendingStatusBarFieldSelection = {
-    statusBarId: "0",
-    preferredIndex: 0,
-    widthRaw: args.widthRaw,
-    textRaw: args.textRaw,
-    imageRaw: args.imageRaw,
-    flagsRaw: args.flagsRaw,
-    progressBar: args.progressBar,
-    progressRaw: args.progressRaw,
-  };
+  pendingStatusBarFieldSelection = buildPendingStatusBarRootSelection(args);
   vscode.postMessage({
     type: WEBVIEW_TO_EXT_MSG_TYPE.createStatusBar,
     widthRaw: args.widthRaw,
@@ -1831,15 +1809,7 @@ function postCreateStatusBarRoot(action: StatusBarPreviewInsertAction): void {
 }
 
 function postInsertMenuEntry(menu: FormMenu, args: { kind: FormMenuEntry["kind"]; idRaw?: string; textRaw?: string }, parentSourceLine?: number): void {
-  const preferredIndex = Math.max(0, menu.entries?.length ?? 0);
-  pendingMenuEntrySelection = {
-    menuId: menu.id,
-    preferredIndex,
-    kind: args.kind,
-    level: getMenuInsertLevel(menu, parentSourceLine),
-    idRaw: args.idRaw,
-    textRaw: args.textRaw,
-  };
+  pendingMenuEntrySelection = buildPendingMenuEntryInsertSelection(menu, args, parentSourceLine);
   vscode.postMessage({
     type: WEBVIEW_TO_EXT_MSG_TYPE.insertMenuEntry,
     menuId: menu.id,
@@ -1851,16 +1821,7 @@ function postInsertMenuEntry(menu: FormMenu, args: { kind: FormMenuEntry["kind"]
 }
 
 function postInsertToolBarEntry(toolBar: FormToolBar, args: { kind: FormToolBarEntry["kind"]; idRaw?: string; iconRaw?: string; textRaw?: string; toggle?: boolean }): void {
-  const preferredIndex = Math.max(0, toolBar.entries?.length ?? 0);
-  pendingToolBarEntrySelection = {
-    toolBarId: toolBar.id,
-    preferredIndex,
-    kind: args.kind,
-    idRaw: args.idRaw,
-    iconRaw: args.iconRaw,
-    textRaw: args.textRaw,
-    toggle: args.toggle,
-  };
+  pendingToolBarEntrySelection = buildPendingToolBarEntryInsertSelection(toolBar, args);
   vscode.postMessage({
     type: WEBVIEW_TO_EXT_MSG_TYPE.insertToolBarEntry,
     toolBarId: toolBar.id,
@@ -1872,17 +1833,7 @@ function postInsertToolBarEntry(toolBar: FormToolBar, args: { kind: FormToolBarE
 }
 
 function postInsertStatusBarField(statusBar: FormStatusBar, args: { widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string }): void {
-  const preferredIndex = Math.max(0, statusBar.fields?.length ?? 0);
-  pendingStatusBarFieldSelection = {
-    statusBarId: statusBar.id,
-    preferredIndex,
-    widthRaw: args.widthRaw,
-    textRaw: args.textRaw,
-    imageRaw: args.imageRaw,
-    flagsRaw: args.flagsRaw,
-    progressBar: args.progressBar,
-    progressRaw: args.progressRaw,
-  };
+  pendingStatusBarFieldSelection = buildPendingStatusBarFieldInsertSelection(statusBar, args);
   vscode.postMessage({
     type: WEBVIEW_TO_EXT_MSG_TYPE.insertStatusBarField,
     statusBarId: statusBar.id,

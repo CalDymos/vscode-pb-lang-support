@@ -90,6 +90,29 @@ export type PendingStatusBarFieldSelectionLike = {
   progressRaw?: string;
 };
 
+export type MenuEntryInsertArgsLike = {
+  kind: string;
+  idRaw?: string;
+  textRaw?: string;
+};
+
+export type ToolBarEntryInsertArgsLike = {
+  kind: string;
+  idRaw?: string;
+  iconRaw?: string;
+  textRaw?: string;
+  toggle?: boolean;
+};
+
+export type StatusBarFieldInsertArgsLike = {
+  widthRaw: string;
+  textRaw?: string;
+  imageRaw?: string;
+  flagsRaw?: string;
+  progressBar?: boolean;
+  progressRaw?: string;
+};
+
 export type PreviewRectLike = {
   x: number;
   y: number;
@@ -327,6 +350,13 @@ export function getMenuEntryLevel(entry: MenuEntryLike | undefined): number {
   return Math.max(0, entry?.level ?? 0);
 }
 
+export function getMenuInsertLevel(menu: MenuModelLike, parentSourceLine?: number): number {
+  if (typeof parentSourceLine !== "number") return 0;
+  const parentEntry = (menu.entries ?? []).find(entry => entry.source?.line === parentSourceLine);
+  if (!parentEntry) return 0;
+  return Math.max(0, getMenuEntryLevel(parentEntry) + 1);
+}
+
 export function getMenuPreviewLabel(entry: MenuEntryLike): string {
   if (entry.kind === "MenuBar" || entry.kind === "CloseSubMenu") return "";
   return (entry.text ?? unquotePbString(entry.textRaw) ?? entry.idRaw ?? entry.kind).trim();
@@ -429,6 +459,88 @@ export function getMenuEntryBlockEndIndex(entries: MenuEntryLike[], entryIndex: 
   }
 
   return endIndex;
+}
+
+export function buildPendingMenuRootSelection(args: MenuEntryInsertArgsLike): PendingMenuEntrySelectionLike {
+  return {
+    menuId: "0",
+    preferredIndex: 0,
+    kind: args.kind,
+    level: 0,
+    idRaw: args.idRaw,
+    textRaw: args.textRaw,
+  };
+}
+
+export function buildPendingMenuEntryInsertSelection(
+  menu: MenuModelLike,
+  args: MenuEntryInsertArgsLike,
+  parentSourceLine?: number
+): PendingMenuEntrySelectionLike {
+  return {
+    menuId: menu.id ?? "",
+    preferredIndex: Math.max(0, menu.entries?.length ?? 0),
+    kind: args.kind,
+    level: getMenuInsertLevel(menu, parentSourceLine),
+    idRaw: args.idRaw,
+    textRaw: args.textRaw,
+  };
+}
+
+export function buildPendingToolBarRootSelection(args: ToolBarEntryInsertArgsLike): PendingToolBarEntrySelectionLike {
+  return {
+    toolBarId: "0",
+    preferredIndex: 0,
+    kind: args.kind,
+    idRaw: args.idRaw,
+    iconRaw: args.iconRaw,
+    textRaw: args.textRaw,
+    toggle: args.toggle,
+  };
+}
+
+export function buildPendingToolBarEntryInsertSelection(
+  toolBar: ToolBarModelLike,
+  args: ToolBarEntryInsertArgsLike
+): PendingToolBarEntrySelectionLike {
+  return {
+    toolBarId: toolBar.id ?? "",
+    preferredIndex: Math.max(0, toolBar.entries?.length ?? 0),
+    kind: args.kind,
+    idRaw: args.idRaw,
+    iconRaw: args.iconRaw,
+    textRaw: args.textRaw,
+    toggle: args.toggle,
+  };
+}
+
+export function buildPendingStatusBarRootSelection(args: StatusBarFieldInsertArgsLike): PendingStatusBarFieldSelectionLike {
+  return {
+    statusBarId: "0",
+    preferredIndex: 0,
+    widthRaw: args.widthRaw,
+    textRaw: args.textRaw,
+    imageRaw: args.imageRaw,
+    flagsRaw: args.flagsRaw,
+    progressBar: args.progressBar,
+    progressRaw: args.progressRaw,
+  };
+}
+
+export function buildPendingStatusBarFieldInsertSelection(
+  statusBar: StatusBarModelLike,
+  args: StatusBarFieldInsertArgsLike
+): PendingStatusBarFieldSelectionLike {
+  return {
+    statusBarId: statusBar.id ?? "",
+    preferredIndex: Math.max(0, statusBar.fields?.length ?? 0),
+    widthRaw: args.widthRaw,
+    textRaw: args.textRaw,
+    imageRaw: args.imageRaw,
+    flagsRaw: args.flagsRaw,
+    progressBar: args.progressBar,
+    progressRaw: args.progressRaw,
+  };
 }
 
 export function getPredictedMenuEntryMoveIndex(
