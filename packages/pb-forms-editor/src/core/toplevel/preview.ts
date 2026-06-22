@@ -31,10 +31,13 @@ export type ToolBarEntryLike = {
   idRaw?: string;
   iconRaw?: string;
   iconId?: string;
+  textRaw?: string;
   toggle?: boolean;
+  source?: SourceLineLike;
 };
 
 export type ToolBarModelLike = {
+  id?: string;
   entries?: ToolBarEntryLike[];
 };
 
@@ -47,10 +50,67 @@ export type StatusBarFieldLike = {
   progressRaw?: string;
   imageRaw?: string;
   imageId?: string;
+  source?: SourceLineLike;
 };
 
 export type StatusBarModelLike = {
+  id?: string;
   fields?: StatusBarFieldLike[];
+};
+
+export type PendingMenuEntrySelectionLike = {
+  menuId: string;
+  preferredIndex: number;
+  kind: string;
+  level?: number;
+  idRaw?: string;
+  textRaw?: string;
+  shortcut?: string;
+  iconRaw?: string;
+};
+
+export type PendingToolBarEntrySelectionLike = {
+  toolBarId: string;
+  preferredIndex: number;
+  kind: string;
+  idRaw?: string;
+  iconRaw?: string;
+  textRaw?: string;
+  toggle?: boolean;
+};
+
+export type PendingStatusBarFieldSelectionLike = {
+  statusBarId: string;
+  preferredIndex: number;
+  widthRaw?: string;
+  textRaw?: string;
+  imageRaw?: string;
+  flagsRaw?: string;
+  progressBar?: boolean;
+  progressRaw?: string;
+};
+
+export type MenuEntryInsertArgsLike = {
+  kind: string;
+  idRaw?: string;
+  textRaw?: string;
+};
+
+export type ToolBarEntryInsertArgsLike = {
+  kind: string;
+  idRaw?: string;
+  iconRaw?: string;
+  textRaw?: string;
+  toggle?: boolean;
+};
+
+export type StatusBarFieldInsertArgsLike = {
+  widthRaw: string;
+  textRaw?: string;
+  imageRaw?: string;
+  flagsRaw?: string;
+  progressBar?: boolean;
+  progressRaw?: string;
 };
 
 export type PreviewRectLike = {
@@ -290,6 +350,13 @@ export function getMenuEntryLevel(entry: MenuEntryLike | undefined): number {
   return Math.max(0, entry?.level ?? 0);
 }
 
+export function getMenuInsertLevel(menu: MenuModelLike, parentSourceLine?: number): number {
+  if (typeof parentSourceLine !== "number") return 0;
+  const parentEntry = (menu.entries ?? []).find(entry => entry.source?.line === parentSourceLine);
+  if (!parentEntry) return 0;
+  return Math.max(0, getMenuEntryLevel(parentEntry) + 1);
+}
+
 export function getMenuPreviewLabel(entry: MenuEntryLike): string {
   if (entry.kind === "MenuBar" || entry.kind === "CloseSubMenu") return "";
   return (entry.text ?? unquotePbString(entry.textRaw) ?? entry.idRaw ?? entry.kind).trim();
@@ -394,6 +461,88 @@ export function getMenuEntryBlockEndIndex(entries: MenuEntryLike[], entryIndex: 
   return endIndex;
 }
 
+export function buildPendingMenuRootSelection(args: MenuEntryInsertArgsLike): PendingMenuEntrySelectionLike {
+  return {
+    menuId: "0",
+    preferredIndex: 0,
+    kind: args.kind,
+    level: 0,
+    idRaw: args.idRaw,
+    textRaw: args.textRaw,
+  };
+}
+
+export function buildPendingMenuEntryInsertSelection(
+  menu: MenuModelLike,
+  args: MenuEntryInsertArgsLike,
+  parentSourceLine?: number
+): PendingMenuEntrySelectionLike {
+  return {
+    menuId: menu.id ?? "",
+    preferredIndex: Math.max(0, menu.entries?.length ?? 0),
+    kind: args.kind,
+    level: getMenuInsertLevel(menu, parentSourceLine),
+    idRaw: args.idRaw,
+    textRaw: args.textRaw,
+  };
+}
+
+export function buildPendingToolBarRootSelection(args: ToolBarEntryInsertArgsLike): PendingToolBarEntrySelectionLike {
+  return {
+    toolBarId: "0",
+    preferredIndex: 0,
+    kind: args.kind,
+    idRaw: args.idRaw,
+    iconRaw: args.iconRaw,
+    textRaw: args.textRaw,
+    toggle: args.toggle,
+  };
+}
+
+export function buildPendingToolBarEntryInsertSelection(
+  toolBar: ToolBarModelLike,
+  args: ToolBarEntryInsertArgsLike
+): PendingToolBarEntrySelectionLike {
+  return {
+    toolBarId: toolBar.id ?? "",
+    preferredIndex: Math.max(0, toolBar.entries?.length ?? 0),
+    kind: args.kind,
+    idRaw: args.idRaw,
+    iconRaw: args.iconRaw,
+    textRaw: args.textRaw,
+    toggle: args.toggle,
+  };
+}
+
+export function buildPendingStatusBarRootSelection(args: StatusBarFieldInsertArgsLike): PendingStatusBarFieldSelectionLike {
+  return {
+    statusBarId: "0",
+    preferredIndex: 0,
+    widthRaw: args.widthRaw,
+    textRaw: args.textRaw,
+    imageRaw: args.imageRaw,
+    flagsRaw: args.flagsRaw,
+    progressBar: args.progressBar,
+    progressRaw: args.progressRaw,
+  };
+}
+
+export function buildPendingStatusBarFieldInsertSelection(
+  statusBar: StatusBarModelLike,
+  args: StatusBarFieldInsertArgsLike
+): PendingStatusBarFieldSelectionLike {
+  return {
+    statusBarId: statusBar.id ?? "",
+    preferredIndex: Math.max(0, statusBar.fields?.length ?? 0),
+    widthRaw: args.widthRaw,
+    textRaw: args.textRaw,
+    imageRaw: args.imageRaw,
+    flagsRaw: args.flagsRaw,
+    progressBar: args.progressBar,
+    progressRaw: args.progressRaw,
+  };
+}
+
 export function getPredictedMenuEntryMoveIndex(
   menu: MenuModelLike,
   sourceEntryIndex: number,
@@ -419,6 +568,183 @@ export function getPredictedMenuEntryMoveIndex(
   }
 
   return Math.max(0, insertIndex);
+}
+
+export function buildPendingMenuEntrySelection(
+  menu: MenuModelLike,
+  sourceEntryIndex: number,
+  targetSourceLine: number,
+  placement: MenuEntryMovePlacement
+): PendingMenuEntrySelectionLike | null {
+  const sourceEntry = menu.entries?.[sourceEntryIndex];
+  if (!sourceEntry) return null;
+
+  const targetEntryIndex = (menu.entries ?? []).findIndex(entry => entry.source?.line === targetSourceLine);
+  if (targetEntryIndex < 0) return null;
+
+  const preferredIndex = getPredictedMenuEntryMoveIndex(menu, sourceEntryIndex, targetEntryIndex, placement);
+  if (preferredIndex === null) return null;
+
+  return {
+    menuId: menu.id ?? "",
+    preferredIndex,
+    kind: sourceEntry.kind,
+    level: getMenuEntryLevel(sourceEntry),
+    idRaw: sourceEntry.idRaw,
+    textRaw: sourceEntry.textRaw,
+    shortcut: sourceEntry.shortcut,
+    iconRaw: sourceEntry.iconRaw
+  };
+}
+
+export function getToolBarEntryMoveBlockEndIndex(toolBar: ToolBarModelLike, entryIndex: number): number {
+  const entry = toolBar.entries?.[entryIndex];
+  if (!entry || entry.kind === "ToolBarToolTip") return entryIndex;
+  const nextEntry = toolBar.entries?.[entryIndex + 1];
+  if (nextEntry?.kind === "ToolBarToolTip" && (nextEntry.idRaw?.trim() ?? "") === (entry.idRaw?.trim() ?? "")) {
+    return entryIndex + 1;
+  }
+  return entryIndex;
+}
+
+export function getPredictedLinearMoveIndex(
+  entryCount: number,
+  sourceEntryIndex: number,
+  sourceEndIndex: number,
+  targetEntryIndex: number,
+  targetEndIndex: number,
+  placement: LinearTopLevelEntryMovePlacement
+): number | null {
+  if (sourceEntryIndex < 0 || sourceEntryIndex >= entryCount) return null;
+  if (targetEntryIndex < 0 || targetEntryIndex >= entryCount) return null;
+
+  let insertIndex = placement === MenuEntryMovePlacement.Before ? targetEntryIndex : targetEndIndex + 1;
+  if (insertIndex >= sourceEntryIndex && insertIndex <= sourceEndIndex + 1) return null;
+
+  if (sourceEntryIndex < insertIndex) {
+    insertIndex -= sourceEndIndex - sourceEntryIndex + 1;
+  }
+  return Math.max(0, insertIndex);
+}
+
+export function buildPendingToolBarEntryMoveSelection(
+  toolBar: ToolBarModelLike,
+  sourceEntryIndex: number,
+  targetSourceLine: number,
+  placement: LinearTopLevelEntryMovePlacement
+): PendingToolBarEntrySelectionLike | null {
+  const sourceEntry = toolBar.entries?.[sourceEntryIndex];
+  if (!sourceEntry) return null;
+
+  const targetEntryIndex = (toolBar.entries ?? []).findIndex(entry => entry.source?.line === targetSourceLine);
+  if (targetEntryIndex < 0) return null;
+
+  const sourceEndIndex = getToolBarEntryMoveBlockEndIndex(toolBar, sourceEntryIndex);
+  const targetEndIndex = getToolBarEntryMoveBlockEndIndex(toolBar, targetEntryIndex);
+  const preferredIndex = getPredictedLinearMoveIndex(toolBar.entries?.length ?? 0, sourceEntryIndex, sourceEndIndex, targetEntryIndex, targetEndIndex, placement);
+  if (preferredIndex === null) return null;
+
+  return {
+    toolBarId: toolBar.id ?? "",
+    preferredIndex,
+    kind: sourceEntry.kind,
+    idRaw: sourceEntry.idRaw,
+    iconRaw: sourceEntry.iconRaw,
+    textRaw: sourceEntry.textRaw,
+    toggle: sourceEntry.toggle
+  };
+}
+
+export function buildPendingStatusBarFieldMoveSelection(
+  statusBar: StatusBarModelLike,
+  sourceFieldIndex: number,
+  targetSourceLine: number,
+  placement: LinearTopLevelEntryMovePlacement
+): PendingStatusBarFieldSelectionLike | null {
+  const sourceField = statusBar.fields?.[sourceFieldIndex];
+  if (!sourceField) return null;
+
+  const targetFieldIndex = (statusBar.fields ?? []).findIndex(field => field.source?.line === targetSourceLine);
+  if (targetFieldIndex < 0) return null;
+
+  const preferredIndex = getPredictedLinearMoveIndex(statusBar.fields?.length ?? 0, sourceFieldIndex, sourceFieldIndex, targetFieldIndex, targetFieldIndex, placement);
+  if (preferredIndex === null) return null;
+
+  return {
+    statusBarId: statusBar.id ?? "",
+    preferredIndex,
+    widthRaw: sourceField.widthRaw,
+    textRaw: sourceField.textRaw,
+    imageRaw: sourceField.imageRaw,
+    flagsRaw: sourceField.flagsRaw,
+    progressBar: sourceField.progressBar,
+    progressRaw: sourceField.progressRaw
+  };
+}
+
+export function menuEntryMatchesPendingSelection(entry: MenuEntryLike | undefined, pending: PendingMenuEntrySelectionLike): boolean {
+  if (!entry) return false;
+  return entry.kind === pending.kind
+    && getMenuEntryLevel(entry) === pending.level
+    && (entry.idRaw ?? "") === (pending.idRaw ?? "")
+    && (entry.textRaw ?? "") === (pending.textRaw ?? "")
+    && (entry.shortcut ?? "") === (pending.shortcut ?? "")
+    && (entry.iconRaw ?? "") === (pending.iconRaw ?? "");
+}
+
+export function resolvePendingMenuEntrySelectionIndex(menu: MenuModelLike | undefined, pending: PendingMenuEntrySelectionLike): number | undefined {
+  if (!menu) return undefined;
+
+  const preferredEntry = menu.entries?.[pending.preferredIndex];
+  if (menuEntryMatchesPendingSelection(preferredEntry, pending)) {
+    return pending.preferredIndex;
+  }
+
+  const matchIndex = (menu.entries ?? []).findIndex(entry => menuEntryMatchesPendingSelection(entry, pending));
+  return matchIndex >= 0 ? matchIndex : undefined;
+}
+
+export function toolBarEntryMatchesPendingSelection(entry: ToolBarEntryLike | undefined, pending: PendingToolBarEntrySelectionLike): boolean {
+  if (!entry) return false;
+  return entry.kind === pending.kind
+    && (entry.idRaw ?? "") === (pending.idRaw ?? "")
+    && (entry.iconRaw ?? "") === (pending.iconRaw ?? "")
+    && (entry.textRaw ?? "") === (pending.textRaw ?? "")
+    && Boolean(entry.toggle) === Boolean(pending.toggle);
+}
+
+export function resolvePendingToolBarEntrySelectionIndex(toolBar: ToolBarModelLike | undefined, pending: PendingToolBarEntrySelectionLike): number | undefined {
+  if (!toolBar) return undefined;
+
+  const preferredEntry = toolBar.entries?.[pending.preferredIndex];
+  if (toolBarEntryMatchesPendingSelection(preferredEntry, pending)) {
+    return pending.preferredIndex;
+  }
+
+  const matchIndex = (toolBar.entries ?? []).findIndex(entry => toolBarEntryMatchesPendingSelection(entry, pending));
+  return matchIndex >= 0 ? matchIndex : undefined;
+}
+
+export function statusBarFieldMatchesPendingSelection(field: StatusBarFieldLike | undefined, pending: PendingStatusBarFieldSelectionLike): boolean {
+  if (!field) return false;
+  return (field.widthRaw ?? "") === (pending.widthRaw ?? "")
+    && (field.textRaw ?? "") === (pending.textRaw ?? "")
+    && (field.imageRaw ?? "") === (pending.imageRaw ?? "")
+    && (field.flagsRaw ?? "") === (pending.flagsRaw ?? "")
+    && Boolean(field.progressBar) === Boolean(pending.progressBar)
+    && (field.progressRaw ?? "") === (pending.progressRaw ?? "");
+}
+
+export function resolvePendingStatusBarFieldSelectionIndex(statusBar: StatusBarModelLike | undefined, pending: PendingStatusBarFieldSelectionLike): number | undefined {
+  if (!statusBar) return undefined;
+
+  const preferredField = statusBar.fields?.[pending.preferredIndex];
+  if (statusBarFieldMatchesPendingSelection(preferredField, pending)) {
+    return pending.preferredIndex;
+  }
+
+  const matchIndex = (statusBar.fields ?? []).findIndex(field => statusBarFieldMatchesPendingSelection(field, pending));
+  return matchIndex >= 0 ? matchIndex : undefined;
 }
 
 export function isBoundToolBarTooltipEntry(toolBar: ToolBarModelLike, entryIndex: number): boolean {
@@ -894,6 +1220,15 @@ export function getToolBarSeparatorSelectedOutlineRect(entryRect: PreviewRectLik
     w: 8,
     h: 18,
   };
+}
+
+export function getToolBarEntrySelectionFocusRect(toolBar: ToolBarModelLike | undefined, entryRect: PreviewEntryRectLike): PreviewRectLike {
+  const entry = toolBar?.id === entryRect.ownerId ? toolBar.entries?.[entryRect.index] : undefined;
+  if (entry?.kind === "ToolBarSeparator") {
+    return { ...entryRect, ...getToolBarSeparatorPreviewRect(entryRect.x, entryRect.y) };
+  }
+
+  return entryRect;
 }
 
 export function getTopLevelClampedAddIconX(

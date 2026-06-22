@@ -5,6 +5,18 @@ import {
   deriveWindows7MenuBarPalette,
   buildOptionalInspectorLiteralRaw,
   buildOptionalInspectorPlainValue,
+  buildPendingMenuEntryInsertSelection,
+  buildPendingMenuEntrySelection,
+  buildPendingMenuRootSelection,
+  buildPendingStatusBarFieldInsertSelection,
+  buildPendingStatusBarFieldMoveSelection,
+  buildPendingStatusBarRootSelection,
+  buildPendingToolBarEntryInsertSelection,
+  buildPendingToolBarEntryMoveSelection,
+  buildPendingToolBarRootSelection,
+  resolvePendingMenuEntrySelectionIndex,
+  resolvePendingStatusBarFieldSelectionIndex,
+  resolvePendingToolBarEntrySelectionIndex,
   canMoveWindowInCanvas,
   canResizeWindowTopInCanvas,
   canResizeWindowLeftInCanvas,
@@ -18,6 +30,7 @@ import {
   getMenuAncestorChain,
   getMenuEntryBlockEndIndex,
   getMenuEntryLevel,
+  getMenuInsertLevel,
   getMenuFlyoutAnchorRect,
   getMenuFlyoutEntryTextLayout,
   getMenuFlyoutFooterOpacity,
@@ -35,6 +48,7 @@ import {
   getMenuFlyoutPanelRect,
   getMenuFooterRect,
   getMenuPreviewLabel,
+  getPredictedLinearMoveIndex,
   getPredictedMenuEntryMoveIndex,
   getMenuVisibleEntries,
   getStatusBarAddButtonPreviewLayout,
@@ -55,6 +69,8 @@ import {
   getSelectedToolBarInspectorFieldConfig,
   getToolBarPreviewInsertArgs,
   getToolBarEntryAdvance,
+  getToolBarEntrySelectionFocusRect,
+  getToolBarEntryMoveBlockEndIndex,
   getToolBarImageButtonPreviewRect,
   getToolBarSeparatorPreviewRect,
   getToolBarSeparatorSelectedOutlineRect,
@@ -100,6 +116,211 @@ test("filters bound toolbar tooltip rows from the visible structure count", () =
   assert.equal(shouldShowToolBarStructureEntry(toolBar, 2), true);
   assert.equal(shouldShowToolBarStructureEntry(toolBar, 3), true);
   assert.equal(getVisibleToolBarEntryCount(toolBar), 3);
+});
+
+test("builds pending top-level move selections from source lines and predicted indices", () => {
+  const menu = {
+    id: "#Menu",
+    entries: [
+      { kind: "MenuTitle", textRaw: '"File"', source: { line: 10 } },
+      { kind: "MenuItem", level: 1, idRaw: "#Open", textRaw: '"Open"', source: { line: 11 } },
+      { kind: "MenuItem", level: 1, idRaw: "#Save", textRaw: '"Save"', source: { line: 12 } }
+    ]
+  };
+
+  assert.deepEqual(buildPendingMenuEntrySelection(menu, 2, 11, "before"), {
+    menuId: "#Menu",
+    preferredIndex: 1,
+    kind: "MenuItem",
+    level: 1,
+    idRaw: "#Save",
+    textRaw: '"Save"',
+    shortcut: undefined,
+    iconRaw: undefined,
+  });
+
+  const toolBar = {
+    id: "#Toolbar",
+    entries: [
+      { kind: "ToolBarImageButton", idRaw: "#Open", iconRaw: "ImageID(#OpenImg)", source: { line: 20 } },
+      { kind: "ToolBarToolTip", idRaw: "#Open", textRaw: '"Open"', source: { line: 21 } },
+      { kind: "ToolBarSeparator", source: { line: 22 } },
+      { kind: "ToolBarImageButton", idRaw: "#Save", source: { line: 23 } }
+    ]
+  };
+
+  assert.equal(getToolBarEntryMoveBlockEndIndex(toolBar, 0), 1);
+  assert.equal(getPredictedLinearMoveIndex(toolBar.entries.length, 0, 1, 3, 3, "after"), 2);
+  assert.deepEqual(buildPendingToolBarEntryMoveSelection(toolBar, 0, 23, "after"), {
+    toolBarId: "#Toolbar",
+    preferredIndex: 2,
+    kind: "ToolBarImageButton",
+    idRaw: "#Open",
+    iconRaw: "ImageID(#OpenImg)",
+    textRaw: undefined,
+    toggle: undefined,
+  });
+
+  const statusBar = {
+    id: "#Status",
+    fields: [
+      { widthRaw: "100", textRaw: '"Left"', source: { line: 30 } },
+      { widthRaw: "200", progressBar: true, progressRaw: "50", source: { line: 31 } }
+    ]
+  };
+
+  assert.deepEqual(buildPendingStatusBarFieldMoveSelection(statusBar, 0, 31, "after"), {
+    statusBarId: "#Status",
+    preferredIndex: 1,
+    widthRaw: "100",
+    textRaw: '"Left"',
+    imageRaw: undefined,
+    flagsRaw: undefined,
+    progressBar: undefined,
+    progressRaw: undefined,
+  });
+});
+
+test("builds pending top-level insert selections from root and existing containers", () => {
+  const menu = {
+    id: "#Menu",
+    entries: [
+      { kind: "MenuTitle", textRaw: '"File"', level: 0, source: { line: 10 } },
+      { kind: "OpenSubMenu", textRaw: '"Export"', level: 1, source: { line: 11 } }
+    ]
+  };
+
+  assert.deepEqual(buildPendingMenuRootSelection({ kind: "MenuTitle", textRaw: '"MenuTitle"' }), {
+    menuId: "0",
+    preferredIndex: 0,
+    kind: "MenuTitle",
+    level: 0,
+    idRaw: undefined,
+    textRaw: '"MenuTitle"',
+  });
+  assert.equal(getMenuInsertLevel(menu, 11), 2);
+  assert.deepEqual(buildPendingMenuEntryInsertSelection(menu, { kind: "MenuItem", idRaw: "#MenuItem_3", textRaw: '"MenuItem3"' }, 11), {
+    menuId: "#Menu",
+    preferredIndex: 2,
+    kind: "MenuItem",
+    level: 2,
+    idRaw: "#MenuItem_3",
+    textRaw: '"MenuItem3"',
+  });
+
+  const toolBar = {
+    id: "#Toolbar",
+    entries: [
+      { kind: "ToolBarImageButton", idRaw: "#Open" }
+    ]
+  };
+
+  assert.deepEqual(buildPendingToolBarRootSelection({ kind: "ToolBarImageButton", idRaw: "#ToolBar_0", iconRaw: "ImageID(#Icon)", toggle: false }), {
+    toolBarId: "0",
+    preferredIndex: 0,
+    kind: "ToolBarImageButton",
+    idRaw: "#ToolBar_0",
+    iconRaw: "ImageID(#Icon)",
+    textRaw: undefined,
+    toggle: false,
+  });
+  assert.deepEqual(buildPendingToolBarEntryInsertSelection(toolBar, { kind: "ToolBarSeparator" }), {
+    toolBarId: "#Toolbar",
+    preferredIndex: 1,
+    kind: "ToolBarSeparator",
+    idRaw: undefined,
+    iconRaw: undefined,
+    textRaw: undefined,
+    toggle: undefined,
+  });
+
+  const statusBar = {
+    id: "#Status",
+    fields: [
+      { widthRaw: "100", textRaw: '"Ready"' }
+    ]
+  };
+
+  assert.deepEqual(buildPendingStatusBarRootSelection({ widthRaw: "100", textRaw: '"Ready"' }), {
+    statusBarId: "0",
+    preferredIndex: 0,
+    widthRaw: "100",
+    textRaw: '"Ready"',
+    imageRaw: undefined,
+    flagsRaw: undefined,
+    progressBar: undefined,
+    progressRaw: undefined,
+  });
+  assert.deepEqual(buildPendingStatusBarFieldInsertSelection(statusBar, { widthRaw: "200", progressBar: true, progressRaw: "50" }), {
+    statusBarId: "#Status",
+    preferredIndex: 1,
+    widthRaw: "200",
+    textRaw: undefined,
+    imageRaw: undefined,
+    flagsRaw: undefined,
+    progressBar: true,
+    progressRaw: "50",
+  });
+});
+
+test("resolves pending top-level selections by preferred index or fallback match", () => {
+  const menu = {
+    id: "#Menu",
+    entries: [
+      { kind: "MenuTitle", textRaw: '"File"', level: 0 },
+      { kind: "MenuItem", idRaw: "#Save", textRaw: '"Save"', level: 1 },
+      { kind: "MenuItem", idRaw: "#Open", textRaw: '"Open"', level: 1 }
+    ]
+  };
+
+  assert.equal(resolvePendingMenuEntrySelectionIndex(menu, {
+    menuId: "#Menu",
+    preferredIndex: 0,
+    kind: "MenuItem",
+    level: 1,
+    idRaw: "#Open",
+    textRaw: '"Open"'
+  }), 2);
+
+  const toolBar = {
+    id: "#Toolbar",
+    entries: [
+      { kind: "ToolBarSeparator" },
+      { kind: "ToolBarImageButton", idRaw: "#Open", iconRaw: "ImageID(#OpenImg)", toggle: true }
+    ]
+  };
+
+  assert.equal(resolvePendingToolBarEntrySelectionIndex(toolBar, {
+    toolBarId: "#Toolbar",
+    preferredIndex: 1,
+    kind: "ToolBarImageButton",
+    idRaw: "#Open",
+    iconRaw: "ImageID(#OpenImg)",
+    toggle: true
+  }), 1);
+
+  const statusBar = {
+    id: "#Status",
+    fields: [
+      { widthRaw: "100", textRaw: '"Ready"' },
+      { widthRaw: "200", progressBar: true, progressRaw: "50" }
+    ]
+  };
+
+  assert.equal(resolvePendingStatusBarFieldSelectionIndex(statusBar, {
+    statusBarId: "#Status",
+    preferredIndex: 0,
+    widthRaw: "200",
+    progressBar: true,
+    progressRaw: "50"
+  }), 1);
+
+  assert.equal(resolvePendingToolBarEntrySelectionIndex(toolBar, {
+    toolBarId: "#Toolbar",
+    preferredIndex: 0,
+    kind: "ToolBarImageButton",
+    idRaw: "#Missing"
+  }), undefined);
 });
 
 test("preserves whitespace-only inspector text values when converting to raw payloads", () => {
@@ -312,6 +533,41 @@ test("separates toolbar separator visible geometry from the original hit slot", 
     y: 16,
     w: 8,
     h: 18,
+  });
+});
+
+test("resolves toolbar entry selection focus rectangles from toolbar entry kind", () => {
+  const toolBar = {
+    id: "#ToolBar_0",
+    entries: [
+      { kind: "ToolBarSeparator" },
+      { kind: "ToolBarImageButton" }
+    ]
+  };
+
+  assert.deepEqual(getToolBarEntrySelectionFocusRect(toolBar, { ownerId: "#ToolBar_0", index: 0, x: 42, y: 17, w: 10, h: 16 }), {
+    ownerId: "#ToolBar_0",
+    index: 0,
+    x: 42,
+    y: 17,
+    w: 6,
+    h: 16,
+  });
+  assert.deepEqual(getToolBarEntrySelectionFocusRect(toolBar, { ownerId: "#ToolBar_0", index: 1, x: 60, y: 17, w: 16, h: 16 }), {
+    ownerId: "#ToolBar_0",
+    index: 1,
+    x: 60,
+    y: 17,
+    w: 16,
+    h: 16,
+  });
+  assert.deepEqual(getToolBarEntrySelectionFocusRect(undefined, { ownerId: "#ToolBar_0", index: 0, x: 42, y: 17, w: 10, h: 16 }), {
+    ownerId: "#ToolBar_0",
+    index: 0,
+    x: 42,
+    y: 17,
+    w: 10,
+    h: 16,
   });
 });
 
