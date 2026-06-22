@@ -26,6 +26,7 @@ import {
   isGadgetDisabledInDesignerPreview,
   isGadgetHiddenInDesignerPreview,
   getGadgetCurrentImageDisplay,
+  getGadgetImageRowsFieldConfig,
   getGadgetConstantsFieldConfig,
   getGadgetFontFieldConfig,
   getGadgetKnownFlags,
@@ -143,6 +144,22 @@ test("keeps the original constructor-range inspector matrix exact", () => {
     [GADGET_KIND.ScrollAreaGadget, { minLabel: "InnerWidth", maxLabel: "InnerHeight", title: "Matches the original InnerWidth / InnerHeight constructor arguments." }],
     [GADGET_KIND.ScrollBarGadget, { minLabel: "Min", maxLabel: "Max", title: "Matches the original Min / Max constructor arguments." }]
   ]);
+});
+
+
+
+test("documents original image gadget rows without replacing the safer assignment draft", () => {
+  assert.deepEqual(getGadgetImageRowsFieldConfig(GADGET_KIND.ImageGadget), {
+    currentImageVisible: true,
+    currentImageEditable: false,
+    changeImageVisible: true,
+    changeImageAvailable: true,
+    currentImageTitle: "Original CurrentImage row. The displayed value is resolved from the assigned form image entry and is not persisted by direct text editing.",
+    changeImageTitle: "Original ChangeImage button row. The port keeps the safer image-assignment draft flow for file selection, reuse and optional resize."
+  });
+  assert.deepEqual(getGadgetImageRowsFieldConfig(GADGET_KIND.ButtonImageGadget), getGadgetImageRowsFieldConfig(GADGET_KIND.ImageGadget));
+  assert.equal(getGadgetImageRowsFieldConfig(GADGET_KIND.ButtonGadget), undefined);
+  assert.equal(getGadgetImageRowsFieldConfig(undefined), undefined);
 });
 
 test("keeps the original gadget image row matrix exact", () => {

@@ -44,6 +44,15 @@ export type GadgetCurrentImageLike = {
   imageRaw?: string;
 };
 
+export type GadgetImageRowsFieldConfig = {
+  currentImageVisible: boolean;
+  currentImageEditable: boolean;
+  changeImageVisible: boolean;
+  changeImageAvailable: boolean;
+  currentImageTitle: string;
+  changeImageTitle: string;
+};
+
 export type GadgetImageEntryLike = {
   image?: string;
   imageRaw?: string;
@@ -606,6 +615,22 @@ export function canEditGadgetCheckedState(kind: string | undefined): boolean {
 
 export function canInspectGadgetImageRows(kind: string | undefined): boolean {
   return typeof kind === "string" && GADGET_IMAGE_ROW_CAPABLE_KINDS.has(kind);
+}
+
+export function getGadgetImageRowsFieldConfig(
+  kind: string | undefined,
+): GadgetImageRowsFieldConfig | undefined {
+  if (!canInspectGadgetImageRows(kind)) return undefined;
+  return {
+    currentImageVisible: true,
+    currentImageEditable: false,
+    changeImageVisible: true,
+    changeImageAvailable: true,
+    currentImageTitle:
+      "Original CurrentImage row. The displayed value is resolved from the assigned form image entry and is not persisted by direct text editing.",
+    changeImageTitle:
+      "Original ChangeImage button row. The port keeps the safer image-assignment draft flow for file selection, reuse and optional resize.",
+  };
 }
 
 export function canInspectGadgetSplitterPosition(

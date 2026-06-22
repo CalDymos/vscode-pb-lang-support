@@ -177,7 +177,6 @@ import {
   canEditGadgetColors,
   canInspectGadgetColumns,
   canInspectCustomGadgetCodeRows,
-  canInspectGadgetImageRows,
   canInspectGadgetItems,
   canInspectGadgetSplitterPosition,
   getCustomGadgetHelpDisplay,
@@ -191,6 +190,7 @@ import {
   getGadgetTooltipFieldConfig,
   getGadgetCaptionFieldConfig,
   getGadgetCurrentImageDisplay,
+  getGadgetImageRowsFieldConfig,
   getGadgetCtorRangeFieldLabels,
   getGadgetCtorRangeInspectorValue,
   getGadgetBooleanInspectorState,
@@ -11563,7 +11563,7 @@ function renderProps() {
   if (showsColumnsInspector) {
     propsEl.appendChild(row("Columns", readonlyInput(String(g.columns?.length ?? 0))));
   }
-  const isImageCapableGadget = canInspectGadgetImageRows(g.kind);
+  const imageRowsField = getGadgetImageRowsFieldConfig(g.kind);
   const parentGadget = g.parentId ? model.gadgets.find(it => it.id === g.parentId) : undefined;
   const gadgetImage = findImageEntryById(g.imageId);
 
@@ -12119,11 +12119,11 @@ function renderProps() {
     propsEl.appendChild(mutedNote("Set the splitter position between the two child gadgets."));
   }
 
-  if (isImageCapableGadget) {
+  if (imageRowsField) {
     propsEl.appendChild(
       row(
         "CurrentImage",
-        readonlyInput(getGadgetCurrentImageDisplay(g, gadgetImage))
+        readonlyInput(getGadgetCurrentImageDisplay(g, gadgetImage), imageRowsField.currentImageTitle)
       )
     );
     if (gadgetImage && typeof gadgetImage.source?.line === "number") {
@@ -12154,8 +12154,10 @@ function renderProps() {
     gadgetImageActions.className = "row-actions";
     const gadgetChooseFileBtn = document.createElement("button");
     gadgetChooseFileBtn.textContent = "Select";
-    gadgetChooseFileBtn.title = "Choose a file for this gadget. Existing matching LoadImage entries are reused when possible, and you can keep the gadget size or resize it to the image.";
+    gadgetChooseFileBtn.disabled = !imageRowsField.changeImageAvailable;
+    gadgetChooseFileBtn.title = imageRowsField.changeImageTitle;
     gadgetChooseFileBtn.onclick = () => {
+      if (!imageRowsField.changeImageAvailable) return;
       openImageAssignmentDraft({ kind: "gadget", gadgetId: g.id }, "chooseFile");
     };
     gadgetImageActions.appendChild(gadgetChooseFileBtn);
