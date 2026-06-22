@@ -570,6 +570,71 @@ export function buildPendingStatusBarFieldMoveSelection(
   };
 }
 
+export function menuEntryMatchesPendingSelection(entry: MenuEntryLike | undefined, pending: PendingMenuEntrySelectionLike): boolean {
+  if (!entry) return false;
+  return entry.kind === pending.kind
+    && getMenuEntryLevel(entry) === pending.level
+    && (entry.idRaw ?? "") === (pending.idRaw ?? "")
+    && (entry.textRaw ?? "") === (pending.textRaw ?? "")
+    && (entry.shortcut ?? "") === (pending.shortcut ?? "")
+    && (entry.iconRaw ?? "") === (pending.iconRaw ?? "");
+}
+
+export function resolvePendingMenuEntrySelectionIndex(menu: MenuModelLike | undefined, pending: PendingMenuEntrySelectionLike): number | undefined {
+  if (!menu) return undefined;
+
+  const preferredEntry = menu.entries?.[pending.preferredIndex];
+  if (menuEntryMatchesPendingSelection(preferredEntry, pending)) {
+    return pending.preferredIndex;
+  }
+
+  const matchIndex = (menu.entries ?? []).findIndex(entry => menuEntryMatchesPendingSelection(entry, pending));
+  return matchIndex >= 0 ? matchIndex : undefined;
+}
+
+export function toolBarEntryMatchesPendingSelection(entry: ToolBarEntryLike | undefined, pending: PendingToolBarEntrySelectionLike): boolean {
+  if (!entry) return false;
+  return entry.kind === pending.kind
+    && (entry.idRaw ?? "") === (pending.idRaw ?? "")
+    && (entry.iconRaw ?? "") === (pending.iconRaw ?? "")
+    && (entry.textRaw ?? "") === (pending.textRaw ?? "")
+    && Boolean(entry.toggle) === Boolean(pending.toggle);
+}
+
+export function resolvePendingToolBarEntrySelectionIndex(toolBar: ToolBarModelLike | undefined, pending: PendingToolBarEntrySelectionLike): number | undefined {
+  if (!toolBar) return undefined;
+
+  const preferredEntry = toolBar.entries?.[pending.preferredIndex];
+  if (toolBarEntryMatchesPendingSelection(preferredEntry, pending)) {
+    return pending.preferredIndex;
+  }
+
+  const matchIndex = (toolBar.entries ?? []).findIndex(entry => toolBarEntryMatchesPendingSelection(entry, pending));
+  return matchIndex >= 0 ? matchIndex : undefined;
+}
+
+export function statusBarFieldMatchesPendingSelection(field: StatusBarFieldLike | undefined, pending: PendingStatusBarFieldSelectionLike): boolean {
+  if (!field) return false;
+  return (field.widthRaw ?? "") === (pending.widthRaw ?? "")
+    && (field.textRaw ?? "") === (pending.textRaw ?? "")
+    && (field.imageRaw ?? "") === (pending.imageRaw ?? "")
+    && (field.flagsRaw ?? "") === (pending.flagsRaw ?? "")
+    && Boolean(field.progressBar) === Boolean(pending.progressBar)
+    && (field.progressRaw ?? "") === (pending.progressRaw ?? "");
+}
+
+export function resolvePendingStatusBarFieldSelectionIndex(statusBar: StatusBarModelLike | undefined, pending: PendingStatusBarFieldSelectionLike): number | undefined {
+  if (!statusBar) return undefined;
+
+  const preferredField = statusBar.fields?.[pending.preferredIndex];
+  if (statusBarFieldMatchesPendingSelection(preferredField, pending)) {
+    return pending.preferredIndex;
+  }
+
+  const matchIndex = (statusBar.fields ?? []).findIndex(field => statusBarFieldMatchesPendingSelection(field, pending));
+  return matchIndex >= 0 ? matchIndex : undefined;
+}
+
 export function isBoundToolBarTooltipEntry(toolBar: ToolBarModelLike, entryIndex: number): boolean {
   const entry = toolBar.entries?.[entryIndex];
   if (!entry || entry.kind !== "ToolBarToolTip") return false;

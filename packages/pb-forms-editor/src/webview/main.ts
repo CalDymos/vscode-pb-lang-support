@@ -132,6 +132,9 @@ import {
   buildPendingMenuEntrySelection,
   buildPendingStatusBarFieldMoveSelection,
   buildPendingToolBarEntryMoveSelection,
+  resolvePendingMenuEntrySelectionIndex,
+  resolvePendingStatusBarFieldSelectionIndex,
+  resolvePendingToolBarEntrySelectionIndex,
   getToolBarPreviewInsertArgs,
   getToolBarEntryAdvance,
   getToolBarEntryMoveBlockEndIndex,
@@ -2394,43 +2397,16 @@ function renderAfterInit() {
   renderProps();
 }
 
-function menuEntryMatchesPendingSelection(entry: FormMenuEntry | undefined, pending: PendingMenuEntrySelection): boolean {
-  if (!entry) return false;
-  return entry.kind === pending.kind
-    && getMenuEntryLevel(entry) === pending.level
-    && (entry.idRaw ?? "") === (pending.idRaw ?? "")
-    && (entry.textRaw ?? "") === (pending.textRaw ?? "")
-    && (entry.shortcut ?? "") === (pending.shortcut ?? "")
-    && (entry.iconRaw ?? "") === (pending.iconRaw ?? "");
-}
-
 function resolvePendingMenuEntrySelection() {
   const pending = pendingMenuEntrySelection;
   if (!pending) return;
 
   const menu = (model.menus ?? []).find(entry => entry.id === pending.menuId);
   pendingMenuEntrySelection = null;
-  if (!menu) return;
-
-  const preferredEntry = menu.entries?.[pending.preferredIndex];
-  if (menuEntryMatchesPendingSelection(preferredEntry, pending)) {
-    selection = { kind: "menuEntry", menuId: pending.menuId, entryIndex: pending.preferredIndex };
-    return;
-  }
-
-  const matchIndex = (menu.entries ?? []).findIndex(entry => menuEntryMatchesPendingSelection(entry, pending));
-  if (matchIndex >= 0) {
+  const matchIndex = resolvePendingMenuEntrySelectionIndex(menu, pending);
+  if (typeof matchIndex === "number") {
     selection = { kind: "menuEntry", menuId: pending.menuId, entryIndex: matchIndex };
   }
-}
-
-function toolBarEntryMatchesPendingSelection(entry: FormToolBarEntry | undefined, pending: PendingToolBarEntrySelection): boolean {
-  if (!entry) return false;
-  return entry.kind === pending.kind
-    && (entry.idRaw ?? "") === (pending.idRaw ?? "")
-    && (entry.iconRaw ?? "") === (pending.iconRaw ?? "")
-    && (entry.textRaw ?? "") === (pending.textRaw ?? "")
-    && Boolean(entry.toggle) === Boolean(pending.toggle);
 }
 
 function resolvePendingToolBarEntrySelection() {
@@ -2439,28 +2415,10 @@ function resolvePendingToolBarEntrySelection() {
 
   const toolBar = (model.toolbars ?? []).find(entry => entry.id === pending.toolBarId);
   pendingToolBarEntrySelection = null;
-  if (!toolBar) return;
-
-  const preferredEntry = toolBar.entries?.[pending.preferredIndex];
-  if (toolBarEntryMatchesPendingSelection(preferredEntry, pending)) {
-    selection = { kind: "toolBarEntry", toolBarId: pending.toolBarId, entryIndex: pending.preferredIndex };
-    return;
-  }
-
-  const matchIndex = (toolBar.entries ?? []).findIndex(entry => toolBarEntryMatchesPendingSelection(entry, pending));
-  if (matchIndex >= 0) {
+  const matchIndex = resolvePendingToolBarEntrySelectionIndex(toolBar, pending);
+  if (typeof matchIndex === "number") {
     selection = { kind: "toolBarEntry", toolBarId: pending.toolBarId, entryIndex: matchIndex };
   }
-}
-
-function statusBarFieldMatchesPendingSelection(field: FormStatusBarField | undefined, pending: PendingStatusBarFieldSelection): boolean {
-  if (!field) return false;
-  return (field.widthRaw ?? "") === (pending.widthRaw ?? "")
-    && (field.textRaw ?? "") === (pending.textRaw ?? "")
-    && (field.imageRaw ?? "") === (pending.imageRaw ?? "")
-    && (field.flagsRaw ?? "") === (pending.flagsRaw ?? "")
-    && Boolean(field.progressBar) === Boolean(pending.progressBar)
-    && (field.progressRaw ?? "") === (pending.progressRaw ?? "");
 }
 
 function resolvePendingStatusBarFieldSelection() {
@@ -2469,16 +2427,8 @@ function resolvePendingStatusBarFieldSelection() {
 
   const statusBar = (model.statusbars ?? []).find(entry => entry.id === pending.statusBarId);
   pendingStatusBarFieldSelection = null;
-  if (!statusBar) return;
-
-  const preferredField = statusBar.fields?.[pending.preferredIndex];
-  if (statusBarFieldMatchesPendingSelection(preferredField, pending)) {
-    selection = { kind: "statusBarField", statusBarId: pending.statusBarId, fieldIndex: pending.preferredIndex };
-    return;
-  }
-
-  const matchIndex = (statusBar.fields ?? []).findIndex(field => statusBarFieldMatchesPendingSelection(field, pending));
-  if (matchIndex >= 0) {
+  const matchIndex = resolvePendingStatusBarFieldSelectionIndex(statusBar, pending);
+  if (typeof matchIndex === "number") {
     selection = { kind: "statusBarField", statusBarId: pending.statusBarId, fieldIndex: matchIndex };
   }
 }

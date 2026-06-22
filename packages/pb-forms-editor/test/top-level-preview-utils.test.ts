@@ -8,6 +8,9 @@ import {
   buildPendingMenuEntrySelection,
   buildPendingStatusBarFieldMoveSelection,
   buildPendingToolBarEntryMoveSelection,
+  resolvePendingMenuEntrySelectionIndex,
+  resolvePendingStatusBarFieldSelectionIndex,
+  resolvePendingToolBarEntrySelectionIndex,
   canMoveWindowInCanvas,
   canResizeWindowTopInCanvas,
   canResizeWindowLeftInCanvas,
@@ -168,6 +171,66 @@ test("builds pending top-level move selections from source lines and predicted i
     progressBar: undefined,
     progressRaw: undefined,
   });
+});
+
+test("resolves pending top-level selections by preferred index or fallback match", () => {
+  const menu = {
+    id: "#Menu",
+    entries: [
+      { kind: "MenuTitle", textRaw: '"File"', level: 0 },
+      { kind: "MenuItem", idRaw: "#Save", textRaw: '"Save"', level: 1 },
+      { kind: "MenuItem", idRaw: "#Open", textRaw: '"Open"', level: 1 }
+    ]
+  };
+
+  assert.equal(resolvePendingMenuEntrySelectionIndex(menu, {
+    menuId: "#Menu",
+    preferredIndex: 0,
+    kind: "MenuItem",
+    level: 1,
+    idRaw: "#Open",
+    textRaw: '"Open"'
+  }), 2);
+
+  const toolBar = {
+    id: "#Toolbar",
+    entries: [
+      { kind: "ToolBarSeparator" },
+      { kind: "ToolBarImageButton", idRaw: "#Open", iconRaw: "ImageID(#OpenImg)", toggle: true }
+    ]
+  };
+
+  assert.equal(resolvePendingToolBarEntrySelectionIndex(toolBar, {
+    toolBarId: "#Toolbar",
+    preferredIndex: 1,
+    kind: "ToolBarImageButton",
+    idRaw: "#Open",
+    iconRaw: "ImageID(#OpenImg)",
+    toggle: true
+  }), 1);
+
+  const statusBar = {
+    id: "#Status",
+    fields: [
+      { widthRaw: "100", textRaw: '"Ready"' },
+      { widthRaw: "200", progressBar: true, progressRaw: "50" }
+    ]
+  };
+
+  assert.equal(resolvePendingStatusBarFieldSelectionIndex(statusBar, {
+    statusBarId: "#Status",
+    preferredIndex: 0,
+    widthRaw: "200",
+    progressBar: true,
+    progressRaw: "50"
+  }), 1);
+
+  assert.equal(resolvePendingToolBarEntrySelectionIndex(toolBar, {
+    toolBarId: "#Toolbar",
+    preferredIndex: 0,
+    kind: "ToolBarImageButton",
+    idRaw: "#Missing"
+  }), undefined);
 });
 
 test("preserves whitespace-only inspector text values when converting to raw payloads", () => {
