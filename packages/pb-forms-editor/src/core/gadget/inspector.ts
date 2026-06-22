@@ -68,6 +68,16 @@ export type GadgetSplitterPositionFieldConfig = {
   valuePolicy: "bounded-by-current-orientation-size";
 };
 
+export type GadgetColorRowsFieldConfig = {
+  visible: boolean;
+  frontColorVisible: boolean;
+  backColorVisible: boolean;
+  valueEditable: boolean;
+  frontColorLabel: string;
+  backColorLabel: string;
+  title: string;
+};
+
 export type GadgetImageEntryLike = {
   image?: string;
   imageRaw?: string;
@@ -620,6 +630,22 @@ export function canEditGadgetText(kind: string | undefined): boolean {
 
 export function canEditGadgetColors(kind: string | undefined): boolean {
   return typeof kind === "string" && GADGET_COLOR_CAPABLE_KINDS.has(kind);
+}
+
+export function getGadgetColorRowsFieldConfig(
+  kind: string | undefined,
+): GadgetColorRowsFieldConfig | undefined {
+  if (!canEditGadgetColors(kind)) return undefined;
+  return {
+    visible: true,
+    frontColorVisible: true,
+    backColorVisible: true,
+    valueEditable: true,
+    frontColorLabel: "FrontColor",
+    backColorLabel: "BackColor",
+    title:
+      "Original FrontColor / BackColor rows. Editing keeps the current port color picker and clear buttons while persisting SetGadgetColor(...) values safely.",
+  };
 }
 
 export function canEditGadgetCheckedState(kind: string | undefined): boolean {

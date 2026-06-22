@@ -27,6 +27,7 @@ import {
   isGadgetHiddenInDesignerPreview,
   getGadgetCurrentImageDisplay,
   getGadgetCheckedStateFieldConfig,
+  getGadgetColorRowsFieldConfig,
   getGadgetImageRowsFieldConfig,
   getGadgetConstantsFieldConfig,
   getGadgetFontFieldConfig,
@@ -132,6 +133,21 @@ test("keeps the gadget color inspector matrix aligned with FD_SelectGadget", () 
     .sort();
 
   assert.deepEqual(actualColorKinds, expectedColorKinds);
+});
+
+test("documents the original FrontColor / BackColor rows while preserving the safer picker flow", () => {
+  assert.deepEqual(getGadgetColorRowsFieldConfig(GADGET_KIND.TextGadget), {
+    visible: true,
+    frontColorVisible: true,
+    backColorVisible: true,
+    valueEditable: true,
+    frontColorLabel: "FrontColor",
+    backColorLabel: "BackColor",
+    title: "Original FrontColor / BackColor rows. Editing keeps the current port color picker and clear buttons while persisting SetGadgetColor(...) values safely."
+  });
+  assert.deepEqual(getGadgetColorRowsFieldConfig(GADGET_KIND.ProgressBarGadget), getGadgetColorRowsFieldConfig(GADGET_KIND.TextGadget));
+  assert.equal(getGadgetColorRowsFieldConfig(GADGET_KIND.ButtonGadget), undefined);
+  assert.equal(getGadgetColorRowsFieldConfig(undefined), undefined);
 });
 
 test("keeps the original constructor-range inspector matrix exact", () => {
@@ -415,6 +431,7 @@ test("documents complete FD_SelectGadget row coverage after the FD-011 audit", (
   assert.equal(canEditGadgetCheckedState(GADGET_KIND.CheckBoxGadget), true);
   assert.equal(canInspectGadgetSplitterPosition(GADGET_KIND.SplitterGadget), true);
   assert.equal(getGadgetSplitterPositionFieldConfig(GADGET_KIND.SplitterGadget)?.label, "SplitterPosition");
+  assert.equal(getGadgetColorRowsFieldConfig(GADGET_KIND.TextGadget)?.frontColorLabel, "FrontColor");
   assert.equal(canInspectCustomGadgetCodeRows(GADGET_KIND.CustomGadget), true);
 });
 test("marks only original item-editor gadget kinds for inspector item sections", () => {
