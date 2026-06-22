@@ -529,6 +529,24 @@ function uniqueFlags(flags: readonly string[]): string[] {
   return out;
 }
 
+const GADGET_FONT_FLAG_SUMMARY_MARKS: readonly {
+  flag: string;
+  mark: string;
+}[] = [
+  { flag: "#PB_Font_Bold", mark: "B" },
+  { flag: "#PB_Font_Italic", mark: "I" },
+  { flag: "#PB_Font_Underline", mark: "U" },
+  { flag: "#PB_Font_StrikeOut", mark: "S" },
+];
+
+function getGadgetFontFlagSummary(flagsRaw: string | undefined): string {
+  const flags = new Set(splitGadgetFlags(flagsRaw));
+  return GADGET_FONT_FLAG_SUMMARY_MARKS
+    .filter(({ flag }) => flags.has(flag))
+    .map(({ mark }) => mark)
+    .join("");
+}
+
 function buildInspectorValue(
   raw: string | undefined,
   fallback: string | undefined,
@@ -860,9 +878,11 @@ export function getGadgetFontDisplaySummary(gadget: GadgetFontLike): string {
   if (gadget.gadgetFontRaw?.trim()) {
     if (gadget.gadgetFont && Number.isFinite(gadget.gadgetFontSize)) {
       const flags = gadget.gadgetFontFlagsRaw?.trim();
-      return flags?.length
-        ? `${gadget.gadgetFont} ${gadget.gadgetFontSize} (${flags})`
+      const flagSummary = getGadgetFontFlagSummary(flags);
+      const originalSummary = flagSummary.length
+        ? `${gadget.gadgetFont} ${gadget.gadgetFontSize} ${flagSummary}`
         : `${gadget.gadgetFont} ${gadget.gadgetFontSize}`;
+      return flags?.length ? `${originalSummary} (${flags})` : originalSummary;
     }
     return gadget.gadgetFontRaw.trim();
   }

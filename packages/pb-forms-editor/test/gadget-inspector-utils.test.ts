@@ -670,7 +670,25 @@ test("formats parsed gadget font metadata into a compact display summary", () =>
       gadgetFontSize: 9,
       gadgetFontFlagsRaw: "#PB_Font_Bold"
     }),
-    "Segoe UI 9 (#PB_Font_Bold)"
+    "Segoe UI 9 B (#PB_Font_Bold)"
+  );
+  assert.equal(
+    getGadgetFontDisplaySummary({
+      gadgetFontRaw: "FontID(#FontBody)",
+      gadgetFont: "Segoe UI",
+      gadgetFontSize: 9,
+      gadgetFontFlagsRaw: "#PB_Font_Bold | #PB_Font_Italic | #PB_Font_Underline | #PB_Font_StrikeOut"
+    }),
+    "Segoe UI 9 BIUS (#PB_Font_Bold | #PB_Font_Italic | #PB_Font_Underline | #PB_Font_StrikeOut)"
+  );
+  assert.equal(
+    getGadgetFontDisplaySummary({
+      gadgetFontRaw: "FontID(#FontBody)",
+      gadgetFont: "Segoe UI",
+      gadgetFontSize: 9,
+      gadgetFontFlagsRaw: "CustomFontFlag"
+    }),
+    "Segoe UI 9 (CustomFontFlag)"
   );
   assert.equal(getGadgetFontDisplaySummary({ gadgetFontRaw: "FontID(#FontBody)" }), "FontID(#FontBody)");
   assert.equal(getGadgetFontDisplaySummary({}), "");
