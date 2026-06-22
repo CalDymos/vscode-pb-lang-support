@@ -1,5 +1,4 @@
 import { EXT_TO_WEBVIEW_MSG_TYPE, WEBVIEW_TO_EXT_MSG_TYPE, type ExtensionToWebviewMessage, type WebviewToExtensionMessage, type WindowsRegistryColors } from "../shared/messages";
-import type { MenuEntryMovePlacement } from "../shared/menu";
 import {
   GRID_MODE_KEY,
   SNAP_MODE_KEY,
@@ -115,7 +114,7 @@ import {
   getMenuFooterRect,
   getMenuPreviewLabel,
   getMenuVisibleEntries,
-  getPredictedMenuEntryMoveIndex,
+  getPredictedLinearMoveIndex,
   getStatusBarAddButtonPreviewLayout,
   getStatusBarFieldImageY,
   getStatusBarFieldPreviewRect,
@@ -130,8 +129,12 @@ import {
   getTopLevelSelectProcEditState,
   buildOptionalInspectorLiteralRaw,
   buildOptionalInspectorPlainValue,
+  buildPendingMenuEntrySelection,
+  buildPendingStatusBarFieldMoveSelection,
+  buildPendingToolBarEntryMoveSelection,
   getToolBarPreviewInsertArgs,
   getToolBarEntryAdvance,
+  getToolBarEntryMoveBlockEndIndex,
   getToolBarImageButtonPreviewRect,
   getToolBarSeparatorPreviewRect,
   getToolBarSeparatorSelectedOutlineRect,
@@ -450,7 +453,7 @@ let windowParentAsRawExpressionOverrides = new Map<string, boolean>();
 type PendingMenuEntrySelection = {
   menuId: string;
   preferredIndex: number;
-  kind: FormMenuEntry["kind"];
+  kind: string;
   level?: number;
   idRaw?: string;
   textRaw?: string;
@@ -461,7 +464,7 @@ type PendingMenuEntrySelection = {
 type PendingToolBarEntrySelection = {
   toolBarId: string;
   preferredIndex: number;
-  kind: FormToolBarEntry["kind"];
+  kind: string;
   idRaw?: string;
   iconRaw?: string;
   textRaw?: string;
@@ -7583,34 +7586,6 @@ function saveImageAssignmentDraft() {
 }
 
 
-function buildPendingMenuEntrySelection(
-  menu: FormMenu,
-  sourceEntryIndex: number,
-  targetSourceLine: number,
-  placement: MenuEntryMovePlacement
-): PendingMenuEntrySelection | null {
-  const sourceEntry = menu.entries?.[sourceEntryIndex];
-  if (!sourceEntry) return null;
-
-  const targetEntryIndex = (menu.entries ?? []).findIndex(entry => entry.source?.line === targetSourceLine);
-  if (targetEntryIndex < 0) return null;
-
-  const preferredIndex = getPredictedMenuEntryMoveIndex(menu, sourceEntryIndex, targetEntryIndex, placement);
-  if (preferredIndex === null) return null;
-
-  return {
-    menuId: menu.id,
-    preferredIndex,
-    kind: sourceEntry.kind,
-    level: getMenuEntryLevel(sourceEntry),
-    idRaw: sourceEntry.idRaw,
-    textRaw: sourceEntry.textRaw,
-    shortcut: sourceEntry.shortcut,
-    iconRaw: sourceEntry.iconRaw
-  };
-}
-
-
 function drawTopLevelMoveIndicator(
   ctx: CanvasRenderingContext2D,
   target: { indicatorRect: PreviewRect; indicatorOrientation: "horizontal" | "vertical" },
@@ -7640,83 +7615,6 @@ function drawTopLevelMoveIndicator(
   ctx.restore();
 }
 
-function getToolBarEntryMoveBlockEndIndex(toolBar: FormToolBar, entryIndex: number): number {
-  const entry = toolBar.entries?.[entryIndex];
-  if (!entry || entry.kind === "ToolBarToolTip") return entryIndex;
-  const nextEntry = toolBar.entries?.[entryIndex + 1];
-  if (nextEntry?.kind === "ToolBarToolTip" && (nextEntry.idRaw?.trim() ?? "") === (entry.idRaw?.trim() ?? "")) {
-    return entryIndex + 1;
-  }
-  return entryIndex;
-}
-
-function getPredictedLinearMoveIndex(entryCount: number, sourceEntryIndex: number, sourceEndIndex: number, targetEntryIndex: number, targetEndIndex: number, placement: MenuEntryMovePlacement): number | null {
-  if (sourceEntryIndex < 0 || sourceEntryIndex >= entryCount) return null;
-  if (targetEntryIndex < 0 || targetEntryIndex >= entryCount) return null;
-
-  let insertIndex = placement === "before" ? targetEntryIndex : targetEndIndex + 1;
-  if (insertIndex >= sourceEntryIndex && insertIndex <= sourceEndIndex + 1) return null;
-
-  if (sourceEntryIndex < insertIndex) {
-    insertIndex -= sourceEndIndex - sourceEntryIndex + 1;
-  }
-  return Math.max(0, insertIndex);
-}
-
-function buildPendingToolBarEntryMoveSelection(
-  toolBar: FormToolBar,
-  sourceEntryIndex: number,
-  targetSourceLine: number,
-  placement: MenuEntryMovePlacement
-): PendingToolBarEntrySelection | null {
-  const sourceEntry = toolBar.entries?.[sourceEntryIndex];
-  if (!sourceEntry) return null;
-
-  const targetEntryIndex = (toolBar.entries ?? []).findIndex(entry => entry.source?.line === targetSourceLine);
-  if (targetEntryIndex < 0) return null;
-
-  const sourceEndIndex = getToolBarEntryMoveBlockEndIndex(toolBar, sourceEntryIndex);
-  const targetEndIndex = getToolBarEntryMoveBlockEndIndex(toolBar, targetEntryIndex);
-  const preferredIndex = getPredictedLinearMoveIndex(toolBar.entries?.length ?? 0, sourceEntryIndex, sourceEndIndex, targetEntryIndex, targetEndIndex, placement);
-  if (preferredIndex === null) return null;
-
-  return {
-    toolBarId: toolBar.id,
-    preferredIndex,
-    kind: sourceEntry.kind,
-    idRaw: sourceEntry.idRaw,
-    iconRaw: sourceEntry.iconRaw,
-    textRaw: sourceEntry.textRaw,
-    toggle: sourceEntry.toggle
-  };
-}
-
-function buildPendingStatusBarFieldMoveSelection(
-  statusBar: FormStatusBar,
-  sourceFieldIndex: number,
-  targetSourceLine: number,
-  placement: MenuEntryMovePlacement
-): PendingStatusBarFieldSelection | null {
-  const sourceField = statusBar.fields?.[sourceFieldIndex];
-  if (!sourceField) return null;
-
-  const targetFieldIndex = (statusBar.fields ?? []).findIndex(field => field.source?.line === targetSourceLine);
-  if (targetFieldIndex < 0) return null;
-
-  const preferredIndex = getPredictedLinearMoveIndex(statusBar.fields?.length ?? 0, sourceFieldIndex, sourceFieldIndex, targetFieldIndex, targetFieldIndex, placement);
-  if (preferredIndex === null) return null;
-
-  return {
-    statusBarId: statusBar.id,
-    preferredIndex,
-    widthRaw: sourceField.widthRaw,
-    textRaw: sourceField.textRaw,
-    imageRaw: sourceField.imageRaw,
-    flagsRaw: sourceField.flagsRaw,
-    progressBar: sourceField.progressBar,
-    progressRaw: sourceField.progressRaw
-  };
-}
 
 function drawMenuFlyoutPanelPreview(
   ctx: CanvasRenderingContext2D,

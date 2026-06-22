@@ -5,6 +5,9 @@ import {
   deriveWindows7MenuBarPalette,
   buildOptionalInspectorLiteralRaw,
   buildOptionalInspectorPlainValue,
+  buildPendingMenuEntrySelection,
+  buildPendingStatusBarFieldMoveSelection,
+  buildPendingToolBarEntryMoveSelection,
   canMoveWindowInCanvas,
   canResizeWindowTopInCanvas,
   canResizeWindowLeftInCanvas,
@@ -35,6 +38,7 @@ import {
   getMenuFlyoutPanelRect,
   getMenuFooterRect,
   getMenuPreviewLabel,
+  getPredictedLinearMoveIndex,
   getPredictedMenuEntryMoveIndex,
   getMenuVisibleEntries,
   getStatusBarAddButtonPreviewLayout,
@@ -55,6 +59,7 @@ import {
   getSelectedToolBarInspectorFieldConfig,
   getToolBarPreviewInsertArgs,
   getToolBarEntryAdvance,
+  getToolBarEntryMoveBlockEndIndex,
   getToolBarImageButtonPreviewRect,
   getToolBarSeparatorPreviewRect,
   getToolBarSeparatorSelectedOutlineRect,
@@ -100,6 +105,69 @@ test("filters bound toolbar tooltip rows from the visible structure count", () =
   assert.equal(shouldShowToolBarStructureEntry(toolBar, 2), true);
   assert.equal(shouldShowToolBarStructureEntry(toolBar, 3), true);
   assert.equal(getVisibleToolBarEntryCount(toolBar), 3);
+});
+
+test("builds pending top-level move selections from source lines and predicted indices", () => {
+  const menu = {
+    id: "#Menu",
+    entries: [
+      { kind: "MenuTitle", textRaw: '"File"', source: { line: 10 } },
+      { kind: "MenuItem", level: 1, idRaw: "#Open", textRaw: '"Open"', source: { line: 11 } },
+      { kind: "MenuItem", level: 1, idRaw: "#Save", textRaw: '"Save"', source: { line: 12 } }
+    ]
+  };
+
+  assert.deepEqual(buildPendingMenuEntrySelection(menu, 2, 11, "before"), {
+    menuId: "#Menu",
+    preferredIndex: 1,
+    kind: "MenuItem",
+    level: 1,
+    idRaw: "#Save",
+    textRaw: '"Save"',
+    shortcut: undefined,
+    iconRaw: undefined,
+  });
+
+  const toolBar = {
+    id: "#Toolbar",
+    entries: [
+      { kind: "ToolBarImageButton", idRaw: "#Open", iconRaw: "ImageID(#OpenImg)", source: { line: 20 } },
+      { kind: "ToolBarToolTip", idRaw: "#Open", textRaw: '"Open"', source: { line: 21 } },
+      { kind: "ToolBarSeparator", source: { line: 22 } },
+      { kind: "ToolBarImageButton", idRaw: "#Save", source: { line: 23 } }
+    ]
+  };
+
+  assert.equal(getToolBarEntryMoveBlockEndIndex(toolBar, 0), 1);
+  assert.equal(getPredictedLinearMoveIndex(toolBar.entries.length, 0, 1, 3, 3, "after"), 2);
+  assert.deepEqual(buildPendingToolBarEntryMoveSelection(toolBar, 0, 23, "after"), {
+    toolBarId: "#Toolbar",
+    preferredIndex: 2,
+    kind: "ToolBarImageButton",
+    idRaw: "#Open",
+    iconRaw: "ImageID(#OpenImg)",
+    textRaw: undefined,
+    toggle: undefined,
+  });
+
+  const statusBar = {
+    id: "#Status",
+    fields: [
+      { widthRaw: "100", textRaw: '"Left"', source: { line: 30 } },
+      { widthRaw: "200", progressBar: true, progressRaw: "50", source: { line: 31 } }
+    ]
+  };
+
+  assert.deepEqual(buildPendingStatusBarFieldMoveSelection(statusBar, 0, 31, "after"), {
+    statusBarId: "#Status",
+    preferredIndex: 1,
+    widthRaw: "100",
+    textRaw: '"Left"',
+    imageRaw: undefined,
+    flagsRaw: undefined,
+    progressBar: undefined,
+    progressRaw: undefined,
+  });
 });
 
 test("preserves whitespace-only inspector text values when converting to raw payloads", () => {
