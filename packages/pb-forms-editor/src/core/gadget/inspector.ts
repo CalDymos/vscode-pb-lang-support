@@ -60,6 +60,14 @@ export type GadgetCheckedStateFieldConfig = {
   title: string;
 };
 
+export type GadgetSplitterPositionFieldConfig = {
+  visible: boolean;
+  valueEditable: boolean;
+  label: string;
+  title: string;
+  valuePolicy: "bounded-by-current-orientation-size";
+};
+
 export type GadgetImageEntryLike = {
   image?: string;
   imageRaw?: string;
@@ -657,6 +665,20 @@ export function canInspectGadgetSplitterPosition(
   kind: string | undefined,
 ): boolean {
   return kind === GADGET_KIND.SplitterGadget;
+}
+
+export function getGadgetSplitterPositionFieldConfig(
+  kind: string | undefined,
+): GadgetSplitterPositionFieldConfig | undefined {
+  if (!canInspectGadgetSplitterPosition(kind)) return undefined;
+  return {
+    visible: true,
+    valueEditable: true,
+    label: "Splitter position",
+    title:
+      "Original SplitterPosition row for SplitterGadget. Editing keeps the current port safety check that bounds the position to the active splitter orientation size.",
+    valuePolicy: "bounded-by-current-orientation-size",
+  };
 }
 
 export function canInspectCustomGadgetCodeRows(

@@ -42,6 +42,7 @@ import {
   getGadgetTextInspectorValue,
   getCustomGadgetSelectPresetFieldConfig,
   getGadgetSelectProcFieldConfig,
+  getGadgetSplitterPositionFieldConfig,
   getGadgetTooltipFieldConfig,
   getGadgetTooltipInspectorValue,
   buildGadgetFlagsExpr,
@@ -202,6 +203,18 @@ test("keeps the original splitter-position special row limited to SplitterGadget
     .filter(kind => canInspectGadgetSplitterPosition(kind));
 
   assert.deepEqual(actualSplitterKinds, [GADGET_KIND.SplitterGadget]);
+});
+
+test("documents the original splitter-position row while preserving bounded port editing", () => {
+  assert.deepEqual(getGadgetSplitterPositionFieldConfig(GADGET_KIND.SplitterGadget), {
+    visible: true,
+    valueEditable: true,
+    label: "SplitterPosition",
+    title: "Original SplitterPosition row for SplitterGadget. Editing keeps the current port safety check that bounds the position to the active splitter orientation size.",
+    valuePolicy: "bounded-by-current-orientation-size"
+  });
+  assert.equal(getGadgetSplitterPositionFieldConfig(GADGET_KIND.ButtonGadget), undefined);
+  assert.equal(getGadgetSplitterPositionFieldConfig(undefined), undefined);
 });
 
 test("keeps original custom-gadget code rows limited to CustomGadget", () => {
@@ -401,6 +414,7 @@ test("documents complete FD_SelectGadget row coverage after the FD-011 audit", (
   assert.equal(canInspectGadgetImageRows(GADGET_KIND.ImageGadget), true);
   assert.equal(canEditGadgetCheckedState(GADGET_KIND.CheckBoxGadget), true);
   assert.equal(canInspectGadgetSplitterPosition(GADGET_KIND.SplitterGadget), true);
+  assert.equal(getGadgetSplitterPositionFieldConfig(GADGET_KIND.SplitterGadget)?.label, "SplitterPosition");
   assert.equal(canInspectCustomGadgetCodeRows(GADGET_KIND.CustomGadget), true);
 });
 test("marks only original item-editor gadget kinds for inspector item sections", () => {

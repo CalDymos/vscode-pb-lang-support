@@ -186,6 +186,7 @@ import {
   getGadgetParentInspectorValue,
   getGadgetResizeLockFieldConfig,
   getGadgetSelectProcFieldConfig,
+  getGadgetSplitterPositionFieldConfig,
   getGadgetTooltipFieldConfig,
   getGadgetCaptionFieldConfig,
   getGadgetCheckedStateFieldConfig,
@@ -12085,35 +12086,34 @@ function renderProps() {
     propsEl.appendChild(row("", changeParentBtn));
   }
 
-  if (canInspectGadgetSplitterPosition(g.kind)) {
-    propsEl.appendChild(
-      row(
-        "Splitter Position",
-        numberInput(getEditableSplitterState(g), v => {
-          const next = Math.trunc(v);
-          const vertical = hasPbFlag(g.flagsExpr, "#PB_Splitter_Vertical");
-          const limit = vertical ? g.w : g.h;
-          if (!Number.isFinite(next) || next <= 0 || next >= limit) {
-            alert(`Splitter position must be between 1 and ${Math.max(1, limit - 1)}.`);
-            renderProps();
-            return;
-          }
-          if (isActiveLayoutDpiScalingEnabled() && isDpiScaledGadgetState(g.kind)) {
-            const nextRaw = toUnscaledLayoutRaw(next);
-            storeLayoutDisplayOverride("gadget", g.id, "state", next, nextRaw);
-            g.state = next;
-            g.stateRaw = nextRaw;
-            post({ type: WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw, id: g.id, stateRaw: nextRaw });
-          } else {
-            g.state = next;
-            g.stateRaw = String(next);
-            post({ type: WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw, id: g.id, stateRaw: String(next) });
-          }
-          render();
-          renderProps();
-        })
-      )
-    );
+  const splitterPositionField = getGadgetSplitterPositionFieldConfig(g.kind);
+  if (splitterPositionField?.visible) {
+    const splitterPositionInput = numberInput(getEditableSplitterState(g), v => {
+      const next = Math.trunc(v);
+      const vertical = hasPbFlag(g.flagsExpr, "#PB_Splitter_Vertical");
+      const limit = vertical ? g.w : g.h;
+      if (!Number.isFinite(next) || next <= 0 || next >= limit) {
+        alert(`Splitter position must be between 1 and ${Math.max(1, limit - 1)}.`);
+        renderProps();
+        return;
+      }
+      if (isActiveLayoutDpiScalingEnabled() && isDpiScaledGadgetState(g.kind)) {
+        const nextRaw = toUnscaledLayoutRaw(next);
+        storeLayoutDisplayOverride("gadget", g.id, "state", next, nextRaw);
+        g.state = next;
+        g.stateRaw = nextRaw;
+        post({ type: WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw, id: g.id, stateRaw: nextRaw });
+      } else {
+        g.state = next;
+        g.stateRaw = String(next);
+        post({ type: WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw, id: g.id, stateRaw: String(next) });
+      }
+      render();
+      renderProps();
+    });
+    splitterPositionInput.disabled = !splitterPositionField.valueEditable;
+    splitterPositionInput.title = splitterPositionField.title;
+    propsEl.appendChild(row(splitterPositionField.label, splitterPositionInput));
     if (shouldShowReadonlyUnscaledGadgetStateRows(g)) {
       propsEl.appendChild(row("Splitter Position (Unscaled)", readonlyInput(getReadonlyUnscaledGadgetStateValue(g), "Readonly code value written to SetGadgetState(...).")));
     }
