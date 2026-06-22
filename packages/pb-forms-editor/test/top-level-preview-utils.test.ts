@@ -69,6 +69,7 @@ import {
   getSelectedToolBarInspectorFieldConfig,
   getToolBarPreviewInsertArgs,
   getToolBarEntryAdvance,
+  getToolBarEntrySelectionFocusRect,
   getToolBarEntryMoveBlockEndIndex,
   getToolBarImageButtonPreviewRect,
   getToolBarSeparatorPreviewRect,
@@ -532,6 +533,41 @@ test("separates toolbar separator visible geometry from the original hit slot", 
     y: 16,
     w: 8,
     h: 18,
+  });
+});
+
+test("resolves toolbar entry selection focus rectangles from toolbar entry kind", () => {
+  const toolBar = {
+    id: "#ToolBar_0",
+    entries: [
+      { kind: "ToolBarSeparator" },
+      { kind: "ToolBarImageButton" }
+    ]
+  };
+
+  assert.deepEqual(getToolBarEntrySelectionFocusRect(toolBar, { ownerId: "#ToolBar_0", index: 0, x: 42, y: 17, w: 10, h: 16 }), {
+    ownerId: "#ToolBar_0",
+    index: 0,
+    x: 42,
+    y: 17,
+    w: 6,
+    h: 16,
+  });
+  assert.deepEqual(getToolBarEntrySelectionFocusRect(toolBar, { ownerId: "#ToolBar_0", index: 1, x: 60, y: 17, w: 16, h: 16 }), {
+    ownerId: "#ToolBar_0",
+    index: 1,
+    x: 60,
+    y: 17,
+    w: 16,
+    h: 16,
+  });
+  assert.deepEqual(getToolBarEntrySelectionFocusRect(undefined, { ownerId: "#ToolBar_0", index: 0, x: 42, y: 17, w: 10, h: 16 }), {
+    ownerId: "#ToolBar_0",
+    index: 0,
+    x: 42,
+    y: 17,
+    w: 10,
+    h: 16,
   });
 });
 

@@ -1222,6 +1222,15 @@ export function getToolBarSeparatorSelectedOutlineRect(entryRect: PreviewRectLik
   };
 }
 
+export function getToolBarEntrySelectionFocusRect(toolBar: ToolBarModelLike | undefined, entryRect: PreviewEntryRectLike): PreviewRectLike {
+  const entry = toolBar?.id === entryRect.ownerId ? toolBar.entries?.[entryRect.index] : undefined;
+  if (entry?.kind === "ToolBarSeparator") {
+    return { ...entryRect, ...getToolBarSeparatorPreviewRect(entryRect.x, entryRect.y) };
+  }
+
+  return entryRect;
+}
+
 export function getTopLevelClampedAddIconX(
   bandRect: PreviewRectLike,
   currentX: number,

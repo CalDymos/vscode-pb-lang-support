@@ -144,6 +144,7 @@ import {
   resolvePendingToolBarEntrySelectionIndex,
   getToolBarPreviewInsertArgs,
   getToolBarEntryAdvance,
+  getToolBarEntrySelectionFocusRect,
   getToolBarEntryMoveBlockEndIndex,
   getToolBarImageButtonPreviewRect,
   getToolBarSeparatorPreviewRect,
@@ -7853,16 +7854,6 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
   }
 }
 
-function getToolBarSelectionFocusRect(entryRect: PreviewEntryRect): PreviewRect {
-  const toolbar = getPrimaryToolbar();
-  const entry = toolbar?.id === entryRect.ownerId ? toolbar.entries?.[entryRect.index] : undefined;
-  if (entry?.kind === "ToolBarSeparator") {
-    return { ...entryRect, ...getToolBarSeparatorPreviewRect(entryRect.x, entryRect.y) };
-  }
-
-  return entryRect;
-}
-
 function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg: string, osSkin: DesignerSettings["osSkin"]) {
   const toolbar = getPrimaryToolbar();
   toolBarEntryPreviewRects = [];
@@ -8679,7 +8670,7 @@ function render() {
       const sel = selection;
       const entryRect = toolBarEntryPreviewRects.find(entry => entry.ownerId === sel.toolBarId && entry.index === sel.entryIndex);
       if (entryRect) {
-        const focusRect = getToolBarSelectionFocusRect(entryRect);
+        const focusRect = getToolBarEntrySelectionFocusRect(getPrimaryToolbar(), entryRect);
         ctx.save();
         ctx.strokeStyle = focus;
         ctx.lineWidth = 2;
