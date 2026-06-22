@@ -21,9 +21,11 @@ import {
   getMenuFlyoutAnchorRect,
   getMenuFlyoutEntryTextLayout,
   getMenuFlyoutFooterOpacity,
+  getMenuFlyoutFooterPreviewRect,
   getMenuFlyoutFooterTextPosition,
   getMenuFlyoutSeparatorLineY,
   getMenuFlyoutSeparatorPreviewRect,
+  getMenuFlyoutEntryPreviewRect,
   getMenuFlyoutShortcutOpacity,
   getMenuEntrySourceLine,
   getMenuEntrySelectedIndexAtDragStart,
@@ -36,9 +38,12 @@ import {
   getPredictedMenuEntryMoveIndex,
   getMenuVisibleEntries,
   getStatusBarAddButtonPreviewLayout,
+  getStatusBarFieldImageY,
   getStatusBarFieldPreviewRect,
   getStatusBarFieldMoveTarget,
+  getStatusBarFieldTextBaselineY,
   getStatusBarFieldWidths,
+  getStatusBarProgressTrackPreviewRect,
   getStatusBarPreviewInsertArgs,
   getSelectedMenuEntryInspectorFieldConfig,
   getSelectedStatusBarInspectorFieldConfig,
@@ -49,8 +54,11 @@ import {
   resolveTopLevelChromeHit,
   getSelectedToolBarInspectorFieldConfig,
   getToolBarPreviewInsertArgs,
+  getToolBarEntryAdvance,
+  getToolBarImageButtonPreviewRect,
   getToolBarSeparatorPreviewRect,
   getToolBarSeparatorSelectedOutlineRect,
+  getToolBarSeparatorSlotRect,
   getTopLevelClampedAddIconX,
   getTopLevelMoveIndicatorStrokes,
   hasPbFlag,
@@ -209,6 +217,27 @@ test("uses the original flyout separator hit rectangle and separator line offset
   assert.equal(getMenuFlyoutSeparatorLineY(entryRect), 54);
 });
 
+
+test("uses original menu flyout entry and footer registered heights", () => {
+  assert.deepEqual(getMenuFlyoutEntryPreviewRect("#Menu", 3, 120, 48, 160), {
+    ownerId: "#Menu",
+    index: 3,
+    x: 120,
+    y: 48,
+    w: 160,
+    h: 20,
+  });
+
+  assert.deepEqual(getMenuFlyoutFooterPreviewRect("#Menu", 0, 120, 108, 160), {
+    menuId: "#Menu",
+    parentIndex: 0,
+    x: 120,
+    y: 108,
+    w: 160,
+    h: 20,
+  });
+});
+
 test("uses the restored flyout text baseline and menu-bar anchored flyout positions", () => {
   assert.deepEqual(getMenuFlyoutEntryTextLayout({ x: 120, y: 48, w: 160, h: 20 }, 37.2), {
     labelX: 144,
@@ -271,10 +300,14 @@ test("predicts menu block end indices and move targets for subtree moves", () =>
 });
 
 
-test("uses the original toolbar separator hit and selection geometry", () => {
-  const entryRect = getToolBarSeparatorPreviewRect(42, 17);
-  assert.deepEqual(entryRect, { x: 42, y: 17, w: 6, h: 16 });
-  assert.deepEqual(getToolBarSeparatorSelectedOutlineRect(entryRect), {
+test("separates toolbar separator visible geometry from the original hit slot", () => {
+  const separatorRect = getToolBarSeparatorPreviewRect(42, 17);
+  assert.deepEqual(separatorRect, { x: 42, y: 17, w: 6, h: 16 });
+  assert.deepEqual(getToolBarSeparatorSlotRect(42, 17), { x: 42, y: 17, w: 10, h: 16 });
+  assert.deepEqual(getToolBarImageButtonPreviewRect(60, 17), { x: 60, y: 17, w: 16, h: 16 });
+  assert.equal(getToolBarEntryAdvance("ToolBarSeparator"), 10);
+  assert.equal(getToolBarEntryAdvance("ToolBarImageButton"), 22);
+  assert.deepEqual(getToolBarSeparatorSelectedOutlineRect(separatorRect), {
     x: 41,
     y: 16,
     w: 8,
@@ -317,6 +350,18 @@ test("uses the original statusbar field hit and selection geometry", () => {
   assert.deepEqual(
     getStatusBarFieldPreviewRect("StatusBar_0", 2, 42.8, 180.2, 64.9, 23.9),
     { ownerId: "StatusBar_0", index: 2, x: 42, y: 180, w: 64, h: 23 }
+  );
+});
+
+
+test("keeps statusbar content offsets aligned with FD_Redraw", () => {
+  const fieldRect = { ownerId: "StatusBar_0", index: 1, x: 42, y: 180, w: 64, h: 23 };
+
+  assert.equal(getStatusBarFieldTextBaselineY(fieldRect), 195);
+  assert.equal(getStatusBarFieldImageY(fieldRect), 184);
+  assert.deepEqual(
+    getStatusBarProgressTrackPreviewRect(fieldRect, 60.8, 13.2),
+    { x: 44, y: 185, w: 60, h: 13 }
   );
 });
 
