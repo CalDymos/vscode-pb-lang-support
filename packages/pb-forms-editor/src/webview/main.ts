@@ -117,10 +117,13 @@ import {
   getMenuVisibleEntries,
   getPredictedMenuEntryMoveIndex,
   getStatusBarAddButtonPreviewLayout,
+  getStatusBarFieldImageY,
   getStatusBarFieldPreviewRect,
   getStatusBarFieldMoveTarget,
+  getStatusBarFieldTextBaselineY,
   getStatusBarFieldWidths,
   getStatusBarPreviewInsertArgs,
+  getStatusBarProgressTrackPreviewRect,
   getSelectedMenuEntryInspectorFieldConfig,
   getSelectedStatusBarInspectorFieldConfig,
   getSelectedToolBarInspectorFieldConfig,
@@ -8279,7 +8282,6 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
   const fieldWidths = getStatusBarFieldWidths(statusbar, Math.max(0, rect.w - statusBarDecoration.widthAdjustment));
 
   let x = rect.x + statusBarDecoration.fieldInsetX;
-  const imageY = rect.y + statusBarDecoration.fieldInsetY;
   for (let i = 0; i < statusbar.fields.length; i++) {
     const field = statusbar.fields[i];
     const fieldW = fieldWidths[i] ?? 18;
@@ -8304,12 +8306,17 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
       ctx.fillStyle = statusBarTextColor;
       const textWidth = Math.ceil(ctx.measureText(textLabel).width);
       const textX = getStatusBarAlignedX(x, fieldW, textWidth, hasPbFlag(field.flagsRaw, "#PB_StatusBar_Center"), hasPbFlag(field.flagsRaw, "#PB_StatusBar_Right"));
-      ctx.fillText(textLabel, textX, rect.y + 15);
+      ctx.fillText(textLabel, textX, getStatusBarFieldTextBaselineY(fieldRect));
     } else if (field.progressBar) {
       const progressDecoration = getWindowPreviewStatusBarProgressDecoration(osSkin);
       const progressMetrics = getStatusBarProgressPreviewMetrics(fieldW, rect.h, field.progressRaw ?? "0");
-      const trackX = x + progressDecoration.trackInsetX;
-      const trackY = rect.y + progressDecoration.trackInsetY;
+      const trackRect = getStatusBarProgressTrackPreviewRect(
+        fieldRect,
+        progressMetrics.trackWidth,
+        progressMetrics.trackHeight,
+        progressDecoration.trackInsetX,
+        progressDecoration.trackInsetY
+      );
       const trackColor = progressDecoration.trackColorStyle === "windows8"
         ? "rgb(230, 230, 230)"
         : "rgb(220, 220, 220)";
@@ -8323,23 +8330,23 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
       ctx.save();
       ctx.fillStyle = trackColor;
       if (progressDecoration.trackShape === "rounded") {
-        traceRoundedRect(ctx, trackX, trackY, progressMetrics.trackWidth, progressMetrics.trackHeight, progressDecoration.trackRadius);
+        traceRoundedRect(ctx, trackRect.x, trackRect.y, trackRect.w, trackRect.h, progressDecoration.trackRadius);
         ctx.fill();
       } else {
-        ctx.fillRect(trackX, trackY, progressMetrics.trackWidth, progressMetrics.trackHeight);
+        ctx.fillRect(trackRect.x, trackRect.y, trackRect.w, trackRect.h);
       }
 
       if (progressMetrics.fillWidth > 0) {
         ctx.fillStyle = fillColor;
-        ctx.fillRect(trackX + 1, trackY + 1, progressMetrics.fillWidth, Math.max(2, progressMetrics.trackHeight - 2));
+        ctx.fillRect(trackRect.x + 1, trackRect.y + 1, progressMetrics.fillWidth, Math.max(2, trackRect.h - 2));
       }
 
       ctx.strokeStyle = borderColor;
       if (progressDecoration.trackShape === "rounded") {
-        traceRoundedRect(ctx, trackX + 0.5, trackY + 0.5, progressMetrics.trackWidth - 1, progressMetrics.trackHeight - 1, progressDecoration.trackRadius);
+        traceRoundedRect(ctx, trackRect.x + 0.5, trackRect.y + 0.5, trackRect.w - 1, trackRect.h - 1, progressDecoration.trackRadius);
         ctx.stroke();
       } else {
-        ctx.strokeRect(trackX + 0.5, trackY + 0.5, progressMetrics.trackWidth - 1, progressMetrics.trackHeight - 1);
+        ctx.strokeRect(trackRect.x + 0.5, trackRect.y + 0.5, trackRect.w - 1, trackRect.h - 1);
       }
       ctx.restore();
     } else {
@@ -8360,6 +8367,7 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
         hasPbFlag(field.flagsRaw, "#PB_StatusBar_Center"),
         hasPbFlag(field.flagsRaw, "#PB_StatusBar_Right")
       );
+      const imageY = getStatusBarFieldImageY(fieldRect, statusBarDecoration.fieldInsetY);
       if (!drawPreviewRasterIcon(ctx, previewImage, imageX, imageY, previewWidth, previewHeight)) {
         drawPreviewFallbackImageIcon(ctx, imageX, imageY, fallbackSize);
       }

@@ -131,6 +131,9 @@ const ORIGINAL_MENU_ROOT_MOVE_INDICATOR_HEIGHT = 16;
 const ORIGINAL_MENU_FLYOUT_ENTRY_HEIGHT = 20;
 const ORIGINAL_MENU_FLYOUT_SEPARATOR_HEIGHT = 12;
 const ORIGINAL_MENU_FLYOUT_FOOTER_HEIGHT = 20;
+const ORIGINAL_STATUSBAR_TEXT_BASELINE_OFFSET_Y = 15;
+const ORIGINAL_STATUSBAR_IMAGE_OFFSET_Y = 4;
+const ORIGINAL_STATUSBAR_PROGRESS_TRACK_INSET_Y = 5;
 
 const ORIGINAL_TOP_LEVEL_MOVE_INDICATOR_STROKES: TopLevelMoveIndicatorStroke[] = [
   { role: "core", lineWidth: 2, fallbackColor: "#0000ff", cssVariable: "--vscode-editorInfo-foreground" },
@@ -685,6 +688,32 @@ export function getStatusBarFieldPreviewRect(
     y: Math.trunc(y),
     w: Math.max(0, Math.trunc(width)),
     h: Math.max(0, Math.trunc(height)),
+  };
+}
+
+export function getStatusBarFieldTextBaselineY(fieldRect: PreviewRectLike): number {
+  return fieldRect.y + ORIGINAL_STATUSBAR_TEXT_BASELINE_OFFSET_Y;
+}
+
+export function getStatusBarFieldImageY(
+  fieldRect: PreviewRectLike,
+  offsetY = ORIGINAL_STATUSBAR_IMAGE_OFFSET_Y
+): number {
+  return fieldRect.y + Math.trunc(offsetY);
+}
+
+export function getStatusBarProgressTrackPreviewRect(
+  fieldRect: PreviewRectLike,
+  trackWidth: number,
+  trackHeight: number,
+  trackInsetX = 2,
+  trackInsetY = ORIGINAL_STATUSBAR_PROGRESS_TRACK_INSET_Y
+): PreviewRectLike {
+  return {
+    x: fieldRect.x + Math.trunc(trackInsetX),
+    y: fieldRect.y + Math.trunc(trackInsetY),
+    w: Math.max(0, Math.trunc(trackWidth)),
+    h: Math.max(0, Math.trunc(trackHeight)),
   };
 }
 

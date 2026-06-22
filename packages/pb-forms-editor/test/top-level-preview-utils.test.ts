@@ -38,9 +38,12 @@ import {
   getPredictedMenuEntryMoveIndex,
   getMenuVisibleEntries,
   getStatusBarAddButtonPreviewLayout,
+  getStatusBarFieldImageY,
   getStatusBarFieldPreviewRect,
   getStatusBarFieldMoveTarget,
+  getStatusBarFieldTextBaselineY,
   getStatusBarFieldWidths,
+  getStatusBarProgressTrackPreviewRect,
   getStatusBarPreviewInsertArgs,
   getSelectedMenuEntryInspectorFieldConfig,
   getSelectedStatusBarInspectorFieldConfig,
@@ -347,6 +350,18 @@ test("uses the original statusbar field hit and selection geometry", () => {
   assert.deepEqual(
     getStatusBarFieldPreviewRect("StatusBar_0", 2, 42.8, 180.2, 64.9, 23.9),
     { ownerId: "StatusBar_0", index: 2, x: 42, y: 180, w: 64, h: 23 }
+  );
+});
+
+
+test("keeps statusbar content offsets aligned with FD_Redraw", () => {
+  const fieldRect = { ownerId: "StatusBar_0", index: 1, x: 42, y: 180, w: 64, h: 23 };
+
+  assert.equal(getStatusBarFieldTextBaselineY(fieldRect), 195);
+  assert.equal(getStatusBarFieldImageY(fieldRect), 184);
+  assert.deepEqual(
+    getStatusBarProgressTrackPreviewRect(fieldRect, 60.8, 13.2),
+    { x: 44, y: 185, w: 60, h: 13 }
   );
 });
 
