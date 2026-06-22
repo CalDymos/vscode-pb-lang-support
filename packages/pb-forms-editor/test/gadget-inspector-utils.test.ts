@@ -30,6 +30,7 @@ import {
   getGadgetFontFieldConfig,
   getGadgetKnownFlags,
   getGadgetParentFieldConfig,
+  getGadgetParentInspectorValue,
   getGadgetResizeLockFieldConfig,
   getGadgetCtorRangeInspectorValue,
   isDpiScaledGadgetCtorRange,
@@ -653,6 +654,12 @@ test("uses the assigned gadget variable or enum symbol tail for the inspector Va
   assert.equal(getGadgetVariableInspectorValue({ variable: "Button_0", firstParam: "#PB_Any" }), "Button_0");
   assert.equal(getGadgetVariableInspectorValue({ firstParam: "#Button_1" }), "Button_1");
 });
+
+test("uses the parent gadget variable for the original Parent row display", () => {
+  assert.equal(getGadgetParentInspectorValue({ variable: "Container_0", firstParam: "#PB_Any" }), "Container_0");
+  assert.equal(getGadgetParentInspectorValue({ firstParam: "#Panel_0" }), "Panel_0");
+  assert.equal(getGadgetParentInspectorValue(undefined), "");
+});
 test("resolves inspector display values from raw gadget caption and tooltip expressions", () => {
   assert.equal(getGadgetTextInspectorValue({ textRaw: '"Caption"', text: "Caption" }), "Caption");
   assert.equal(getGadgetTextInspectorValue({ textRaw: '~"Escaped ""Caption"""', text: 'Escaped "Caption"' }), 'Escaped "Caption"');
@@ -689,6 +696,14 @@ test("formats parsed gadget font metadata into a compact display summary", () =>
       gadgetFontFlagsRaw: "CustomFontFlag"
     }),
     "Segoe UI 9 (CustomFontFlag)"
+  );
+  assert.equal(
+    getGadgetFontDisplaySummary({
+      gadgetFont: "Segoe UI",
+      gadgetFontSize: 9,
+      gadgetFontFlagsRaw: "#PB_Font_Italic"
+    }),
+    "Segoe UI 9 I (#PB_Font_Italic)"
   );
   assert.equal(getGadgetFontDisplaySummary({ gadgetFontRaw: "FontID(#FontBody)" }), "FontID(#FontBody)");
   assert.equal(getGadgetFontDisplaySummary({}), "");

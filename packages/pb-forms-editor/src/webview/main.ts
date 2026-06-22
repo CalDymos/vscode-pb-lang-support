@@ -185,6 +185,7 @@ import {
   getGadgetConstantsFieldConfig,
   getGadgetFontFieldConfig,
   getGadgetParentFieldConfig,
+  getGadgetParentInspectorValue,
   getGadgetResizeLockFieldConfig,
   getGadgetSelectProcFieldConfig,
   getGadgetTooltipFieldConfig,
@@ -11563,6 +11564,7 @@ function renderProps() {
     propsEl.appendChild(row("Columns", readonlyInput(String(g.columns?.length ?? 0))));
   }
   const isImageCapableGadget = canInspectGadgetImageRows(g.kind);
+  const parentGadget = g.parentId ? model.gadgets.find(it => it.id === g.parentId) : undefined;
   const gadgetImage = findImageEntryById(g.imageId);
 
   const deleteGadgetBtn = document.createElement("button");
@@ -12048,6 +12050,10 @@ function renderProps() {
       )
     );
     propsEl.appendChild(mutedNote("SelectGadget follows the original combobox row. In the available PureBasic source, preset changes there are not written back automatically; InitCode and CreateCode remain the effective saved values."));
+  }
+
+  if (parentField) {
+    propsEl.appendChild(row("Parent", readonlyInput(getGadgetParentInspectorValue(parentGadget), parentField.title)));
   }
 
   if (parentField?.selectTargetAvailable && g.parentId) {

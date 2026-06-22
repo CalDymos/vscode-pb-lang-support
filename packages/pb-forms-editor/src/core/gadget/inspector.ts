@@ -28,6 +28,11 @@ export type GadgetFontLike = {
   gadgetFontFlagsRaw?: string;
 };
 
+export type GadgetParentDisplayLike = {
+  variable?: string;
+  firstParam: string;
+};
+
 export type GadgetCtorRangeLike = {
   minRaw?: string;
   min?: number;
@@ -817,6 +822,13 @@ export function getGadgetVariableInspectorValue(gadget: {
   return gadget.firstParam.replace(/^#/, "");
 }
 
+export function getGadgetParentInspectorValue(
+  parent: GadgetParentDisplayLike | undefined,
+): string {
+  if (!parent) return "";
+  return getGadgetVariableInspectorValue(parent);
+}
+
 export function getGadgetTooltipFieldConfig(
   kind: string | undefined,
 ): GadgetTooltipFieldConfig | undefined {
@@ -875,18 +887,15 @@ export function getCustomGadgetHelpDisplay(): string {
 }
 
 export function getGadgetFontDisplaySummary(gadget: GadgetFontLike): string {
-  if (gadget.gadgetFontRaw?.trim()) {
-    if (gadget.gadgetFont && Number.isFinite(gadget.gadgetFontSize)) {
-      const flags = gadget.gadgetFontFlagsRaw?.trim();
-      const flagSummary = getGadgetFontFlagSummary(flags);
-      const originalSummary = flagSummary.length
-        ? `${gadget.gadgetFont} ${gadget.gadgetFontSize} ${flagSummary}`
-        : `${gadget.gadgetFont} ${gadget.gadgetFontSize}`;
-      return flags?.length ? `${originalSummary} (${flags})` : originalSummary;
-    }
-    return gadget.gadgetFontRaw.trim();
+  if (gadget.gadgetFont && Number.isFinite(gadget.gadgetFontSize)) {
+    const flags = gadget.gadgetFontFlagsRaw?.trim();
+    const flagSummary = getGadgetFontFlagSummary(flags);
+    const originalSummary = flagSummary.length
+      ? `${gadget.gadgetFont} ${gadget.gadgetFontSize} ${flagSummary}`
+      : `${gadget.gadgetFont} ${gadget.gadgetFontSize}`;
+    return flags?.length ? `${originalSummary} (${flags})` : originalSummary;
   }
-  return "";
+  return gadget.gadgetFontRaw?.trim() ?? "";
 }
 
 const PB_FORM_SKIN_CONSTANTS: Readonly<
