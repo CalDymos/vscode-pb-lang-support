@@ -173,7 +173,6 @@ import {
   buildGadgetFlagsExpr,
   buildGadgetTextRaw,
   buildGadgetTooltipRaw,
-  canEditGadgetCheckedState,
   canEditGadgetColors,
   canInspectGadgetColumns,
   canInspectCustomGadgetCodeRows,
@@ -189,6 +188,7 @@ import {
   getGadgetSelectProcFieldConfig,
   getGadgetTooltipFieldConfig,
   getGadgetCaptionFieldConfig,
+  getGadgetCheckedStateFieldConfig,
   getGadgetCurrentImageDisplay,
   getGadgetImageRowsFieldConfig,
   getGadgetCtorRangeFieldLabels,
@@ -11646,13 +11646,13 @@ function renderProps() {
 
   const captionField = getGadgetCaptionFieldConfig(g.kind);
   const canEditColors = canEditGadgetColors(g.kind);
-  const canEditChecked = canEditGadgetCheckedState(g.kind);
+  const checkedStateField = getGadgetCheckedStateFieldConfig(g.kind);
   const parentField = getGadgetParentFieldConfig(g.kind, Boolean(g.parentId));
   const resizeLockField = getGadgetResizeLockFieldConfig(g.kind);
   const fontField = getGadgetFontFieldConfig(g.kind);
   const constantsField = getGadgetConstantsFieldConfig(g.kind);
   const hasExpressionVisibility = (Boolean(g.hiddenRaw) && g.hidden === undefined) || (Boolean(g.disabledRaw) && g.disabled === undefined);
-  const hasExpressionChecked = canEditChecked && Boolean(g.stateRaw) && g.state === undefined;
+  const hasExpressionChecked = Boolean(checkedStateField) && Boolean(g.stateRaw) && g.state === undefined;
 
   if (captionField) {
     propsEl.appendChild(
@@ -11963,10 +11963,10 @@ function renderProps() {
     }
   }
 
-  if (canEditChecked) {
+  if (checkedStateField?.visible) {
     propsEl.appendChild(
       row(
-        "Checked",
+        checkedStateField.label,
         checkboxInput(Boolean(g.state), v => {
           g.state = v ? 1 : 0;
           g.stateRaw = buildGadgetCheckedStateRaw(g.kind, v);
@@ -11976,7 +11976,8 @@ function renderProps() {
         }, {
           title: hasExpressionChecked
             ? "This gadget currently uses a custom checked expression. Changing it here replaces it with a simple checked/unchecked value."
-            : "Set whether this gadget starts checked."
+            : checkedStateField.title,
+          disabled: !checkedStateField.valueEditable
         })
       )
     );

@@ -53,6 +53,13 @@ export type GadgetImageRowsFieldConfig = {
   changeImageTitle: string;
 };
 
+export type GadgetCheckedStateFieldConfig = {
+  visible: boolean;
+  valueEditable: boolean;
+  label: string;
+  title: string;
+};
+
 export type GadgetImageEntryLike = {
   image?: string;
   imageRaw?: string;
@@ -611,6 +618,19 @@ export function canEditGadgetCheckedState(kind: string | undefined): boolean {
   return (
     typeof kind === "string" && GADGET_CHECKED_STATE_CAPABLE_KINDS.has(kind)
   );
+}
+
+export function getGadgetCheckedStateFieldConfig(
+  kind: string | undefined,
+): GadgetCheckedStateFieldConfig | undefined {
+  if (!canEditGadgetCheckedState(kind)) return undefined;
+  return {
+    visible: true,
+    valueEditable: true,
+    label: "Checked",
+    title:
+      "Original Checked row for CheckBoxGadget and OptionGadget. Editing writes the SetGadgetState(...) checked value.",
+  };
 }
 
 export function canInspectGadgetImageRows(kind: string | undefined): boolean {

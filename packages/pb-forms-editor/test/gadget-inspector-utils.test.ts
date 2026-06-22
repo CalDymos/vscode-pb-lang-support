@@ -26,6 +26,7 @@ import {
   isGadgetDisabledInDesignerPreview,
   isGadgetHiddenInDesignerPreview,
   getGadgetCurrentImageDisplay,
+  getGadgetCheckedStateFieldConfig,
   getGadgetImageRowsFieldConfig,
   getGadgetConstantsFieldConfig,
   getGadgetFontFieldConfig,
@@ -182,6 +183,18 @@ test("keeps the original checked-state special row matrix exact", () => {
     GADGET_KIND.CheckBoxGadget,
     GADGET_KIND.OptionGadget
   ].sort());
+});
+
+test("documents the original checked-state inspector row without broadening its scope", () => {
+  assert.deepEqual(getGadgetCheckedStateFieldConfig(GADGET_KIND.CheckBoxGadget), {
+    visible: true,
+    valueEditable: true,
+    label: "Checked",
+    title: "Original Checked row for CheckBoxGadget and OptionGadget. Editing writes the SetGadgetState(...) checked value."
+  });
+  assert.deepEqual(getGadgetCheckedStateFieldConfig(GADGET_KIND.OptionGadget), getGadgetCheckedStateFieldConfig(GADGET_KIND.CheckBoxGadget));
+  assert.equal(getGadgetCheckedStateFieldConfig(GADGET_KIND.ButtonGadget), undefined);
+  assert.equal(getGadgetCheckedStateFieldConfig(undefined), undefined);
 });
 
 test("keeps the original splitter-position special row limited to SplitterGadget", () => {
