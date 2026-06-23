@@ -11836,8 +11836,8 @@ function renderProps() {
     : resizeLockField.unavailableNote
   ));
   }
-  if (hasExpressionVisibility) {
-    propsEl.appendChild(mutedNote("Custom Hidden/Disabled expressions stay unchanged until you edit them here. Editing replaces them with 1 or 0."));
+  if (hasExpressionVisibility && visibilityStateField) {
+    propsEl.appendChild(mutedNote(visibilityStateField.customExpressionNote));
   }
 
   if (fontField) {
@@ -11993,14 +11993,14 @@ function renderProps() {
           renderProps();
         }, {
           title: hasExpressionChecked
-            ? "This gadget currently uses a custom checked expression. Changing it here replaces it with a simple checked/unchecked value."
+            ? checkedStateField.customExpressionTitle
             : checkedStateField.title,
           disabled: !checkedStateField.valueEditable
         })
       )
     );
     if (hasExpressionChecked) {
-      propsEl.appendChild(mutedNote("Custom checked expressions stay unchanged until you edit them here. Editing replaces them with a simple checked/unchecked value or removes the line."));
+      propsEl.appendChild(mutedNote(checkedStateField.customExpressionNote));
     }
   }
 
@@ -12133,9 +12133,9 @@ function renderProps() {
     splitterPositionInput.title = splitterPositionField.title;
     propsEl.appendChild(row(splitterPositionField.label, splitterPositionInput));
     if (shouldShowReadonlyUnscaledGadgetStateRows(g)) {
-      propsEl.appendChild(row("Splitter Position (Unscaled)", readonlyInput(getReadonlyUnscaledGadgetStateValue(g), "Readonly code value written to SetGadgetState(...).")));
+      propsEl.appendChild(row(splitterPositionField.unscaledLabel, readonlyInput(getReadonlyUnscaledGadgetStateValue(g), splitterPositionField.unscaledTitle)));
     }
-    propsEl.appendChild(mutedNote("Set the splitter position between the two child gadgets."));
+    propsEl.appendChild(mutedNote(splitterPositionField.note));
   }
 
   if (imageRowsField) {

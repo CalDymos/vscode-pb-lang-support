@@ -58,6 +58,8 @@ export type GadgetCheckedStateFieldConfig = {
   valueEditable: boolean;
   label: string;
   title: string;
+  customExpressionTitle: string;
+  customExpressionNote: string;
 };
 
 export type GadgetVisibilityStateFieldConfig = {
@@ -69,6 +71,7 @@ export type GadgetVisibilityStateFieldConfig = {
   hiddenCustomExpressionTitle: string;
   disabledTitle: string;
   disabledCustomExpressionTitle: string;
+  customExpressionNote: string;
 };
 
 export type GadgetLayoutFieldConfig = {
@@ -97,6 +100,9 @@ export type GadgetSplitterPositionFieldConfig = {
   valueEditable: boolean;
   label: string;
   title: string;
+  unscaledLabel: string;
+  unscaledTitle: string;
+  note: string;
   valuePolicy: "bounded-by-current-orientation-size";
 };
 
@@ -770,6 +776,10 @@ export function getGadgetCheckedStateFieldConfig(
     label: "Checked",
     title:
       "Toggle whether this gadget is checked. Custom expressions stay unchanged until you change this value.",
+    customExpressionTitle:
+      "This gadget uses a custom checked expression. Changing this checkbox replaces it with a simple checked or unchecked value.",
+    customExpressionNote:
+      "Custom checked expressions stay unchanged until you change this checkbox. Checking replaces the expression with the checked constant; unchecking removes the SetGadgetState line.",
   };
 }
 
@@ -806,9 +816,13 @@ export function getGadgetSplitterPositionFieldConfig(
   return {
     visible: true,
     valueEditable: true,
-    label: "SplitterPosition",
+    label: "Splitter Position",
     title:
       "Edit the splitter position between the two child gadgets. The value must stay within the current splitter size.",
+    unscaledLabel: "Splitter Position (Unscaled)",
+    unscaledTitle:
+      "Displays the raw splitter position saved in the form code. Edit SplitterPosition to update it.",
+    note: "Set the splitter position between the two child gadgets.",
     valuePolicy: "bounded-by-current-orientation-size",
   };
 }
@@ -897,6 +911,8 @@ export function getGadgetVisibilityStateFieldConfig(
     disabledTitle: "Enable or disable this gadget.",
     disabledCustomExpressionTitle:
       "This gadget uses a custom disable expression. Changing this checkbox replaces it with 1 or 0.",
+    customExpressionNote:
+      "Custom Hidden/Disabled expressions stay unchanged until you change these checkboxes. Changing one replaces that expression with 1 or 0.",
   };
 }
 

@@ -221,7 +221,9 @@ test("uses a user-facing checked-state tooltip without broadening its scope", ()
     visible: true,
     valueEditable: true,
     label: "Checked",
-    title: "Toggle whether this gadget is checked. Custom expressions stay unchanged until you change this value."
+    title: "Toggle whether this gadget is checked. Custom expressions stay unchanged until you change this value.",
+    customExpressionTitle: "This gadget uses a custom checked expression. Changing this checkbox replaces it with a simple checked or unchecked value.",
+    customExpressionNote: "Custom checked expressions stay unchanged until you change this checkbox. Checking replaces the expression with the checked constant; unchecking removes the SetGadgetState line."
   });
   assert.deepEqual(getGadgetCheckedStateFieldConfig(GADGET_KIND.OptionGadget), getGadgetCheckedStateFieldConfig(GADGET_KIND.CheckBoxGadget));
   assert.equal(getGadgetCheckedStateFieldConfig(GADGET_KIND.ButtonGadget), undefined);
@@ -239,8 +241,11 @@ test("uses a user-facing splitter-position tooltip while preserving bounds polic
   assert.deepEqual(getGadgetSplitterPositionFieldConfig(GADGET_KIND.SplitterGadget), {
     visible: true,
     valueEditable: true,
-    label: "SplitterPosition",
+    label: "Splitter Position",
     title: "Edit the splitter position between the two child gadgets. The value must stay within the current splitter size.",
+    unscaledLabel: "Splitter Position (Unscaled)",
+    unscaledTitle: "Displays the raw splitter position saved in the form code. Edit SplitterPosition to update it.",
+    note: "Set the splitter position between the two child gadgets.",
     valuePolicy: "bounded-by-current-orientation-size"
   });
   assert.equal(getGadgetSplitterPositionFieldConfig(GADGET_KIND.ButtonGadget), undefined);
@@ -486,7 +491,7 @@ test("documents complete FD_SelectGadget row coverage after the FD-011 audit", (
   assert.equal(canInspectGadgetImageRows(GADGET_KIND.ImageGadget), true);
   assert.equal(canEditGadgetCheckedState(GADGET_KIND.CheckBoxGadget), true);
   assert.equal(canInspectGadgetSplitterPosition(GADGET_KIND.SplitterGadget), true);
-  assert.equal(getGadgetSplitterPositionFieldConfig(GADGET_KIND.SplitterGadget)?.label, "SplitterPosition");
+  assert.equal(getGadgetSplitterPositionFieldConfig(GADGET_KIND.SplitterGadget)?.label, "Splitter Position");
   assert.equal(getGadgetColorRowsFieldConfig(GADGET_KIND.TextGadget)?.frontColorLabel, "FrontColor");
   assert.equal(canInspectCustomGadgetCodeRows(GADGET_KIND.CustomGadget), true);
   assert.equal(getCustomGadgetCodeRowsFieldConfig(GADGET_KIND.CustomGadget)?.visible, true);
@@ -628,7 +633,8 @@ test("uses user-facing hidden and disabled tooltips for gadget visibility state 
     hiddenTitle: "Show or hide this gadget.",
     hiddenCustomExpressionTitle: "This gadget uses a custom hide expression. Changing this checkbox replaces it with 1 or 0.",
     disabledTitle: "Enable or disable this gadget.",
-    disabledCustomExpressionTitle: "This gadget uses a custom disable expression. Changing this checkbox replaces it with 1 or 0."
+    disabledCustomExpressionTitle: "This gadget uses a custom disable expression. Changing this checkbox replaces it with 1 or 0.",
+    customExpressionNote: "Custom Hidden/Disabled expressions stay unchanged until you change these checkboxes. Changing one replaces that expression with 1 or 0."
   });
   assert.equal(getGadgetVisibilityStateFieldConfig(GADGET_KIND.MDIGadget), undefined);
   assert.equal(getGadgetVisibilityStateFieldConfig(undefined), undefined);
