@@ -12141,7 +12141,7 @@ function renderProps() {
   if (imageRowsField) {
     propsEl.appendChild(
       row(
-        "CurrentImage",
+        imageRowsField.currentImageLabel,
         readonlyInput(getGadgetCurrentImageDisplay(g, gadgetImage), imageRowsField.currentImageTitle)
       )
     );
@@ -12172,7 +12172,7 @@ function renderProps() {
     const gadgetImageActions = document.createElement("div");
     gadgetImageActions.className = "row-actions";
     const gadgetChooseFileBtn = document.createElement("button");
-    gadgetChooseFileBtn.textContent = "Select";
+    gadgetChooseFileBtn.textContent = imageRowsField.selectButtonLabel;
     gadgetChooseFileBtn.disabled = !imageRowsField.changeImageAvailable;
     gadgetChooseFileBtn.title = imageRowsField.changeImageTitle;
     gadgetChooseFileBtn.onclick = () => {
@@ -12180,7 +12180,7 @@ function renderProps() {
       openImageAssignmentDraft({ kind: "gadget", gadgetId: g.id }, "chooseFile");
     };
     gadgetImageActions.appendChild(gadgetChooseFileBtn);
-    propsEl.appendChild(row("ChangeImage", gadgetImageActions));
+    propsEl.appendChild(row(imageRowsField.changeImageLabel, gadgetImageActions));
   }
 
   if (isImageAssignmentDraftOpenFor({ kind: "gadget", gadgetId: g.id })) {

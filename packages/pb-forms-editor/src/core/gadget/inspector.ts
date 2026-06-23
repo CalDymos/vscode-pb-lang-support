@@ -49,6 +49,9 @@ export type GadgetImageRowsFieldConfig = {
   currentImageEditable: boolean;
   changeImageVisible: boolean;
   changeImageAvailable: boolean;
+  currentImageLabel: string;
+  changeImageLabel: string;
+  selectButtonLabel: string;
   currentImageTitle: string;
   changeImageTitle: string;
 };
@@ -838,6 +841,9 @@ export function getGadgetImageRowsFieldConfig(
     currentImageEditable: false,
     changeImageVisible: true,
     changeImageAvailable: true,
+    currentImageLabel: "CurrentImage",
+    changeImageLabel: "ChangeImage",
+    selectButtonLabel: "Select",
     currentImageTitle:
       "Displays the image currently assigned to this gadget. Use Select to choose or create another image.",
     changeImageTitle:

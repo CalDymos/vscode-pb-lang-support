@@ -208,6 +208,9 @@ test("uses user-facing image gadget row tooltips", () => {
     currentImageEditable: false,
     changeImageVisible: true,
     changeImageAvailable: true,
+    currentImageLabel: "CurrentImage",
+    changeImageLabel: "ChangeImage",
+    selectButtonLabel: "Select",
     currentImageTitle: "Displays the image currently assigned to this gadget. Use Select to choose or create another image.",
     changeImageTitle: "Choose, create or assign an image for this gadget."
   });
