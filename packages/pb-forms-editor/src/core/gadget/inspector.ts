@@ -75,7 +75,8 @@ export type GadgetColorRowsFieldConfig = {
   valueEditable: boolean;
   frontColorLabel: string;
   backColorLabel: string;
-  title: string;
+  frontColorTitle: string;
+  backColorTitle: string;
 };
 
 export type GadgetImageEntryLike = {
@@ -290,7 +291,7 @@ const GADGET_CTOR_RANGE_FIELD_LABELS: ReadonlyMap<
     {
       minLabel: "Min",
       maxLabel: "Max",
-      title: "Matches the original Min / Max constructor arguments.",
+      title: "Edit this constructor value. Custom expressions are kept as raw text.",
     },
   ],
   [
@@ -298,7 +299,7 @@ const GADGET_CTOR_RANGE_FIELD_LABELS: ReadonlyMap<
     {
       minLabel: "Min",
       maxLabel: "Max",
-      title: "Matches the original Min / Max constructor arguments.",
+      title: "Edit this constructor value. Custom expressions are kept as raw text.",
     },
   ],
   [
@@ -306,7 +307,7 @@ const GADGET_CTOR_RANGE_FIELD_LABELS: ReadonlyMap<
     {
       minLabel: "Min",
       maxLabel: "Max",
-      title: "Matches the original Min / Max constructor arguments.",
+      title: "Edit this constructor value. Custom expressions are kept as raw text.",
     },
   ],
   [
@@ -314,7 +315,7 @@ const GADGET_CTOR_RANGE_FIELD_LABELS: ReadonlyMap<
     {
       minLabel: "Min",
       maxLabel: "Max",
-      title: "Matches the original Min / Max constructor arguments.",
+      title: "Edit this constructor value. Custom expressions are kept as raw text.",
     },
   ],
   [
@@ -323,7 +324,7 @@ const GADGET_CTOR_RANGE_FIELD_LABELS: ReadonlyMap<
       minLabel: "InnerWidth",
       maxLabel: "InnerHeight",
       title:
-        "Matches the original InnerWidth / InnerHeight constructor arguments.",
+        "Edit this inner size constructor value. Custom expressions are kept as raw text.",
     },
   ],
 ]);
@@ -643,8 +644,10 @@ export function getGadgetColorRowsFieldConfig(
     valueEditable: true,
     frontColorLabel: "FrontColor",
     backColorLabel: "BackColor",
-    title:
-      "Original FrontColor / BackColor rows. Editing keeps the current port color picker and clear buttons while persisting SetGadgetColor(...) values safely.",
+    frontColorTitle:
+      "Displays the raw front color expression. Use the picker to change it or Remove to clear it.",
+    backColorTitle:
+      "Displays the raw background color expression. Use the picker to change it or Remove to clear it.",
   };
 }
 
@@ -663,7 +666,7 @@ export function getGadgetCheckedStateFieldConfig(
     valueEditable: true,
     label: "Checked",
     title:
-      "Original Checked row for CheckBoxGadget and OptionGadget. Editing writes the SetGadgetState(...) checked value.",
+      "Toggle whether this gadget is checked. Custom expressions stay unchanged until you change this value.",
   };
 }
 
@@ -681,9 +684,9 @@ export function getGadgetImageRowsFieldConfig(
     changeImageVisible: true,
     changeImageAvailable: true,
     currentImageTitle:
-      "Original CurrentImage row. The displayed value is resolved from the assigned form image entry and is not persisted by direct text editing.",
+      "Displays the image currently assigned to this gadget. Use Select to choose or create another image.",
     changeImageTitle:
-      "Original ChangeImage button row. The port keeps the safer image-assignment draft flow for file selection, reuse and optional resize.",
+      "Choose, create or assign an image for this gadget.",
   };
 }
 
@@ -700,9 +703,9 @@ export function getGadgetSplitterPositionFieldConfig(
   return {
     visible: true,
     valueEditable: true,
-    label: "Splitter position",
+    label: "SplitterPosition",
     title:
-      "Original SplitterPosition row for SplitterGadget. Editing keeps the current port safety check that bounds the position to the active splitter orientation size.",
+      "Edit the splitter position between the two child gadgets. The value must stay within the current splitter size.",
     valuePolicy: "bounded-by-current-orientation-size",
   };
 }
@@ -736,7 +739,7 @@ export function getGadgetParentFieldConfig(
     selectTargetAvailable: hasParent,
     changeDialogAvailable: true,
     title:
-      "Original FD_SelectGadget parent row. The value is selected through the reparent dialog, not edited as free text.",
+      "Displays the current parent gadget. Use Select Parent to jump to it or Change Parent to choose another parent.",
   };
 }
 
@@ -748,7 +751,7 @@ export function getGadgetResizeLockFieldConfig(
     visible: true,
     valueEditablePolicy: "safe-resize-patch-only",
     title:
-      "Original LockLeft / LockRight / LockTop / LockBottom rows. Editing remains limited to source states that can be persisted safely as ResizeGadget(...).",
+      "Controls how the gadget stays attached to parent edges when the parent is resized. Editable only when the current layout can be saved safely.",
   };
 }
 
@@ -760,7 +763,7 @@ export function getGadgetFontFieldConfig(
     visible: true,
     rawEditable: true,
     title:
-      "Original Font row. The port exposes the persisted SetGadgetFont(...) expression as raw text until the original-style picker is implemented.",
+      "Displays and edits the raw SetGadgetFont(...) expression. Leave empty to clear the gadget font.",
   };
 }
 
@@ -772,7 +775,7 @@ export function getGadgetConstantsFieldConfig(
     visible: true,
     knownFlags: getGadgetKnownFlags(kind),
     title:
-      "Original Constants node. Known constants follow declare.pb order; custom flag tails are preserved by the patcher.",
+      "Toggle known PureBasic constants for this gadget. Custom constants in the raw flags expression are kept.",
   };
 }
 
@@ -784,7 +787,7 @@ export function getGadgetSelectProcFieldConfig(
     valueEditable: true,
     preservesGridString: true,
     title:
-      "Choose an existing procedure or type a procedure name. Matches the original SelectProc grid cell; surrounding whitespace is not stripped before the patcher receives the value.",
+      "Choose an existing procedure or type the procedure called by gadget events.",
     placeholder: "Type or pick a procedure",
   };
 }
@@ -797,7 +800,7 @@ export function getCustomGadgetSelectPresetFieldConfig(
     valueEditable: true,
     persisted: false,
     title:
-      "Shows the original CustomGadget preset combobox row. In the available PureBasic source, changing this row does not rewrite InitCode or CreateCode automatically.",
+      "Select a CustomGadget preset. InitCode and CreateCode remain the saved creation code.",
   };
 }
 

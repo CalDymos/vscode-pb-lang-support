@@ -11853,7 +11853,7 @@ function renderProps() {
 
   if (colorRowsField?.visible) {
     const frontColorInput = readonlyInput((g.frontColorRaw ?? "").trim());
-    frontColorInput.title = colorRowsField.title;
+    frontColorInput.title = colorRowsField.frontColorTitle;
     const frontColorPicker = document.createElement("input");
     frontColorPicker.type = "color";
     frontColorPicker.value = pbColorNumberToCssHex(g.frontColor) ?? "#000000";
@@ -11894,7 +11894,7 @@ function renderProps() {
     }
 
     const backColorInput = readonlyInput((g.backColorRaw ?? "").trim());
-    backColorInput.title = colorRowsField.title;
+    backColorInput.title = colorRowsField.backColorTitle;
     const backColorPicker = document.createElement("input");
     backColorPicker.type = "color";
     backColorPicker.value = pbColorNumberToCssHex(g.backColor) ?? "#000000";
@@ -12007,7 +12007,7 @@ function renderProps() {
           },
           {
             disabled: !customSelectPresetField?.valueEditable,
-            title: customSelectPresetField?.title ?? "Shows the original CustomGadget combobox row."
+            title: customSelectPresetField?.title ?? "Select a CustomGadget preset."
           }
         )
       )
@@ -12057,7 +12057,7 @@ function renderProps() {
         )
       )
     );
-    propsEl.appendChild(mutedNote("SelectGadget follows the original combobox row. In the available PureBasic source, preset changes there are not written back automatically; InitCode and CreateCode remain the effective saved values."));
+    propsEl.appendChild(mutedNote("SelectGadget chooses the preset shown here. InitCode and CreateCode remain the effective saved creation code."));
   }
 
   if (parentField) {
@@ -12083,8 +12083,8 @@ function renderProps() {
     changeParentBtn.textContent = "Change Parent";
     changeParentBtn.disabled = !canChangeParent;
     changeParentBtn.title = canChangeParent
-      ? "Open the original-style Select Parent dialog for this gadget."
-      : "CustomGadget reparenting is blocked until an additional original-source proof exists.";
+      ? "Open the Select Parent dialog for this gadget."
+      : "Changing the parent is not available for this gadget type.";
     changeParentBtn.onclick = () => {
       if (!canChangeParent) return;
       openSelectParentDialog(g);

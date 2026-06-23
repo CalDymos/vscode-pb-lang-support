@@ -135,7 +135,7 @@ test("keeps the gadget color inspector matrix aligned with FD_SelectGadget", () 
   assert.deepEqual(actualColorKinds, expectedColorKinds);
 });
 
-test("documents the original FrontColor / BackColor rows while preserving the safer picker flow", () => {
+test("uses user-facing FrontColor and BackColor tooltips", () => {
   assert.deepEqual(getGadgetColorRowsFieldConfig(GADGET_KIND.TextGadget), {
     visible: true,
     frontColorVisible: true,
@@ -143,7 +143,8 @@ test("documents the original FrontColor / BackColor rows while preserving the sa
     valueEditable: true,
     frontColorLabel: "FrontColor",
     backColorLabel: "BackColor",
-    title: "Original FrontColor / BackColor rows. Editing keeps the current port color picker and clear buttons while persisting SetGadgetColor(...) values safely."
+    frontColorTitle: "Displays the raw front color expression. Use the picker to change it or Remove to clear it.",
+    backColorTitle: "Displays the raw background color expression. Use the picker to change it or Remove to clear it."
   });
   assert.deepEqual(getGadgetColorRowsFieldConfig(GADGET_KIND.ProgressBarGadget), getGadgetColorRowsFieldConfig(GADGET_KIND.TextGadget));
   assert.equal(getGadgetColorRowsFieldConfig(GADGET_KIND.ButtonGadget), undefined);
@@ -156,24 +157,24 @@ test("keeps the original constructor-range inspector matrix exact", () => {
     .map(kind => [kind, getGadgetCtorRangeFieldLabels(kind)] as const);
 
   assert.deepEqual(actualRangeLabels, [
-    [GADGET_KIND.SpinGadget, { minLabel: "Min", maxLabel: "Max", title: "Matches the original Min / Max constructor arguments." }],
-    [GADGET_KIND.TrackBarGadget, { minLabel: "Min", maxLabel: "Max", title: "Matches the original Min / Max constructor arguments." }],
-    [GADGET_KIND.ProgressBarGadget, { minLabel: "Min", maxLabel: "Max", title: "Matches the original Min / Max constructor arguments." }],
-    [GADGET_KIND.ScrollAreaGadget, { minLabel: "InnerWidth", maxLabel: "InnerHeight", title: "Matches the original InnerWidth / InnerHeight constructor arguments." }],
-    [GADGET_KIND.ScrollBarGadget, { minLabel: "Min", maxLabel: "Max", title: "Matches the original Min / Max constructor arguments." }]
+    [GADGET_KIND.SpinGadget, { minLabel: "Min", maxLabel: "Max", title: "Edit this constructor value. Custom expressions are kept as raw text." }],
+    [GADGET_KIND.TrackBarGadget, { minLabel: "Min", maxLabel: "Max", title: "Edit this constructor value. Custom expressions are kept as raw text." }],
+    [GADGET_KIND.ProgressBarGadget, { minLabel: "Min", maxLabel: "Max", title: "Edit this constructor value. Custom expressions are kept as raw text." }],
+    [GADGET_KIND.ScrollAreaGadget, { minLabel: "InnerWidth", maxLabel: "InnerHeight", title: "Edit this inner size constructor value. Custom expressions are kept as raw text." }],
+    [GADGET_KIND.ScrollBarGadget, { minLabel: "Min", maxLabel: "Max", title: "Edit this constructor value. Custom expressions are kept as raw text." }]
   ]);
 });
 
 
 
-test("documents original image gadget rows without replacing the safer assignment draft", () => {
+test("uses user-facing image gadget row tooltips", () => {
   assert.deepEqual(getGadgetImageRowsFieldConfig(GADGET_KIND.ImageGadget), {
     currentImageVisible: true,
     currentImageEditable: false,
     changeImageVisible: true,
     changeImageAvailable: true,
-    currentImageTitle: "Original CurrentImage row. The displayed value is resolved from the assigned form image entry and is not persisted by direct text editing.",
-    changeImageTitle: "Original ChangeImage button row. The port keeps the safer image-assignment draft flow for file selection, reuse and optional resize."
+    currentImageTitle: "Displays the image currently assigned to this gadget. Use Select to choose or create another image.",
+    changeImageTitle: "Choose, create or assign an image for this gadget."
   });
   assert.deepEqual(getGadgetImageRowsFieldConfig(GADGET_KIND.ButtonImageGadget), getGadgetImageRowsFieldConfig(GADGET_KIND.ImageGadget));
   assert.equal(getGadgetImageRowsFieldConfig(GADGET_KIND.ButtonGadget), undefined);
@@ -202,12 +203,12 @@ test("keeps the original checked-state special row matrix exact", () => {
   ].sort());
 });
 
-test("documents the original checked-state inspector row without broadening its scope", () => {
+test("uses a user-facing checked-state tooltip without broadening its scope", () => {
   assert.deepEqual(getGadgetCheckedStateFieldConfig(GADGET_KIND.CheckBoxGadget), {
     visible: true,
     valueEditable: true,
     label: "Checked",
-    title: "Original Checked row for CheckBoxGadget and OptionGadget. Editing writes the SetGadgetState(...) checked value."
+    title: "Toggle whether this gadget is checked. Custom expressions stay unchanged until you change this value."
   });
   assert.deepEqual(getGadgetCheckedStateFieldConfig(GADGET_KIND.OptionGadget), getGadgetCheckedStateFieldConfig(GADGET_KIND.CheckBoxGadget));
   assert.equal(getGadgetCheckedStateFieldConfig(GADGET_KIND.ButtonGadget), undefined);
@@ -221,12 +222,12 @@ test("keeps the original splitter-position special row limited to SplitterGadget
   assert.deepEqual(actualSplitterKinds, [GADGET_KIND.SplitterGadget]);
 });
 
-test("documents the original splitter-position row while preserving bounded port editing", () => {
+test("uses a user-facing splitter-position tooltip while preserving bounds policy", () => {
   assert.deepEqual(getGadgetSplitterPositionFieldConfig(GADGET_KIND.SplitterGadget), {
     visible: true,
     valueEditable: true,
     label: "SplitterPosition",
-    title: "Original SplitterPosition row for SplitterGadget. Editing keeps the current port safety check that bounds the position to the active splitter orientation size.",
+    title: "Edit the splitter position between the two child gadgets. The value must stay within the current splitter size.",
     valuePolicy: "bounded-by-current-orientation-size"
   });
   assert.equal(getGadgetSplitterPositionFieldConfig(GADGET_KIND.ButtonGadget), undefined);
@@ -260,11 +261,11 @@ test("keeps gadget SelectProc field editable and preserves the original grid str
   assert.equal(getGadgetSelectProcFieldConfig(GADGET_KIND.Unknown), undefined);
 });
 
-test("documents CustomGadget SelectGadget as visible but not persisted by the original event grid path", () => {
+test("uses a user-facing CustomGadget SelectGadget tooltip", () => {
   assert.deepEqual(getCustomGadgetSelectPresetFieldConfig(GADGET_KIND.CustomGadget), {
     valueEditable: true,
     persisted: false,
-    title: "Shows the original CustomGadget preset combobox row. In the available PureBasic source, changing this row does not rewrite InitCode or CreateCode automatically."
+    title: "Select a CustomGadget preset. InitCode and CreateCode remain the saved creation code."
   });
   assert.equal(getCustomGadgetSelectPresetFieldConfig(GADGET_KIND.ButtonGadget), undefined);
   assert.equal(getCustomGadgetSelectPresetFieldConfig(undefined), undefined);
@@ -344,19 +345,19 @@ test("keeps original FD_SelectGadget base rows visible for all regular gadget ki
   assert.equal(canInspectGadgetBaseRows(undefined), false);
 });
 
-test("documents original parent row visibility without replacing the reparent dialog policy", () => {
+test("uses a user-facing parent tooltip without replacing the reparent dialog policy", () => {
   assert.deepEqual(getGadgetParentFieldConfig(GADGET_KIND.ButtonGadget, false), {
     visible: true,
     valueEditable: false,
     selectTargetAvailable: false,
     changeDialogAvailable: true,
-    title: "Original FD_SelectGadget parent row. The value is selected through the reparent dialog, not edited as free text."
+    title: "Displays the current parent gadget. Use Select Parent to jump to it or Change Parent to choose another parent."
   });
   assert.equal(getGadgetParentFieldConfig(GADGET_KIND.ButtonGadget, true)?.selectTargetAvailable, true);
   assert.equal(getGadgetParentFieldConfig(GADGET_KIND.MDIGadget, false), undefined);
 });
 
-test("documents original lock rows while preserving safe ResizeGadget patch policy", () => {
+test("uses user-facing lock row titles while preserving safe ResizeGadget policy", () => {
   const actualLockKinds = [...GADGET_KIND_SET]
     .filter(kind => getGadgetResizeLockFieldConfig(kind)?.visible === true)
     .sort();
@@ -366,7 +367,7 @@ test("documents original lock rows while preserving safe ResizeGadget patch poli
   assert.equal(getGadgetResizeLockFieldConfig(GADGET_KIND.Unknown), undefined);
 });
 
-test("keeps original font row visible and records current raw-font editing policy", () => {
+test("keeps font row visible and uses a raw-font editing tooltip", () => {
   const actualFontKinds = [...GADGET_KIND_SET]
     .filter(kind => getGadgetFontFieldConfig(kind)?.visible === true)
     .sort();
@@ -376,7 +377,7 @@ test("keeps original font row visible and records current raw-font editing polic
   assert.equal(getGadgetFontFieldConfig(GADGET_KIND.Unknown), undefined);
 });
 
-test("keeps original constants node visible while known flags stay in declare.pb order", () => {
+test("keeps constants node visible while using a user-facing constants tooltip", () => {
   const actualConstantsKinds = [...GADGET_KIND_SET]
     .filter(kind => getGadgetConstantsFieldConfig(kind)?.visible === true)
     .sort();
@@ -638,12 +639,12 @@ test("returns the original range/scrollarea field labels for constructor-bound g
   assert.deepEqual(getGadgetCtorRangeFieldLabels("ProgressBarGadget"), {
     minLabel: "Min",
     maxLabel: "Max",
-    title: "Matches the original Min / Max constructor arguments."
+    title: "Edit this constructor value. Custom expressions are kept as raw text."
   });
   assert.deepEqual(getGadgetCtorRangeFieldLabels("ScrollAreaGadget"), {
     minLabel: "InnerWidth",
     maxLabel: "InnerHeight",
-    title: "Matches the original InnerWidth / InnerHeight constructor arguments."
+    title: "Edit this inner size constructor value. Custom expressions are kept as raw text."
   });
   assert.equal(getGadgetCtorRangeFieldLabels("ButtonGadget"), undefined);
 });
@@ -654,27 +655,27 @@ test("covers the full original constructor-range gadget matrix after the FD-042c
   assert.deepEqual(getGadgetCtorRangeFieldLabels("SpinGadget"), {
     minLabel: "Min",
     maxLabel: "Max",
-    title: "Matches the original Min / Max constructor arguments."
+    title: "Edit this constructor value. Custom expressions are kept as raw text."
   });
   assert.deepEqual(getGadgetCtorRangeFieldLabels("TrackBarGadget"), {
     minLabel: "Min",
     maxLabel: "Max",
-    title: "Matches the original Min / Max constructor arguments."
+    title: "Edit this constructor value. Custom expressions are kept as raw text."
   });
   assert.deepEqual(getGadgetCtorRangeFieldLabels("ScrollBarGadget"), {
     minLabel: "Min",
     maxLabel: "Max",
-    title: "Matches the original Min / Max constructor arguments."
+    title: "Edit this constructor value. Custom expressions are kept as raw text."
   });
   assert.deepEqual(getGadgetCtorRangeFieldLabels("ProgressBarGadget"), {
     minLabel: "Min",
     maxLabel: "Max",
-    title: "Matches the original Min / Max constructor arguments."
+    title: "Edit this constructor value. Custom expressions are kept as raw text."
   });
   assert.deepEqual(getGadgetCtorRangeFieldLabels("ScrollAreaGadget"), {
     minLabel: "InnerWidth",
     maxLabel: "InnerHeight",
-    title: "Matches the original InnerWidth / InnerHeight constructor arguments."
+    title: "Edit this inner size constructor value. Custom expressions are kept as raw text."
   });
 });
 

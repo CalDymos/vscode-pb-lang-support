@@ -114,7 +114,7 @@ function buildClipboardOriginalActions(args: {
       label: "Copy",
       title: copyEnabled
         ? "Copy the currently selected gadget for a later Paste command."
-        : "This original Form Designer popup command is visible, but its patch path is not implemented for this gadget structure yet.",
+        : "This command is not implemented for this gadget structure yet.",
       enabled: copyEnabled,
       gadgetId: gadget.id,
     },
@@ -136,14 +136,14 @@ function buildCutOriginalAction(gadgetId: string): GadgetCanvasContextMenuAction
   return {
     kind: "cutGadget",
     label: "Cut",
-    title: "This original Form Designer popup command is visible, but its patch path is not implemented yet.",
+    title: "This command is not implemented yet.",
     enabled: false,
     gadgetId,
   };
 }
 
 function buildAlignOriginalActions(gadgetId: string): GadgetCanvasContextMenuAction[] {
-  const title = "This original Form Designer popup command is visible, but its patch path is not implemented yet.";
+  const title = "This command is not implemented yet.";
   return [
     { kind: "alignGadgetLeft", label: "Align Left", title, enabled: false, gadgetId },
     { kind: "alignGadgetTop", label: "Align Top", title, enabled: false, gadgetId },
@@ -159,7 +159,7 @@ function buildDuplicateAction(gadget: GadgetContextMenuLike): GadgetCanvasContex
     label: "Duplicate",
     title: enabled
       ? "Duplicate the currently selected gadget."
-      : "This original Form Designer popup command is visible, but its patch path is not implemented for this gadget structure yet.",
+      : "This command is not implemented for this gadget structure yet.",
     enabled,
     gadgetId: gadget.id
   };
