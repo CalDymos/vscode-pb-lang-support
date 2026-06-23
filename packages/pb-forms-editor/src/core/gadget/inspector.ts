@@ -182,6 +182,7 @@ export type GadgetTooltipFieldConfig = {
 export type GadgetSelectProcFieldConfig = {
   valueEditable: boolean;
   preservesGridString: boolean;
+  label: string;
   title: string;
   placeholder: string;
 };
@@ -229,6 +230,7 @@ export type GadgetFontFieldConfig = {
 export type GadgetConstantsFieldConfig = {
   visible: boolean;
   knownFlags: readonly string[];
+  sectionLabel: string;
   title: string;
 };
 
@@ -1033,6 +1035,7 @@ export function getGadgetConstantsFieldConfig(
   return {
     visible: true,
     knownFlags: getGadgetKnownFlags(kind),
+    sectionLabel: "Constants",
     title:
       "Toggle known PureBasic constants for this gadget. Custom constants in the raw flags expression are kept.",
   };
@@ -1045,6 +1048,7 @@ export function getGadgetSelectProcFieldConfig(
   return {
     valueEditable: true,
     preservesGridString: true,
+    label: "SelectProc",
     title:
       "Choose an existing procedure or type the procedure called by gadget events.",
     placeholder: "Type or pick a procedure",

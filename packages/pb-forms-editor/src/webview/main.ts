@@ -12192,7 +12192,7 @@ function renderProps() {
   if (gadgetSelectProcField) {
     propsEl.appendChild(
       row(
-        "SelectProc",
+        gadgetSelectProcField.label,
         editableComboInput(
           g.eventProc ?? "",
           getProcedureSuggestions(),
@@ -12224,7 +12224,7 @@ function renderProps() {
         .filter(Boolean)
     );
 
-    propsEl.appendChild(section("Constants"));
+    propsEl.appendChild(section(constantsField.sectionLabel));
     for (const flag of gadgetKnownFlags) {
       propsEl.appendChild(row(
         flag,

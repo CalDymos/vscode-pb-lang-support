@@ -298,6 +298,9 @@ test("keeps gadget SelectProc field editable and preserves the original grid str
 
   assert.equal(buttonConfig?.valueEditable, true);
   assert.equal(buttonConfig?.preservesGridString, true);
+  assert.equal(buttonConfig?.label, "SelectProc");
+  assert.equal(buttonConfig?.title, "Choose an existing procedure or type the procedure called by gadget events.");
+  assert.equal(buttonConfig?.placeholder, "Type or pick a procedure");
   assert.equal(customConfig?.valueEditable, true);
   assert.equal(customConfig?.preservesGridString, true);
   assert.equal(getGadgetSelectProcFieldConfig(GADGET_KIND.MDIGadget), undefined);
@@ -471,7 +474,10 @@ test("keeps constants node visible while using a user-facing constants tooltip",
     .sort();
 
   assert.deepEqual(actualConstantsKinds, ORIGINAL_FD_SELECT_GADGET_BASE_ROW_KINDS);
-  assert.deepEqual(getGadgetConstantsFieldConfig(GADGET_KIND.ImageGadget)?.knownFlags, ["#PB_Image_Border", "#PB_Image_Raised"]);
+  const imageConstantsConfig = getGadgetConstantsFieldConfig(GADGET_KIND.ImageGadget);
+  assert.equal(imageConstantsConfig?.sectionLabel, "Constants");
+  assert.equal(imageConstantsConfig?.title, "Toggle known PureBasic constants for this gadget. Custom constants in the raw flags expression are kept.");
+  assert.deepEqual(imageConstantsConfig?.knownFlags, ["#PB_Image_Border", "#PB_Image_Raised"]);
   assert.deepEqual(getGadgetConstantsFieldConfig(GADGET_KIND.OptionGadget)?.knownFlags, []);
   assert.equal(getGadgetConstantsFieldConfig(GADGET_KIND.Unknown), undefined);
 });
@@ -522,7 +528,9 @@ test("documents complete FD_SelectGadget row coverage after the FD-011 audit", (
   assert.equal(getGadgetResizeLockFieldConfig(baseKind)?.visible, true);
   assert.equal(getGadgetFontFieldConfig(baseKind)?.visible, true);
   assert.equal(getGadgetSelectProcFieldConfig(baseKind)?.valueEditable, true);
+  assert.equal(getGadgetSelectProcFieldConfig(baseKind)?.label, "SelectProc");
   assert.equal(getGadgetConstantsFieldConfig(baseKind)?.visible, true);
+  assert.equal(getGadgetConstantsFieldConfig(baseKind)?.sectionLabel, "Constants");
 
   assert.equal(getGadgetCtorRangeFieldLabels(GADGET_KIND.ProgressBarGadget)?.minLabel, "Min");
   assert.equal(canInspectGadgetImageRows(GADGET_KIND.ImageGadget), true);
