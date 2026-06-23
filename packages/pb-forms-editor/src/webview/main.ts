@@ -11948,7 +11948,7 @@ function renderProps() {
           v => {
             applyLocalGadgetCtorRangeUpdate(g, "min", v);
           },
-          { title: gadgetCtorRangeLabels.title }
+          { title: gadgetCtorRangeLabels.minTitle }
         )
       )
     );
@@ -11963,7 +11963,7 @@ function renderProps() {
           v => {
             applyLocalGadgetCtorRangeUpdate(g, "max", v);
           },
-          { title: gadgetCtorRangeLabels.title }
+          { title: gadgetCtorRangeLabels.maxTitle }
         )
       )
     );

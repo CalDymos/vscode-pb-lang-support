@@ -159,11 +159,11 @@ test("keeps the original constructor-range inspector matrix exact", () => {
     .map(kind => [kind, getGadgetCtorRangeFieldLabels(kind)] as const);
 
   assert.deepEqual(actualRangeLabels, [
-    [GADGET_KIND.SpinGadget, { minLabel: "Min", maxLabel: "Max", title: "Edit this constructor value. Custom expressions are kept as raw text." }],
-    [GADGET_KIND.TrackBarGadget, { minLabel: "Min", maxLabel: "Max", title: "Edit this constructor value. Custom expressions are kept as raw text." }],
-    [GADGET_KIND.ProgressBarGadget, { minLabel: "Min", maxLabel: "Max", title: "Edit this constructor value. Custom expressions are kept as raw text." }],
-    [GADGET_KIND.ScrollAreaGadget, { minLabel: "InnerWidth", maxLabel: "InnerHeight", title: "Edit this inner size constructor value. Custom expressions are kept as raw text." }],
-    [GADGET_KIND.ScrollBarGadget, { minLabel: "Min", maxLabel: "Max", title: "Edit this constructor value. Custom expressions are kept as raw text." }]
+    [GADGET_KIND.SpinGadget, { minLabel: "Min", maxLabel: "Max", minTitle: "Edit the raw minimum value expression for this gadget.", maxTitle: "Edit the raw maximum value expression for this gadget." }],
+    [GADGET_KIND.TrackBarGadget, { minLabel: "Min", maxLabel: "Max", minTitle: "Edit the raw minimum value expression for this gadget.", maxTitle: "Edit the raw maximum value expression for this gadget." }],
+    [GADGET_KIND.ProgressBarGadget, { minLabel: "Min", maxLabel: "Max", minTitle: "Edit the raw minimum value expression for this gadget.", maxTitle: "Edit the raw maximum value expression for this gadget." }],
+    [GADGET_KIND.ScrollAreaGadget, { minLabel: "InnerWidth", maxLabel: "InnerHeight", minTitle: "Edit the raw inner width expression for this scroll area.", maxTitle: "Edit the raw inner height expression for this scroll area." }],
+    [GADGET_KIND.ScrollBarGadget, { minLabel: "Min", maxLabel: "Max", minTitle: "Edit the raw minimum value expression for this gadget.", maxTitle: "Edit the raw maximum value expression for this gadget." }]
   ]);
 });
 
@@ -669,12 +669,14 @@ test("returns the original range/scrollarea field labels for constructor-bound g
   assert.deepEqual(getGadgetCtorRangeFieldLabels("ProgressBarGadget"), {
     minLabel: "Min",
     maxLabel: "Max",
-    title: "Edit this constructor value. Custom expressions are kept as raw text."
+    minTitle: "Edit the raw minimum value expression for this gadget.",
+    maxTitle: "Edit the raw maximum value expression for this gadget."
   });
   assert.deepEqual(getGadgetCtorRangeFieldLabels("ScrollAreaGadget"), {
     minLabel: "InnerWidth",
     maxLabel: "InnerHeight",
-    title: "Edit this inner size constructor value. Custom expressions are kept as raw text."
+    minTitle: "Edit the raw inner width expression for this scroll area.",
+    maxTitle: "Edit the raw inner height expression for this scroll area."
   });
   assert.equal(getGadgetCtorRangeFieldLabels("ButtonGadget"), undefined);
 });
@@ -685,27 +687,32 @@ test("covers the full original constructor-range gadget matrix after the FD-042c
   assert.deepEqual(getGadgetCtorRangeFieldLabels("SpinGadget"), {
     minLabel: "Min",
     maxLabel: "Max",
-    title: "Edit this constructor value. Custom expressions are kept as raw text."
+    minTitle: "Edit the raw minimum value expression for this gadget.",
+    maxTitle: "Edit the raw maximum value expression for this gadget."
   });
   assert.deepEqual(getGadgetCtorRangeFieldLabels("TrackBarGadget"), {
     minLabel: "Min",
     maxLabel: "Max",
-    title: "Edit this constructor value. Custom expressions are kept as raw text."
+    minTitle: "Edit the raw minimum value expression for this gadget.",
+    maxTitle: "Edit the raw maximum value expression for this gadget."
   });
   assert.deepEqual(getGadgetCtorRangeFieldLabels("ScrollBarGadget"), {
     minLabel: "Min",
     maxLabel: "Max",
-    title: "Edit this constructor value. Custom expressions are kept as raw text."
+    minTitle: "Edit the raw minimum value expression for this gadget.",
+    maxTitle: "Edit the raw maximum value expression for this gadget."
   });
   assert.deepEqual(getGadgetCtorRangeFieldLabels("ProgressBarGadget"), {
     minLabel: "Min",
     maxLabel: "Max",
-    title: "Edit this constructor value. Custom expressions are kept as raw text."
+    minTitle: "Edit the raw minimum value expression for this gadget.",
+    maxTitle: "Edit the raw maximum value expression for this gadget."
   });
   assert.deepEqual(getGadgetCtorRangeFieldLabels("ScrollAreaGadget"), {
     minLabel: "InnerWidth",
     maxLabel: "InnerHeight",
-    title: "Edit this inner size constructor value. Custom expressions are kept as raw text."
+    minTitle: "Edit the raw inner width expression for this scroll area.",
+    maxTitle: "Edit the raw inner height expression for this scroll area."
   });
 });
 

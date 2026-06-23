@@ -87,7 +87,8 @@ export type GadgetImageEntryLike = {
 export type GadgetCtorRangeFieldLabels = {
   minLabel: string;
   maxLabel: string;
-  title: string;
+  minTitle: string;
+  maxTitle: string;
 };
 
 export type GadgetItemEditorFieldConfig = {
@@ -308,7 +309,8 @@ const GADGET_CTOR_RANGE_FIELD_LABELS: ReadonlyMap<
     {
       minLabel: "Min",
       maxLabel: "Max",
-      title: "Edit this constructor value. Custom expressions are kept as raw text.",
+      minTitle: "Edit the raw minimum value expression for this gadget.",
+      maxTitle: "Edit the raw maximum value expression for this gadget.",
     },
   ],
   [
@@ -316,7 +318,8 @@ const GADGET_CTOR_RANGE_FIELD_LABELS: ReadonlyMap<
     {
       minLabel: "Min",
       maxLabel: "Max",
-      title: "Edit this constructor value. Custom expressions are kept as raw text.",
+      minTitle: "Edit the raw minimum value expression for this gadget.",
+      maxTitle: "Edit the raw maximum value expression for this gadget.",
     },
   ],
   [
@@ -324,7 +327,8 @@ const GADGET_CTOR_RANGE_FIELD_LABELS: ReadonlyMap<
     {
       minLabel: "Min",
       maxLabel: "Max",
-      title: "Edit this constructor value. Custom expressions are kept as raw text.",
+      minTitle: "Edit the raw minimum value expression for this gadget.",
+      maxTitle: "Edit the raw maximum value expression for this gadget.",
     },
   ],
   [
@@ -332,7 +336,8 @@ const GADGET_CTOR_RANGE_FIELD_LABELS: ReadonlyMap<
     {
       minLabel: "Min",
       maxLabel: "Max",
-      title: "Edit this constructor value. Custom expressions are kept as raw text.",
+      minTitle: "Edit the raw minimum value expression for this gadget.",
+      maxTitle: "Edit the raw maximum value expression for this gadget.",
     },
   ],
   [
@@ -340,8 +345,8 @@ const GADGET_CTOR_RANGE_FIELD_LABELS: ReadonlyMap<
     {
       minLabel: "InnerWidth",
       maxLabel: "InnerHeight",
-      title:
-        "Edit this inner size constructor value. Custom expressions are kept as raw text.",
+      minTitle: "Edit the raw inner width expression for this scroll area.",
+      maxTitle: "Edit the raw inner height expression for this scroll area.",
     },
   ],
 ]);
