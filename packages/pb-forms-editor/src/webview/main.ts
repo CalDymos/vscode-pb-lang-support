@@ -173,15 +173,15 @@ import {
   buildGadgetFlagsExpr,
   buildGadgetTextRaw,
   buildGadgetTooltipRaw,
-  canInspectGadgetColumns,
   canInspectCustomGadgetCodeRows,
-  canInspectGadgetItems,
   canInspectGadgetSplitterPosition,
   getCustomGadgetHelpDisplay,
   getCustomGadgetSelectPresetFieldConfig,
   getGadgetColorRowsFieldConfig,
+  getGadgetColumnEditorFieldConfig,
   getGadgetConstantsFieldConfig,
   getGadgetFontFieldConfig,
+  getGadgetItemEditorFieldConfig,
   getGadgetParentFieldConfig,
   getGadgetParentInspectorValue,
   getGadgetResizeLockFieldConfig,
@@ -11556,12 +11556,14 @@ function renderProps() {
   if (shouldShowGadgetTabDetail(g)) {
     propsEl.appendChild(row("Tab", readonlyInput(String(g.parentItem))));
   }
-  const showsItemsInspector = canInspectGadgetItems(g.kind) || Boolean(g.items?.length);
-  const showsColumnsInspector = canInspectGadgetColumns(g.kind) || Boolean(g.columns?.length);
-  if (showsItemsInspector) {
+  const itemEditorField = getGadgetItemEditorFieldConfig(g.kind, Boolean(g.items?.length));
+  const columnEditorField = getGadgetColumnEditorFieldConfig(g.kind, Boolean(g.columns?.length));
+  const showsItemsInspector = Boolean(itemEditorField);
+  const showsColumnsInspector = Boolean(columnEditorField);
+  if (itemEditorField) {
     propsEl.appendChild(row("Items", readonlyInput(String(g.items?.length ?? 0))));
   }
-  if (showsColumnsInspector) {
+  if (columnEditorField) {
     propsEl.appendChild(row("Columns", readonlyInput(String(g.columns?.length ?? 0))));
   }
   const imageRowsField = getGadgetImageRowsFieldConfig(g.kind);
@@ -12238,7 +12240,7 @@ function renderProps() {
   }
 
   // Items editor (minimal UI)
-  if (showsItemsInspector) {
+  if (itemEditorField) {
     propsEl.appendChild(section("Items"));
     const itemDraft = getGadgetItemDraft(g);
     const itemEditorOpen = isGadgetItemEditorOpen(g);
@@ -12246,25 +12248,25 @@ function renderProps() {
     propsEl.appendChild(row(
       "Item Text",
       textInput(itemDraft.text, v => updateGadgetItemEditorDraft({ text: v }), {
-        title: "Edit the text for this item."
+        title: itemEditorField.itemTextTitle
       })
     ));
     propsEl.appendChild(row(
       "Position",
       textInput(itemDraft.posRaw, v => updateGadgetItemEditorDraft({ posRaw: v }), {
-        title: "Edit the position used for this item."
+        title: itemEditorField.positionRawTitle
       })
     ));
     propsEl.appendChild(row(
       "Image Raw",
       textInput(itemDraft.imageRaw, v => updateGadgetItemEditorDraft({ imageRaw: v }), {
-        title: "Edit the optional image reference for this item."
+        title: itemEditorField.imageRawTitle
       })
     ));
     propsEl.appendChild(row(
       "Flags Raw",
       textInput(itemDraft.flagsRaw, v => updateGadgetItemEditorDraft({ flagsRaw: v }), {
-        title: "Edit the optional flags for this item."
+        title: itemEditorField.flagsRawTitle
       })
     ));
 
@@ -12326,6 +12328,7 @@ function renderProps() {
 
   const addItemBtn = document.createElement("button");
   addItemBtn.textContent = "Add Item";
+  addItemBtn.title = itemEditorField.addButtonTitle;
   addItemBtn.onclick = () => {
     openGadgetItemEditor(g);
     renderProps();
@@ -12344,7 +12347,7 @@ function renderProps() {
   }
 
   // Columns editor (minimal UI)
-  if (showsColumnsInspector) {
+  if (columnEditorField) {
     propsEl.appendChild(section("Columns"));
     const columnDraft = getGadgetColumnDraft(g);
     const columnEditorOpen = isGadgetColumnEditorOpen(g);
@@ -12352,19 +12355,19 @@ function renderProps() {
     propsEl.appendChild(row(
       "Column Title",
       textInput(columnDraft.title, v => updateGadgetColumnEditorDraft({ title: v }), {
-        title: "Edit the column title."
+        title: columnEditorField.columnTitleTitle
       })
     ));
     propsEl.appendChild(row(
       "Column Index",
       textInput(columnDraft.colRaw, v => updateGadgetColumnEditorDraft({ colRaw: v }), {
-        title: "Edit the column index."
+        title: columnEditorField.indexRawTitle
       })
     ));
     propsEl.appendChild(row(
       "Width",
       textInput(columnDraft.widthRaw, v => updateGadgetColumnEditorDraft({ widthRaw: v }), {
-        title: "Edit the column width."
+        title: columnEditorField.widthRawTitle
       })
     ));
 

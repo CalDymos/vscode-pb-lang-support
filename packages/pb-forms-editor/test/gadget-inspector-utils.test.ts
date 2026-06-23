@@ -28,7 +28,9 @@ import {
   getGadgetCurrentImageDisplay,
   getGadgetCheckedStateFieldConfig,
   getGadgetColorRowsFieldConfig,
+  getGadgetColumnEditorFieldConfig,
   getGadgetImageRowsFieldConfig,
+  getGadgetItemEditorFieldConfig,
   getGadgetConstantsFieldConfig,
   getGadgetFontFieldConfig,
   getGadgetKnownFlags,
@@ -435,6 +437,34 @@ test("documents complete FD_SelectGadget row coverage after the FD-011 audit", (
   assert.equal(getGadgetColorRowsFieldConfig(GADGET_KIND.TextGadget)?.frontColorLabel, "FrontColor");
   assert.equal(canInspectCustomGadgetCodeRows(GADGET_KIND.CustomGadget), true);
 });
+
+test("uses user-facing item-editor tooltips while preserving existing item data display", () => {
+  assert.deepEqual(getGadgetItemEditorFieldConfig(GADGET_KIND.PanelGadget), {
+    visible: true,
+    itemTextTitle: "Edit the item text shown by this gadget.",
+    positionRawTitle: "Edit the raw item position expression. Use -1 to append the item.",
+    imageRawTitle: "Edit the optional raw image expression for this item.",
+    flagsRawTitle: "Edit the optional raw flags expression for this item.",
+    addButtonTitle: "Add a new item to this gadget."
+  });
+  assert.deepEqual(getGadgetItemEditorFieldConfig(GADGET_KIND.ButtonGadget, true), getGadgetItemEditorFieldConfig(GADGET_KIND.PanelGadget));
+  assert.equal(getGadgetItemEditorFieldConfig(GADGET_KIND.ButtonGadget), undefined);
+  assert.equal(getGadgetItemEditorFieldConfig(undefined), undefined);
+});
+
+test("uses user-facing column-editor tooltips while preserving existing column data display", () => {
+  assert.deepEqual(getGadgetColumnEditorFieldConfig(GADGET_KIND.ListIconGadget), {
+    visible: true,
+    columnTitleTitle: "Edit the column title shown by this gadget.",
+    indexRawTitle: "Edit the raw column index expression. Use the next index to append the column.",
+    widthRawTitle: "Edit the raw column width expression.",
+    addButtonTitle: "Add a new column to this gadget."
+  });
+  assert.deepEqual(getGadgetColumnEditorFieldConfig(GADGET_KIND.ButtonGadget, true), getGadgetColumnEditorFieldConfig(GADGET_KIND.ListIconGadget));
+  assert.equal(getGadgetColumnEditorFieldConfig(GADGET_KIND.PanelGadget), undefined);
+  assert.equal(getGadgetColumnEditorFieldConfig(undefined), undefined);
+});
+
 test("marks only original item-editor gadget kinds for inspector item sections", () => {
   assert.equal(canInspectGadgetItems("PanelGadget"), true);
   assert.equal(canInspectGadgetItems("ListIconGadget"), true);

@@ -90,6 +90,23 @@ export type GadgetCtorRangeFieldLabels = {
   title: string;
 };
 
+export type GadgetItemEditorFieldConfig = {
+  visible: boolean;
+  itemTextTitle: string;
+  positionRawTitle: string;
+  imageRawTitle: string;
+  flagsRawTitle: string;
+  addButtonTitle: string;
+};
+
+export type GadgetColumnEditorFieldConfig = {
+  visible: boolean;
+  columnTitleTitle: string;
+  indexRawTitle: string;
+  widthRawTitle: string;
+  addButtonTitle: string;
+};
+
 export type GadgetCaptionFieldConfig = {
   label: string;
   textEditable: boolean;
@@ -808,10 +825,41 @@ export function canInspectGadgetItems(kind: string | undefined): boolean {
   return typeof kind === "string" && GADGET_ITEM_EDITOR_CAPABLE_KINDS.has(kind);
 }
 
+export function getGadgetItemEditorFieldConfig(
+  kind: string | undefined,
+  hasExistingItems = false,
+): GadgetItemEditorFieldConfig | undefined {
+  if (!canInspectGadgetItems(kind) && !hasExistingItems) return undefined;
+  return {
+    visible: true,
+    itemTextTitle: "Edit the item text shown by this gadget.",
+    positionRawTitle:
+      "Edit the raw item position expression. Use -1 to append the item.",
+    imageRawTitle: "Edit the optional raw image expression for this item.",
+    flagsRawTitle: "Edit the optional raw flags expression for this item.",
+    addButtonTitle: "Add a new item to this gadget.",
+  };
+}
+
 export function canInspectGadgetColumns(kind: string | undefined): boolean {
   return (
     typeof kind === "string" && GADGET_COLUMN_EDITOR_CAPABLE_KINDS.has(kind)
   );
+}
+
+export function getGadgetColumnEditorFieldConfig(
+  kind: string | undefined,
+  hasExistingColumns = false,
+): GadgetColumnEditorFieldConfig | undefined {
+  if (!canInspectGadgetColumns(kind) && !hasExistingColumns) return undefined;
+  return {
+    visible: true,
+    columnTitleTitle: "Edit the column title shown by this gadget.",
+    indexRawTitle:
+      "Edit the raw column index expression. Use the next index to append the column.",
+    widthRawTitle: "Edit the raw column width expression.",
+    addButtonTitle: "Add a new column to this gadget.",
+  };
 }
 
 export function getGadgetKnownFlags(
