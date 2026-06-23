@@ -177,6 +177,18 @@ export type CustomGadgetSelectPresetFieldConfig = {
   title: string;
 };
 
+export type CustomGadgetCodeRowsFieldConfig = {
+  visible: boolean;
+  selectGadgetLabel: string;
+  initCodeLabel: string;
+  createCodeLabel: string;
+  helpLabel: string;
+  initCodeTitle: string;
+  createCodeTitle: string;
+  helpTitle: string;
+  note: string;
+};
+
 export type GadgetResizeLockLike = {
   parentId?: string;
   x: number;
@@ -755,6 +767,27 @@ export function canInspectCustomGadgetCodeRows(
   kind: string | undefined,
 ): boolean {
   return kind === GADGET_KIND.CustomGadget;
+}
+
+export function getCustomGadgetCodeRowsFieldConfig(
+  kind: string | undefined,
+): CustomGadgetCodeRowsFieldConfig | undefined {
+  if (!canInspectCustomGadgetCodeRows(kind)) return undefined;
+  return {
+    visible: true,
+    selectGadgetLabel: "SelectGadget",
+    initCodeLabel: "InitCode",
+    createCodeLabel: "CreateCode",
+    helpLabel: "Help",
+    initCodeTitle:
+      "Edit the code that runs before this custom gadget is created.",
+    createCodeTitle:
+      "Edit the code that creates this custom gadget. Leave it filled so the gadget can be recreated.",
+    helpTitle:
+      "Shows the placeholders available in InitCode and CreateCode.",
+    note:
+      "SelectGadget chooses the preset shown here. InitCode and CreateCode contain the code used for this custom gadget.",
+  };
 }
 
 export function canInspectGadgetTooltipRows(kind: string | undefined): boolean {

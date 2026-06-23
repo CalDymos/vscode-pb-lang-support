@@ -176,6 +176,7 @@ import {
   canInspectCustomGadgetCodeRows,
   canInspectGadgetSplitterPosition,
   getCustomGadgetHelpDisplay,
+  getCustomGadgetCodeRowsFieldConfig,
   getCustomGadgetSelectPresetFieldConfig,
   getGadgetColorRowsFieldConfig,
   getGadgetColumnEditorFieldConfig,
@@ -12001,11 +12002,12 @@ function renderProps() {
     }
   }
 
-  if (canInspectCustomGadgetCodeRows(g.kind)) {
+  const customGadgetCodeRowsField = getCustomGadgetCodeRowsFieldConfig(g.kind);
+  if (customGadgetCodeRowsField?.visible) {
     const customSelectPresetField = getCustomGadgetSelectPresetFieldConfig(g.kind);
     propsEl.appendChild(
       row(
-        "SelectGadget",
+        customGadgetCodeRowsField.selectGadgetLabel,
         editableComboInput(
           g.customSelectName ?? "",
           [],
@@ -12022,7 +12024,7 @@ function renderProps() {
     );
     propsEl.appendChild(
       row(
-        "InitCode",
+        customGadgetCodeRowsField.initCodeLabel,
         textInput(
           g.customInitRaw ?? "",
           v => {
@@ -12030,13 +12032,13 @@ function renderProps() {
             postCustomGadgetCode(g.id, { customInitRaw: v });
             renderProps();
           },
-          { title: "Initialization code written before the custom gadget is created." }
+          { title: customGadgetCodeRowsField.initCodeTitle }
         )
       )
     );
     propsEl.appendChild(
       row(
-        "CreateCode",
+        customGadgetCodeRowsField.createCodeLabel,
         textInput(
           g.customCreateRaw ?? "",
           v => {
@@ -12048,24 +12050,24 @@ function renderProps() {
             postCustomGadgetCode(g.id, { customCreateRaw: v });
             renderProps();
           },
-          { title: "Creation code used to build this custom gadget." }
+          { title: customGadgetCodeRowsField.createCodeTitle }
         )
       )
     );
     propsEl.appendChild(
       row(
-        "Help",
+        customGadgetCodeRowsField.helpLabel,
         textInput(
           getCustomGadgetHelpDisplay(),
           () => {},
           {
             disabled: true,
-            title: "Reference placeholders that can be used in custom gadget code."
+            title: customGadgetCodeRowsField.helpTitle
           }
         )
       )
     );
-    propsEl.appendChild(mutedNote("SelectGadget chooses the preset shown here. InitCode and CreateCode remain the effective saved creation code."));
+    propsEl.appendChild(mutedNote(customGadgetCodeRowsField.note));
   }
 
   if (parentField) {

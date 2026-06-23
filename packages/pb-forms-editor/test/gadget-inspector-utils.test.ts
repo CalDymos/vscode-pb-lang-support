@@ -21,6 +21,7 @@ import {
   canInspectGadgetTooltipRows,
   getGadgetCtorRangeFieldLabels,
   getCustomGadgetHelpDisplay,
+  getCustomGadgetCodeRowsFieldConfig,
   getGadgetBooleanInspectorState,
   getGadgetCaptionFieldConfig,
   isGadgetDisabledInDesignerPreview,
@@ -274,6 +275,23 @@ test("uses a user-facing CustomGadget SelectGadget tooltip", () => {
   assert.equal(getCustomGadgetSelectPresetFieldConfig(undefined), undefined);
 });
 
+
+test("uses user-facing CustomGadget code row tooltips", () => {
+  assert.deepEqual(getCustomGadgetCodeRowsFieldConfig(GADGET_KIND.CustomGadget), {
+    visible: true,
+    selectGadgetLabel: "SelectGadget",
+    initCodeLabel: "InitCode",
+    createCodeLabel: "CreateCode",
+    helpLabel: "Help",
+    initCodeTitle: "Edit the code that runs before this custom gadget is created.",
+    createCodeTitle: "Edit the code that creates this custom gadget. Leave it filled so the gadget can be recreated.",
+    helpTitle: "Shows the placeholders available in InitCode and CreateCode.",
+    note: "SelectGadget chooses the preset shown here. InitCode and CreateCode contain the code used for this custom gadget."
+  });
+  assert.equal(getCustomGadgetCodeRowsFieldConfig(GADGET_KIND.ButtonGadget), undefined);
+  assert.equal(getCustomGadgetCodeRowsFieldConfig(undefined), undefined);
+});
+
 test("keeps gadget tooltip rows visible for the original FD_SelectGadget gadget matrix", () => {
   const expectedTooltipKinds = [
     GADGET_KIND.ButtonGadget,
@@ -446,6 +464,7 @@ test("documents complete FD_SelectGadget row coverage after the FD-011 audit", (
   assert.equal(getGadgetSplitterPositionFieldConfig(GADGET_KIND.SplitterGadget)?.label, "SplitterPosition");
   assert.equal(getGadgetColorRowsFieldConfig(GADGET_KIND.TextGadget)?.frontColorLabel, "FrontColor");
   assert.equal(canInspectCustomGadgetCodeRows(GADGET_KIND.CustomGadget), true);
+  assert.equal(getCustomGadgetCodeRowsFieldConfig(GADGET_KIND.CustomGadget)?.visible, true);
 });
 
 test("uses user-facing item-editor tooltips while preserving existing item data display", () => {
