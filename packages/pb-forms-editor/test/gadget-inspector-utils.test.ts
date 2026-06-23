@@ -95,6 +95,28 @@ const ORIGINAL_FD_SELECT_GADGET_BASE_ROW_KINDS = [
   GADGET_KIND.WebViewGadget
 ].sort();
 
+const GENERIC_CTOR_RANGE_FIELD_LABELS = {
+  minLabel: "Min",
+  maxLabel: "Max",
+  minTitle: "Edit the raw minimum value expression for this gadget.",
+  maxTitle: "Edit the raw maximum value expression for this gadget.",
+  minUnscaledLabel: "Min (Unscaled)",
+  maxUnscaledLabel: "Max (Unscaled)",
+  minUnscaledTitle: "Displays the raw minimum value saved in the gadget constructor. Edit Min to update it.",
+  maxUnscaledTitle: "Displays the raw maximum value saved in the gadget constructor. Edit Max to update it."
+};
+
+const SCROLLAREA_CTOR_RANGE_FIELD_LABELS = {
+  minLabel: "InnerWidth",
+  maxLabel: "InnerHeight",
+  minTitle: "Edit the raw inner width expression for this scroll area.",
+  maxTitle: "Edit the raw inner height expression for this scroll area.",
+  minUnscaledLabel: "InnerWidth (Unscaled)",
+  maxUnscaledLabel: "InnerHeight (Unscaled)",
+  minUnscaledTitle: "Displays the raw inner width value saved in the gadget constructor. Edit InnerWidth to update it.",
+  maxUnscaledTitle: "Displays the raw inner height value saved in the gadget constructor. Edit InnerHeight to update it."
+};
+
 test("marks only persistent caption/callback constructor paths as caption-editable", () => {
   assert.equal(canEditGadgetText("StringGadget"), true);
   assert.equal(canEditGadgetText("ButtonGadget"), true);
@@ -170,11 +192,11 @@ test("keeps the original constructor-range inspector matrix exact", () => {
     .map(kind => [kind, getGadgetCtorRangeFieldLabels(kind)] as const);
 
   assert.deepEqual(actualRangeLabels, [
-    [GADGET_KIND.SpinGadget, { minLabel: "Min", maxLabel: "Max", minTitle: "Edit the raw minimum value expression for this gadget.", maxTitle: "Edit the raw maximum value expression for this gadget." }],
-    [GADGET_KIND.TrackBarGadget, { minLabel: "Min", maxLabel: "Max", minTitle: "Edit the raw minimum value expression for this gadget.", maxTitle: "Edit the raw maximum value expression for this gadget." }],
-    [GADGET_KIND.ProgressBarGadget, { minLabel: "Min", maxLabel: "Max", minTitle: "Edit the raw minimum value expression for this gadget.", maxTitle: "Edit the raw maximum value expression for this gadget." }],
-    [GADGET_KIND.ScrollAreaGadget, { minLabel: "InnerWidth", maxLabel: "InnerHeight", minTitle: "Edit the raw inner width expression for this scroll area.", maxTitle: "Edit the raw inner height expression for this scroll area." }],
-    [GADGET_KIND.ScrollBarGadget, { minLabel: "Min", maxLabel: "Max", minTitle: "Edit the raw minimum value expression for this gadget.", maxTitle: "Edit the raw maximum value expression for this gadget." }]
+    [GADGET_KIND.SpinGadget, GENERIC_CTOR_RANGE_FIELD_LABELS],
+    [GADGET_KIND.TrackBarGadget, GENERIC_CTOR_RANGE_FIELD_LABELS],
+    [GADGET_KIND.ProgressBarGadget, GENERIC_CTOR_RANGE_FIELD_LABELS],
+    [GADGET_KIND.ScrollAreaGadget, SCROLLAREA_CTOR_RANGE_FIELD_LABELS],
+    [GADGET_KIND.ScrollBarGadget, GENERIC_CTOR_RANGE_FIELD_LABELS]
   ]);
 });
 
@@ -801,54 +823,19 @@ test("uses user-facing caption and tooltip field titles", () => {
 
 
 test("returns the original range/scrollarea field labels for constructor-bound gadget fields", () => {
-  assert.deepEqual(getGadgetCtorRangeFieldLabels("ProgressBarGadget"), {
-    minLabel: "Min",
-    maxLabel: "Max",
-    minTitle: "Edit the raw minimum value expression for this gadget.",
-    maxTitle: "Edit the raw maximum value expression for this gadget."
-  });
-  assert.deepEqual(getGadgetCtorRangeFieldLabels("ScrollAreaGadget"), {
-    minLabel: "InnerWidth",
-    maxLabel: "InnerHeight",
-    minTitle: "Edit the raw inner width expression for this scroll area.",
-    maxTitle: "Edit the raw inner height expression for this scroll area."
-  });
+  assert.deepEqual(getGadgetCtorRangeFieldLabels("ProgressBarGadget"), GENERIC_CTOR_RANGE_FIELD_LABELS);
+  assert.deepEqual(getGadgetCtorRangeFieldLabels("ScrollAreaGadget"), SCROLLAREA_CTOR_RANGE_FIELD_LABELS);
   assert.equal(getGadgetCtorRangeFieldLabels("ButtonGadget"), undefined);
 });
 
 
 
 test("covers the full original constructor-range gadget matrix after the FD-042c audit", () => {
-  assert.deepEqual(getGadgetCtorRangeFieldLabels("SpinGadget"), {
-    minLabel: "Min",
-    maxLabel: "Max",
-    minTitle: "Edit the raw minimum value expression for this gadget.",
-    maxTitle: "Edit the raw maximum value expression for this gadget."
-  });
-  assert.deepEqual(getGadgetCtorRangeFieldLabels("TrackBarGadget"), {
-    minLabel: "Min",
-    maxLabel: "Max",
-    minTitle: "Edit the raw minimum value expression for this gadget.",
-    maxTitle: "Edit the raw maximum value expression for this gadget."
-  });
-  assert.deepEqual(getGadgetCtorRangeFieldLabels("ScrollBarGadget"), {
-    minLabel: "Min",
-    maxLabel: "Max",
-    minTitle: "Edit the raw minimum value expression for this gadget.",
-    maxTitle: "Edit the raw maximum value expression for this gadget."
-  });
-  assert.deepEqual(getGadgetCtorRangeFieldLabels("ProgressBarGadget"), {
-    minLabel: "Min",
-    maxLabel: "Max",
-    minTitle: "Edit the raw minimum value expression for this gadget.",
-    maxTitle: "Edit the raw maximum value expression for this gadget."
-  });
-  assert.deepEqual(getGadgetCtorRangeFieldLabels("ScrollAreaGadget"), {
-    minLabel: "InnerWidth",
-    maxLabel: "InnerHeight",
-    minTitle: "Edit the raw inner width expression for this scroll area.",
-    maxTitle: "Edit the raw inner height expression for this scroll area."
-  });
+  assert.deepEqual(getGadgetCtorRangeFieldLabels("SpinGadget"), GENERIC_CTOR_RANGE_FIELD_LABELS);
+  assert.deepEqual(getGadgetCtorRangeFieldLabels("TrackBarGadget"), GENERIC_CTOR_RANGE_FIELD_LABELS);
+  assert.deepEqual(getGadgetCtorRangeFieldLabels("ScrollBarGadget"), GENERIC_CTOR_RANGE_FIELD_LABELS);
+  assert.deepEqual(getGadgetCtorRangeFieldLabels("ProgressBarGadget"), GENERIC_CTOR_RANGE_FIELD_LABELS);
+  assert.deepEqual(getGadgetCtorRangeFieldLabels("ScrollAreaGadget"), SCROLLAREA_CTOR_RANGE_FIELD_LABELS);
 });
 
 test("keeps the checked-state matrix limited to the original checkbox and option gadgets", () => {

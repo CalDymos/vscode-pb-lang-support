@@ -11962,7 +11962,7 @@ function renderProps() {
       )
     );
     if (shouldShowReadonlyUnscaledGadgetCtorRangeRows(g)) {
-      propsEl.appendChild(row(`${gadgetCtorRangeLabels.minLabel} (Unscaled)`, readonlyInput(getReadonlyUnscaledGadgetCtorRangeValue(g, "min"), "Readonly code value written to the gadget constructor.")));
+      propsEl.appendChild(row(gadgetCtorRangeLabels.minUnscaledLabel, readonlyInput(getReadonlyUnscaledGadgetCtorRangeValue(g, "min"), gadgetCtorRangeLabels.minUnscaledTitle)));
     }
     propsEl.appendChild(
       row(
@@ -11977,7 +11977,7 @@ function renderProps() {
       )
     );
     if (shouldShowReadonlyUnscaledGadgetCtorRangeRows(g)) {
-      propsEl.appendChild(row(`${gadgetCtorRangeLabels.maxLabel} (Unscaled)`, readonlyInput(getReadonlyUnscaledGadgetCtorRangeValue(g, "max"), "Readonly code value written to the gadget constructor.")));
+      propsEl.appendChild(row(gadgetCtorRangeLabels.maxUnscaledLabel, readonlyInput(getReadonlyUnscaledGadgetCtorRangeValue(g, "max"), gadgetCtorRangeLabels.maxUnscaledTitle)));
     }
   }
 

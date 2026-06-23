@@ -134,6 +134,10 @@ export type GadgetCtorRangeFieldLabels = {
   maxLabel: string;
   minTitle: string;
   maxTitle: string;
+  minUnscaledLabel: string;
+  maxUnscaledLabel: string;
+  minUnscaledTitle: string;
+  maxUnscaledTitle: string;
 };
 
 export type GadgetItemEditorFieldConfig = {
@@ -388,6 +392,12 @@ const GADGET_CTOR_RANGE_FIELD_LABELS: ReadonlyMap<
       maxLabel: "Max",
       minTitle: "Edit the raw minimum value expression for this gadget.",
       maxTitle: "Edit the raw maximum value expression for this gadget.",
+      minUnscaledLabel: "Min (Unscaled)",
+      maxUnscaledLabel: "Max (Unscaled)",
+      minUnscaledTitle:
+        "Displays the raw minimum value saved in the gadget constructor. Edit Min to update it.",
+      maxUnscaledTitle:
+        "Displays the raw maximum value saved in the gadget constructor. Edit Max to update it.",
     },
   ],
   [
@@ -397,6 +407,12 @@ const GADGET_CTOR_RANGE_FIELD_LABELS: ReadonlyMap<
       maxLabel: "Max",
       minTitle: "Edit the raw minimum value expression for this gadget.",
       maxTitle: "Edit the raw maximum value expression for this gadget.",
+      minUnscaledLabel: "Min (Unscaled)",
+      maxUnscaledLabel: "Max (Unscaled)",
+      minUnscaledTitle:
+        "Displays the raw minimum value saved in the gadget constructor. Edit Min to update it.",
+      maxUnscaledTitle:
+        "Displays the raw maximum value saved in the gadget constructor. Edit Max to update it.",
     },
   ],
   [
@@ -406,6 +422,12 @@ const GADGET_CTOR_RANGE_FIELD_LABELS: ReadonlyMap<
       maxLabel: "Max",
       minTitle: "Edit the raw minimum value expression for this gadget.",
       maxTitle: "Edit the raw maximum value expression for this gadget.",
+      minUnscaledLabel: "Min (Unscaled)",
+      maxUnscaledLabel: "Max (Unscaled)",
+      minUnscaledTitle:
+        "Displays the raw minimum value saved in the gadget constructor. Edit Min to update it.",
+      maxUnscaledTitle:
+        "Displays the raw maximum value saved in the gadget constructor. Edit Max to update it.",
     },
   ],
   [
@@ -415,6 +437,12 @@ const GADGET_CTOR_RANGE_FIELD_LABELS: ReadonlyMap<
       maxLabel: "Max",
       minTitle: "Edit the raw minimum value expression for this gadget.",
       maxTitle: "Edit the raw maximum value expression for this gadget.",
+      minUnscaledLabel: "Min (Unscaled)",
+      maxUnscaledLabel: "Max (Unscaled)",
+      minUnscaledTitle:
+        "Displays the raw minimum value saved in the gadget constructor. Edit Min to update it.",
+      maxUnscaledTitle:
+        "Displays the raw maximum value saved in the gadget constructor. Edit Max to update it.",
     },
   ],
   [
@@ -424,6 +452,12 @@ const GADGET_CTOR_RANGE_FIELD_LABELS: ReadonlyMap<
       maxLabel: "InnerHeight",
       minTitle: "Edit the raw inner width expression for this scroll area.",
       maxTitle: "Edit the raw inner height expression for this scroll area.",
+      minUnscaledLabel: "InnerWidth (Unscaled)",
+      maxUnscaledLabel: "InnerHeight (Unscaled)",
+      minUnscaledTitle:
+        "Displays the raw inner width value saved in the gadget constructor. Edit InnerWidth to update it.",
+      maxUnscaledTitle:
+        "Displays the raw inner height value saved in the gadget constructor. Edit InnerHeight to update it.",
     },
   ],
 ]);
