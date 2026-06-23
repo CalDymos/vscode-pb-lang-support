@@ -190,6 +190,7 @@ import {
   getGadgetTooltipFieldConfig,
   getGadgetCaptionFieldConfig,
   getGadgetCheckedStateFieldConfig,
+  getGadgetVisibilityStateFieldConfig,
   getGadgetCurrentImageDisplay,
   getGadgetImageRowsFieldConfig,
   getGadgetCtorRangeFieldLabels,
@@ -11650,6 +11651,7 @@ function renderProps() {
   const captionField = getGadgetCaptionFieldConfig(g.kind);
   const colorRowsField = getGadgetColorRowsFieldConfig(g.kind);
   const checkedStateField = getGadgetCheckedStateFieldConfig(g.kind);
+  const visibilityStateField = getGadgetVisibilityStateFieldConfig(g.kind);
   const parentField = getGadgetParentFieldConfig(g.kind, Boolean(g.parentId));
   const resizeLockField = getGadgetResizeLockFieldConfig(g.kind);
   const fontField = getGadgetFontFieldConfig(g.kind);
@@ -11742,34 +11744,42 @@ function renderProps() {
     propsEl.appendChild(row("Height (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(g.hRaw, g.h), "Readonly code value written to the gadget constructor.")));
   }
 
-  propsEl.appendChild(
-    row(
-      "Hidden",
-      checkboxInput(getGadgetBooleanInspectorState(g.hiddenRaw, g.hidden), v => {
-        g.hidden = v;
-        g.hiddenRaw = v ? "1" : "0";
-        postGadgetProperties(g.id, { hiddenRaw: g.hiddenRaw });
-        render();
-        renderProps();
-      }, {
-        title: g.hiddenRaw && g.hidden === undefined ? "This gadget currently uses a custom hide expression. Changing it here replaces it with 1 or 0." : "Show or hide this gadget."
-      })
-    )
-  );
-  propsEl.appendChild(
-    row(
-      "Disabled",
-      checkboxInput(getGadgetBooleanInspectorState(g.disabledRaw, g.disabled), v => {
-        g.disabled = v;
-        g.disabledRaw = v ? "1" : "0";
-        postGadgetProperties(g.id, { disabledRaw: g.disabledRaw });
-        render();
-        renderProps();
-      }, {
-        title: g.disabledRaw && g.disabled === undefined ? "This gadget currently uses a custom disable expression. Changing it here replaces it with 1 or 0." : "Enable or disable this gadget."
-      })
-    )
-  );
+  if (visibilityStateField) {
+    propsEl.appendChild(
+      row(
+        visibilityStateField.hiddenLabel,
+        checkboxInput(getGadgetBooleanInspectorState(g.hiddenRaw, g.hidden), v => {
+          g.hidden = v;
+          g.hiddenRaw = v ? "1" : "0";
+          postGadgetProperties(g.id, { hiddenRaw: g.hiddenRaw });
+          render();
+          renderProps();
+        }, {
+          disabled: !visibilityStateField.valueEditable,
+          title: g.hiddenRaw && g.hidden === undefined
+            ? visibilityStateField.hiddenCustomExpressionTitle
+            : visibilityStateField.hiddenTitle
+        })
+      )
+    );
+    propsEl.appendChild(
+      row(
+        visibilityStateField.disabledLabel,
+        checkboxInput(getGadgetBooleanInspectorState(g.disabledRaw, g.disabled), v => {
+          g.disabled = v;
+          g.disabledRaw = v ? "1" : "0";
+          postGadgetProperties(g.id, { disabledRaw: g.disabledRaw });
+          render();
+          renderProps();
+        }, {
+          disabled: !visibilityStateField.valueEditable,
+          title: g.disabledRaw && g.disabled === undefined
+            ? visibilityStateField.disabledCustomExpressionTitle
+            : visibilityStateField.disabledTitle
+        })
+      )
+    );
+  }
   if (resizeLockField) {
     const resizeCtx = getWindowResizeLockContext(g);
     const currentLockLeft = g.lockLeft !== false;

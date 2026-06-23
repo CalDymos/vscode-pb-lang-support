@@ -60,6 +60,17 @@ export type GadgetCheckedStateFieldConfig = {
   title: string;
 };
 
+export type GadgetVisibilityStateFieldConfig = {
+  visible: boolean;
+  valueEditable: boolean;
+  hiddenLabel: string;
+  disabledLabel: string;
+  hiddenTitle: string;
+  hiddenCustomExpressionTitle: string;
+  disabledTitle: string;
+  disabledCustomExpressionTitle: string;
+};
+
 export type GadgetSplitterPositionFieldConfig = {
   visible: boolean;
   valueEditable: boolean;
@@ -756,6 +767,24 @@ export function canInspectGadgetSelectProc(kind: string | undefined): boolean {
 
 export function canInspectGadgetBaseRows(kind: string | undefined): boolean {
   return typeof kind === "string" && GADGET_CAPTION_VISIBLE_KINDS.has(kind);
+}
+
+export function getGadgetVisibilityStateFieldConfig(
+  kind: string | undefined,
+): GadgetVisibilityStateFieldConfig | undefined {
+  if (!canInspectGadgetBaseRows(kind)) return undefined;
+  return {
+    visible: true,
+    valueEditable: true,
+    hiddenLabel: "Hidden",
+    disabledLabel: "Disabled",
+    hiddenTitle: "Show or hide this gadget.",
+    hiddenCustomExpressionTitle:
+      "This gadget uses a custom hide expression. Changing this checkbox replaces it with 1 or 0.",
+    disabledTitle: "Enable or disable this gadget.",
+    disabledCustomExpressionTitle:
+      "This gadget uses a custom disable expression. Changing this checkbox replaces it with 1 or 0.",
+  };
 }
 
 export function getGadgetParentFieldConfig(

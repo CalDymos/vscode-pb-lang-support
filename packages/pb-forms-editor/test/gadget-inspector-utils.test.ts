@@ -48,6 +48,7 @@ import {
   getGadgetSplitterPositionFieldConfig,
   getGadgetTooltipFieldConfig,
   getGadgetTooltipInspectorValue,
+  getGadgetVisibilityStateFieldConfig,
   buildGadgetFlagsExpr,
   shouldShowGadgetParentDetail,
   shouldShowGadgetTabDetail
@@ -431,6 +432,7 @@ test("documents complete FD_SelectGadget row coverage after the FD-011 audit", (
     valueTitle: "Edit the tooltip shown when the user hovers over this gadget. Enable 'Tooltip Is Variable' for a variable name or expression.",
     valueUnavailableTitle: "Displays the tooltip stored for this gadget."
   });
+  assert.equal(getGadgetVisibilityStateFieldConfig(baseKind)?.visible, true);
   assert.equal(getGadgetParentFieldConfig(baseKind, false)?.visible, true);
   assert.equal(getGadgetResizeLockFieldConfig(baseKind)?.visible, true);
   assert.equal(getGadgetFontFieldConfig(baseKind)?.visible, true);
@@ -538,6 +540,29 @@ test("prefers parsed gadget hidden/disabled booleans and treats raw 0 as uncheck
   assert.equal(getGadgetBooleanInspectorState("HideExpr()", undefined), true);
   assert.equal(getGadgetBooleanInspectorState("DisableExpr()", undefined), true);
   assert.equal(getGadgetBooleanInspectorState(undefined, false), false);
+});
+
+test("uses user-facing hidden and disabled tooltips for gadget visibility state rows", () => {
+  assert.deepEqual(getGadgetVisibilityStateFieldConfig(GADGET_KIND.ButtonGadget), {
+    visible: true,
+    valueEditable: true,
+    hiddenLabel: "Hidden",
+    disabledLabel: "Disabled",
+    hiddenTitle: "Show or hide this gadget.",
+    hiddenCustomExpressionTitle: "This gadget uses a custom hide expression. Changing this checkbox replaces it with 1 or 0.",
+    disabledTitle: "Enable or disable this gadget.",
+    disabledCustomExpressionTitle: "This gadget uses a custom disable expression. Changing this checkbox replaces it with 1 or 0."
+  });
+  assert.equal(getGadgetVisibilityStateFieldConfig(GADGET_KIND.MDIGadget), undefined);
+  assert.equal(getGadgetVisibilityStateFieldConfig(undefined), undefined);
+});
+
+test("keeps hidden and disabled state rows visible for the original base gadget matrix", () => {
+  const actualVisibilityStateKinds = [...GADGET_KIND_SET]
+    .filter(kind => getGadgetVisibilityStateFieldConfig(kind)?.visible === true)
+    .sort();
+
+  assert.deepEqual(actualVisibilityStateKinds, ORIGINAL_FD_SELECT_GADGET_BASE_ROW_KINDS);
 });
 
 test("uses only parsed boolean gadget hidden state for the designer preview visibility path", () => {
