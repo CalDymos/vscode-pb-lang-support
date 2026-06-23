@@ -446,13 +446,19 @@ test("uses user-facing lock row titles while preserving safe ResizeGadget policy
   assert.equal(getGadgetResizeLockFieldConfig(GADGET_KIND.Unknown), undefined);
 });
 
-test("keeps font row visible and uses a raw-font editing tooltip", () => {
+test("keeps font row visible and uses raw-font display text from config", () => {
   const actualFontKinds = [...GADGET_KIND_SET]
     .filter(kind => getGadgetFontFieldConfig(kind)?.visible === true)
     .sort();
 
   assert.deepEqual(actualFontKinds, ORIGINAL_FD_SELECT_GADGET_BASE_ROW_KINDS);
-  assert.equal(getGadgetFontFieldConfig(GADGET_KIND.StringGadget)?.rawEditable, true);
+  assert.deepEqual(getGadgetFontFieldConfig(GADGET_KIND.StringGadget), {
+    visible: true,
+    rawEditable: true,
+    label: "Font Raw",
+    title: "Displays and edits the raw SetGadgetFont(...) expression. Leave empty to clear the gadget font.",
+    summaryPrefix: "Current font"
+  });
   assert.equal(getGadgetFontFieldConfig(GADGET_KIND.Unknown), undefined);
 });
 

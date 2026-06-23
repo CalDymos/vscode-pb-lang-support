@@ -11843,7 +11843,7 @@ function renderProps() {
   if (fontField) {
     propsEl.appendChild(
       row(
-        "Font Raw",
+        fontField.label,
         textInput(
           g.gadgetFontRaw ?? "",
           v => {
@@ -11858,7 +11858,7 @@ function renderProps() {
     );
     const gadgetFontSummary = getGadgetFontDisplaySummary(g);
     if (gadgetFontSummary) {
-      propsEl.appendChild(mutedNote(`Current font: ${gadgetFontSummary}`));
+      propsEl.appendChild(mutedNote(`${fontField.summaryPrefix}: ${gadgetFontSummary}`));
     }
   }
 

@@ -218,7 +218,9 @@ export type GadgetResizeLockFieldConfig = {
 export type GadgetFontFieldConfig = {
   visible: boolean;
   rawEditable: boolean;
+  label: string;
   title: string;
+  summaryPrefix: string;
 };
 
 export type GadgetConstantsFieldConfig = {
@@ -1011,8 +1013,10 @@ export function getGadgetFontFieldConfig(
   return {
     visible: true,
     rawEditable: true,
+    label: "Font Raw",
     title:
       "Displays and edits the raw SetGadgetFont(...) expression. Leave empty to clear the gadget font.",
+    summaryPrefix: "Current font",
   };
 }
 
