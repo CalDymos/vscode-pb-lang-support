@@ -71,6 +71,27 @@ export type GadgetVisibilityStateFieldConfig = {
   disabledCustomExpressionTitle: string;
 };
 
+export type GadgetLayoutFieldConfig = {
+  visible: boolean;
+  valueEditable: boolean;
+  xLabel: string;
+  yLabel: string;
+  widthLabel: string;
+  heightLabel: string;
+  xTitle: string;
+  yTitle: string;
+  widthTitle: string;
+  heightTitle: string;
+  xUnscaledLabel: string;
+  yUnscaledLabel: string;
+  widthUnscaledLabel: string;
+  heightUnscaledLabel: string;
+  xUnscaledTitle: string;
+  yUnscaledTitle: string;
+  widthUnscaledTitle: string;
+  heightUnscaledTitle: string;
+};
+
 export type GadgetSplitterPositionFieldConfig = {
   visible: boolean;
   valueEditable: boolean;
@@ -800,6 +821,36 @@ export function canInspectGadgetSelectProc(kind: string | undefined): boolean {
 
 export function canInspectGadgetBaseRows(kind: string | undefined): boolean {
   return typeof kind === "string" && GADGET_CAPTION_VISIBLE_KINDS.has(kind);
+}
+
+export function canInspectGadgetLayoutRows(kind: string | undefined): boolean {
+  return canInspectGadgetBaseRows(kind);
+}
+
+export function getGadgetLayoutFieldConfig(
+  kind: string | undefined,
+): GadgetLayoutFieldConfig | undefined {
+  if (!canInspectGadgetLayoutRows(kind)) return undefined;
+  return {
+    visible: true,
+    valueEditable: true,
+    xLabel: "X",
+    yLabel: "Y",
+    widthLabel: "Width",
+    heightLabel: "Height",
+    xTitle: "Edit the displayed X position of this gadget.",
+    yTitle: "Edit the displayed Y position of this gadget.",
+    widthTitle: "Edit the displayed width of this gadget.",
+    heightTitle: "Edit the displayed height of this gadget.",
+    xUnscaledLabel: "X (Unscaled)",
+    yUnscaledLabel: "Y (Unscaled)",
+    widthUnscaledLabel: "Width (Unscaled)",
+    heightUnscaledLabel: "Height (Unscaled)",
+    xUnscaledTitle: "Displays the raw X value saved in the form code. Edit X to update it.",
+    yUnscaledTitle: "Displays the raw Y value saved in the form code. Edit Y to update it.",
+    widthUnscaledTitle: "Displays the raw width value saved in the form code. Edit Width to update it.",
+    heightUnscaledTitle: "Displays the raw height value saved in the form code. Edit Height to update it.",
+  };
 }
 
 export function getGadgetVisibilityStateFieldConfig(

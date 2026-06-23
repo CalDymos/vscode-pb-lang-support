@@ -16,6 +16,7 @@ import {
   canInspectGadgetBaseRows,
   canInspectGadgetImageRows,
   canInspectGadgetItems,
+  canInspectGadgetLayoutRows,
   canInspectGadgetSelectProc,
   canInspectGadgetSplitterPosition,
   canInspectGadgetTooltipRows,
@@ -32,6 +33,7 @@ import {
   getGadgetColumnEditorFieldConfig,
   getGadgetImageRowsFieldConfig,
   getGadgetItemEditorFieldConfig,
+  getGadgetLayoutFieldConfig,
   getGadgetConstantsFieldConfig,
   getGadgetFontFieldConfig,
   getGadgetKnownFlags,
@@ -559,6 +561,39 @@ test("prefers parsed gadget hidden/disabled booleans and treats raw 0 as uncheck
   assert.equal(getGadgetBooleanInspectorState("HideExpr()", undefined), true);
   assert.equal(getGadgetBooleanInspectorState("DisableExpr()", undefined), true);
   assert.equal(getGadgetBooleanInspectorState(undefined, false), false);
+});
+
+test("keeps the original gadget layout row matrix exact", () => {
+  const actualLayoutKinds = [...GADGET_KIND_SET]
+    .filter(kind => canInspectGadgetLayoutRows(kind))
+    .sort();
+
+  assert.deepEqual(actualLayoutKinds, ORIGINAL_FD_SELECT_GADGET_BASE_ROW_KINDS);
+});
+
+test("uses user-facing gadget layout tooltips", () => {
+  assert.deepEqual(getGadgetLayoutFieldConfig(GADGET_KIND.ButtonGadget), {
+    visible: true,
+    valueEditable: true,
+    xLabel: "X",
+    yLabel: "Y",
+    widthLabel: "Width",
+    heightLabel: "Height",
+    xTitle: "Edit the displayed X position of this gadget.",
+    yTitle: "Edit the displayed Y position of this gadget.",
+    widthTitle: "Edit the displayed width of this gadget.",
+    heightTitle: "Edit the displayed height of this gadget.",
+    xUnscaledLabel: "X (Unscaled)",
+    yUnscaledLabel: "Y (Unscaled)",
+    widthUnscaledLabel: "Width (Unscaled)",
+    heightUnscaledLabel: "Height (Unscaled)",
+    xUnscaledTitle: "Displays the raw X value saved in the form code. Edit X to update it.",
+    yUnscaledTitle: "Displays the raw Y value saved in the form code. Edit Y to update it.",
+    widthUnscaledTitle: "Displays the raw width value saved in the form code. Edit Width to update it.",
+    heightUnscaledTitle: "Displays the raw height value saved in the form code. Edit Height to update it.",
+  });
+  assert.deepEqual(getGadgetLayoutFieldConfig(GADGET_KIND.CustomGadget), getGadgetLayoutFieldConfig(GADGET_KIND.ButtonGadget));
+  assert.equal(getGadgetLayoutFieldConfig(undefined), undefined);
 });
 
 test("uses user-facing hidden and disabled tooltips for gadget visibility state rows", () => {

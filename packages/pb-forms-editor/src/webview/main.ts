@@ -183,6 +183,7 @@ import {
   getGadgetConstantsFieldConfig,
   getGadgetFontFieldConfig,
   getGadgetItemEditorFieldConfig,
+  getGadgetLayoutFieldConfig,
   getGadgetParentFieldConfig,
   getGadgetParentInspectorValue,
   getGadgetResizeLockFieldConfig,
@@ -11653,6 +11654,7 @@ function renderProps() {
   const colorRowsField = getGadgetColorRowsFieldConfig(g.kind);
   const checkedStateField = getGadgetCheckedStateFieldConfig(g.kind);
   const visibilityStateField = getGadgetVisibilityStateFieldConfig(g.kind);
+  const layoutField = getGadgetLayoutFieldConfig(g.kind);
   const parentField = getGadgetParentFieldConfig(g.kind, Boolean(g.parentId));
   const resizeLockField = getGadgetResizeLockFieldConfig(g.kind);
   const fontField = getGadgetFontFieldConfig(g.kind);
@@ -11727,22 +11729,24 @@ function renderProps() {
     );
   }
 
-  propsEl.appendChild(section("Layout"));
-  propsEl.appendChild(row("X", numberInput(g.x, v => { updateGadgetDisplayField(g, "x", asInt(v)); postGadgetRect(g); render(); renderProps(); })));
-  if (shouldShowReadonlyUnscaledLayoutRows()) {
-    propsEl.appendChild(row("X (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(g.xRaw, g.x), "Readonly code value written to the gadget constructor.")));
-  }
-  propsEl.appendChild(row("Y", numberInput(g.y, v => { updateGadgetDisplayField(g, "y", asInt(v)); postGadgetRect(g); render(); renderProps(); })));
-  if (shouldShowReadonlyUnscaledLayoutRows()) {
-    propsEl.appendChild(row("Y (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(g.yRaw, g.y), "Readonly code value written to the gadget constructor.")));
-  }
-  propsEl.appendChild(row("Width", numberInput(g.w, v => { updateGadgetDisplayField(g, "w", asInt(v)); postGadgetRect(g); render(); renderProps(); })));
-  if (shouldShowReadonlyUnscaledLayoutRows()) {
-    propsEl.appendChild(row("Width (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(g.wRaw, g.w), "Readonly code value written to the gadget constructor.")));
-  }
-  propsEl.appendChild(row("Height", numberInput(g.h, v => { updateGadgetDisplayField(g, "h", asInt(v)); postGadgetRect(g); render(); renderProps(); })));
-  if (shouldShowReadonlyUnscaledLayoutRows()) {
-    propsEl.appendChild(row("Height (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(g.hRaw, g.h), "Readonly code value written to the gadget constructor.")));
+  if (layoutField) {
+    propsEl.appendChild(section("Layout"));
+    propsEl.appendChild(row(layoutField.xLabel, numberInput(g.x, v => { updateGadgetDisplayField(g, "x", asInt(v)); postGadgetRect(g); render(); renderProps(); }, { title: layoutField.xTitle })));
+    if (shouldShowReadonlyUnscaledLayoutRows()) {
+      propsEl.appendChild(row(layoutField.xUnscaledLabel, readonlyInput(getReadonlyUnscaledLayoutValue(g.xRaw, g.x), layoutField.xUnscaledTitle)));
+    }
+    propsEl.appendChild(row(layoutField.yLabel, numberInput(g.y, v => { updateGadgetDisplayField(g, "y", asInt(v)); postGadgetRect(g); render(); renderProps(); }, { title: layoutField.yTitle })));
+    if (shouldShowReadonlyUnscaledLayoutRows()) {
+      propsEl.appendChild(row(layoutField.yUnscaledLabel, readonlyInput(getReadonlyUnscaledLayoutValue(g.yRaw, g.y), layoutField.yUnscaledTitle)));
+    }
+    propsEl.appendChild(row(layoutField.widthLabel, numberInput(g.w, v => { updateGadgetDisplayField(g, "w", asInt(v)); postGadgetRect(g); render(); renderProps(); }, { title: layoutField.widthTitle })));
+    if (shouldShowReadonlyUnscaledLayoutRows()) {
+      propsEl.appendChild(row(layoutField.widthUnscaledLabel, readonlyInput(getReadonlyUnscaledLayoutValue(g.wRaw, g.w), layoutField.widthUnscaledTitle)));
+    }
+    propsEl.appendChild(row(layoutField.heightLabel, numberInput(g.h, v => { updateGadgetDisplayField(g, "h", asInt(v)); postGadgetRect(g); render(); renderProps(); }, { title: layoutField.heightTitle })));
+    if (shouldShowReadonlyUnscaledLayoutRows()) {
+      propsEl.appendChild(row(layoutField.heightUnscaledLabel, readonlyInput(getReadonlyUnscaledLayoutValue(g.hRaw, g.h), layoutField.heightUnscaledTitle)));
+    }
   }
 
   if (visibilityStateField) {
@@ -12731,10 +12735,11 @@ function checkboxInput(
   return i;
 }
 
-function numberInput(value: number, onChange: (v: number) => void) {
+function numberInput(value: number, onChange: (v: number) => void, options?: { title?: string }) {
   const i = document.createElement("input");
   i.type = "number";
   i.value = String(value);
+  i.title = options?.title ?? "";
   i.onchange = () => onChange(Number(i.value));
   return i;
 }
