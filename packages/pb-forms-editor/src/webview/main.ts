@@ -12073,13 +12073,13 @@ function renderProps() {
   }
 
   if (parentField) {
-    propsEl.appendChild(row("Parent", readonlyInput(getGadgetParentInspectorValue(parentGadget), parentField.title)));
+    propsEl.appendChild(row(parentField.label, readonlyInput(getGadgetParentInspectorValue(parentGadget), parentField.title)));
   }
 
   if (parentField?.selectTargetAvailable && g.parentId) {
     const btn = document.createElement("button");
-    btn.textContent = "Select Parent";
-    btn.title = parentField.title;
+    btn.textContent = parentField.selectButtonLabel;
+    btn.title = parentField.selectButtonTitle;
     btn.onclick = () => {
       selection = { kind: "gadget", id: g.parentId! };
       render();
@@ -12092,11 +12092,11 @@ function renderProps() {
   if (parentField) {
     const changeParentBtn = document.createElement("button");
     const canChangeParent = parentField.changeDialogAvailable && canOpenGadgetReparentDialog(g);
-    changeParentBtn.textContent = "Change Parent";
+    changeParentBtn.textContent = parentField.changeButtonLabel;
     changeParentBtn.disabled = !canChangeParent;
     changeParentBtn.title = canChangeParent
-      ? "Open the Select Parent dialog for this gadget."
-      : "Changing the parent is not available for this gadget type.";
+      ? parentField.changeAvailableTitle
+      : parentField.changeUnavailableTitle;
     changeParentBtn.onclick = () => {
       if (!canChangeParent) return;
       openSelectParentDialog(g);

@@ -408,7 +408,13 @@ test("uses a user-facing parent tooltip without replacing the reparent dialog po
     valueEditable: false,
     selectTargetAvailable: false,
     changeDialogAvailable: true,
-    title: "Displays the current parent gadget. Use Select Parent to jump to it or Change Parent to choose another parent."
+    label: "Parent",
+    title: "Displays the current parent gadget. Use Select Parent to jump to it or Change Parent to choose another parent.",
+    selectButtonLabel: "Select Parent",
+    selectButtonTitle: "Select the current parent gadget in the designer.",
+    changeButtonLabel: "Change Parent",
+    changeAvailableTitle: "Open the Select Parent dialog for this gadget.",
+    changeUnavailableTitle: "Changing the parent is not available for this gadget type."
   });
   assert.equal(getGadgetParentFieldConfig(GADGET_KIND.ButtonGadget, true)?.selectTargetAvailable, true);
   assert.equal(getGadgetParentFieldConfig(GADGET_KIND.MDIGadget, false), undefined);

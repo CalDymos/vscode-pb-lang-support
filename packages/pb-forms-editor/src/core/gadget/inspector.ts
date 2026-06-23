@@ -188,7 +188,13 @@ export type GadgetParentFieldConfig = {
   valueEditable: boolean;
   selectTargetAvailable: boolean;
   changeDialogAvailable: boolean;
+  label: string;
   title: string;
+  selectButtonLabel: string;
+  selectButtonTitle: string;
+  changeButtonLabel: string;
+  changeAvailableTitle: string;
+  changeUnavailableTitle: string;
 };
 
 export type GadgetResizeLockFieldConfig = {
@@ -960,8 +966,14 @@ export function getGadgetParentFieldConfig(
     valueEditable: false,
     selectTargetAvailable: hasParent,
     changeDialogAvailable: true,
+    label: "Parent",
     title:
       "Displays the current parent gadget. Use Select Parent to jump to it or Change Parent to choose another parent.",
+    selectButtonLabel: "Select Parent",
+    selectButtonTitle: "Select the current parent gadget in the designer.",
+    changeButtonLabel: "Change Parent",
+    changeAvailableTitle: "Open the Select Parent dialog for this gadget.",
+    changeUnavailableTitle: "Changing the parent is not available for this gadget type.",
   };
 }
 
