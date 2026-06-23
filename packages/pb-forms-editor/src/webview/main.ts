@@ -11665,7 +11665,7 @@ function renderProps() {
   if (captionField) {
     propsEl.appendChild(
       row(
-        "Caption Is Variable",
+        captionField.variableToggleLabel,
         checkboxInput(Boolean(g.textVariable), v => {
           applyLocalGadgetTextUpdate(g, getGadgetTextInspectorValue(g), v);
         }, {
@@ -11699,7 +11699,7 @@ function renderProps() {
   if (tooltipField) {
     propsEl.appendChild(
       row(
-        "Tooltip Is Variable",
+        tooltipField.variableToggleLabel,
         checkboxInput(Boolean(g.tooltipVariable), v => {
           applyLocalGadgetTooltipUpdate(g, getGadgetTooltipInspectorValue(g), v);
         }, {
@@ -11712,7 +11712,7 @@ function renderProps() {
     );
     propsEl.appendChild(
       row(
-        "Tooltip",
+        tooltipField.label,
         textInput(
           getGadgetTooltipInspectorValue(g),
           v => {

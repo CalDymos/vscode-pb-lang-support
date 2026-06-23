@@ -162,6 +162,7 @@ export type GadgetColumnEditorFieldConfig = {
 
 export type GadgetCaptionFieldConfig = {
   label: string;
+  variableToggleLabel: string;
   textEditable: boolean;
   variableToggleEditable: boolean;
   variableToggleTitle: string;
@@ -171,6 +172,8 @@ export type GadgetCaptionFieldConfig = {
 };
 
 export type GadgetTooltipFieldConfig = {
+  label: string;
+  variableToggleLabel: string;
   valueEditable: boolean;
   variableToggleEditable: boolean;
   variableToggleTitle: string;
@@ -1224,6 +1227,8 @@ export function getGadgetTooltipFieldConfig(
 ): GadgetTooltipFieldConfig | undefined {
   if (!canInspectGadgetTooltipRows(kind)) return undefined;
   return {
+    label: "Tooltip",
+    variableToggleLabel: "Tooltip Is Variable",
     valueEditable: true,
     variableToggleEditable: true,
     variableToggleTitle:
@@ -1245,6 +1250,7 @@ export function getGadgetCaptionFieldConfig(
   if (kind === GADGET_KIND.DateGadget) {
     return {
       label: "Mask",
+      variableToggleLabel: "Caption Is Variable",
       textEditable: canEditGadgetText(kind),
       variableToggleEditable: GADGET_CAPTION_VARIABLE_CAPABLE_KINDS.has(kind),
       variableToggleTitle:
@@ -1260,6 +1266,7 @@ export function getGadgetCaptionFieldConfig(
   if (kind === GADGET_KIND.ScintillaGadget) {
     return {
       label: "Callback",
+      variableToggleLabel: "Caption Is Variable",
       textEditable: true,
       variableToggleEditable: false,
       variableToggleTitle:
@@ -1274,6 +1281,7 @@ export function getGadgetCaptionFieldConfig(
 
   return {
     label: "Caption",
+    variableToggleLabel: "Caption Is Variable",
     textEditable: canEditGadgetText(kind),
     variableToggleEditable: GADGET_CAPTION_VARIABLE_CAPABLE_KINDS.has(kind),
     variableToggleTitle:
