@@ -11869,7 +11869,7 @@ function renderProps() {
     frontColorPicker.type = "color";
     frontColorPicker.value = pbColorNumberToCssHex(g.frontColor) ?? "#000000";
     frontColorPicker.disabled = !colorRowsField.valueEditable;
-    frontColorPicker.title = "Choose the gadget front color. The value is saved as RGB(...).";
+    frontColorPicker.title = colorRowsField.frontColorPickerTitle;
     frontColorPicker.style.width = "40px";
     frontColorPicker.style.minWidth = "40px";
     frontColorPicker.style.padding = "0";
@@ -11890,8 +11890,8 @@ function renderProps() {
     clearFrontColorBtn.textContent = "Remove";
     clearFrontColorBtn.disabled = !colorRowsField.valueEditable || !(g.frontColorRaw?.trim() || typeof g.frontColor === "number");
     clearFrontColorBtn.title = clearFrontColorBtn.disabled
-      ? "No gadget front color is set."
-      : "Remove the current gadget front color.";
+      ? colorRowsField.frontColorRemoveEmptyTitle
+      : colorRowsField.frontColorRemoveTitle;
     clearFrontColorBtn.onclick = () => {
       clearInfoError();
       g.frontColorRaw = undefined;
@@ -11910,7 +11910,7 @@ function renderProps() {
     backColorPicker.type = "color";
     backColorPicker.value = pbColorNumberToCssHex(g.backColor) ?? "#000000";
     backColorPicker.disabled = !colorRowsField.valueEditable;
-    backColorPicker.title = "Choose the gadget background color. The value is saved as RGB(...).";
+    backColorPicker.title = colorRowsField.backColorPickerTitle;
     backColorPicker.style.width = "40px";
     backColorPicker.style.minWidth = "40px";
     backColorPicker.style.padding = "0";
@@ -11931,8 +11931,8 @@ function renderProps() {
     clearBackColorBtn.textContent = "Remove";
     clearBackColorBtn.disabled = !colorRowsField.valueEditable || !(g.backColorRaw?.trim() || typeof g.backColor === "number");
     clearBackColorBtn.title = clearBackColorBtn.disabled
-      ? "No gadget background color is set."
-      : "Remove the current gadget background color.";
+      ? colorRowsField.backColorRemoveEmptyTitle
+      : colorRowsField.backColorRemoveTitle;
     clearBackColorBtn.onclick = () => {
       clearInfoError();
       g.backColorRaw = undefined;
@@ -11944,7 +11944,7 @@ function renderProps() {
     if (colorRowsField.backColorVisible) {
       propsEl.appendChild(row(colorRowsField.backColorLabel, inputWithActions(backColorInput, backColorPicker, clearBackColorBtn)));
     }
-    propsEl.appendChild(mutedNote("Use the pickers to set gadget front/background colors. Remove clears the current color."));
+    propsEl.appendChild(mutedNote(colorRowsField.note));
   }
 
   const gadgetCtorRangeLabels = getGadgetCtorRangeFieldLabels(g.kind);

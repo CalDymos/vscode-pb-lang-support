@@ -109,6 +109,13 @@ export type GadgetColorRowsFieldConfig = {
   backColorLabel: string;
   frontColorTitle: string;
   backColorTitle: string;
+  frontColorPickerTitle: string;
+  backColorPickerTitle: string;
+  frontColorRemoveTitle: string;
+  backColorRemoveTitle: string;
+  frontColorRemoveEmptyTitle: string;
+  backColorRemoveEmptyTitle: string;
+  note: string;
 };
 
 export type GadgetImageEntryLike = {
@@ -734,6 +741,16 @@ export function getGadgetColorRowsFieldConfig(
       "Displays the raw front color expression. Use the picker to change it or Remove to clear it.",
     backColorTitle:
       "Displays the raw background color expression. Use the picker to change it or Remove to clear it.",
+    frontColorPickerTitle:
+      "Choose the gadget front color. The value is saved as RGB(...).",
+    backColorPickerTitle:
+      "Choose the gadget background color. The value is saved as RGB(...).",
+    frontColorRemoveTitle: "Remove the current gadget front color.",
+    backColorRemoveTitle: "Remove the current gadget background color.",
+    frontColorRemoveEmptyTitle: "No gadget front color is set.",
+    backColorRemoveEmptyTitle: "No gadget background color is set.",
+    note:
+      "Use the pickers to set gadget front/background colors. Remove clears the current color.",
   };
 }
 
