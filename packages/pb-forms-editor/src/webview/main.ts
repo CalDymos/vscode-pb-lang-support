@@ -11799,43 +11799,41 @@ function renderProps() {
     : undefined;
   const verticalLockTopToggle = buildGadgetVerticalLockResizeUpdate(g, resizeCtx, !currentLockTop, currentLockBottom);
   const verticalLockBottomToggle = buildGadgetVerticalLockResizeUpdate(g, resizeCtx, currentLockTop, !currentLockBottom);
-  const impossibleHorizontalUnlockTitle = "This transition cannot be persisted safely: when the other axis still needs ResizeGadget(...), the source code cannot store a state with neither LockLeft nor LockRight.";
-  const impossibleVerticalUnlockTitle = "This transition cannot be persisted safely: when the other axis still needs ResizeGadget(...), the source code cannot store a state with neither LockTop nor LockBottom.";
-  propsEl.appendChild(row("LockLeft", checkboxInput(currentLockLeft, v => {
+  propsEl.appendChild(row(resizeLockField.lockLeftLabel, checkboxInput(currentLockLeft, v => {
     applyLocalGadgetHorizontalLockUpdate(g, v, currentLockRight);
   }, {
     disabled: !horizontalLockLeftToggle,
     title: horizontalLockLeftToggle
-      ? "Keep the gadget anchored to the left when the window is resized."
-      : (currentLockLeft && !currentLockRight ? impossibleHorizontalUnlockTitle : "This lock can be edited only when the current layout can be converted to a safe ResizeGadget(...) update.")
+      ? resizeLockField.lockLeftTitle
+      : (currentLockLeft && !currentLockRight ? resizeLockField.unsafeHorizontalUnlockTitle : resizeLockField.unavailableTitle)
   })));
-  propsEl.appendChild(row("LockRight", checkboxInput(currentLockRight, v => {
+  propsEl.appendChild(row(resizeLockField.lockRightLabel, checkboxInput(currentLockRight, v => {
     applyLocalGadgetHorizontalLockUpdate(g, currentLockLeft, v);
   }, {
     disabled: !horizontalLockRightToggle,
     title: horizontalLockRightToggle
-      ? "Keep the gadget anchored to the right when the window is resized."
-      : (!currentLockLeft && currentLockRight ? impossibleHorizontalUnlockTitle : "This lock can be edited only when the current layout can be converted to a safe ResizeGadget(...) update.")
+      ? resizeLockField.lockRightTitle
+      : (!currentLockLeft && currentLockRight ? resizeLockField.unsafeHorizontalUnlockTitle : resizeLockField.unavailableTitle)
   })));
-  propsEl.appendChild(row("LockTop", checkboxInput(currentLockTop, v => {
+  propsEl.appendChild(row(resizeLockField.lockTopLabel, checkboxInput(currentLockTop, v => {
     applyLocalGadgetVerticalLockUpdate(g, v, currentLockBottom);
   }, {
     disabled: !verticalLockTopToggle,
     title: verticalLockTopToggle
-      ? "Keep the gadget anchored to the top when the window is resized."
-      : (currentLockTop && !currentLockBottom ? impossibleVerticalUnlockTitle : "This lock can be edited only when the current layout can be converted to a safe ResizeGadget(...) update.")
+      ? resizeLockField.lockTopTitle
+      : (currentLockTop && !currentLockBottom ? resizeLockField.unsafeVerticalUnlockTitle : resizeLockField.unavailableTitle)
   })));
-  propsEl.appendChild(row("LockBottom", checkboxInput(currentLockBottom, v => {
+  propsEl.appendChild(row(resizeLockField.lockBottomLabel, checkboxInput(currentLockBottom, v => {
     applyLocalGadgetVerticalLockUpdate(g, currentLockTop, v);
   }, {
     disabled: !verticalLockBottomToggle,
     title: verticalLockBottomToggle
-      ? "Keep the gadget anchored to the bottom when the window is resized."
-      : (!currentLockTop && currentLockBottom ? impossibleVerticalUnlockTitle : "This lock can be edited only when the current layout can be converted to a safe ResizeGadget(...) update.")
+      ? resizeLockField.lockBottomTitle
+      : (!currentLockTop && currentLockBottom ? resizeLockField.unsafeVerticalUnlockTitle : resizeLockField.unavailableTitle)
   })));
   propsEl.appendChild(mutedNote(horizontalLockLeftToggle || horizontalLockRightToggle || verticalLockTopToggle || verticalLockBottomToggle
-    ? "These lock options create, update or remove the gadget's ResizeGadget(...) line as needed."
-    : "Lock editing is available only when the current layout can be converted to a safe ResizeGadget(...) update."
+    ? resizeLockField.editableNote
+    : resizeLockField.unavailableNote
   ));
   }
   if (hasExpressionVisibility) {

@@ -177,7 +177,19 @@ export type GadgetParentFieldConfig = {
 export type GadgetResizeLockFieldConfig = {
   visible: boolean;
   valueEditablePolicy: "safe-resize-patch-only";
-  title: string;
+  lockLeftLabel: string;
+  lockRightLabel: string;
+  lockTopLabel: string;
+  lockBottomLabel: string;
+  lockLeftTitle: string;
+  lockRightTitle: string;
+  lockTopTitle: string;
+  lockBottomTitle: string;
+  unavailableTitle: string;
+  unsafeHorizontalUnlockTitle: string;
+  unsafeVerticalUnlockTitle: string;
+  editableNote: string;
+  unavailableNote: string;
 };
 
 export type GadgetFontFieldConfig = {
@@ -893,8 +905,23 @@ export function getGadgetResizeLockFieldConfig(
   return {
     visible: true,
     valueEditablePolicy: "safe-resize-patch-only",
-    title:
-      "Controls how the gadget stays attached to parent edges when the parent is resized. Editable only when the current layout can be saved safely.",
+    lockLeftLabel: "LockLeft",
+    lockRightLabel: "LockRight",
+    lockTopLabel: "LockTop",
+    lockBottomLabel: "LockBottom",
+    lockLeftTitle: "Keep the left edge attached when the parent is resized.",
+    lockRightTitle: "Keep the right edge attached when the parent is resized.",
+    lockTopTitle: "Keep the top edge attached when the parent is resized.",
+    lockBottomTitle: "Keep the bottom edge attached when the parent is resized.",
+    unavailableTitle: "This lock cannot be changed safely for the current layout.",
+    unsafeHorizontalUnlockTitle:
+      "At least one horizontal edge must stay locked while vertical resizing is still active.",
+    unsafeVerticalUnlockTitle:
+      "At least one vertical edge must stay locked while horizontal resizing is still active.",
+    editableNote:
+      "These lock options control how the gadget moves or stretches when its parent is resized.",
+    unavailableNote:
+      "Lock editing is unavailable for this layout because changing it could lose the saved resize behavior.",
   };
 }
 

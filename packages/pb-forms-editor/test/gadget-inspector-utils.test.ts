@@ -386,7 +386,23 @@ test("uses user-facing lock row titles while preserving safe ResizeGadget policy
     .sort();
 
   assert.deepEqual(actualLockKinds, ORIGINAL_FD_SELECT_GADGET_BASE_ROW_KINDS);
-  assert.equal(getGadgetResizeLockFieldConfig(GADGET_KIND.ButtonGadget)?.valueEditablePolicy, "safe-resize-patch-only");
+  assert.deepEqual(getGadgetResizeLockFieldConfig(GADGET_KIND.ButtonGadget), {
+    visible: true,
+    valueEditablePolicy: "safe-resize-patch-only",
+    lockLeftLabel: "LockLeft",
+    lockRightLabel: "LockRight",
+    lockTopLabel: "LockTop",
+    lockBottomLabel: "LockBottom",
+    lockLeftTitle: "Keep the left edge attached when the parent is resized.",
+    lockRightTitle: "Keep the right edge attached when the parent is resized.",
+    lockTopTitle: "Keep the top edge attached when the parent is resized.",
+    lockBottomTitle: "Keep the bottom edge attached when the parent is resized.",
+    unavailableTitle: "This lock cannot be changed safely for the current layout.",
+    unsafeHorizontalUnlockTitle: "At least one horizontal edge must stay locked while vertical resizing is still active.",
+    unsafeVerticalUnlockTitle: "At least one vertical edge must stay locked while horizontal resizing is still active.",
+    editableNote: "These lock options control how the gadget moves or stretches when its parent is resized.",
+    unavailableNote: "Lock editing is unavailable for this layout because changing it could lose the saved resize behavior."
+  });
   assert.equal(getGadgetResizeLockFieldConfig(GADGET_KIND.Unknown), undefined);
 });
 
