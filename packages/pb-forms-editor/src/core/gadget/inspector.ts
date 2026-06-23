@@ -112,11 +112,19 @@ export type GadgetCaptionFieldConfig = {
   label: string;
   textEditable: boolean;
   variableToggleEditable: boolean;
+  variableToggleTitle: string;
+  variableToggleUnavailableTitle: string;
+  textTitle: string;
+  textUnavailableTitle: string;
 };
 
 export type GadgetTooltipFieldConfig = {
   valueEditable: boolean;
   variableToggleEditable: boolean;
+  variableToggleTitle: string;
+  variableToggleUnavailableTitle: string;
+  valueTitle: string;
+  valueUnavailableTitle: string;
 };
 
 export type GadgetSelectProcFieldConfig = {
@@ -982,7 +990,17 @@ export function getGadgetTooltipFieldConfig(
   kind: string | undefined,
 ): GadgetTooltipFieldConfig | undefined {
   if (!canInspectGadgetTooltipRows(kind)) return undefined;
-  return { valueEditable: true, variableToggleEditable: true };
+  return {
+    valueEditable: true,
+    variableToggleEditable: true,
+    variableToggleTitle:
+      "Treat the tooltip as a variable or expression instead of a string literal.",
+    variableToggleUnavailableTitle:
+      "This gadget cannot switch its tooltip to variable mode.",
+    valueTitle:
+      "Edit the tooltip shown when the user hovers over this gadget. Enable 'Tooltip Is Variable' for a variable name or expression.",
+    valueUnavailableTitle: "Displays the tooltip stored for this gadget.",
+  };
 }
 
 export function getGadgetCaptionFieldConfig(
@@ -996,6 +1014,13 @@ export function getGadgetCaptionFieldConfig(
       label: "Mask",
       textEditable: canEditGadgetText(kind),
       variableToggleEditable: GADGET_CAPTION_VARIABLE_CAPABLE_KINDS.has(kind),
+      variableToggleTitle:
+        "Treat the mask as a variable or expression instead of a string literal.",
+      variableToggleUnavailableTitle:
+        "This gadget cannot switch its mask to variable mode.",
+      textTitle:
+        "Edit the date mask used by this gadget. Enable 'Caption Is Variable' for a variable name or expression.",
+      textUnavailableTitle: "Displays the date mask stored for this gadget.",
     };
   }
 
@@ -1004,6 +1029,13 @@ export function getGadgetCaptionFieldConfig(
       label: "Callback",
       textEditable: true,
       variableToggleEditable: false,
+      variableToggleTitle:
+        "Treat this value as a variable or expression instead of a string literal.",
+      variableToggleUnavailableTitle:
+        "This callback field is edited directly and cannot be switched to variable mode.",
+      textTitle: "Edit the callback procedure passed to this Scintilla gadget.",
+      textUnavailableTitle:
+        "Displays the callback procedure stored for this Scintilla gadget.",
     };
   }
 
@@ -1011,6 +1043,13 @@ export function getGadgetCaptionFieldConfig(
     label: "Caption",
     textEditable: canEditGadgetText(kind),
     variableToggleEditable: GADGET_CAPTION_VARIABLE_CAPABLE_KINDS.has(kind),
+    variableToggleTitle:
+      "Treat the caption as a variable or expression instead of a string literal.",
+    variableToggleUnavailableTitle:
+      "This gadget cannot switch its caption to variable mode.",
+    textTitle:
+      "Edit the text shown by this gadget. Enable 'Caption Is Variable' for a variable name or expression.",
+    textUnavailableTitle: "Displays the caption stored for this gadget.",
   };
 }
 

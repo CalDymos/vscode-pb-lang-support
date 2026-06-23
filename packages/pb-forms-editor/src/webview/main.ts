@@ -11666,8 +11666,8 @@ function renderProps() {
         }, {
           disabled: !captionField.variableToggleEditable,
           title: captionField.variableToggleEditable
-            ? "Treat this value as a variable or expression instead of a string literal."
-            : "This gadget keeps the original callback field behavior and does not expose a variable toggle here."
+            ? captionField.variableToggleTitle
+            : captionField.variableToggleUnavailableTitle
         })
       )
     );
@@ -11681,13 +11681,9 @@ function renderProps() {
           },
           {
             disabled: !captionField.textEditable,
-            title: captionField.label === "Mask"
-              ? "Mask text passed to this DateGadget."
-              : captionField.label === "Callback"
-                ? "Callback procedure passed to this Scintilla gadget."
-                : captionField.textEditable
-                  ? "Text shown for this gadget. Enable 'Caption Is Variable' if this value is a variable name or expression."
-                  : "This gadget keeps the original readonly caption field behavior."
+            title: captionField.textEditable
+              ? captionField.textTitle
+              : captionField.textUnavailableTitle
           }
         )
       )
@@ -11704,8 +11700,8 @@ function renderProps() {
         }, {
           disabled: !tooltipField.variableToggleEditable,
           title: tooltipField.variableToggleEditable
-            ? "Treat this tooltip as a variable or expression instead of a string literal."
-            : "This gadget keeps the original readonly tooltip-variable field behavior."
+            ? tooltipField.variableToggleTitle
+            : tooltipField.variableToggleUnavailableTitle
         })
       )
     );
@@ -11720,8 +11716,8 @@ function renderProps() {
           {
             disabled: !tooltipField.valueEditable,
             title: tooltipField.valueEditable
-              ? "Tooltip shown for this gadget. Enable 'Tooltip Is Variable' if this value is a variable name or expression."
-              : "This gadget keeps the original readonly tooltip field behavior."
+              ? tooltipField.valueTitle
+              : tooltipField.valueUnavailableTitle
           }
         )
       )

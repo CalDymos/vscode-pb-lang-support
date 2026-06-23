@@ -417,11 +417,19 @@ test("documents complete FD_SelectGadget row coverage after the FD-011 audit", (
   assert.deepEqual(getGadgetCaptionFieldConfig(baseKind), {
     label: "Caption",
     textEditable: true,
-    variableToggleEditable: true
+    variableToggleEditable: true,
+    variableToggleTitle: "Treat the caption as a variable or expression instead of a string literal.",
+    variableToggleUnavailableTitle: "This gadget cannot switch its caption to variable mode.",
+    textTitle: "Edit the text shown by this gadget. Enable 'Caption Is Variable' for a variable name or expression.",
+    textUnavailableTitle: "Displays the caption stored for this gadget."
   });
   assert.deepEqual(getGadgetTooltipFieldConfig(baseKind), {
     valueEditable: true,
-    variableToggleEditable: true
+    variableToggleEditable: true,
+    variableToggleTitle: "Treat the tooltip as a variable or expression instead of a string literal.",
+    variableToggleUnavailableTitle: "This gadget cannot switch its tooltip to variable mode.",
+    valueTitle: "Edit the tooltip shown when the user hovers over this gadget. Enable 'Tooltip Is Variable' for a variable name or expression.",
+    valueUnavailableTitle: "Displays the tooltip stored for this gadget."
   });
   assert.equal(getGadgetParentFieldConfig(baseKind, false)?.visible, true);
   assert.equal(getGadgetResizeLockFieldConfig(baseKind)?.visible, true);
@@ -639,29 +647,48 @@ test("returns the original caption field behavior for Date, Scintilla, Editor an
   assert.deepEqual(getGadgetCaptionFieldConfig("DateGadget"), {
     label: "Mask",
     textEditable: true,
-    variableToggleEditable: true
+    variableToggleEditable: true,
+    variableToggleTitle: "Treat the mask as a variable or expression instead of a string literal.",
+    variableToggleUnavailableTitle: "This gadget cannot switch its mask to variable mode.",
+    textTitle: "Edit the date mask used by this gadget. Enable 'Caption Is Variable' for a variable name or expression.",
+    textUnavailableTitle: "Displays the date mask stored for this gadget."
   });
   assert.deepEqual(getGadgetCaptionFieldConfig("ScintillaGadget"), {
     label: "Callback",
     textEditable: true,
-    variableToggleEditable: false
+    variableToggleEditable: false,
+    variableToggleTitle: "Treat this value as a variable or expression instead of a string literal.",
+    variableToggleUnavailableTitle: "This callback field is edited directly and cannot be switched to variable mode.",
+    textTitle: "Edit the callback procedure passed to this Scintilla gadget.",
+    textUnavailableTitle: "Displays the callback procedure stored for this Scintilla gadget."
   });
   assert.deepEqual(getGadgetCaptionFieldConfig("EditorGadget"), {
     label: "Caption",
     textEditable: false,
-    variableToggleEditable: false
+    variableToggleEditable: false,
+    variableToggleTitle: "Treat the caption as a variable or expression instead of a string literal.",
+    variableToggleUnavailableTitle: "This gadget cannot switch its caption to variable mode.",
+    textTitle: "Edit the text shown by this gadget. Enable 'Caption Is Variable' for a variable name or expression.",
+    textUnavailableTitle: "Displays the caption stored for this gadget."
   });
-  assert.deepEqual(getGadgetCaptionFieldConfig("CanvasGadget"), {
-    label: "Caption",
-    textEditable: false,
-    variableToggleEditable: false
-  });
-  assert.deepEqual(getGadgetCaptionFieldConfig("ImageGadget"), {
-    label: "Caption",
-    textEditable: false,
-    variableToggleEditable: false
-  });
+  assert.deepEqual(getGadgetCaptionFieldConfig("CanvasGadget"), getGadgetCaptionFieldConfig("EditorGadget"));
+  assert.deepEqual(getGadgetCaptionFieldConfig("ImageGadget"), getGadgetCaptionFieldConfig("EditorGadget"));
   assert.equal(getGadgetCaptionFieldConfig("Unknown"), undefined);
+});
+
+test("uses user-facing caption and tooltip field titles", () => {
+  const caption = getGadgetCaptionFieldConfig(GADGET_KIND.ButtonGadget);
+  assert.equal(caption?.variableToggleTitle, "Treat the caption as a variable or expression instead of a string literal.");
+  assert.equal(caption?.textTitle, "Edit the text shown by this gadget. Enable 'Caption Is Variable' for a variable name or expression.");
+  assert.equal(caption?.textUnavailableTitle, "Displays the caption stored for this gadget.");
+
+  const mask = getGadgetCaptionFieldConfig(GADGET_KIND.DateGadget);
+  assert.equal(mask?.label, "Mask");
+  assert.equal(mask?.textTitle, "Edit the date mask used by this gadget. Enable 'Caption Is Variable' for a variable name or expression.");
+
+  const tooltip = getGadgetTooltipFieldConfig(GADGET_KIND.ButtonGadget);
+  assert.equal(tooltip?.variableToggleTitle, "Treat the tooltip as a variable or expression instead of a string literal.");
+  assert.equal(tooltip?.valueTitle, "Edit the tooltip shown when the user hovers over this gadget. Enable 'Tooltip Is Variable' for a variable name or expression.");
 });
 
 
