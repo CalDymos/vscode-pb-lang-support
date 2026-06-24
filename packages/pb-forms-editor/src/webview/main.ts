@@ -11887,7 +11887,7 @@ function renderProps() {
       renderProps();
     };
     const clearFrontColorBtn = document.createElement("button");
-    clearFrontColorBtn.textContent = "Remove";
+    clearFrontColorBtn.textContent = colorRowsField.removeButtonLabel;
     clearFrontColorBtn.disabled = !colorRowsField.valueEditable || !(g.frontColorRaw?.trim() || typeof g.frontColor === "number");
     clearFrontColorBtn.title = clearFrontColorBtn.disabled
       ? colorRowsField.frontColorRemoveEmptyTitle
@@ -11928,7 +11928,7 @@ function renderProps() {
       renderProps();
     };
     const clearBackColorBtn = document.createElement("button");
-    clearBackColorBtn.textContent = "Remove";
+    clearBackColorBtn.textContent = colorRowsField.removeButtonLabel;
     clearBackColorBtn.disabled = !colorRowsField.valueEditable || !(g.backColorRaw?.trim() || typeof g.backColor === "number");
     clearBackColorBtn.title = clearBackColorBtn.disabled
       ? colorRowsField.backColorRemoveEmptyTitle

@@ -120,6 +120,7 @@ export type GadgetColorRowsFieldConfig = {
   backColorTitle: string;
   frontColorPickerTitle: string;
   backColorPickerTitle: string;
+  removeButtonLabel: string;
   frontColorRemoveTitle: string;
   backColorRemoveTitle: string;
   frontColorRemoveEmptyTitle: string;
@@ -821,6 +822,7 @@ export function getGadgetColorRowsFieldConfig(
       "Choose the gadget front color. The value is saved as RGB(...).",
     backColorPickerTitle:
       "Choose the gadget background color. The value is saved as RGB(...).",
+    removeButtonLabel: "Remove",
     frontColorRemoveTitle: "Remove the current gadget front color.",
     backColorRemoveTitle: "Remove the current gadget background color.",
     frontColorRemoveEmptyTitle: "No gadget front color is set.",
