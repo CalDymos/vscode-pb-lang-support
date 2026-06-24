@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { parseFormDocument } from "../src/core/parser/form-parser";
+import { GADGET_KIND } from "../src/core/model";
+import { PBFD_INSERTABLE_GADGET_KINDS, type InsertableGadgetKind } from "../src/core/gadget/insert";
 import { applyGadgetDelete, applyGadgetEventProcUpdate, applyGadgetInsert, applyGadgetItemDelete, applyGadgetItemUpdate, applyPanelGadgetItemMove, applyGadgetOpenArgsUpdate, applyGadgetPbAnyToggle, applyGadgetPropertyUpdate, applyGadgetReparent, applyMenuEntryEventUpdate, applyMovePatch, applyRectPatch, applyResizeGadgetDelete, applyResizeGadgetMutation, applyResizeGadgetRawUpdate, applyToolBarEntryEventUpdate, applyWindowEventProcUpdate, applyWindowEventUpdate, applyWindowGenerateEventLoopUpdate, applyWindowOpenArgsUpdate, applyWindowPbAnyToggle, applyWindowPropertyUpdate, applyWindowRectPatch, applyWindowVariableNamePatch } from "../src/core/emitter/patch-emitter";
 import { loadFixture } from "./helpers/loadFixture";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
@@ -246,6 +248,70 @@ EndProcedure
   assert.equal(gadget?.y, 34);
   assert.equal(gadget?.w, 160);
   assert.equal(gadget?.h, 40);
+});
+
+
+const INSERT_CONSTRUCTOR_MATRIX: Array<{ kind: InsertableGadgetKind; pattern: RegExp }> = [
+  { kind: GADGET_KIND.ButtonGadget, pattern: /ButtonGadget\(#Button_0, 12, 34, 100, 25, ""\)/ },
+  { kind: GADGET_KIND.ButtonImageGadget, pattern: /ButtonImageGadget\(#ButtonImage_0, 12, 34, 100, 25, 0\)/ },
+  { kind: GADGET_KIND.StringGadget, pattern: /StringGadget\(#String_0, 12, 34, 100, 25, ""\)/ },
+  { kind: GADGET_KIND.TextGadget, pattern: /TextGadget\(#Text_0, 12, 34, 100, 25, ""\)/ },
+  { kind: GADGET_KIND.CheckBoxGadget, pattern: /CheckBoxGadget\(#Checkbox_0, 12, 34, 100, 25, ""\)/ },
+  { kind: GADGET_KIND.OptionGadget, pattern: /OptionGadget\(#Option_0, 12, 34, 100, 25, ""\)/ },
+  { kind: GADGET_KIND.FrameGadget, pattern: /FrameGadget\(#Frame3D_0, 12, 34, 100, 25, ""\)/ },
+  { kind: GADGET_KIND.ComboBoxGadget, pattern: /ComboBoxGadget\(#Combo_0, 12, 34, 100, 25\)/ },
+  { kind: GADGET_KIND.ListViewGadget, pattern: /ListViewGadget\(#ListView_0, 12, 34, 100, 25\)/ },
+  { kind: GADGET_KIND.ListIconGadget, pattern: /ListIconGadget\(#ListIcon_0, 12, 34, 100, 25, "Column 1", 100\)/ },
+  { kind: GADGET_KIND.TreeGadget, pattern: /TreeGadget\(#Tree_0, 12, 34, 100, 25\)/ },
+  { kind: GADGET_KIND.EditorGadget, pattern: /EditorGadget\(#Editor_0, 12, 34, 100, 25\)/ },
+  { kind: GADGET_KIND.SpinGadget, pattern: /SpinGadget\(#Spin_0, 12, 34, 100, 25, 0, 0\)/ },
+  { kind: GADGET_KIND.TrackBarGadget, pattern: /TrackBarGadget\(#TrackBar_0, 12, 34, 100, 25, 0, 0\)/ },
+  { kind: GADGET_KIND.ProgressBarGadget, pattern: /ProgressBarGadget\(#ProgressBar_0, 12, 34, 100, 25, 0, 0\)/ },
+  { kind: GADGET_KIND.ImageGadget, pattern: /ImageGadget\(#Image_0, 12, 34, 100, 25, 0\)/ },
+  { kind: GADGET_KIND.HyperLinkGadget, pattern: /HyperLinkGadget\(#Hyperlink_0, 12, 34, 100, 25, "", 0\)/ },
+  { kind: GADGET_KIND.CalendarGadget, pattern: /CalendarGadget\(#Calendar_0, 12, 34, 100, 25, 0\)/ },
+  { kind: GADGET_KIND.DateGadget, pattern: /DateGadget\(#Date_0, 12, 34, 100, 25, "", 0\)/ },
+  { kind: GADGET_KIND.ContainerGadget, pattern: /ContainerGadget\(#Container_0, 12, 34, 100, 25\)\s+CloseGadgetList\(\)/ },
+  { kind: GADGET_KIND.PanelGadget, pattern: /PanelGadget\(#Panel_0, 12, 34, 100, 25\)\s+AddGadgetItem\(#Panel_0, -1, "Tab 1"\)\s+CloseGadgetList\(\)/ },
+  { kind: GADGET_KIND.ScrollAreaGadget, pattern: /ScrollAreaGadget\(#ScrollArea_0, 12, 34, 100, 25, 300, 225, 1\)\s+CloseGadgetList\(\)/ },
+  { kind: GADGET_KIND.WebViewGadget, pattern: /WebViewGadget\(#WebView_0, 12, 34, 100, 25\)/ },
+  { kind: GADGET_KIND.WebGadget, pattern: /WebGadget\(#WebView_0, 12, 34, 100, 25, ""\)/ },
+  { kind: GADGET_KIND.OpenGLGadget, pattern: /OpenGLGadget\(#OpenGL_0, 12, 34, 100, 25\)/ },
+  { kind: GADGET_KIND.CanvasGadget, pattern: /CanvasGadget\(#Canvas_0, 12, 34, 100, 25\)/ },
+  { kind: GADGET_KIND.ExplorerTreeGadget, pattern: /ExplorerTreeGadget\(#ExplorerTree_0, 12, 34, 100, 25, ""\)/ },
+  { kind: GADGET_KIND.ExplorerListGadget, pattern: /ExplorerListGadget\(#ExplorerList_0, 12, 34, 100, 25, ""\)/ },
+  { kind: GADGET_KIND.ExplorerComboGadget, pattern: /ExplorerComboGadget\(#ExplorerCombo_0, 12, 34, 100, 25, ""\)/ },
+  { kind: GADGET_KIND.IPAddressGadget, pattern: /IPAddressGadget\(#IP_0, 12, 34, 100, 25\)/ },
+  { kind: GADGET_KIND.ScrollBarGadget, pattern: /ScrollBarGadget\(#Scrollbar_0, 12, 34, 100, 25, 0, 0, 0\)/ },
+  { kind: GADGET_KIND.ScintillaGadget, pattern: /ScintillaGadget\(#Scintilla_0, 12, 34, 100, 25, @Callback_Scintilla_0\(\)\)/ },
+];
+
+test("covers default insert constructors for every non-splitter toolbox gadget", () => {
+  const coveredKinds = new Set(INSERT_CONSTRUCTOR_MATRIX.map(entry => entry.kind));
+  for (const kind of PBFD_INSERTABLE_GADGET_KINDS) {
+    if (kind === GADGET_KIND.SplitterGadget) continue;
+    assert.ok(coveredKinds.has(kind), `Missing default constructor coverage for ${kind}.`);
+  }
+
+  for (const entry of INSERT_CONSTRUCTOR_MATRIX) {
+    const text = `; Form Designer for PureBasic - 6.40
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+EndProcedure
+`;
+
+    const { patchedText, parsed } = patchAndReparse(text, (document) =>
+      applyGadgetInsert(document, entry.kind, 12, 34)
+    );
+
+    assert.match(patchedText, entry.pattern, `Unexpected default constructor for ${entry.kind}.`);
+    assert.equal(parsed.gadgets.length, 1, `Expected one inserted gadget for ${entry.kind}.`);
+    assert.equal(parsed.gadgets[0]?.kind, entry.kind);
+    assert.equal(parsed.gadgets[0]?.x, 12);
+    assert.equal(parsed.gadgets[0]?.y, 34);
+    assert.equal(parsed.gadgets[0]?.w, 100);
+    assert.equal(parsed.gadgets[0]?.h, 25);
+  }
 });
 
 test("preserves original top-level Windows toolbar Y expressions when patching gadget rects", () => {
