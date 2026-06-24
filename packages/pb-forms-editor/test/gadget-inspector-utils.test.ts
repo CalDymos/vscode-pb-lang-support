@@ -548,6 +548,17 @@ test("documents complete FD_SelectGadget row coverage after the FD-011 audit", (
 test("uses user-facing item-editor tooltips while preserving existing item data display", () => {
   assert.deepEqual(getGadgetItemEditorFieldConfig(GADGET_KIND.PanelGadget), {
     visible: true,
+    sectionLabel: "Items",
+    itemTextLabel: "Item Text",
+    positionRawLabel: "Position",
+    imageRawLabel: "Image Raw",
+    flagsRawLabel: "Flags Raw",
+    imageActionLabel: "Image",
+    saveButtonLabel: "Save Item",
+    insertButtonLabel: "Insert Item",
+    cancelButtonLabel: "Cancel Item",
+    addButtonLabel: "Add Item",
+    deleteConfirmLabel: "Delete Item",
     itemTextTitle: "Edit the item text shown by this gadget.",
     positionRawTitle: "Edit the raw item position expression. Use -1 to append the item.",
     imageRawTitle: "Edit the optional raw image expression for this item.",
@@ -562,6 +573,15 @@ test("uses user-facing item-editor tooltips while preserving existing item data 
 test("uses user-facing column-editor tooltips while preserving existing column data display", () => {
   assert.deepEqual(getGadgetColumnEditorFieldConfig(GADGET_KIND.ListIconGadget), {
     visible: true,
+    sectionLabel: "Columns",
+    columnTitleLabel: "Column Title",
+    columnIndexLabel: "Column Index",
+    widthRawLabel: "Width",
+    saveButtonLabel: "Save Column",
+    insertButtonLabel: "Insert Column",
+    cancelButtonLabel: "Cancel Column",
+    addButtonLabel: "Add Column",
+    deleteConfirmLabel: "Delete Column",
     columnTitleTitle: "Edit the column title shown by this gadget.",
     indexRawTitle: "Edit the raw column index expression. Use the next index to append the column.",
     widthRawTitle: "Edit the raw column width expression.",

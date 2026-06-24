@@ -12251,30 +12251,30 @@ function renderProps() {
 
   // Items editor (minimal UI)
   if (itemEditorField) {
-    propsEl.appendChild(section("Items"));
+    propsEl.appendChild(section(itemEditorField.sectionLabel));
     const itemDraft = getGadgetItemDraft(g);
     const itemEditorOpen = isGadgetItemEditorOpen(g);
   if (itemDraft && itemEditorOpen) {
     propsEl.appendChild(row(
-      "Item Text",
+      itemEditorField.itemTextLabel,
       textInput(itemDraft.text, v => updateGadgetItemEditorDraft({ text: v }), {
         title: itemEditorField.itemTextTitle
       })
     ));
     propsEl.appendChild(row(
-      "Position",
+      itemEditorField.positionRawLabel,
       textInput(itemDraft.posRaw, v => updateGadgetItemEditorDraft({ posRaw: v }), {
         title: itemEditorField.positionRawTitle
       })
     ));
     propsEl.appendChild(row(
-      "Image Raw",
+      itemEditorField.imageRawLabel,
       textInput(itemDraft.imageRaw, v => updateGadgetItemEditorDraft({ imageRaw: v }), {
         title: itemEditorField.imageRawTitle
       })
     ));
     propsEl.appendChild(row(
-      "Flags Raw",
+      itemEditorField.flagsRawLabel,
       textInput(itemDraft.flagsRaw, v => updateGadgetItemEditorDraft({ flagsRaw: v }), {
         title: itemEditorField.flagsRawTitle
       })
@@ -12283,10 +12283,10 @@ function renderProps() {
     const itemEditorActions = document.createElement("div");
     itemEditorActions.className = "miniActions";
     const saveItemBtn = document.createElement("button");
-    saveItemBtn.textContent = itemDraft.sourceLine ? "Save Item" : "Insert Item";
+    saveItemBtn.textContent = itemDraft.sourceLine ? itemEditorField.saveButtonLabel : itemEditorField.insertButtonLabel;
     saveItemBtn.onclick = () => saveGadgetItemEditor(g);
     const cancelItemBtn = document.createElement("button");
-    cancelItemBtn.textContent = "Cancel Item";
+    cancelItemBtn.textContent = itemEditorField.cancelButtonLabel;
     cancelItemBtn.onclick = () => {
       closeGadgetItemEditor(g.id);
       renderProps();
@@ -12322,12 +12322,12 @@ function renderProps() {
                 gadgetId: g.id,
                 sourceLine: it.source!.line,
                 message: `Delete item ${idx} from gadget '${g.id}'?`,
-                confirmLabel: "Delete Item"
+                confirmLabel: itemEditorField.deleteConfirmLabel
               });
             }
           : undefined,
         {
-          label: "Image",
+          label: itemEditorField.imageActionLabel,
           onClick: itemImage ? () => selectImageById(itemImage.id) : undefined,
           disabled: !itemImage,
           title: itemImage ? "" : itemImageHint
@@ -12337,7 +12337,7 @@ function renderProps() {
   });
 
   const addItemBtn = document.createElement("button");
-  addItemBtn.textContent = "Add Item";
+  addItemBtn.textContent = itemEditorField.addButtonLabel;
   addItemBtn.title = itemEditorField.addButtonTitle;
   addItemBtn.onclick = () => {
     openGadgetItemEditor(g);
@@ -12358,24 +12358,24 @@ function renderProps() {
 
   // Columns editor (minimal UI)
   if (columnEditorField) {
-    propsEl.appendChild(section("Columns"));
+    propsEl.appendChild(section(columnEditorField.sectionLabel));
     const columnDraft = getGadgetColumnDraft(g);
     const columnEditorOpen = isGadgetColumnEditorOpen(g);
   if (columnDraft && columnEditorOpen) {
     propsEl.appendChild(row(
-      "Column Title",
+      columnEditorField.columnTitleLabel,
       textInput(columnDraft.title, v => updateGadgetColumnEditorDraft({ title: v }), {
         title: columnEditorField.columnTitleTitle
       })
     ));
     propsEl.appendChild(row(
-      "Column Index",
+      columnEditorField.columnIndexLabel,
       textInput(columnDraft.colRaw, v => updateGadgetColumnEditorDraft({ colRaw: v }), {
         title: columnEditorField.indexRawTitle
       })
     ));
     propsEl.appendChild(row(
-      "Width",
+      columnEditorField.widthRawLabel,
       textInput(columnDraft.widthRaw, v => updateGadgetColumnEditorDraft({ widthRaw: v }), {
         title: columnEditorField.widthRawTitle
       })
@@ -12384,10 +12384,10 @@ function renderProps() {
     const columnEditorActions = document.createElement("div");
     columnEditorActions.className = "miniActions";
     const saveColumnBtn = document.createElement("button");
-    saveColumnBtn.textContent = columnDraft.sourceLine ? "Save Column" : "Insert Column";
+    saveColumnBtn.textContent = columnDraft.sourceLine ? columnEditorField.saveButtonLabel : columnEditorField.insertButtonLabel;
     saveColumnBtn.onclick = () => saveGadgetColumnEditor(g);
     const cancelColumnBtn = document.createElement("button");
-    cancelColumnBtn.textContent = "Cancel Column";
+    cancelColumnBtn.textContent = columnEditorField.cancelButtonLabel;
     cancelColumnBtn.onclick = () => {
       closeGadgetColumnEditor(g.id);
       renderProps();
@@ -12418,7 +12418,7 @@ function renderProps() {
                 gadgetId: g.id,
                 sourceLine: c.source!.line,
                 message: `Delete column ${idx} from gadget '${g.id}'?`,
-                confirmLabel: "Delete Column"
+                confirmLabel: columnEditorField.deleteConfirmLabel
               });
             }
           : undefined
@@ -12427,7 +12427,7 @@ function renderProps() {
   });
 
   const addColBtn = document.createElement("button");
-  addColBtn.textContent = "Add Column";
+  addColBtn.textContent = columnEditorField.addButtonLabel;
   addColBtn.onclick = () => {
     openGadgetColumnEditor(g);
     renderProps();

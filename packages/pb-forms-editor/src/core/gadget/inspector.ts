@@ -145,6 +145,17 @@ export type GadgetCtorRangeFieldLabels = {
 
 export type GadgetItemEditorFieldConfig = {
   visible: boolean;
+  sectionLabel: string;
+  itemTextLabel: string;
+  positionRawLabel: string;
+  imageRawLabel: string;
+  flagsRawLabel: string;
+  imageActionLabel: string;
+  saveButtonLabel: string;
+  insertButtonLabel: string;
+  cancelButtonLabel: string;
+  addButtonLabel: string;
+  deleteConfirmLabel: string;
   itemTextTitle: string;
   positionRawTitle: string;
   imageRawTitle: string;
@@ -154,6 +165,15 @@ export type GadgetItemEditorFieldConfig = {
 
 export type GadgetColumnEditorFieldConfig = {
   visible: boolean;
+  sectionLabel: string;
+  columnTitleLabel: string;
+  columnIndexLabel: string;
+  widthRawLabel: string;
+  saveButtonLabel: string;
+  insertButtonLabel: string;
+  cancelButtonLabel: string;
+  addButtonLabel: string;
+  deleteConfirmLabel: string;
   columnTitleTitle: string;
   indexRawTitle: string;
   widthRawTitle: string;
@@ -1081,6 +1101,17 @@ export function getGadgetItemEditorFieldConfig(
   if (!canInspectGadgetItems(kind) && !hasExistingItems) return undefined;
   return {
     visible: true,
+    sectionLabel: "Items",
+    itemTextLabel: "Item Text",
+    positionRawLabel: "Position",
+    imageRawLabel: "Image Raw",
+    flagsRawLabel: "Flags Raw",
+    imageActionLabel: "Image",
+    saveButtonLabel: "Save Item",
+    insertButtonLabel: "Insert Item",
+    cancelButtonLabel: "Cancel Item",
+    addButtonLabel: "Add Item",
+    deleteConfirmLabel: "Delete Item",
     itemTextTitle: "Edit the item text shown by this gadget.",
     positionRawTitle:
       "Edit the raw item position expression. Use -1 to append the item.",
@@ -1103,6 +1134,15 @@ export function getGadgetColumnEditorFieldConfig(
   if (!canInspectGadgetColumns(kind) && !hasExistingColumns) return undefined;
   return {
     visible: true,
+    sectionLabel: "Columns",
+    columnTitleLabel: "Column Title",
+    columnIndexLabel: "Column Index",
+    widthRawLabel: "Width",
+    saveButtonLabel: "Save Column",
+    insertButtonLabel: "Insert Column",
+    cancelButtonLabel: "Cancel Column",
+    addButtonLabel: "Add Column",
+    deleteConfirmLabel: "Delete Column",
     columnTitleTitle: "Edit the column title shown by this gadget.",
     indexRawTitle:
       "Edit the raw column index expression. Use the next index to append the column.",
