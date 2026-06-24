@@ -181,6 +181,7 @@ import {
   getGadgetColorRowsFieldConfig,
   getGadgetColumnEditorFieldConfig,
   getGadgetConstantsFieldConfig,
+  getGadgetDetailsFieldConfig,
   getGadgetFontFieldConfig,
   getGadgetItemEditorFieldConfig,
   getGadgetLayoutFieldConfig,
@@ -11765,15 +11766,17 @@ function renderProps() {
     return;
   }
 
-  propsEl.appendChild(section("Details"));
-  propsEl.appendChild(row("Id", readonlyInput(g.id)));
-  propsEl.appendChild(row("Kind", readonlyInput(g.kind)));
+  const detailsField = getGadgetDetailsFieldConfig();
+  propsEl.appendChild(section(detailsField.sectionLabel));
+  propsEl.appendChild(row(detailsField.idLabel, readonlyInput(g.id, detailsField.idTitle)));
+  propsEl.appendChild(row(detailsField.kindLabel, readonlyInput(g.kind, detailsField.kindTitle)));
   if (shouldShowGadgetParentDetail(g)) {
-    propsEl.appendChild(row("Parent", readonlyInput(g.parentId!.toString())));
+    propsEl.appendChild(row(detailsField.parentLabel, readonlyInput(g.parentId!.toString(), detailsField.parentTitle)));
   }
   if (shouldShowGadgetTabDetail(g)) {
-    propsEl.appendChild(row("Tab", readonlyInput(String(g.parentItem))));
+    propsEl.appendChild(row(detailsField.tabLabel, readonlyInput(String(g.parentItem), detailsField.tabTitle)));
   }
+  propsEl.appendChild(mutedNote(detailsField.note));
   const itemEditorField = getGadgetItemEditorFieldConfig(g.kind, Boolean(g.items?.length));
   const columnEditorField = getGadgetColumnEditorFieldConfig(g.kind, Boolean(g.columns?.length));
   const showsItemsInspector = Boolean(itemEditorField);

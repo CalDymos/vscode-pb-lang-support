@@ -338,6 +338,20 @@ export type GadgetInspectorDetailsLike = {
   parentItem?: number;
 };
 
+export type GadgetDetailsFieldConfig = {
+  visible: boolean;
+  sectionLabel: string;
+  idLabel: string;
+  kindLabel: string;
+  parentLabel: string;
+  tabLabel: string;
+  idTitle: string;
+  kindTitle: string;
+  parentTitle: string;
+  tabTitle: string;
+  note: string;
+};
+
 const GADGET_CAPTION_VISIBLE_KINDS: ReadonlySet<string> = new Set([
   GADGET_KIND.ButtonGadget,
   GADGET_KIND.ButtonImageGadget,
@@ -1204,6 +1218,27 @@ export function buildGadgetFlagsExpr(
   );
   const parts = [...orderedKnown, ...customFlags];
   return parts.length ? parts.join(" | ") : undefined;
+}
+
+export function getGadgetDetailsFieldConfig(): GadgetDetailsFieldConfig {
+  return {
+    visible: true,
+    sectionLabel: "Details",
+    idLabel: "Id",
+    kindLabel: "Kind",
+    parentLabel: "Parent",
+    tabLabel: "Tab",
+    idTitle:
+      "Displays the internal selection id used by this editor. This is read-only reference information.",
+    kindTitle:
+      "Displays the parsed PureBasic gadget constructor kind. This is read-only reference information.",
+    parentTitle:
+      "Displays the internal parent gadget id tracked by this editor. Use the editable Parent controls in Properties to change the parent.",
+    tabTitle:
+      "Displays the parsed panel tab index for this child gadget. This is read-only reference information.",
+    note:
+      "Details are read-only editor reference fields.",
+  };
 }
 
 export function shouldShowGadgetParentDetail(

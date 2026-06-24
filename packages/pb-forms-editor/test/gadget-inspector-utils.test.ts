@@ -36,6 +36,7 @@ import {
   getGadgetItemEditorFieldConfig,
   getGadgetLayoutFieldConfig,
   getGadgetConstantsFieldConfig,
+  getGadgetDetailsFieldConfig,
   getGadgetFontFieldConfig,
   getGadgetKnownFlags,
   getGadgetParentFieldConfig,
@@ -1745,4 +1746,20 @@ test("shows non-original gadget parent and tab detail rows only when they actual
   assert.equal(shouldShowGadgetTabDetail({ parentItem: 0 }), true);
   assert.equal(shouldShowGadgetTabDetail({ parentItem: 3 }), true);
   assert.equal(shouldShowGadgetTabDetail({}), false);
+});
+
+test("labels the non-original gadget details block as read-only editor reference data", () => {
+  assert.deepEqual(getGadgetDetailsFieldConfig(), {
+    visible: true,
+    sectionLabel: "Details",
+    idLabel: "Id",
+    kindLabel: "Kind",
+    parentLabel: "Parent",
+    tabLabel: "Tab",
+    idTitle: "Displays the internal selection id used by this editor. This is not an original Form Designer property.",
+    kindTitle: "Displays the parsed PureBasic gadget constructor kind. This is read-only reference information.",
+    parentTitle: "Displays the internal parent gadget id tracked by this editor. Use the editable Parent controls in Properties to change the parent.",
+    tabTitle: "Displays the parsed panel tab index for this child gadget. This is read-only reference information.",
+    note: "Details are read-only editor reference fields. The original Form Designer properties start in the Properties section below."
+  });
 });
