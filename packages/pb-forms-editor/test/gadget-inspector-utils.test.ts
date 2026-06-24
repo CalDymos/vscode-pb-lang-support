@@ -899,7 +899,7 @@ test("uses user-facing caption and tooltip field titles", () => {
 test("returns user-facing notes for non-editable gadget caption rows", () => {
   assert.equal(
     getGadgetCaptionUnavailableNote(GADGET_KIND.ImageGadget),
-    "This gadget type has no editable caption field here. The stored value is shown for reference."
+    "This gadget type has no editable caption field here. The saved value is shown so you can see what the file contains."
   );
   assert.equal(
     getGadgetCaptionUnavailableNote(GADGET_KIND.ListIconGadget),
@@ -1766,7 +1766,7 @@ test("shows non-original gadget parent and tab detail rows only when they actual
   assert.equal(shouldShowGadgetTabDetail({}), false);
 });
 
-test("labels the gadget details block with user-facing read-only reference text", () => {
+test("labels the gadget details block with user-facing read-only text", () => {
   assert.deepEqual(getGadgetDetailsFieldConfig(), {
     visible: true,
     sectionLabel: "Details",
@@ -1778,6 +1778,6 @@ test("labels the gadget details block with user-facing read-only reference text"
     kindTitle: "Displays the selected gadget type.",
     parentTitle: "Displays the container or panel that owns this gadget. Use the Parent controls in Properties to change it.",
     tabTitle: "Displays the panel tab index for this child gadget.",
-    note: "Details are read-only reference fields. Editable properties start below."
+    note: "Details are read-only and identify the selected gadget. Editable properties start below."
   });
 });

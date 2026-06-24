@@ -1110,7 +1110,7 @@ export function getGadgetCaptionUnavailableNote(
   }
 
   if (!config.textEditable && !config.variableToggleEditable) {
-    return `This gadget type has no editable ${config.label.toLowerCase()} field here. The stored value is shown for reference.`;
+    return `This gadget type has no editable ${config.label.toLowerCase()} field here. The saved value is shown so you can see what the file contains.`;
   }
 
   if (!config.textEditable) {
@@ -1266,7 +1266,7 @@ export function getGadgetDetailsFieldConfig(): GadgetDetailsFieldConfig {
     tabTitle:
       "Displays the panel tab index for this child gadget.",
     note:
-      "Details are read-only reference fields. Editable properties start below.",
+      "Details are read-only and identify the selected gadget. Editable properties start below.",
   };
 }
 
