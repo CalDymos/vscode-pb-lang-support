@@ -554,6 +554,7 @@ test("uses user-facing item-editor tooltips while preserving existing item data 
   assert.deepEqual(getGadgetItemEditorFieldConfig(GADGET_KIND.PanelGadget), {
     visible: true,
     sectionLabel: "Items",
+    countLabel: "Items",
     itemTextLabel: "Item Text",
     positionRawLabel: "Position",
     imageRawLabel: "Image Raw",
@@ -568,7 +569,8 @@ test("uses user-facing item-editor tooltips while preserving existing item data 
     positionRawTitle: "Edit the raw item position expression. Use -1 to append the item.",
     imageRawTitle: "Edit the optional raw image expression for this item.",
     flagsRawTitle: "Edit the optional raw flags expression for this item.",
-    addButtonTitle: "Add a new item to this gadget."
+    addButtonTitle: "Add a new item to this gadget.",
+    countTitle: "Displays how many items are stored for this gadget."
   });
   assert.deepEqual(getGadgetItemEditorFieldConfig(GADGET_KIND.ButtonGadget, true), getGadgetItemEditorFieldConfig(GADGET_KIND.PanelGadget));
   assert.equal(getGadgetItemEditorFieldConfig(GADGET_KIND.ButtonGadget), undefined);
@@ -579,6 +581,7 @@ test("uses user-facing column-editor tooltips while preserving existing column d
   assert.deepEqual(getGadgetColumnEditorFieldConfig(GADGET_KIND.ListIconGadget), {
     visible: true,
     sectionLabel: "Columns",
+    countLabel: "Columns",
     columnTitleLabel: "Column Title",
     columnIndexLabel: "Column Index",
     widthRawLabel: "Width",
@@ -590,7 +593,8 @@ test("uses user-facing column-editor tooltips while preserving existing column d
     columnTitleTitle: "Edit the column title shown by this gadget.",
     indexRawTitle: "Edit the raw column index expression. Use the next index to append the column.",
     widthRawTitle: "Edit the raw column width expression.",
-    addButtonTitle: "Add a new column to this gadget."
+    addButtonTitle: "Add a new column to this gadget.",
+    countTitle: "Displays how many columns are stored for this gadget."
   });
   assert.deepEqual(getGadgetColumnEditorFieldConfig(GADGET_KIND.ButtonGadget, true), getGadgetColumnEditorFieldConfig(GADGET_KIND.ListIconGadget));
   assert.equal(getGadgetColumnEditorFieldConfig(GADGET_KIND.PanelGadget), undefined);
@@ -1748,7 +1752,7 @@ test("shows non-original gadget parent and tab detail rows only when they actual
   assert.equal(shouldShowGadgetTabDetail({}), false);
 });
 
-test("labels the non-original gadget details block as read-only editor reference data", () => {
+test("labels the gadget details block with user-facing read-only reference text", () => {
   assert.deepEqual(getGadgetDetailsFieldConfig(), {
     visible: true,
     sectionLabel: "Details",
@@ -1756,10 +1760,10 @@ test("labels the non-original gadget details block as read-only editor reference
     kindLabel: "Kind",
     parentLabel: "Parent",
     tabLabel: "Tab",
-    idTitle: "Displays the internal selection id used by this editor. This is not an original Form Designer property.",
-    kindTitle: "Displays the parsed PureBasic gadget constructor kind. This is read-only reference information.",
-    parentTitle: "Displays the internal parent gadget id tracked by this editor. Use the editable Parent controls in Properties to change the parent.",
-    tabTitle: "Displays the parsed panel tab index for this child gadget. This is read-only reference information.",
-    note: "Details are read-only editor reference fields. The original Form Designer properties start in the Properties section below."
+    idTitle: "Displays the selected gadget identifier.",
+    kindTitle: "Displays the selected gadget type.",
+    parentTitle: "Displays the container or panel that owns this gadget. Use the Parent controls in Properties to change it.",
+    tabTitle: "Displays the panel tab index for this child gadget.",
+    note: "Details are read-only reference fields. Editable properties start below."
   });
 });

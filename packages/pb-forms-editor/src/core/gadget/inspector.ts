@@ -147,6 +147,7 @@ export type GadgetCtorRangeFieldLabels = {
 export type GadgetItemEditorFieldConfig = {
   visible: boolean;
   sectionLabel: string;
+  countLabel: string;
   itemTextLabel: string;
   positionRawLabel: string;
   imageRawLabel: string;
@@ -162,11 +163,13 @@ export type GadgetItemEditorFieldConfig = {
   imageRawTitle: string;
   flagsRawTitle: string;
   addButtonTitle: string;
+  countTitle: string;
 };
 
 export type GadgetColumnEditorFieldConfig = {
   visible: boolean;
   sectionLabel: string;
+  countLabel: string;
   columnTitleLabel: string;
   columnIndexLabel: string;
   widthRawLabel: string;
@@ -179,6 +182,7 @@ export type GadgetColumnEditorFieldConfig = {
   indexRawTitle: string;
   widthRawTitle: string;
   addButtonTitle: string;
+  countTitle: string;
 };
 
 export type GadgetCaptionFieldConfig = {
@@ -1145,6 +1149,7 @@ export function getGadgetItemEditorFieldConfig(
   return {
     visible: true,
     sectionLabel: "Items",
+    countLabel: "Items",
     itemTextLabel: "Item Text",
     positionRawLabel: "Position",
     imageRawLabel: "Image Raw",
@@ -1161,6 +1166,7 @@ export function getGadgetItemEditorFieldConfig(
     imageRawTitle: "Edit the optional raw image expression for this item.",
     flagsRawTitle: "Edit the optional raw flags expression for this item.",
     addButtonTitle: "Add a new item to this gadget.",
+    countTitle: "Displays how many items are stored for this gadget.",
   };
 }
 
@@ -1178,6 +1184,7 @@ export function getGadgetColumnEditorFieldConfig(
   return {
     visible: true,
     sectionLabel: "Columns",
+    countLabel: "Columns",
     columnTitleLabel: "Column Title",
     columnIndexLabel: "Column Index",
     widthRawLabel: "Width",
@@ -1191,6 +1198,7 @@ export function getGadgetColumnEditorFieldConfig(
       "Edit the raw column index expression. Use the next index to append the column.",
     widthRawTitle: "Edit the raw column width expression.",
     addButtonTitle: "Add a new column to this gadget.",
+    countTitle: "Displays how many columns are stored for this gadget.",
   };
 }
 
@@ -1228,16 +1236,14 @@ export function getGadgetDetailsFieldConfig(): GadgetDetailsFieldConfig {
     kindLabel: "Kind",
     parentLabel: "Parent",
     tabLabel: "Tab",
-    idTitle:
-      "Displays the internal selection id used by this editor. This is read-only reference information.",
-    kindTitle:
-      "Displays the parsed PureBasic gadget constructor kind. This is read-only reference information.",
+    idTitle: "Displays the selected gadget identifier.",
+    kindTitle: "Displays the selected gadget type.",
     parentTitle:
-      "Displays the internal parent gadget id tracked by this editor. Use the editable Parent controls in Properties to change the parent.",
+      "Displays the container or panel that owns this gadget. Use the Parent controls in Properties to change it.",
     tabTitle:
-      "Displays the parsed panel tab index for this child gadget. This is read-only reference information.",
+      "Displays the panel tab index for this child gadget.",
     note:
-      "Details are read-only editor reference fields.",
+      "Details are read-only reference fields. Editable properties start below.",
   };
 }
 

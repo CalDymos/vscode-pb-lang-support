@@ -1914,7 +1914,7 @@ function getGadgetDeleteBlockedReason(gadget: Gadget | undefined): string | unde
   const deletePlan = getGadgetDeletePlan(gadget);
   if (!deletePlan) return "The selected gadget could not be resolved.";
   if (!deletePlan.deletedIds.size) {
-    return "This gadget remains attached to a surviving SplitterGadget in the original delete logic. Delete the splitter instead.";
+    return "This gadget is still used by a SplitterGadget. Delete the splitter instead.";
   }
 
   return undefined;
@@ -2139,8 +2139,8 @@ function openSelectParentDialog(gadget: Gadget): void {
   title.textContent = `Change Parent — ${gadget.id}`;
   dialog.appendChild(title);
   dialog.appendChild(mutedNote(gadget.kind === GADGET_KIND.SplitterGadget
-    ? "This Select Parent flow follows the original splitter special case: gadget1 and gadget2 are moved together with the splitter into the selected parent block, and the splitter itself resets to X/Y = 0,0."
-    : "This Select Parent flow follows the original path for normal gadgets. The moved gadget is inserted into the selected parent block and its X/Y position resets to 0,0."));
+    ? "For splitters, both attached gadgets move together into the selected parent. The splitter position resets to X/Y = 0,0."
+    : "The selected gadget moves into the selected parent. Its X/Y position resets to 0,0."));
 
   const validationEl = document.createElement("div");
   validationEl.className = "muted";
@@ -10046,7 +10046,7 @@ function renderProps() {
     createMenuBtn.disabled = (model.menus?.length ?? 0) > 0;
     createMenuBtn.title = createMenuBtn.disabled
       ? "This form already contains a parsed menu root."
-      : "Create a menu root with the original default MenuTitle entry.";
+      : "Create a menu root with the default MenuTitle entry.";
     createMenuBtn.onclick = () => {
       if (createMenuBtn.disabled) return;
       postCreateMenuRoot();
@@ -10058,7 +10058,7 @@ function renderProps() {
     createToolBarButtonBtn.disabled = (model.toolbars?.length ?? 0) > 0;
     createToolBarButtonBtn.title = createToolBarButtonBtn.disabled
       ? "This form already contains a parsed toolbar root."
-      : "Create a toolbar root with the original default button entry.";
+      : "Create a toolbar root with the default button entry.";
     createToolBarButtonBtn.onclick = () => {
       if (createToolBarButtonBtn.disabled) return;
       postCreateToolBarRoot("button");
@@ -10070,7 +10070,7 @@ function renderProps() {
     createStatusBarLabelBtn.disabled = (model.statusbars?.length ?? 0) > 0;
     createStatusBarLabelBtn.title = createStatusBarLabelBtn.disabled
       ? "This form already contains a parsed statusbar root."
-      : "Create a statusbar root with the original default label field.";
+      : "Create a statusbar root with the default label field.";
     createStatusBarLabelBtn.onclick = () => {
       if (createStatusBarLabelBtn.disabled) return;
       postCreateStatusBarRoot("label");
@@ -11782,10 +11782,16 @@ function renderProps() {
   const showsItemsInspector = Boolean(itemEditorField);
   const showsColumnsInspector = Boolean(columnEditorField);
   if (itemEditorField) {
-    propsEl.appendChild(row("Items", readonlyInput(String(g.items?.length ?? 0))));
+    propsEl.appendChild(row(
+      itemEditorField.countLabel,
+      readonlyInput(String(g.items?.length ?? 0), itemEditorField.countTitle)
+    ));
   }
   if (columnEditorField) {
-    propsEl.appendChild(row("Columns", readonlyInput(String(g.columns?.length ?? 0))));
+    propsEl.appendChild(row(
+      columnEditorField.countLabel,
+      readonlyInput(String(g.columns?.length ?? 0), columnEditorField.countTitle)
+    ));
   }
   const imageRowsField = getGadgetImageRowsFieldConfig(g.kind);
   const parentGadget = g.parentId ? model.gadgets.find(it => it.id === g.parentId) : undefined;
@@ -12653,6 +12659,7 @@ function renderProps() {
 
   const addColBtn = document.createElement("button");
   addColBtn.textContent = columnEditorField.addButtonLabel;
+  addColBtn.title = columnEditorField.addButtonTitle;
   addColBtn.onclick = () => {
     openGadgetColumnEditor(g);
     renderProps();
