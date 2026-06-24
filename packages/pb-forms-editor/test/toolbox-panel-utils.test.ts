@@ -34,6 +34,8 @@ test("toolbox panel keeps the verified vd icon bindings for representative entri
   const menusAndToolbars = categories.find(category => category.title === "Menus & Toolbars");
 
   assert.equal(commonControls?.items.find(item => item.label === "Button")?.iconAsset, "vd_buttongadget.png");
+  assert.equal(commonControls?.items.find(item => item.label === "OpenGL")?.iconAsset, "vd_containergadget.png");
+  assert.equal(commonControls?.items.find(item => item.label === "Scintilla")?.iconAsset, "vd_editorgadget.png");
   assert.equal(commonControls?.items.find(item => item.label === "WebView")?.iconAsset, "vd_webgadget.png");
   assert.equal(containers?.items.find(item => item.label === "Frame")?.iconAsset, "vd_frame3dgadget.png");
   assert.equal(menusAndToolbars?.items.find(item => item.label === "ToolBar")?.iconAsset, "vd_toolbar.png");
@@ -45,4 +47,22 @@ test("toolbox immediate insert keeps the verified original splitter exception an
   assert.equal(canImmediateInsertFromToolbox("ButtonGadget"), true);
   assert.equal(canImmediateInsertFromToolbox("SplitterGadget"), false);
   assert.deepEqual(getImmediateToolboxInsertPosition(), { x: 10, y: 10 });
+});
+
+test("toolbox keeps original OpenGL and Scintilla entries selectable", () => {
+  const commonControls = getToolboxPanelCategories().find(category => category.title === "Common Controls");
+  assert.ok(commonControls);
+  if (!commonControls) {
+    throw new Error("Common Controls toolbox category is missing.");
+  }
+
+  assert.deepEqual(
+    commonControls.items
+      .filter(item => item.label === "OpenGL" || item.label === "Scintilla")
+      .map(item => ({ label: item.label, kind: item.kind, enabled: item.enabled })),
+    [
+      { label: "OpenGL", kind: "OpenGLGadget", enabled: true },
+      { label: "Scintilla", kind: "ScintillaGadget", enabled: true }
+    ]
+  );
 });
