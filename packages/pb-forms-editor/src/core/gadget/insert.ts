@@ -39,6 +39,51 @@ export const PBFD_INSERTABLE_GADGET_KINDS = [
 
 export type InsertableGadgetKind = typeof PBFD_INSERTABLE_GADGET_KINDS[number];
 
+export type GadgetDrawInsertPoint = {
+  x: number;
+  y: number;
+  parentId?: string;
+  parentItem?: number;
+};
+
+export type GadgetDrawInsertRect = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  parentId?: string;
+  parentItem?: number;
+};
+
+function hasSameDrawInsertParent(a: GadgetDrawInsertPoint, b: GadgetDrawInsertPoint): boolean {
+  return a.parentId === b.parentId && a.parentItem === b.parentItem;
+}
+
+export function buildGadgetDrawInsertRect(
+  start: GadgetDrawInsertPoint,
+  end: GadgetDrawInsertPoint
+): GadgetDrawInsertRect | undefined {
+  if (!hasSameDrawInsertParent(start, end)) return undefined;
+
+  const x1 = Math.trunc(start.x);
+  const y1 = Math.trunc(start.y);
+  const x2 = Math.trunc(end.x);
+  const y2 = Math.trunc(end.y);
+  const w = Math.abs(x2 - x1);
+  const h = Math.abs(y2 - y1);
+  if (w <= 0 || h <= 0) return undefined;
+
+  const rect: GadgetDrawInsertRect = {
+    x: Math.min(x1, x2),
+    y: Math.min(y1, y2),
+    w,
+    h,
+  };
+  if (start.parentId !== undefined) rect.parentId = start.parentId;
+  if (start.parentItem !== undefined) rect.parentItem = start.parentItem;
+  return rect;
+}
+
 type GadgetIdentityLike = Pick<Gadget, "id" | "pbAny" | "variable" | "firstParam">;
 
 const INSERT_PREFIX_BY_KIND: Record<InsertableGadgetKind, string> = {

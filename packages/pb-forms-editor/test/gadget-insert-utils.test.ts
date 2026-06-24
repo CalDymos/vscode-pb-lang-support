@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { insertedGadgetHasAmbiguousEmptyTextDefault, shouldInsertGadgetAsPbAny } from '../src/core/gadget/insert';
+import { buildGadgetDrawInsertRect, insertedGadgetHasAmbiguousEmptyTextDefault, shouldInsertGadgetAsPbAny } from '../src/core/gadget/insert';
 
 test('shouldInsertGadgetAsPbAny honours the configured default when provided', () => {
   const mixedIds = [
@@ -38,4 +38,26 @@ test('insertedGadgetHasAmbiguousEmptyTextDefault matches the constructor kinds t
   assert.equal(insertedGadgetHasAmbiguousEmptyTextDefault('ListViewGadget'), false);
   assert.equal(insertedGadgetHasAmbiguousEmptyTextDefault('PanelGadget'), false);
   assert.equal(insertedGadgetHasAmbiguousEmptyTextDefault(undefined), false);
+});
+
+
+test('buildGadgetDrawInsertRect normalizes the original draw-insert coordinates', () => {
+  assert.deepEqual(
+    buildGadgetDrawInsertRect({ x: 90, y: 55 }, { x: 20, y: 10 }),
+    { x: 20, y: 10, w: 70, h: 45 }
+  );
+
+  assert.deepEqual(
+    buildGadgetDrawInsertRect({ x: 8, y: 12, parentId: '#Container_0', parentItem: 2 }, { x: 58, y: 32, parentId: '#Container_0', parentItem: 2 }),
+    { x: 8, y: 12, w: 50, h: 20, parentId: '#Container_0', parentItem: 2 }
+  );
+});
+
+test('buildGadgetDrawInsertRect rejects clicks and parent-changing drags', () => {
+  assert.equal(buildGadgetDrawInsertRect({ x: 10, y: 10 }, { x: 10, y: 25 }), undefined);
+  assert.equal(buildGadgetDrawInsertRect({ x: 10, y: 10 }, { x: 25, y: 10 }), undefined);
+  assert.equal(
+    buildGadgetDrawInsertRect({ x: 10, y: 10, parentId: '#Container_0' }, { x: 30, y: 30, parentId: '#Container_1' }),
+    undefined
+  );
 });
