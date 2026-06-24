@@ -37,6 +37,7 @@ import {
   getGadgetLayoutFieldConfig,
   getGadgetConstantsFieldConfig,
   getGadgetDetailsFieldConfig,
+  getGadgetIdentityFieldConfig,
   getGadgetFontFieldConfig,
   getGadgetKnownFlags,
   getGadgetParentFieldConfig,
@@ -674,6 +675,19 @@ test("keeps the original gadget layout row matrix exact", () => {
     .sort();
 
   assert.deepEqual(actualLayoutKinds, ORIGINAL_FD_SELECT_GADGET_BASE_ROW_KINDS);
+});
+
+
+
+test("uses user-facing gadget identity field labels and tooltips", () => {
+  assert.deepEqual(getGadgetIdentityFieldConfig(), {
+    pbAnyLabel: "#PB_Any",
+    variableLabel: "Variable",
+    enumValueLabel: "Enum Value",
+    pbAnyTitle: "Use #PB_Any for this gadget and store the assigned handle in Variable.",
+    variableTitle: "Edit the identifier used by this gadget in the form code.",
+    enumValueTitle: "Enter a fixed numeric enum value, or leave empty to use the next available value."
+  });
 });
 
 test("uses user-facing gadget layout tooltips", () => {

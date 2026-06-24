@@ -182,6 +182,7 @@ import {
   getGadgetColumnEditorFieldConfig,
   getGadgetConstantsFieldConfig,
   getGadgetDetailsFieldConfig,
+  getGadgetIdentityFieldConfig,
   getGadgetFontFieldConfig,
   getGadgetItemEditorFieldConfig,
   getGadgetLayoutFieldConfig,
@@ -11794,6 +11795,7 @@ function renderProps() {
     ));
   }
   const imageRowsField = getGadgetImageRowsFieldConfig(g.kind);
+  const identityField = getGadgetIdentityFieldConfig();
   const parentGadget = g.parentId ? model.gadgets.find(it => it.id === g.parentId) : undefined;
   const gadgetImage = findImageEntryById(g.imageId);
 
@@ -11822,7 +11824,7 @@ function renderProps() {
 
   propsEl.appendChild(
     row(
-      PB_ANY,
+      identityField.pbAnyLabel,
       checkboxInput(Boolean(g.pbAny), v => {
         // Pre-update selection to the new id so sanitizeSelectionAfterModelUpdate
         // can still find this gadget after the stable key changes.
@@ -11836,14 +11838,14 @@ function renderProps() {
           enumSymbol: gadgetEnumSymbol,
           enumValueRaw: g.enumValueRaw
         });
-      })
+      }, { title: identityField.pbAnyTitle })
     )
   );
 
   const gadgetVariableInputValue = getGadgetVariableInspectorValue(g);
   propsEl.appendChild(
     row(
-      "Variable",
+      identityField.variableLabel,
       textInput(gadgetVariableInputValue, v => {
         const parsed = parseWindowVariableNameInspectorInput(v, gadgetVariableInputValue);
         if (!parsed.ok) {
@@ -11860,18 +11862,18 @@ function renderProps() {
           gadgetId: g.id,
           variableName: parsed.value
         });
-      })
+      }, { title: identityField.variableTitle })
     )
   );
 
   if (!g.pbAny) {
-    propsEl.appendChild(row("Enum Value", textInput(g.enumValueRaw ?? "", v => {
+    propsEl.appendChild(row(identityField.enumValueLabel, textInput(g.enumValueRaw ?? "", v => {
       vscode.postMessage({
         type: WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEnumValue,
         enumSymbol: gadgetEnumSymbol,
         enumValueRaw: v.trim().length ? v.trim() : undefined
       });
-    })));
+    }, { title: identityField.enumValueTitle })));
   }
 
   const captionField = getGadgetCaptionFieldConfig(g.kind);

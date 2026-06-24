@@ -342,6 +342,15 @@ export type GadgetInspectorDetailsLike = {
   parentItem?: number;
 };
 
+export type GadgetIdentityFieldConfig = {
+  pbAnyLabel: string;
+  variableLabel: string;
+  enumValueLabel: string;
+  pbAnyTitle: string;
+  variableTitle: string;
+  enumValueTitle: string;
+};
+
 export type GadgetDetailsFieldConfig = {
   visible: boolean;
   sectionLabel: string;
@@ -1226,6 +1235,20 @@ export function buildGadgetFlagsExpr(
   );
   const parts = [...orderedKnown, ...customFlags];
   return parts.length ? parts.join(" | ") : undefined;
+}
+
+export function getGadgetIdentityFieldConfig(): GadgetIdentityFieldConfig {
+  return {
+    pbAnyLabel: "#PB_Any",
+    variableLabel: "Variable",
+    enumValueLabel: "Enum Value",
+    pbAnyTitle:
+      "Use #PB_Any for this gadget and store the assigned handle in Variable.",
+    variableTitle:
+      "Edit the identifier used by this gadget in the form code.",
+    enumValueTitle:
+      "Enter a fixed numeric enum value, or leave empty to use the next available value.",
+  };
 }
 
 export function getGadgetDetailsFieldConfig(): GadgetDetailsFieldConfig {
