@@ -25,6 +25,7 @@ import {
   getCustomGadgetCodeRowsFieldConfig,
   getGadgetBooleanInspectorState,
   getGadgetCaptionFieldConfig,
+  getGadgetCaptionUnavailableNote,
   isGadgetDisabledInDesignerPreview,
   isGadgetHiddenInDesignerPreview,
   getGadgetCurrentImageDisplay,
@@ -478,8 +479,10 @@ test("keeps constants node visible while using a user-facing constants tooltip",
   const imageConstantsConfig = getGadgetConstantsFieldConfig(GADGET_KIND.ImageGadget);
   assert.equal(imageConstantsConfig?.sectionLabel, "Constants");
   assert.equal(imageConstantsConfig?.title, "Toggle known PureBasic constants for this gadget. Custom constants in the raw flags expression are kept.");
+  assert.equal(imageConstantsConfig?.emptyNote, "No known PureBasic constants are available for this gadget type.");
   assert.deepEqual(imageConstantsConfig?.knownFlags, ["#PB_Image_Border", "#PB_Image_Raised"]);
   assert.deepEqual(getGadgetConstantsFieldConfig(GADGET_KIND.OptionGadget)?.knownFlags, []);
+  assert.equal(getGadgetConstantsFieldConfig(GADGET_KIND.OptionGadget)?.emptyNote, "No known PureBasic constants are available for this gadget type.");
   assert.equal(getGadgetConstantsFieldConfig(GADGET_KIND.Unknown), undefined);
 });
 
@@ -872,6 +875,23 @@ test("uses user-facing caption and tooltip field titles", () => {
   assert.equal(tooltip?.variableToggleLabel, "Tooltip Is Variable");
   assert.equal(tooltip?.variableToggleTitle, "Treat the tooltip as a variable or expression instead of a string literal.");
   assert.equal(tooltip?.valueTitle, "Edit the tooltip shown when the user hovers over this gadget. Enable 'Tooltip Is Variable' for a variable name or expression.");
+});
+
+test("returns user-facing notes for non-editable gadget caption rows", () => {
+  assert.equal(
+    getGadgetCaptionUnavailableNote(GADGET_KIND.ImageGadget),
+    "This gadget type has no editable caption field here. The stored value is shown for reference."
+  );
+  assert.equal(
+    getGadgetCaptionUnavailableNote(GADGET_KIND.ListIconGadget),
+    "Caption can be edited, but variable mode is not available for this gadget type."
+  );
+  assert.equal(
+    getGadgetCaptionUnavailableNote(GADGET_KIND.ScintillaGadget),
+    "The callback can be edited directly, but variable mode is not available for this gadget type."
+  );
+  assert.equal(getGadgetCaptionUnavailableNote(GADGET_KIND.ButtonGadget), undefined);
+  assert.equal(getGadgetCaptionUnavailableNote(GADGET_KIND.Unknown), undefined);
 });
 
 

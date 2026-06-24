@@ -191,6 +191,7 @@ import {
   getGadgetSplitterPositionFieldConfig,
   getGadgetTooltipFieldConfig,
   getGadgetCaptionFieldConfig,
+  getGadgetCaptionUnavailableNote,
   getGadgetCheckedStateFieldConfig,
   getGadgetVisibilityStateFieldConfig,
   getGadgetCurrentImageDisplay,
@@ -11877,6 +11878,7 @@ function renderProps() {
   const hasExpressionChecked = Boolean(checkedStateField) && Boolean(g.stateRaw) && g.state === undefined;
 
   if (captionField) {
+    const captionUnavailableNote = getGadgetCaptionUnavailableNote(g.kind);
     propsEl.appendChild(
       row(
         captionField.variableToggleLabel,
@@ -11907,6 +11909,9 @@ function renderProps() {
         )
       )
     );
+    if (captionUnavailableNote) {
+      propsEl.appendChild(mutedNote(captionUnavailableNote));
+    }
   }
 
   const tooltipField = getGadgetTooltipFieldConfig(g.kind);
@@ -12439,6 +12444,9 @@ function renderProps() {
     );
 
     propsEl.appendChild(section(constantsField.sectionLabel));
+    if (!gadgetKnownFlags.length) {
+      propsEl.appendChild(mutedNote(constantsField.emptyNote));
+    }
     for (const flag of gadgetKnownFlags) {
       propsEl.appendChild(row(
         flag,

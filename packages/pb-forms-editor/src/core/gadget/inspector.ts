@@ -256,6 +256,7 @@ export type GadgetConstantsFieldConfig = {
   knownFlags: readonly string[];
   sectionLabel: string;
   title: string;
+  emptyNote: string;
 };
 
 export type CustomGadgetSelectPresetFieldConfig = {
@@ -1063,7 +1064,33 @@ export function getGadgetConstantsFieldConfig(
     sectionLabel: "Constants",
     title:
       "Toggle known PureBasic constants for this gadget. Custom constants in the raw flags expression are kept.",
+    emptyNote: "No known PureBasic constants are available for this gadget type.",
   };
+}
+
+export function getGadgetCaptionUnavailableNote(
+  kind: string | undefined,
+): string | undefined {
+  const config = getGadgetCaptionFieldConfig(kind);
+  if (!config) return undefined;
+
+  if (kind === GADGET_KIND.ScintillaGadget) {
+    return "The callback can be edited directly, but variable mode is not available for this gadget type.";
+  }
+
+  if (config.textEditable && !config.variableToggleEditable) {
+    return `${config.label} can be edited, but variable mode is not available for this gadget type.`;
+  }
+
+  if (!config.textEditable && !config.variableToggleEditable) {
+    return `This gadget type has no editable ${config.label.toLowerCase()} field here. The stored value is shown for reference.`;
+  }
+
+  if (!config.textEditable) {
+    return `This gadget type has no editable ${config.label.toLowerCase()} field here.`;
+  }
+
+  return undefined;
 }
 
 export function getGadgetSelectProcFieldConfig(
