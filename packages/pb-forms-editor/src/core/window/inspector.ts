@@ -415,7 +415,7 @@ export function getWindowBaseRowsFieldConfig(): WindowBaseRowsFieldConfig {
   return {
     visible: true,
     valueEditable: true,
-    title: "Original FD_InitBasicPropGridRows() window rows are always visible for windows.",
+    title: "Displays the standard window properties. Edit the values directly in the inspector.",
   };
 }
 
@@ -424,8 +424,8 @@ export function getWindowParentFieldConfig(): WindowParentFieldConfig {
     visible: true,
     valueEditable: true,
     rawExpressionToggleAvailable: true,
-    title: "Enter the parent window expression. Disable the checkbox to emit WindowID(...); enable it to write the expression raw.",
-    rawExpressionTitle: "When enabled, the parent is written directly as the last OpenWindow(...) argument. When disabled, the editor emits WindowID(...), matching the original default path.",
+    title: "Enter the parent window expression. Disable raw mode to wrap the value with WindowID(...).",
+    rawExpressionTitle: "When enabled, the parent is written directly as the last OpenWindow(...) argument. When disabled, the value is wrapped with WindowID(...).",
   };
 }
 
@@ -434,7 +434,7 @@ export function getWindowEnumValueFieldConfig(pbAny: boolean): WindowEnumValueFi
     visible: !pbAny,
     valueEditable: true,
     originalStoragePolicy: "split-explicit-id-from-variable-cell",
-    title: "Edits the explicit numeric ID that the original inspector stores in the Variable row as Name=ID.",
+    title: "Edit the explicit numeric window ID used together with the variable name.",
   };
 }
 
@@ -520,7 +520,7 @@ export function getWindowConstantsFieldConfig(): WindowConstantsFieldConfig {
     customFlagsKnownFlagPolicy: "drop-known-flags",
     customFlagsDuplicatePolicy: "drop-duplicates",
     customFlagsSeparator: " | ",
-    title: "Window flags are written through the OpenWindow(...) flags argument in original declaration order.",
+    title: "Toggle known window flags. Custom flags are kept in the raw flags expression.",
   };
 }
 

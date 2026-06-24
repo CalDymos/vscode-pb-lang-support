@@ -16,20 +16,29 @@ import {
   canInspectGadgetBaseRows,
   canInspectGadgetImageRows,
   canInspectGadgetItems,
+  canInspectGadgetLayoutRows,
   canInspectGadgetSelectProc,
   canInspectGadgetSplitterPosition,
   canInspectGadgetTooltipRows,
   getGadgetCtorRangeFieldLabels,
   getCustomGadgetHelpDisplay,
+  getCustomGadgetCodeRowsFieldConfig,
   getGadgetBooleanInspectorState,
   getGadgetCaptionFieldConfig,
   isGadgetDisabledInDesignerPreview,
   isGadgetHiddenInDesignerPreview,
   getGadgetCurrentImageDisplay,
+  getGadgetCheckedStateFieldConfig,
+  getGadgetColorRowsFieldConfig,
+  getGadgetColumnEditorFieldConfig,
+  getGadgetImageRowsFieldConfig,
+  getGadgetItemEditorFieldConfig,
+  getGadgetLayoutFieldConfig,
   getGadgetConstantsFieldConfig,
   getGadgetFontFieldConfig,
   getGadgetKnownFlags,
   getGadgetParentFieldConfig,
+  getGadgetParentInspectorValue,
   getGadgetResizeLockFieldConfig,
   getGadgetCtorRangeInspectorValue,
   isDpiScaledGadgetCtorRange,
@@ -39,8 +48,10 @@ import {
   getGadgetTextInspectorValue,
   getCustomGadgetSelectPresetFieldConfig,
   getGadgetSelectProcFieldConfig,
+  getGadgetSplitterPositionFieldConfig,
   getGadgetTooltipFieldConfig,
   getGadgetTooltipInspectorValue,
+  getGadgetVisibilityStateFieldConfig,
   buildGadgetFlagsExpr,
   shouldShowGadgetParentDetail,
   shouldShowGadgetTabDetail
@@ -83,6 +94,28 @@ const ORIGINAL_FD_SELECT_GADGET_BASE_ROW_KINDS = [
   GADGET_KIND.WebGadget,
   GADGET_KIND.WebViewGadget
 ].sort();
+
+const GENERIC_CTOR_RANGE_FIELD_LABELS = {
+  minLabel: "Min",
+  maxLabel: "Max",
+  minTitle: "Edit the raw minimum value expression for this gadget.",
+  maxTitle: "Edit the raw maximum value expression for this gadget.",
+  minUnscaledLabel: "Min (Unscaled)",
+  maxUnscaledLabel: "Max (Unscaled)",
+  minUnscaledTitle: "Displays the raw minimum value saved in the gadget constructor. Edit Min to update it.",
+  maxUnscaledTitle: "Displays the raw maximum value saved in the gadget constructor. Edit Max to update it."
+};
+
+const SCROLLAREA_CTOR_RANGE_FIELD_LABELS = {
+  minLabel: "InnerWidth",
+  maxLabel: "InnerHeight",
+  minTitle: "Edit the raw inner width expression for this scroll area.",
+  maxTitle: "Edit the raw inner height expression for this scroll area.",
+  minUnscaledLabel: "InnerWidth (Unscaled)",
+  maxUnscaledLabel: "InnerHeight (Unscaled)",
+  minUnscaledTitle: "Displays the raw inner width value saved in the gadget constructor. Edit InnerWidth to update it.",
+  maxUnscaledTitle: "Displays the raw inner height value saved in the gadget constructor. Edit InnerHeight to update it."
+};
 
 test("marks only persistent caption/callback constructor paths as caption-editable", () => {
   assert.equal(canEditGadgetText("StringGadget"), true);
@@ -130,18 +163,61 @@ test("keeps the gadget color inspector matrix aligned with FD_SelectGadget", () 
   assert.deepEqual(actualColorKinds, expectedColorKinds);
 });
 
+test("uses user-facing FrontColor and BackColor tooltips", () => {
+  assert.deepEqual(getGadgetColorRowsFieldConfig(GADGET_KIND.TextGadget), {
+    visible: true,
+    frontColorVisible: true,
+    backColorVisible: true,
+    valueEditable: true,
+    frontColorLabel: "FrontColor",
+    backColorLabel: "BackColor",
+    frontColorTitle: "Displays the raw front color expression. Use the picker to change it or Remove to clear it.",
+    backColorTitle: "Displays the raw background color expression. Use the picker to change it or Remove to clear it.",
+    frontColorPickerTitle: "Choose the gadget front color. The value is saved as RGB(...).",
+    backColorPickerTitle: "Choose the gadget background color. The value is saved as RGB(...).",
+    removeButtonLabel: "Remove",
+    frontColorRemoveTitle: "Remove the current gadget front color.",
+    backColorRemoveTitle: "Remove the current gadget background color.",
+    frontColorRemoveEmptyTitle: "No gadget front color is set.",
+    backColorRemoveEmptyTitle: "No gadget background color is set.",
+    note: "Use the pickers to set gadget front/background colors. Remove clears the current color."
+  });
+  assert.deepEqual(getGadgetColorRowsFieldConfig(GADGET_KIND.ProgressBarGadget), getGadgetColorRowsFieldConfig(GADGET_KIND.TextGadget));
+  assert.equal(getGadgetColorRowsFieldConfig(GADGET_KIND.ButtonGadget), undefined);
+  assert.equal(getGadgetColorRowsFieldConfig(undefined), undefined);
+});
+
 test("keeps the original constructor-range inspector matrix exact", () => {
   const actualRangeLabels = [...GADGET_KIND_SET]
     .filter(kind => getGadgetCtorRangeFieldLabels(kind) !== undefined)
     .map(kind => [kind, getGadgetCtorRangeFieldLabels(kind)] as const);
 
   assert.deepEqual(actualRangeLabels, [
-    [GADGET_KIND.SpinGadget, { minLabel: "Min", maxLabel: "Max", title: "Matches the original Min / Max constructor arguments." }],
-    [GADGET_KIND.TrackBarGadget, { minLabel: "Min", maxLabel: "Max", title: "Matches the original Min / Max constructor arguments." }],
-    [GADGET_KIND.ProgressBarGadget, { minLabel: "Min", maxLabel: "Max", title: "Matches the original Min / Max constructor arguments." }],
-    [GADGET_KIND.ScrollAreaGadget, { minLabel: "InnerWidth", maxLabel: "InnerHeight", title: "Matches the original InnerWidth / InnerHeight constructor arguments." }],
-    [GADGET_KIND.ScrollBarGadget, { minLabel: "Min", maxLabel: "Max", title: "Matches the original Min / Max constructor arguments." }]
+    [GADGET_KIND.SpinGadget, GENERIC_CTOR_RANGE_FIELD_LABELS],
+    [GADGET_KIND.TrackBarGadget, GENERIC_CTOR_RANGE_FIELD_LABELS],
+    [GADGET_KIND.ProgressBarGadget, GENERIC_CTOR_RANGE_FIELD_LABELS],
+    [GADGET_KIND.ScrollAreaGadget, SCROLLAREA_CTOR_RANGE_FIELD_LABELS],
+    [GADGET_KIND.ScrollBarGadget, GENERIC_CTOR_RANGE_FIELD_LABELS]
   ]);
+});
+
+
+
+test("uses user-facing image gadget row tooltips", () => {
+  assert.deepEqual(getGadgetImageRowsFieldConfig(GADGET_KIND.ImageGadget), {
+    currentImageVisible: true,
+    currentImageEditable: false,
+    changeImageVisible: true,
+    changeImageAvailable: true,
+    currentImageLabel: "CurrentImage",
+    changeImageLabel: "ChangeImage",
+    selectButtonLabel: "Select",
+    currentImageTitle: "Displays the image currently assigned to this gadget. Use Select to choose or create another image.",
+    changeImageTitle: "Choose, create or assign an image for this gadget."
+  });
+  assert.deepEqual(getGadgetImageRowsFieldConfig(GADGET_KIND.ButtonImageGadget), getGadgetImageRowsFieldConfig(GADGET_KIND.ImageGadget));
+  assert.equal(getGadgetImageRowsFieldConfig(GADGET_KIND.ButtonGadget), undefined);
+  assert.equal(getGadgetImageRowsFieldConfig(undefined), undefined);
 });
 
 test("keeps the original gadget image row matrix exact", () => {
@@ -166,11 +242,40 @@ test("keeps the original checked-state special row matrix exact", () => {
   ].sort());
 });
 
+test("uses a user-facing checked-state tooltip without broadening its scope", () => {
+  assert.deepEqual(getGadgetCheckedStateFieldConfig(GADGET_KIND.CheckBoxGadget), {
+    visible: true,
+    valueEditable: true,
+    label: "Checked",
+    title: "Toggle whether this gadget is checked. Custom expressions stay unchanged until you change this value.",
+    customExpressionTitle: "This gadget uses a custom checked expression. Changing this checkbox replaces it with a simple checked or unchecked value.",
+    customExpressionNote: "Custom checked expressions stay unchanged until you change this checkbox. Checking replaces the expression with the checked constant; unchecking removes the SetGadgetState line."
+  });
+  assert.deepEqual(getGadgetCheckedStateFieldConfig(GADGET_KIND.OptionGadget), getGadgetCheckedStateFieldConfig(GADGET_KIND.CheckBoxGadget));
+  assert.equal(getGadgetCheckedStateFieldConfig(GADGET_KIND.ButtonGadget), undefined);
+  assert.equal(getGadgetCheckedStateFieldConfig(undefined), undefined);
+});
+
 test("keeps the original splitter-position special row limited to SplitterGadget", () => {
   const actualSplitterKinds = [...GADGET_KIND_SET]
     .filter(kind => canInspectGadgetSplitterPosition(kind));
 
   assert.deepEqual(actualSplitterKinds, [GADGET_KIND.SplitterGadget]);
+});
+
+test("uses a user-facing splitter-position tooltip while preserving bounds policy", () => {
+  assert.deepEqual(getGadgetSplitterPositionFieldConfig(GADGET_KIND.SplitterGadget), {
+    visible: true,
+    valueEditable: true,
+    label: "Splitter Position",
+    title: "Edit the splitter position between the two child gadgets. The value must stay within the current splitter size.",
+    unscaledLabel: "Splitter Position (Unscaled)",
+    unscaledTitle: "Displays the raw splitter position saved in the form code. Edit SplitterPosition to update it.",
+    note: "Set the splitter position between the two child gadgets.",
+    valuePolicy: "bounded-by-current-orientation-size"
+  });
+  assert.equal(getGadgetSplitterPositionFieldConfig(GADGET_KIND.ButtonGadget), undefined);
+  assert.equal(getGadgetSplitterPositionFieldConfig(undefined), undefined);
 });
 
 test("keeps original custom-gadget code rows limited to CustomGadget", () => {
@@ -194,20 +299,40 @@ test("keeps gadget SelectProc field editable and preserves the original grid str
 
   assert.equal(buttonConfig?.valueEditable, true);
   assert.equal(buttonConfig?.preservesGridString, true);
+  assert.equal(buttonConfig?.label, "SelectProc");
+  assert.equal(buttonConfig?.title, "Choose an existing procedure or type the procedure called by gadget events.");
+  assert.equal(buttonConfig?.placeholder, "Type or pick a procedure");
   assert.equal(customConfig?.valueEditable, true);
   assert.equal(customConfig?.preservesGridString, true);
   assert.equal(getGadgetSelectProcFieldConfig(GADGET_KIND.MDIGadget), undefined);
   assert.equal(getGadgetSelectProcFieldConfig(GADGET_KIND.Unknown), undefined);
 });
 
-test("documents CustomGadget SelectGadget as visible but not persisted by the original event grid path", () => {
+test("uses a user-facing CustomGadget SelectGadget tooltip", () => {
   assert.deepEqual(getCustomGadgetSelectPresetFieldConfig(GADGET_KIND.CustomGadget), {
     valueEditable: true,
     persisted: false,
-    title: "Shows the original CustomGadget preset combobox row. In the available PureBasic source, changing this row does not rewrite InitCode or CreateCode automatically."
+    title: "Select a CustomGadget preset. InitCode and CreateCode remain the saved creation code."
   });
   assert.equal(getCustomGadgetSelectPresetFieldConfig(GADGET_KIND.ButtonGadget), undefined);
   assert.equal(getCustomGadgetSelectPresetFieldConfig(undefined), undefined);
+});
+
+
+test("uses user-facing CustomGadget code row tooltips", () => {
+  assert.deepEqual(getCustomGadgetCodeRowsFieldConfig(GADGET_KIND.CustomGadget), {
+    visible: true,
+    selectGadgetLabel: "SelectGadget",
+    initCodeLabel: "InitCode",
+    createCodeLabel: "CreateCode",
+    helpLabel: "Help",
+    initCodeTitle: "Edit the code that runs before this custom gadget is created.",
+    createCodeTitle: "Edit the code that creates this custom gadget. Leave it filled so the gadget can be recreated.",
+    helpTitle: "Shows the placeholders available in InitCode and CreateCode.",
+    note: "SelectGadget chooses the preset shown here. InitCode and CreateCode contain the code used for this custom gadget."
+  });
+  assert.equal(getCustomGadgetCodeRowsFieldConfig(GADGET_KIND.ButtonGadget), undefined);
+  assert.equal(getCustomGadgetCodeRowsFieldConfig(undefined), undefined);
 });
 
 test("keeps gadget tooltip rows visible for the original FD_SelectGadget gadget matrix", () => {
@@ -284,45 +409,76 @@ test("keeps original FD_SelectGadget base rows visible for all regular gadget ki
   assert.equal(canInspectGadgetBaseRows(undefined), false);
 });
 
-test("documents original parent row visibility without replacing the reparent dialog policy", () => {
+test("uses a user-facing parent tooltip without replacing the reparent dialog policy", () => {
   assert.deepEqual(getGadgetParentFieldConfig(GADGET_KIND.ButtonGadget, false), {
     visible: true,
     valueEditable: false,
     selectTargetAvailable: false,
     changeDialogAvailable: true,
-    title: "Original FD_SelectGadget parent row. The value is selected through the reparent dialog, not edited as free text."
+    label: "Parent",
+    title: "Displays the current parent gadget. Use Select Parent to jump to it or Change Parent to choose another parent.",
+    selectButtonLabel: "Select Parent",
+    selectButtonTitle: "Select the current parent gadget in the designer.",
+    changeButtonLabel: "Change Parent",
+    changeAvailableTitle: "Open the Select Parent dialog for this gadget.",
+    changeUnavailableTitle: "Changing the parent is not available for this gadget type."
   });
   assert.equal(getGadgetParentFieldConfig(GADGET_KIND.ButtonGadget, true)?.selectTargetAvailable, true);
   assert.equal(getGadgetParentFieldConfig(GADGET_KIND.MDIGadget, false), undefined);
 });
 
-test("documents original lock rows while preserving safe ResizeGadget patch policy", () => {
+test("uses user-facing lock row titles while preserving safe ResizeGadget policy", () => {
   const actualLockKinds = [...GADGET_KIND_SET]
     .filter(kind => getGadgetResizeLockFieldConfig(kind)?.visible === true)
     .sort();
 
   assert.deepEqual(actualLockKinds, ORIGINAL_FD_SELECT_GADGET_BASE_ROW_KINDS);
-  assert.equal(getGadgetResizeLockFieldConfig(GADGET_KIND.ButtonGadget)?.valueEditablePolicy, "safe-resize-patch-only");
+  assert.deepEqual(getGadgetResizeLockFieldConfig(GADGET_KIND.ButtonGadget), {
+    visible: true,
+    valueEditablePolicy: "safe-resize-patch-only",
+    lockLeftLabel: "LockLeft",
+    lockRightLabel: "LockRight",
+    lockTopLabel: "LockTop",
+    lockBottomLabel: "LockBottom",
+    lockLeftTitle: "Keep the left edge attached when the parent is resized.",
+    lockRightTitle: "Keep the right edge attached when the parent is resized.",
+    lockTopTitle: "Keep the top edge attached when the parent is resized.",
+    lockBottomTitle: "Keep the bottom edge attached when the parent is resized.",
+    unavailableTitle: "This lock cannot be changed safely for the current layout.",
+    unsafeHorizontalUnlockTitle: "At least one horizontal edge must stay locked while vertical resizing is still active.",
+    unsafeVerticalUnlockTitle: "At least one vertical edge must stay locked while horizontal resizing is still active.",
+    editableNote: "These lock options control how the gadget moves or stretches when its parent is resized.",
+    unavailableNote: "Lock editing is unavailable for this layout because changing it could lose the saved resize behavior."
+  });
   assert.equal(getGadgetResizeLockFieldConfig(GADGET_KIND.Unknown), undefined);
 });
 
-test("keeps original font row visible and records current raw-font editing policy", () => {
+test("keeps font row visible and uses raw-font display text from config", () => {
   const actualFontKinds = [...GADGET_KIND_SET]
     .filter(kind => getGadgetFontFieldConfig(kind)?.visible === true)
     .sort();
 
   assert.deepEqual(actualFontKinds, ORIGINAL_FD_SELECT_GADGET_BASE_ROW_KINDS);
-  assert.equal(getGadgetFontFieldConfig(GADGET_KIND.StringGadget)?.rawEditable, true);
+  assert.deepEqual(getGadgetFontFieldConfig(GADGET_KIND.StringGadget), {
+    visible: true,
+    rawEditable: true,
+    label: "Font Raw",
+    title: "Displays and edits the raw SetGadgetFont(...) expression. Leave empty to clear the gadget font.",
+    summaryPrefix: "Current font"
+  });
   assert.equal(getGadgetFontFieldConfig(GADGET_KIND.Unknown), undefined);
 });
 
-test("keeps original constants node visible while known flags stay in declare.pb order", () => {
+test("keeps constants node visible while using a user-facing constants tooltip", () => {
   const actualConstantsKinds = [...GADGET_KIND_SET]
     .filter(kind => getGadgetConstantsFieldConfig(kind)?.visible === true)
     .sort();
 
   assert.deepEqual(actualConstantsKinds, ORIGINAL_FD_SELECT_GADGET_BASE_ROW_KINDS);
-  assert.deepEqual(getGadgetConstantsFieldConfig(GADGET_KIND.ImageGadget)?.knownFlags, ["#PB_Image_Border", "#PB_Image_Raised"]);
+  const imageConstantsConfig = getGadgetConstantsFieldConfig(GADGET_KIND.ImageGadget);
+  assert.equal(imageConstantsConfig?.sectionLabel, "Constants");
+  assert.equal(imageConstantsConfig?.title, "Toggle known PureBasic constants for this gadget. Custom constants in the raw flags expression are kept.");
+  assert.deepEqual(imageConstantsConfig?.knownFlags, ["#PB_Image_Border", "#PB_Image_Raised"]);
   assert.deepEqual(getGadgetConstantsFieldConfig(GADGET_KIND.OptionGadget)?.knownFlags, []);
   assert.equal(getGadgetConstantsFieldConfig(GADGET_KIND.Unknown), undefined);
 });
@@ -353,25 +509,90 @@ test("documents complete FD_SelectGadget row coverage after the FD-011 audit", (
 
   assert.deepEqual(getGadgetCaptionFieldConfig(baseKind), {
     label: "Caption",
+    variableToggleLabel: "Caption Is Variable",
     textEditable: true,
-    variableToggleEditable: true
+    variableToggleEditable: true,
+    variableToggleTitle: "Treat the caption as a variable or expression instead of a string literal.",
+    variableToggleUnavailableTitle: "This gadget cannot switch its caption to variable mode.",
+    textTitle: "Edit the text shown by this gadget. Enable 'Caption Is Variable' for a variable name or expression.",
+    textUnavailableTitle: "Displays the caption stored for this gadget."
   });
   assert.deepEqual(getGadgetTooltipFieldConfig(baseKind), {
+    label: "Tooltip",
+    variableToggleLabel: "Tooltip Is Variable",
     valueEditable: true,
-    variableToggleEditable: true
+    variableToggleEditable: true,
+    variableToggleTitle: "Treat the tooltip as a variable or expression instead of a string literal.",
+    variableToggleUnavailableTitle: "This gadget cannot switch its tooltip to variable mode.",
+    valueTitle: "Edit the tooltip shown when the user hovers over this gadget. Enable 'Tooltip Is Variable' for a variable name or expression.",
+    valueUnavailableTitle: "Displays the tooltip stored for this gadget."
   });
+  assert.equal(getGadgetVisibilityStateFieldConfig(baseKind)?.visible, true);
   assert.equal(getGadgetParentFieldConfig(baseKind, false)?.visible, true);
   assert.equal(getGadgetResizeLockFieldConfig(baseKind)?.visible, true);
   assert.equal(getGadgetFontFieldConfig(baseKind)?.visible, true);
   assert.equal(getGadgetSelectProcFieldConfig(baseKind)?.valueEditable, true);
+  assert.equal(getGadgetSelectProcFieldConfig(baseKind)?.label, "SelectProc");
   assert.equal(getGadgetConstantsFieldConfig(baseKind)?.visible, true);
+  assert.equal(getGadgetConstantsFieldConfig(baseKind)?.sectionLabel, "Constants");
 
   assert.equal(getGadgetCtorRangeFieldLabels(GADGET_KIND.ProgressBarGadget)?.minLabel, "Min");
   assert.equal(canInspectGadgetImageRows(GADGET_KIND.ImageGadget), true);
   assert.equal(canEditGadgetCheckedState(GADGET_KIND.CheckBoxGadget), true);
   assert.equal(canInspectGadgetSplitterPosition(GADGET_KIND.SplitterGadget), true);
+  assert.equal(getGadgetSplitterPositionFieldConfig(GADGET_KIND.SplitterGadget)?.label, "Splitter Position");
+  assert.equal(getGadgetColorRowsFieldConfig(GADGET_KIND.TextGadget)?.frontColorLabel, "FrontColor");
   assert.equal(canInspectCustomGadgetCodeRows(GADGET_KIND.CustomGadget), true);
+  assert.equal(getCustomGadgetCodeRowsFieldConfig(GADGET_KIND.CustomGadget)?.visible, true);
 });
+
+test("uses user-facing item-editor tooltips while preserving existing item data display", () => {
+  assert.deepEqual(getGadgetItemEditorFieldConfig(GADGET_KIND.PanelGadget), {
+    visible: true,
+    sectionLabel: "Items",
+    itemTextLabel: "Item Text",
+    positionRawLabel: "Position",
+    imageRawLabel: "Image Raw",
+    flagsRawLabel: "Flags Raw",
+    imageActionLabel: "Image",
+    saveButtonLabel: "Save Item",
+    insertButtonLabel: "Insert Item",
+    cancelButtonLabel: "Cancel Item",
+    addButtonLabel: "Add Item",
+    deleteConfirmLabel: "Delete Item",
+    itemTextTitle: "Edit the item text shown by this gadget.",
+    positionRawTitle: "Edit the raw item position expression. Use -1 to append the item.",
+    imageRawTitle: "Edit the optional raw image expression for this item.",
+    flagsRawTitle: "Edit the optional raw flags expression for this item.",
+    addButtonTitle: "Add a new item to this gadget."
+  });
+  assert.deepEqual(getGadgetItemEditorFieldConfig(GADGET_KIND.ButtonGadget, true), getGadgetItemEditorFieldConfig(GADGET_KIND.PanelGadget));
+  assert.equal(getGadgetItemEditorFieldConfig(GADGET_KIND.ButtonGadget), undefined);
+  assert.equal(getGadgetItemEditorFieldConfig(undefined), undefined);
+});
+
+test("uses user-facing column-editor tooltips while preserving existing column data display", () => {
+  assert.deepEqual(getGadgetColumnEditorFieldConfig(GADGET_KIND.ListIconGadget), {
+    visible: true,
+    sectionLabel: "Columns",
+    columnTitleLabel: "Column Title",
+    columnIndexLabel: "Column Index",
+    widthRawLabel: "Width",
+    saveButtonLabel: "Save Column",
+    insertButtonLabel: "Insert Column",
+    cancelButtonLabel: "Cancel Column",
+    addButtonLabel: "Add Column",
+    deleteConfirmLabel: "Delete Column",
+    columnTitleTitle: "Edit the column title shown by this gadget.",
+    indexRawTitle: "Edit the raw column index expression. Use the next index to append the column.",
+    widthRawTitle: "Edit the raw column width expression.",
+    addButtonTitle: "Add a new column to this gadget."
+  });
+  assert.deepEqual(getGadgetColumnEditorFieldConfig(GADGET_KIND.ButtonGadget, true), getGadgetColumnEditorFieldConfig(GADGET_KIND.ListIconGadget));
+  assert.equal(getGadgetColumnEditorFieldConfig(GADGET_KIND.PanelGadget), undefined);
+  assert.equal(getGadgetColumnEditorFieldConfig(undefined), undefined);
+});
+
 test("marks only original item-editor gadget kinds for inspector item sections", () => {
   assert.equal(canInspectGadgetItems("PanelGadget"), true);
   assert.equal(canInspectGadgetItems("ListIconGadget"), true);
@@ -437,6 +658,63 @@ test("prefers parsed gadget hidden/disabled booleans and treats raw 0 as uncheck
   assert.equal(getGadgetBooleanInspectorState("HideExpr()", undefined), true);
   assert.equal(getGadgetBooleanInspectorState("DisableExpr()", undefined), true);
   assert.equal(getGadgetBooleanInspectorState(undefined, false), false);
+});
+
+test("keeps the original gadget layout row matrix exact", () => {
+  const actualLayoutKinds = [...GADGET_KIND_SET]
+    .filter(kind => canInspectGadgetLayoutRows(kind))
+    .sort();
+
+  assert.deepEqual(actualLayoutKinds, ORIGINAL_FD_SELECT_GADGET_BASE_ROW_KINDS);
+});
+
+test("uses user-facing gadget layout tooltips", () => {
+  assert.deepEqual(getGadgetLayoutFieldConfig(GADGET_KIND.ButtonGadget), {
+    visible: true,
+    valueEditable: true,
+    xLabel: "X",
+    yLabel: "Y",
+    widthLabel: "Width",
+    heightLabel: "Height",
+    xTitle: "Edit the displayed X position of this gadget.",
+    yTitle: "Edit the displayed Y position of this gadget.",
+    widthTitle: "Edit the displayed width of this gadget.",
+    heightTitle: "Edit the displayed height of this gadget.",
+    xUnscaledLabel: "X (Unscaled)",
+    yUnscaledLabel: "Y (Unscaled)",
+    widthUnscaledLabel: "Width (Unscaled)",
+    heightUnscaledLabel: "Height (Unscaled)",
+    xUnscaledTitle: "Displays the raw X value saved in the form code. Edit X to update it.",
+    yUnscaledTitle: "Displays the raw Y value saved in the form code. Edit Y to update it.",
+    widthUnscaledTitle: "Displays the raw width value saved in the form code. Edit Width to update it.",
+    heightUnscaledTitle: "Displays the raw height value saved in the form code. Edit Height to update it.",
+  });
+  assert.deepEqual(getGadgetLayoutFieldConfig(GADGET_KIND.CustomGadget), getGadgetLayoutFieldConfig(GADGET_KIND.ButtonGadget));
+  assert.equal(getGadgetLayoutFieldConfig(undefined), undefined);
+});
+
+test("uses user-facing hidden and disabled tooltips for gadget visibility state rows", () => {
+  assert.deepEqual(getGadgetVisibilityStateFieldConfig(GADGET_KIND.ButtonGadget), {
+    visible: true,
+    valueEditable: true,
+    hiddenLabel: "Hidden",
+    disabledLabel: "Disabled",
+    hiddenTitle: "Show or hide this gadget.",
+    hiddenCustomExpressionTitle: "This gadget uses a custom hide expression. Changing this checkbox replaces it with 1 or 0.",
+    disabledTitle: "Enable or disable this gadget.",
+    disabledCustomExpressionTitle: "This gadget uses a custom disable expression. Changing this checkbox replaces it with 1 or 0.",
+    customExpressionNote: "Custom Hidden/Disabled expressions stay unchanged until you change these checkboxes. Changing one replaces that expression with 1 or 0."
+  });
+  assert.equal(getGadgetVisibilityStateFieldConfig(GADGET_KIND.MDIGadget), undefined);
+  assert.equal(getGadgetVisibilityStateFieldConfig(undefined), undefined);
+});
+
+test("keeps hidden and disabled state rows visible for the original base gadget matrix", () => {
+  const actualVisibilityStateKinds = [...GADGET_KIND_SET]
+    .filter(kind => getGadgetVisibilityStateFieldConfig(kind)?.visible === true)
+    .sort();
+
+  assert.deepEqual(actualVisibilityStateKinds, ORIGINAL_FD_SELECT_GADGET_BASE_ROW_KINDS);
 });
 
 test("uses only parsed boolean gadget hidden state for the designer preview visibility path", () => {
@@ -545,75 +823,72 @@ test("keeps caption variable toggles limited to original captionvariable emitter
 test("returns the original caption field behavior for Date, Scintilla, Editor and Canvas gadgets", () => {
   assert.deepEqual(getGadgetCaptionFieldConfig("DateGadget"), {
     label: "Mask",
+    variableToggleLabel: "Caption Is Variable",
     textEditable: true,
-    variableToggleEditable: true
+    variableToggleEditable: true,
+    variableToggleTitle: "Treat the mask as a variable or expression instead of a string literal.",
+    variableToggleUnavailableTitle: "This gadget cannot switch its mask to variable mode.",
+    textTitle: "Edit the date mask used by this gadget. Enable 'Caption Is Variable' for a variable name or expression.",
+    textUnavailableTitle: "Displays the date mask stored for this gadget."
   });
   assert.deepEqual(getGadgetCaptionFieldConfig("ScintillaGadget"), {
     label: "Callback",
+    variableToggleLabel: "Caption Is Variable",
     textEditable: true,
-    variableToggleEditable: false
+    variableToggleEditable: false,
+    variableToggleTitle: "Treat this value as a variable or expression instead of a string literal.",
+    variableToggleUnavailableTitle: "This callback field is edited directly and cannot be switched to variable mode.",
+    textTitle: "Edit the callback procedure passed to this Scintilla gadget.",
+    textUnavailableTitle: "Displays the callback procedure stored for this Scintilla gadget."
   });
   assert.deepEqual(getGadgetCaptionFieldConfig("EditorGadget"), {
     label: "Caption",
+    variableToggleLabel: "Caption Is Variable",
     textEditable: false,
-    variableToggleEditable: false
+    variableToggleEditable: false,
+    variableToggleTitle: "Treat the caption as a variable or expression instead of a string literal.",
+    variableToggleUnavailableTitle: "This gadget cannot switch its caption to variable mode.",
+    textTitle: "Edit the text shown by this gadget. Enable 'Caption Is Variable' for a variable name or expression.",
+    textUnavailableTitle: "Displays the caption stored for this gadget."
   });
-  assert.deepEqual(getGadgetCaptionFieldConfig("CanvasGadget"), {
-    label: "Caption",
-    textEditable: false,
-    variableToggleEditable: false
-  });
-  assert.deepEqual(getGadgetCaptionFieldConfig("ImageGadget"), {
-    label: "Caption",
-    textEditable: false,
-    variableToggleEditable: false
-  });
+  assert.deepEqual(getGadgetCaptionFieldConfig("CanvasGadget"), getGadgetCaptionFieldConfig("EditorGadget"));
+  assert.deepEqual(getGadgetCaptionFieldConfig("ImageGadget"), getGadgetCaptionFieldConfig("EditorGadget"));
   assert.equal(getGadgetCaptionFieldConfig("Unknown"), undefined);
+});
+
+test("uses user-facing caption and tooltip field titles", () => {
+  const caption = getGadgetCaptionFieldConfig(GADGET_KIND.ButtonGadget);
+  assert.equal(caption?.variableToggleLabel, "Caption Is Variable");
+  assert.equal(caption?.variableToggleTitle, "Treat the caption as a variable or expression instead of a string literal.");
+  assert.equal(caption?.textTitle, "Edit the text shown by this gadget. Enable 'Caption Is Variable' for a variable name or expression.");
+  assert.equal(caption?.textUnavailableTitle, "Displays the caption stored for this gadget.");
+
+  const mask = getGadgetCaptionFieldConfig(GADGET_KIND.DateGadget);
+  assert.equal(mask?.label, "Mask");
+  assert.equal(mask?.textTitle, "Edit the date mask used by this gadget. Enable 'Caption Is Variable' for a variable name or expression.");
+
+  const tooltip = getGadgetTooltipFieldConfig(GADGET_KIND.ButtonGadget);
+  assert.equal(tooltip?.label, "Tooltip");
+  assert.equal(tooltip?.variableToggleLabel, "Tooltip Is Variable");
+  assert.equal(tooltip?.variableToggleTitle, "Treat the tooltip as a variable or expression instead of a string literal.");
+  assert.equal(tooltip?.valueTitle, "Edit the tooltip shown when the user hovers over this gadget. Enable 'Tooltip Is Variable' for a variable name or expression.");
 });
 
 
 test("returns the original range/scrollarea field labels for constructor-bound gadget fields", () => {
-  assert.deepEqual(getGadgetCtorRangeFieldLabels("ProgressBarGadget"), {
-    minLabel: "Min",
-    maxLabel: "Max",
-    title: "Matches the original Min / Max constructor arguments."
-  });
-  assert.deepEqual(getGadgetCtorRangeFieldLabels("ScrollAreaGadget"), {
-    minLabel: "InnerWidth",
-    maxLabel: "InnerHeight",
-    title: "Matches the original InnerWidth / InnerHeight constructor arguments."
-  });
+  assert.deepEqual(getGadgetCtorRangeFieldLabels("ProgressBarGadget"), GENERIC_CTOR_RANGE_FIELD_LABELS);
+  assert.deepEqual(getGadgetCtorRangeFieldLabels("ScrollAreaGadget"), SCROLLAREA_CTOR_RANGE_FIELD_LABELS);
   assert.equal(getGadgetCtorRangeFieldLabels("ButtonGadget"), undefined);
 });
 
 
 
 test("covers the full original constructor-range gadget matrix after the FD-042c audit", () => {
-  assert.deepEqual(getGadgetCtorRangeFieldLabels("SpinGadget"), {
-    minLabel: "Min",
-    maxLabel: "Max",
-    title: "Matches the original Min / Max constructor arguments."
-  });
-  assert.deepEqual(getGadgetCtorRangeFieldLabels("TrackBarGadget"), {
-    minLabel: "Min",
-    maxLabel: "Max",
-    title: "Matches the original Min / Max constructor arguments."
-  });
-  assert.deepEqual(getGadgetCtorRangeFieldLabels("ScrollBarGadget"), {
-    minLabel: "Min",
-    maxLabel: "Max",
-    title: "Matches the original Min / Max constructor arguments."
-  });
-  assert.deepEqual(getGadgetCtorRangeFieldLabels("ProgressBarGadget"), {
-    minLabel: "Min",
-    maxLabel: "Max",
-    title: "Matches the original Min / Max constructor arguments."
-  });
-  assert.deepEqual(getGadgetCtorRangeFieldLabels("ScrollAreaGadget"), {
-    minLabel: "InnerWidth",
-    maxLabel: "InnerHeight",
-    title: "Matches the original InnerWidth / InnerHeight constructor arguments."
-  });
+  assert.deepEqual(getGadgetCtorRangeFieldLabels("SpinGadget"), GENERIC_CTOR_RANGE_FIELD_LABELS);
+  assert.deepEqual(getGadgetCtorRangeFieldLabels("TrackBarGadget"), GENERIC_CTOR_RANGE_FIELD_LABELS);
+  assert.deepEqual(getGadgetCtorRangeFieldLabels("ScrollBarGadget"), GENERIC_CTOR_RANGE_FIELD_LABELS);
+  assert.deepEqual(getGadgetCtorRangeFieldLabels("ProgressBarGadget"), GENERIC_CTOR_RANGE_FIELD_LABELS);
+  assert.deepEqual(getGadgetCtorRangeFieldLabels("ScrollAreaGadget"), SCROLLAREA_CTOR_RANGE_FIELD_LABELS);
 });
 
 test("keeps the checked-state matrix limited to the original checkbox and option gadgets", () => {
@@ -653,6 +928,12 @@ test("uses the assigned gadget variable or enum symbol tail for the inspector Va
   assert.equal(getGadgetVariableInspectorValue({ variable: "Button_0", firstParam: "#PB_Any" }), "Button_0");
   assert.equal(getGadgetVariableInspectorValue({ firstParam: "#Button_1" }), "Button_1");
 });
+
+test("uses the parent gadget variable for the original Parent row display", () => {
+  assert.equal(getGadgetParentInspectorValue({ variable: "Container_0", firstParam: "#PB_Any" }), "Container_0");
+  assert.equal(getGadgetParentInspectorValue({ firstParam: "#Panel_0" }), "Panel_0");
+  assert.equal(getGadgetParentInspectorValue(undefined), "");
+});
 test("resolves inspector display values from raw gadget caption and tooltip expressions", () => {
   assert.equal(getGadgetTextInspectorValue({ textRaw: '"Caption"', text: "Caption" }), "Caption");
   assert.equal(getGadgetTextInspectorValue({ textRaw: '~"Escaped ""Caption"""', text: 'Escaped "Caption"' }), 'Escaped "Caption"');
@@ -670,7 +951,33 @@ test("formats parsed gadget font metadata into a compact display summary", () =>
       gadgetFontSize: 9,
       gadgetFontFlagsRaw: "#PB_Font_Bold"
     }),
-    "Segoe UI 9 (#PB_Font_Bold)"
+    "Segoe UI 9 B (#PB_Font_Bold)"
+  );
+  assert.equal(
+    getGadgetFontDisplaySummary({
+      gadgetFontRaw: "FontID(#FontBody)",
+      gadgetFont: "Segoe UI",
+      gadgetFontSize: 9,
+      gadgetFontFlagsRaw: "#PB_Font_Bold | #PB_Font_Italic | #PB_Font_Underline | #PB_Font_StrikeOut"
+    }),
+    "Segoe UI 9 BIUS (#PB_Font_Bold | #PB_Font_Italic | #PB_Font_Underline | #PB_Font_StrikeOut)"
+  );
+  assert.equal(
+    getGadgetFontDisplaySummary({
+      gadgetFontRaw: "FontID(#FontBody)",
+      gadgetFont: "Segoe UI",
+      gadgetFontSize: 9,
+      gadgetFontFlagsRaw: "CustomFontFlag"
+    }),
+    "Segoe UI 9 (CustomFontFlag)"
+  );
+  assert.equal(
+    getGadgetFontDisplaySummary({
+      gadgetFont: "Segoe UI",
+      gadgetFontSize: 9,
+      gadgetFontFlagsRaw: "#PB_Font_Italic"
+    }),
+    "Segoe UI 9 I (#PB_Font_Italic)"
   );
   assert.equal(getGadgetFontDisplaySummary({ gadgetFontRaw: "FontID(#FontBody)" }), "FontID(#FontBody)");
   assert.equal(getGadgetFontDisplaySummary({}), "");

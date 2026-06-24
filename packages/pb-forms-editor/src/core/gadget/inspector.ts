@@ -28,6 +28,11 @@ export type GadgetFontLike = {
   gadgetFontFlagsRaw?: string;
 };
 
+export type GadgetParentDisplayLike = {
+  variable?: string;
+  firstParam: string;
+};
+
 export type GadgetCtorRangeLike = {
   minRaw?: string;
   min?: number;
@@ -39,6 +44,90 @@ export type GadgetCurrentImageLike = {
   imageRaw?: string;
 };
 
+export type GadgetImageRowsFieldConfig = {
+  currentImageVisible: boolean;
+  currentImageEditable: boolean;
+  changeImageVisible: boolean;
+  changeImageAvailable: boolean;
+  currentImageLabel: string;
+  changeImageLabel: string;
+  selectButtonLabel: string;
+  currentImageTitle: string;
+  changeImageTitle: string;
+};
+
+export type GadgetCheckedStateFieldConfig = {
+  visible: boolean;
+  valueEditable: boolean;
+  label: string;
+  title: string;
+  customExpressionTitle: string;
+  customExpressionNote: string;
+};
+
+export type GadgetVisibilityStateFieldConfig = {
+  visible: boolean;
+  valueEditable: boolean;
+  hiddenLabel: string;
+  disabledLabel: string;
+  hiddenTitle: string;
+  hiddenCustomExpressionTitle: string;
+  disabledTitle: string;
+  disabledCustomExpressionTitle: string;
+  customExpressionNote: string;
+};
+
+export type GadgetLayoutFieldConfig = {
+  visible: boolean;
+  valueEditable: boolean;
+  xLabel: string;
+  yLabel: string;
+  widthLabel: string;
+  heightLabel: string;
+  xTitle: string;
+  yTitle: string;
+  widthTitle: string;
+  heightTitle: string;
+  xUnscaledLabel: string;
+  yUnscaledLabel: string;
+  widthUnscaledLabel: string;
+  heightUnscaledLabel: string;
+  xUnscaledTitle: string;
+  yUnscaledTitle: string;
+  widthUnscaledTitle: string;
+  heightUnscaledTitle: string;
+};
+
+export type GadgetSplitterPositionFieldConfig = {
+  visible: boolean;
+  valueEditable: boolean;
+  label: string;
+  title: string;
+  unscaledLabel: string;
+  unscaledTitle: string;
+  note: string;
+  valuePolicy: "bounded-by-current-orientation-size";
+};
+
+export type GadgetColorRowsFieldConfig = {
+  visible: boolean;
+  frontColorVisible: boolean;
+  backColorVisible: boolean;
+  valueEditable: boolean;
+  frontColorLabel: string;
+  backColorLabel: string;
+  frontColorTitle: string;
+  backColorTitle: string;
+  frontColorPickerTitle: string;
+  backColorPickerTitle: string;
+  removeButtonLabel: string;
+  frontColorRemoveTitle: string;
+  backColorRemoveTitle: string;
+  frontColorRemoveEmptyTitle: string;
+  backColorRemoveEmptyTitle: string;
+  note: string;
+};
+
 export type GadgetImageEntryLike = {
   image?: string;
   imageRaw?: string;
@@ -47,23 +136,77 @@ export type GadgetImageEntryLike = {
 export type GadgetCtorRangeFieldLabels = {
   minLabel: string;
   maxLabel: string;
-  title: string;
+  minTitle: string;
+  maxTitle: string;
+  minUnscaledLabel: string;
+  maxUnscaledLabel: string;
+  minUnscaledTitle: string;
+  maxUnscaledTitle: string;
+};
+
+export type GadgetItemEditorFieldConfig = {
+  visible: boolean;
+  sectionLabel: string;
+  itemTextLabel: string;
+  positionRawLabel: string;
+  imageRawLabel: string;
+  flagsRawLabel: string;
+  imageActionLabel: string;
+  saveButtonLabel: string;
+  insertButtonLabel: string;
+  cancelButtonLabel: string;
+  addButtonLabel: string;
+  deleteConfirmLabel: string;
+  itemTextTitle: string;
+  positionRawTitle: string;
+  imageRawTitle: string;
+  flagsRawTitle: string;
+  addButtonTitle: string;
+};
+
+export type GadgetColumnEditorFieldConfig = {
+  visible: boolean;
+  sectionLabel: string;
+  columnTitleLabel: string;
+  columnIndexLabel: string;
+  widthRawLabel: string;
+  saveButtonLabel: string;
+  insertButtonLabel: string;
+  cancelButtonLabel: string;
+  addButtonLabel: string;
+  deleteConfirmLabel: string;
+  columnTitleTitle: string;
+  indexRawTitle: string;
+  widthRawTitle: string;
+  addButtonTitle: string;
 };
 
 export type GadgetCaptionFieldConfig = {
   label: string;
+  variableToggleLabel: string;
   textEditable: boolean;
   variableToggleEditable: boolean;
+  variableToggleTitle: string;
+  variableToggleUnavailableTitle: string;
+  textTitle: string;
+  textUnavailableTitle: string;
 };
 
 export type GadgetTooltipFieldConfig = {
+  label: string;
+  variableToggleLabel: string;
   valueEditable: boolean;
   variableToggleEditable: boolean;
+  variableToggleTitle: string;
+  variableToggleUnavailableTitle: string;
+  valueTitle: string;
+  valueUnavailableTitle: string;
 };
 
 export type GadgetSelectProcFieldConfig = {
   valueEditable: boolean;
   preservesGridString: boolean;
+  label: string;
   title: string;
   placeholder: string;
 };
@@ -73,24 +216,45 @@ export type GadgetParentFieldConfig = {
   valueEditable: boolean;
   selectTargetAvailable: boolean;
   changeDialogAvailable: boolean;
+  label: string;
   title: string;
+  selectButtonLabel: string;
+  selectButtonTitle: string;
+  changeButtonLabel: string;
+  changeAvailableTitle: string;
+  changeUnavailableTitle: string;
 };
 
 export type GadgetResizeLockFieldConfig = {
   visible: boolean;
   valueEditablePolicy: "safe-resize-patch-only";
-  title: string;
+  lockLeftLabel: string;
+  lockRightLabel: string;
+  lockTopLabel: string;
+  lockBottomLabel: string;
+  lockLeftTitle: string;
+  lockRightTitle: string;
+  lockTopTitle: string;
+  lockBottomTitle: string;
+  unavailableTitle: string;
+  unsafeHorizontalUnlockTitle: string;
+  unsafeVerticalUnlockTitle: string;
+  editableNote: string;
+  unavailableNote: string;
 };
 
 export type GadgetFontFieldConfig = {
   visible: boolean;
   rawEditable: boolean;
+  label: string;
   title: string;
+  summaryPrefix: string;
 };
 
 export type GadgetConstantsFieldConfig = {
   visible: boolean;
   knownFlags: readonly string[];
+  sectionLabel: string;
   title: string;
 };
 
@@ -98,6 +262,18 @@ export type CustomGadgetSelectPresetFieldConfig = {
   valueEditable: boolean;
   persisted: boolean;
   title: string;
+};
+
+export type CustomGadgetCodeRowsFieldConfig = {
+  visible: boolean;
+  selectGadgetLabel: string;
+  initCodeLabel: string;
+  createCodeLabel: string;
+  helpLabel: string;
+  initCodeTitle: string;
+  createCodeTitle: string;
+  helpTitle: string;
+  note: string;
 };
 
 export type GadgetResizeLockLike = {
@@ -251,7 +427,14 @@ const GADGET_CTOR_RANGE_FIELD_LABELS: ReadonlyMap<
     {
       minLabel: "Min",
       maxLabel: "Max",
-      title: "Matches the original Min / Max constructor arguments.",
+      minTitle: "Edit the raw minimum value expression for this gadget.",
+      maxTitle: "Edit the raw maximum value expression for this gadget.",
+      minUnscaledLabel: "Min (Unscaled)",
+      maxUnscaledLabel: "Max (Unscaled)",
+      minUnscaledTitle:
+        "Displays the raw minimum value saved in the gadget constructor. Edit Min to update it.",
+      maxUnscaledTitle:
+        "Displays the raw maximum value saved in the gadget constructor. Edit Max to update it.",
     },
   ],
   [
@@ -259,7 +442,14 @@ const GADGET_CTOR_RANGE_FIELD_LABELS: ReadonlyMap<
     {
       minLabel: "Min",
       maxLabel: "Max",
-      title: "Matches the original Min / Max constructor arguments.",
+      minTitle: "Edit the raw minimum value expression for this gadget.",
+      maxTitle: "Edit the raw maximum value expression for this gadget.",
+      minUnscaledLabel: "Min (Unscaled)",
+      maxUnscaledLabel: "Max (Unscaled)",
+      minUnscaledTitle:
+        "Displays the raw minimum value saved in the gadget constructor. Edit Min to update it.",
+      maxUnscaledTitle:
+        "Displays the raw maximum value saved in the gadget constructor. Edit Max to update it.",
     },
   ],
   [
@@ -267,7 +457,14 @@ const GADGET_CTOR_RANGE_FIELD_LABELS: ReadonlyMap<
     {
       minLabel: "Min",
       maxLabel: "Max",
-      title: "Matches the original Min / Max constructor arguments.",
+      minTitle: "Edit the raw minimum value expression for this gadget.",
+      maxTitle: "Edit the raw maximum value expression for this gadget.",
+      minUnscaledLabel: "Min (Unscaled)",
+      maxUnscaledLabel: "Max (Unscaled)",
+      minUnscaledTitle:
+        "Displays the raw minimum value saved in the gadget constructor. Edit Min to update it.",
+      maxUnscaledTitle:
+        "Displays the raw maximum value saved in the gadget constructor. Edit Max to update it.",
     },
   ],
   [
@@ -275,7 +472,14 @@ const GADGET_CTOR_RANGE_FIELD_LABELS: ReadonlyMap<
     {
       minLabel: "Min",
       maxLabel: "Max",
-      title: "Matches the original Min / Max constructor arguments.",
+      minTitle: "Edit the raw minimum value expression for this gadget.",
+      maxTitle: "Edit the raw maximum value expression for this gadget.",
+      minUnscaledLabel: "Min (Unscaled)",
+      maxUnscaledLabel: "Max (Unscaled)",
+      minUnscaledTitle:
+        "Displays the raw minimum value saved in the gadget constructor. Edit Min to update it.",
+      maxUnscaledTitle:
+        "Displays the raw maximum value saved in the gadget constructor. Edit Max to update it.",
     },
   ],
   [
@@ -283,8 +487,14 @@ const GADGET_CTOR_RANGE_FIELD_LABELS: ReadonlyMap<
     {
       minLabel: "InnerWidth",
       maxLabel: "InnerHeight",
-      title:
-        "Matches the original InnerWidth / InnerHeight constructor arguments.",
+      minTitle: "Edit the raw inner width expression for this scroll area.",
+      maxTitle: "Edit the raw inner height expression for this scroll area.",
+      minUnscaledLabel: "InnerWidth (Unscaled)",
+      maxUnscaledLabel: "InnerHeight (Unscaled)",
+      minUnscaledTitle:
+        "Displays the raw inner width value saved in the gadget constructor. Edit InnerWidth to update it.",
+      maxUnscaledTitle:
+        "Displays the raw inner height value saved in the gadget constructor. Edit InnerHeight to update it.",
     },
   ],
 ]);
@@ -529,6 +739,24 @@ function uniqueFlags(flags: readonly string[]): string[] {
   return out;
 }
 
+const GADGET_FONT_FLAG_SUMMARY_MARKS: readonly {
+  flag: string;
+  mark: string;
+}[] = [
+  { flag: "#PB_Font_Bold", mark: "B" },
+  { flag: "#PB_Font_Italic", mark: "I" },
+  { flag: "#PB_Font_Underline", mark: "U" },
+  { flag: "#PB_Font_StrikeOut", mark: "S" },
+];
+
+function getGadgetFontFlagSummary(flagsRaw: string | undefined): string {
+  const flags = new Set(splitGadgetFlags(flagsRaw));
+  return GADGET_FONT_FLAG_SUMMARY_MARKS
+    .filter(({ flag }) => flags.has(flag))
+    .map(({ mark }) => mark)
+    .join("");
+}
+
 function buildInspectorValue(
   raw: string | undefined,
   fallback: string | undefined,
@@ -575,14 +803,79 @@ export function canEditGadgetColors(kind: string | undefined): boolean {
   return typeof kind === "string" && GADGET_COLOR_CAPABLE_KINDS.has(kind);
 }
 
+export function getGadgetColorRowsFieldConfig(
+  kind: string | undefined,
+): GadgetColorRowsFieldConfig | undefined {
+  if (!canEditGadgetColors(kind)) return undefined;
+  return {
+    visible: true,
+    frontColorVisible: true,
+    backColorVisible: true,
+    valueEditable: true,
+    frontColorLabel: "FrontColor",
+    backColorLabel: "BackColor",
+    frontColorTitle:
+      "Displays the raw front color expression. Use the picker to change it or Remove to clear it.",
+    backColorTitle:
+      "Displays the raw background color expression. Use the picker to change it or Remove to clear it.",
+    frontColorPickerTitle:
+      "Choose the gadget front color. The value is saved as RGB(...).",
+    backColorPickerTitle:
+      "Choose the gadget background color. The value is saved as RGB(...).",
+    removeButtonLabel: "Remove",
+    frontColorRemoveTitle: "Remove the current gadget front color.",
+    backColorRemoveTitle: "Remove the current gadget background color.",
+    frontColorRemoveEmptyTitle: "No gadget front color is set.",
+    backColorRemoveEmptyTitle: "No gadget background color is set.",
+    note:
+      "Use the pickers to set gadget front/background colors. Remove clears the current color.",
+  };
+}
+
 export function canEditGadgetCheckedState(kind: string | undefined): boolean {
   return (
     typeof kind === "string" && GADGET_CHECKED_STATE_CAPABLE_KINDS.has(kind)
   );
 }
 
+export function getGadgetCheckedStateFieldConfig(
+  kind: string | undefined,
+): GadgetCheckedStateFieldConfig | undefined {
+  if (!canEditGadgetCheckedState(kind)) return undefined;
+  return {
+    visible: true,
+    valueEditable: true,
+    label: "Checked",
+    title:
+      "Toggle whether this gadget is checked. Custom expressions stay unchanged until you change this value.",
+    customExpressionTitle:
+      "This gadget uses a custom checked expression. Changing this checkbox replaces it with a simple checked or unchecked value.",
+    customExpressionNote:
+      "Custom checked expressions stay unchanged until you change this checkbox. Checking replaces the expression with the checked constant; unchecking removes the SetGadgetState line.",
+  };
+}
+
 export function canInspectGadgetImageRows(kind: string | undefined): boolean {
   return typeof kind === "string" && GADGET_IMAGE_ROW_CAPABLE_KINDS.has(kind);
+}
+
+export function getGadgetImageRowsFieldConfig(
+  kind: string | undefined,
+): GadgetImageRowsFieldConfig | undefined {
+  if (!canInspectGadgetImageRows(kind)) return undefined;
+  return {
+    currentImageVisible: true,
+    currentImageEditable: false,
+    changeImageVisible: true,
+    changeImageAvailable: true,
+    currentImageLabel: "CurrentImage",
+    changeImageLabel: "ChangeImage",
+    selectButtonLabel: "Select",
+    currentImageTitle:
+      "Displays the image currently assigned to this gadget. Use Select to choose or create another image.",
+    changeImageTitle:
+      "Choose, create or assign an image for this gadget.",
+  };
 }
 
 export function canInspectGadgetSplitterPosition(
@@ -591,10 +884,49 @@ export function canInspectGadgetSplitterPosition(
   return kind === GADGET_KIND.SplitterGadget;
 }
 
+export function getGadgetSplitterPositionFieldConfig(
+  kind: string | undefined,
+): GadgetSplitterPositionFieldConfig | undefined {
+  if (!canInspectGadgetSplitterPosition(kind)) return undefined;
+  return {
+    visible: true,
+    valueEditable: true,
+    label: "Splitter Position",
+    title:
+      "Edit the splitter position between the two child gadgets. The value must stay within the current splitter size.",
+    unscaledLabel: "Splitter Position (Unscaled)",
+    unscaledTitle:
+      "Displays the raw splitter position saved in the form code. Edit SplitterPosition to update it.",
+    note: "Set the splitter position between the two child gadgets.",
+    valuePolicy: "bounded-by-current-orientation-size",
+  };
+}
+
 export function canInspectCustomGadgetCodeRows(
   kind: string | undefined,
 ): boolean {
   return kind === GADGET_KIND.CustomGadget;
+}
+
+export function getCustomGadgetCodeRowsFieldConfig(
+  kind: string | undefined,
+): CustomGadgetCodeRowsFieldConfig | undefined {
+  if (!canInspectCustomGadgetCodeRows(kind)) return undefined;
+  return {
+    visible: true,
+    selectGadgetLabel: "SelectGadget",
+    initCodeLabel: "InitCode",
+    createCodeLabel: "CreateCode",
+    helpLabel: "Help",
+    initCodeTitle:
+      "Edit the code that runs before this custom gadget is created.",
+    createCodeTitle:
+      "Edit the code that creates this custom gadget. Leave it filled so the gadget can be recreated.",
+    helpTitle:
+      "Shows the placeholders available in InitCode and CreateCode.",
+    note:
+      "SelectGadget chooses the preset shown here. InitCode and CreateCode contain the code used for this custom gadget.",
+  };
 }
 
 export function canInspectGadgetTooltipRows(kind: string | undefined): boolean {
@@ -609,6 +941,56 @@ export function canInspectGadgetBaseRows(kind: string | undefined): boolean {
   return typeof kind === "string" && GADGET_CAPTION_VISIBLE_KINDS.has(kind);
 }
 
+export function canInspectGadgetLayoutRows(kind: string | undefined): boolean {
+  return canInspectGadgetBaseRows(kind);
+}
+
+export function getGadgetLayoutFieldConfig(
+  kind: string | undefined,
+): GadgetLayoutFieldConfig | undefined {
+  if (!canInspectGadgetLayoutRows(kind)) return undefined;
+  return {
+    visible: true,
+    valueEditable: true,
+    xLabel: "X",
+    yLabel: "Y",
+    widthLabel: "Width",
+    heightLabel: "Height",
+    xTitle: "Edit the displayed X position of this gadget.",
+    yTitle: "Edit the displayed Y position of this gadget.",
+    widthTitle: "Edit the displayed width of this gadget.",
+    heightTitle: "Edit the displayed height of this gadget.",
+    xUnscaledLabel: "X (Unscaled)",
+    yUnscaledLabel: "Y (Unscaled)",
+    widthUnscaledLabel: "Width (Unscaled)",
+    heightUnscaledLabel: "Height (Unscaled)",
+    xUnscaledTitle: "Displays the raw X value saved in the form code. Edit X to update it.",
+    yUnscaledTitle: "Displays the raw Y value saved in the form code. Edit Y to update it.",
+    widthUnscaledTitle: "Displays the raw width value saved in the form code. Edit Width to update it.",
+    heightUnscaledTitle: "Displays the raw height value saved in the form code. Edit Height to update it.",
+  };
+}
+
+export function getGadgetVisibilityStateFieldConfig(
+  kind: string | undefined,
+): GadgetVisibilityStateFieldConfig | undefined {
+  if (!canInspectGadgetBaseRows(kind)) return undefined;
+  return {
+    visible: true,
+    valueEditable: true,
+    hiddenLabel: "Hidden",
+    disabledLabel: "Disabled",
+    hiddenTitle: "Show or hide this gadget.",
+    hiddenCustomExpressionTitle:
+      "This gadget uses a custom hide expression. Changing this checkbox replaces it with 1 or 0.",
+    disabledTitle: "Enable or disable this gadget.",
+    disabledCustomExpressionTitle:
+      "This gadget uses a custom disable expression. Changing this checkbox replaces it with 1 or 0.",
+    customExpressionNote:
+      "Custom Hidden/Disabled expressions stay unchanged until you change these checkboxes. Changing one replaces that expression with 1 or 0.",
+  };
+}
+
 export function getGadgetParentFieldConfig(
   kind: string | undefined,
   hasParent: boolean,
@@ -619,8 +1001,14 @@ export function getGadgetParentFieldConfig(
     valueEditable: false,
     selectTargetAvailable: hasParent,
     changeDialogAvailable: true,
+    label: "Parent",
     title:
-      "Original FD_SelectGadget parent row. The value is selected through the reparent dialog, not edited as free text.",
+      "Displays the current parent gadget. Use Select Parent to jump to it or Change Parent to choose another parent.",
+    selectButtonLabel: "Select Parent",
+    selectButtonTitle: "Select the current parent gadget in the designer.",
+    changeButtonLabel: "Change Parent",
+    changeAvailableTitle: "Open the Select Parent dialog for this gadget.",
+    changeUnavailableTitle: "Changing the parent is not available for this gadget type.",
   };
 }
 
@@ -631,8 +1019,23 @@ export function getGadgetResizeLockFieldConfig(
   return {
     visible: true,
     valueEditablePolicy: "safe-resize-patch-only",
-    title:
-      "Original LockLeft / LockRight / LockTop / LockBottom rows. Editing remains limited to source states that can be persisted safely as ResizeGadget(...).",
+    lockLeftLabel: "LockLeft",
+    lockRightLabel: "LockRight",
+    lockTopLabel: "LockTop",
+    lockBottomLabel: "LockBottom",
+    lockLeftTitle: "Keep the left edge attached when the parent is resized.",
+    lockRightTitle: "Keep the right edge attached when the parent is resized.",
+    lockTopTitle: "Keep the top edge attached when the parent is resized.",
+    lockBottomTitle: "Keep the bottom edge attached when the parent is resized.",
+    unavailableTitle: "This lock cannot be changed safely for the current layout.",
+    unsafeHorizontalUnlockTitle:
+      "At least one horizontal edge must stay locked while vertical resizing is still active.",
+    unsafeVerticalUnlockTitle:
+      "At least one vertical edge must stay locked while horizontal resizing is still active.",
+    editableNote:
+      "These lock options control how the gadget moves or stretches when its parent is resized.",
+    unavailableNote:
+      "Lock editing is unavailable for this layout because changing it could lose the saved resize behavior.",
   };
 }
 
@@ -643,8 +1046,10 @@ export function getGadgetFontFieldConfig(
   return {
     visible: true,
     rawEditable: true,
+    label: "Font Raw",
     title:
-      "Original Font row. The port exposes the persisted SetGadgetFont(...) expression as raw text until the original-style picker is implemented.",
+      "Displays and edits the raw SetGadgetFont(...) expression. Leave empty to clear the gadget font.",
+    summaryPrefix: "Current font",
   };
 }
 
@@ -655,8 +1060,9 @@ export function getGadgetConstantsFieldConfig(
   return {
     visible: true,
     knownFlags: getGadgetKnownFlags(kind),
+    sectionLabel: "Constants",
     title:
-      "Original Constants node. Known constants follow declare.pb order; custom flag tails are preserved by the patcher.",
+      "Toggle known PureBasic constants for this gadget. Custom constants in the raw flags expression are kept.",
   };
 }
 
@@ -667,8 +1073,9 @@ export function getGadgetSelectProcFieldConfig(
   return {
     valueEditable: true,
     preservesGridString: true,
+    label: "SelectProc",
     title:
-      "Choose an existing procedure or type a procedure name. Matches the original SelectProc grid cell; surrounding whitespace is not stripped before the patcher receives the value.",
+      "Choose an existing procedure or type the procedure called by gadget events.",
     placeholder: "Type or pick a procedure",
   };
 }
@@ -681,7 +1088,7 @@ export function getCustomGadgetSelectPresetFieldConfig(
     valueEditable: true,
     persisted: false,
     title:
-      "Shows the original CustomGadget preset combobox row. In the available PureBasic source, changing this row does not rewrite InitCode or CreateCode automatically.",
+      "Select a CustomGadget preset. InitCode and CreateCode remain the saved creation code.",
   };
 }
 
@@ -689,10 +1096,61 @@ export function canInspectGadgetItems(kind: string | undefined): boolean {
   return typeof kind === "string" && GADGET_ITEM_EDITOR_CAPABLE_KINDS.has(kind);
 }
 
+export function getGadgetItemEditorFieldConfig(
+  kind: string | undefined,
+  hasExistingItems = false,
+): GadgetItemEditorFieldConfig | undefined {
+  if (!canInspectGadgetItems(kind) && !hasExistingItems) return undefined;
+  return {
+    visible: true,
+    sectionLabel: "Items",
+    itemTextLabel: "Item Text",
+    positionRawLabel: "Position",
+    imageRawLabel: "Image Raw",
+    flagsRawLabel: "Flags Raw",
+    imageActionLabel: "Image",
+    saveButtonLabel: "Save Item",
+    insertButtonLabel: "Insert Item",
+    cancelButtonLabel: "Cancel Item",
+    addButtonLabel: "Add Item",
+    deleteConfirmLabel: "Delete Item",
+    itemTextTitle: "Edit the item text shown by this gadget.",
+    positionRawTitle:
+      "Edit the raw item position expression. Use -1 to append the item.",
+    imageRawTitle: "Edit the optional raw image expression for this item.",
+    flagsRawTitle: "Edit the optional raw flags expression for this item.",
+    addButtonTitle: "Add a new item to this gadget.",
+  };
+}
+
 export function canInspectGadgetColumns(kind: string | undefined): boolean {
   return (
     typeof kind === "string" && GADGET_COLUMN_EDITOR_CAPABLE_KINDS.has(kind)
   );
+}
+
+export function getGadgetColumnEditorFieldConfig(
+  kind: string | undefined,
+  hasExistingColumns = false,
+): GadgetColumnEditorFieldConfig | undefined {
+  if (!canInspectGadgetColumns(kind) && !hasExistingColumns) return undefined;
+  return {
+    visible: true,
+    sectionLabel: "Columns",
+    columnTitleLabel: "Column Title",
+    columnIndexLabel: "Column Index",
+    widthRawLabel: "Width",
+    saveButtonLabel: "Save Column",
+    insertButtonLabel: "Insert Column",
+    cancelButtonLabel: "Cancel Column",
+    addButtonLabel: "Add Column",
+    deleteConfirmLabel: "Delete Column",
+    columnTitleTitle: "Edit the column title shown by this gadget.",
+    indexRawTitle:
+      "Edit the raw column index expression. Use the next index to append the column.",
+    widthRawTitle: "Edit the raw column width expression.",
+    addButtonTitle: "Add a new column to this gadget.",
+  };
 }
 
 export function getGadgetKnownFlags(
@@ -799,11 +1257,30 @@ export function getGadgetVariableInspectorValue(gadget: {
   return gadget.firstParam.replace(/^#/, "");
 }
 
+export function getGadgetParentInspectorValue(
+  parent: GadgetParentDisplayLike | undefined,
+): string {
+  if (!parent) return "";
+  return getGadgetVariableInspectorValue(parent);
+}
+
 export function getGadgetTooltipFieldConfig(
   kind: string | undefined,
 ): GadgetTooltipFieldConfig | undefined {
   if (!canInspectGadgetTooltipRows(kind)) return undefined;
-  return { valueEditable: true, variableToggleEditable: true };
+  return {
+    label: "Tooltip",
+    variableToggleLabel: "Tooltip Is Variable",
+    valueEditable: true,
+    variableToggleEditable: true,
+    variableToggleTitle:
+      "Treat the tooltip as a variable or expression instead of a string literal.",
+    variableToggleUnavailableTitle:
+      "This gadget cannot switch its tooltip to variable mode.",
+    valueTitle:
+      "Edit the tooltip shown when the user hovers over this gadget. Enable 'Tooltip Is Variable' for a variable name or expression.",
+    valueUnavailableTitle: "Displays the tooltip stored for this gadget.",
+  };
 }
 
 export function getGadgetCaptionFieldConfig(
@@ -815,23 +1292,47 @@ export function getGadgetCaptionFieldConfig(
   if (kind === GADGET_KIND.DateGadget) {
     return {
       label: "Mask",
+      variableToggleLabel: "Caption Is Variable",
       textEditable: canEditGadgetText(kind),
       variableToggleEditable: GADGET_CAPTION_VARIABLE_CAPABLE_KINDS.has(kind),
+      variableToggleTitle:
+        "Treat the mask as a variable or expression instead of a string literal.",
+      variableToggleUnavailableTitle:
+        "This gadget cannot switch its mask to variable mode.",
+      textTitle:
+        "Edit the date mask used by this gadget. Enable 'Caption Is Variable' for a variable name or expression.",
+      textUnavailableTitle: "Displays the date mask stored for this gadget.",
     };
   }
 
   if (kind === GADGET_KIND.ScintillaGadget) {
     return {
       label: "Callback",
+      variableToggleLabel: "Caption Is Variable",
       textEditable: true,
       variableToggleEditable: false,
+      variableToggleTitle:
+        "Treat this value as a variable or expression instead of a string literal.",
+      variableToggleUnavailableTitle:
+        "This callback field is edited directly and cannot be switched to variable mode.",
+      textTitle: "Edit the callback procedure passed to this Scintilla gadget.",
+      textUnavailableTitle:
+        "Displays the callback procedure stored for this Scintilla gadget.",
     };
   }
 
   return {
     label: "Caption",
+    variableToggleLabel: "Caption Is Variable",
     textEditable: canEditGadgetText(kind),
     variableToggleEditable: GADGET_CAPTION_VARIABLE_CAPABLE_KINDS.has(kind),
+    variableToggleTitle:
+      "Treat the caption as a variable or expression instead of a string literal.",
+    variableToggleUnavailableTitle:
+      "This gadget cannot switch its caption to variable mode.",
+    textTitle:
+      "Edit the text shown by this gadget. Enable 'Caption Is Variable' for a variable name or expression.",
+    textUnavailableTitle: "Displays the caption stored for this gadget.",
   };
 }
 
@@ -857,16 +1358,15 @@ export function getCustomGadgetHelpDisplay(): string {
 }
 
 export function getGadgetFontDisplaySummary(gadget: GadgetFontLike): string {
-  if (gadget.gadgetFontRaw?.trim()) {
-    if (gadget.gadgetFont && Number.isFinite(gadget.gadgetFontSize)) {
-      const flags = gadget.gadgetFontFlagsRaw?.trim();
-      return flags?.length
-        ? `${gadget.gadgetFont} ${gadget.gadgetFontSize} (${flags})`
-        : `${gadget.gadgetFont} ${gadget.gadgetFontSize}`;
-    }
-    return gadget.gadgetFontRaw.trim();
+  if (gadget.gadgetFont && Number.isFinite(gadget.gadgetFontSize)) {
+    const flags = gadget.gadgetFontFlagsRaw?.trim();
+    const flagSummary = getGadgetFontFlagSummary(flags);
+    const originalSummary = flagSummary.length
+      ? `${gadget.gadgetFont} ${gadget.gadgetFontSize} ${flagSummary}`
+      : `${gadget.gadgetFont} ${gadget.gadgetFontSize}`;
+    return flags?.length ? `${originalSummary} (${flags})` : originalSummary;
   }
-  return "";
+  return gadget.gadgetFontRaw?.trim() ?? "";
 }
 
 const PB_FORM_SKIN_CONSTANTS: Readonly<

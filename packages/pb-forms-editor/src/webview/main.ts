@@ -173,23 +173,28 @@ import {
   buildGadgetFlagsExpr,
   buildGadgetTextRaw,
   buildGadgetTooltipRaw,
-  canEditGadgetCheckedState,
-  canEditGadgetColors,
-  canInspectGadgetColumns,
   canInspectCustomGadgetCodeRows,
-  canInspectGadgetImageRows,
-  canInspectGadgetItems,
   canInspectGadgetSplitterPosition,
   getCustomGadgetHelpDisplay,
+  getCustomGadgetCodeRowsFieldConfig,
   getCustomGadgetSelectPresetFieldConfig,
+  getGadgetColorRowsFieldConfig,
+  getGadgetColumnEditorFieldConfig,
   getGadgetConstantsFieldConfig,
   getGadgetFontFieldConfig,
+  getGadgetItemEditorFieldConfig,
+  getGadgetLayoutFieldConfig,
   getGadgetParentFieldConfig,
+  getGadgetParentInspectorValue,
   getGadgetResizeLockFieldConfig,
   getGadgetSelectProcFieldConfig,
+  getGadgetSplitterPositionFieldConfig,
   getGadgetTooltipFieldConfig,
   getGadgetCaptionFieldConfig,
+  getGadgetCheckedStateFieldConfig,
+  getGadgetVisibilityStateFieldConfig,
   getGadgetCurrentImageDisplay,
+  getGadgetImageRowsFieldConfig,
   getGadgetCtorRangeFieldLabels,
   getGadgetCtorRangeInspectorValue,
   getGadgetBooleanInspectorState,
@@ -11554,15 +11559,18 @@ function renderProps() {
   if (shouldShowGadgetTabDetail(g)) {
     propsEl.appendChild(row("Tab", readonlyInput(String(g.parentItem))));
   }
-  const showsItemsInspector = canInspectGadgetItems(g.kind) || Boolean(g.items?.length);
-  const showsColumnsInspector = canInspectGadgetColumns(g.kind) || Boolean(g.columns?.length);
-  if (showsItemsInspector) {
+  const itemEditorField = getGadgetItemEditorFieldConfig(g.kind, Boolean(g.items?.length));
+  const columnEditorField = getGadgetColumnEditorFieldConfig(g.kind, Boolean(g.columns?.length));
+  const showsItemsInspector = Boolean(itemEditorField);
+  const showsColumnsInspector = Boolean(columnEditorField);
+  if (itemEditorField) {
     propsEl.appendChild(row("Items", readonlyInput(String(g.items?.length ?? 0))));
   }
-  if (showsColumnsInspector) {
+  if (columnEditorField) {
     propsEl.appendChild(row("Columns", readonlyInput(String(g.columns?.length ?? 0))));
   }
-  const isImageCapableGadget = canInspectGadgetImageRows(g.kind);
+  const imageRowsField = getGadgetImageRowsFieldConfig(g.kind);
+  const parentGadget = g.parentId ? model.gadgets.find(it => it.id === g.parentId) : undefined;
   const gadgetImage = findImageEntryById(g.imageId);
 
   const deleteGadgetBtn = document.createElement("button");
@@ -11643,26 +11651,28 @@ function renderProps() {
   }
 
   const captionField = getGadgetCaptionFieldConfig(g.kind);
-  const canEditColors = canEditGadgetColors(g.kind);
-  const canEditChecked = canEditGadgetCheckedState(g.kind);
+  const colorRowsField = getGadgetColorRowsFieldConfig(g.kind);
+  const checkedStateField = getGadgetCheckedStateFieldConfig(g.kind);
+  const visibilityStateField = getGadgetVisibilityStateFieldConfig(g.kind);
+  const layoutField = getGadgetLayoutFieldConfig(g.kind);
   const parentField = getGadgetParentFieldConfig(g.kind, Boolean(g.parentId));
   const resizeLockField = getGadgetResizeLockFieldConfig(g.kind);
   const fontField = getGadgetFontFieldConfig(g.kind);
   const constantsField = getGadgetConstantsFieldConfig(g.kind);
   const hasExpressionVisibility = (Boolean(g.hiddenRaw) && g.hidden === undefined) || (Boolean(g.disabledRaw) && g.disabled === undefined);
-  const hasExpressionChecked = canEditChecked && Boolean(g.stateRaw) && g.state === undefined;
+  const hasExpressionChecked = Boolean(checkedStateField) && Boolean(g.stateRaw) && g.state === undefined;
 
   if (captionField) {
     propsEl.appendChild(
       row(
-        "Caption Is Variable",
+        captionField.variableToggleLabel,
         checkboxInput(Boolean(g.textVariable), v => {
           applyLocalGadgetTextUpdate(g, getGadgetTextInspectorValue(g), v);
         }, {
           disabled: !captionField.variableToggleEditable,
           title: captionField.variableToggleEditable
-            ? "Treat this value as a variable or expression instead of a string literal."
-            : "This gadget keeps the original callback field behavior and does not expose a variable toggle here."
+            ? captionField.variableToggleTitle
+            : captionField.variableToggleUnavailableTitle
         })
       )
     );
@@ -11676,13 +11686,9 @@ function renderProps() {
           },
           {
             disabled: !captionField.textEditable,
-            title: captionField.label === "Mask"
-              ? "Mask text passed to this DateGadget."
-              : captionField.label === "Callback"
-                ? "Callback procedure passed to this Scintilla gadget."
-                : captionField.textEditable
-                  ? "Text shown for this gadget. Enable 'Caption Is Variable' if this value is a variable name or expression."
-                  : "This gadget keeps the original readonly caption field behavior."
+            title: captionField.textEditable
+              ? captionField.textTitle
+              : captionField.textUnavailableTitle
           }
         )
       )
@@ -11693,20 +11699,20 @@ function renderProps() {
   if (tooltipField) {
     propsEl.appendChild(
       row(
-        "Tooltip Is Variable",
+        tooltipField.variableToggleLabel,
         checkboxInput(Boolean(g.tooltipVariable), v => {
           applyLocalGadgetTooltipUpdate(g, getGadgetTooltipInspectorValue(g), v);
         }, {
           disabled: !tooltipField.variableToggleEditable,
           title: tooltipField.variableToggleEditable
-            ? "Treat this tooltip as a variable or expression instead of a string literal."
-            : "This gadget keeps the original readonly tooltip-variable field behavior."
+            ? tooltipField.variableToggleTitle
+            : tooltipField.variableToggleUnavailableTitle
         })
       )
     );
     propsEl.appendChild(
       row(
-        "Tooltip",
+        tooltipField.label,
         textInput(
           getGadgetTooltipInspectorValue(g),
           v => {
@@ -11715,60 +11721,70 @@ function renderProps() {
           {
             disabled: !tooltipField.valueEditable,
             title: tooltipField.valueEditable
-              ? "Tooltip shown for this gadget. Enable 'Tooltip Is Variable' if this value is a variable name or expression."
-              : "This gadget keeps the original readonly tooltip field behavior."
+              ? tooltipField.valueTitle
+              : tooltipField.valueUnavailableTitle
           }
         )
       )
     );
   }
 
-  propsEl.appendChild(section("Layout"));
-  propsEl.appendChild(row("X", numberInput(g.x, v => { updateGadgetDisplayField(g, "x", asInt(v)); postGadgetRect(g); render(); renderProps(); })));
-  if (shouldShowReadonlyUnscaledLayoutRows()) {
-    propsEl.appendChild(row("X (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(g.xRaw, g.x), "Readonly code value written to the gadget constructor.")));
-  }
-  propsEl.appendChild(row("Y", numberInput(g.y, v => { updateGadgetDisplayField(g, "y", asInt(v)); postGadgetRect(g); render(); renderProps(); })));
-  if (shouldShowReadonlyUnscaledLayoutRows()) {
-    propsEl.appendChild(row("Y (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(g.yRaw, g.y), "Readonly code value written to the gadget constructor.")));
-  }
-  propsEl.appendChild(row("Width", numberInput(g.w, v => { updateGadgetDisplayField(g, "w", asInt(v)); postGadgetRect(g); render(); renderProps(); })));
-  if (shouldShowReadonlyUnscaledLayoutRows()) {
-    propsEl.appendChild(row("Width (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(g.wRaw, g.w), "Readonly code value written to the gadget constructor.")));
-  }
-  propsEl.appendChild(row("Height", numberInput(g.h, v => { updateGadgetDisplayField(g, "h", asInt(v)); postGadgetRect(g); render(); renderProps(); })));
-  if (shouldShowReadonlyUnscaledLayoutRows()) {
-    propsEl.appendChild(row("Height (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(g.hRaw, g.h), "Readonly code value written to the gadget constructor.")));
+  if (layoutField) {
+    propsEl.appendChild(section("Layout"));
+    propsEl.appendChild(row(layoutField.xLabel, numberInput(g.x, v => { updateGadgetDisplayField(g, "x", asInt(v)); postGadgetRect(g); render(); renderProps(); }, { title: layoutField.xTitle })));
+    if (shouldShowReadonlyUnscaledLayoutRows()) {
+      propsEl.appendChild(row(layoutField.xUnscaledLabel, readonlyInput(getReadonlyUnscaledLayoutValue(g.xRaw, g.x), layoutField.xUnscaledTitle)));
+    }
+    propsEl.appendChild(row(layoutField.yLabel, numberInput(g.y, v => { updateGadgetDisplayField(g, "y", asInt(v)); postGadgetRect(g); render(); renderProps(); }, { title: layoutField.yTitle })));
+    if (shouldShowReadonlyUnscaledLayoutRows()) {
+      propsEl.appendChild(row(layoutField.yUnscaledLabel, readonlyInput(getReadonlyUnscaledLayoutValue(g.yRaw, g.y), layoutField.yUnscaledTitle)));
+    }
+    propsEl.appendChild(row(layoutField.widthLabel, numberInput(g.w, v => { updateGadgetDisplayField(g, "w", asInt(v)); postGadgetRect(g); render(); renderProps(); }, { title: layoutField.widthTitle })));
+    if (shouldShowReadonlyUnscaledLayoutRows()) {
+      propsEl.appendChild(row(layoutField.widthUnscaledLabel, readonlyInput(getReadonlyUnscaledLayoutValue(g.wRaw, g.w), layoutField.widthUnscaledTitle)));
+    }
+    propsEl.appendChild(row(layoutField.heightLabel, numberInput(g.h, v => { updateGadgetDisplayField(g, "h", asInt(v)); postGadgetRect(g); render(); renderProps(); }, { title: layoutField.heightTitle })));
+    if (shouldShowReadonlyUnscaledLayoutRows()) {
+      propsEl.appendChild(row(layoutField.heightUnscaledLabel, readonlyInput(getReadonlyUnscaledLayoutValue(g.hRaw, g.h), layoutField.heightUnscaledTitle)));
+    }
   }
 
-  propsEl.appendChild(
-    row(
-      "Hidden",
-      checkboxInput(getGadgetBooleanInspectorState(g.hiddenRaw, g.hidden), v => {
-        g.hidden = v;
-        g.hiddenRaw = v ? "1" : "0";
-        postGadgetProperties(g.id, { hiddenRaw: g.hiddenRaw });
-        render();
-        renderProps();
-      }, {
-        title: g.hiddenRaw && g.hidden === undefined ? "This gadget currently uses a custom hide expression. Changing it here replaces it with 1 or 0." : "Show or hide this gadget."
-      })
-    )
-  );
-  propsEl.appendChild(
-    row(
-      "Disabled",
-      checkboxInput(getGadgetBooleanInspectorState(g.disabledRaw, g.disabled), v => {
-        g.disabled = v;
-        g.disabledRaw = v ? "1" : "0";
-        postGadgetProperties(g.id, { disabledRaw: g.disabledRaw });
-        render();
-        renderProps();
-      }, {
-        title: g.disabledRaw && g.disabled === undefined ? "This gadget currently uses a custom disable expression. Changing it here replaces it with 1 or 0." : "Enable or disable this gadget."
-      })
-    )
-  );
+  if (visibilityStateField) {
+    propsEl.appendChild(
+      row(
+        visibilityStateField.hiddenLabel,
+        checkboxInput(getGadgetBooleanInspectorState(g.hiddenRaw, g.hidden), v => {
+          g.hidden = v;
+          g.hiddenRaw = v ? "1" : "0";
+          postGadgetProperties(g.id, { hiddenRaw: g.hiddenRaw });
+          render();
+          renderProps();
+        }, {
+          disabled: !visibilityStateField.valueEditable,
+          title: g.hiddenRaw && g.hidden === undefined
+            ? visibilityStateField.hiddenCustomExpressionTitle
+            : visibilityStateField.hiddenTitle
+        })
+      )
+    );
+    propsEl.appendChild(
+      row(
+        visibilityStateField.disabledLabel,
+        checkboxInput(getGadgetBooleanInspectorState(g.disabledRaw, g.disabled), v => {
+          g.disabled = v;
+          g.disabledRaw = v ? "1" : "0";
+          postGadgetProperties(g.id, { disabledRaw: g.disabledRaw });
+          render();
+          renderProps();
+        }, {
+          disabled: !visibilityStateField.valueEditable,
+          title: g.disabledRaw && g.disabled === undefined
+            ? visibilityStateField.disabledCustomExpressionTitle
+            : visibilityStateField.disabledTitle
+        })
+      )
+    );
+  }
   if (resizeLockField) {
     const resizeCtx = getWindowResizeLockContext(g);
     const currentLockLeft = g.lockLeft !== false;
@@ -11783,53 +11799,51 @@ function renderProps() {
     : undefined;
   const verticalLockTopToggle = buildGadgetVerticalLockResizeUpdate(g, resizeCtx, !currentLockTop, currentLockBottom);
   const verticalLockBottomToggle = buildGadgetVerticalLockResizeUpdate(g, resizeCtx, currentLockTop, !currentLockBottom);
-  const impossibleHorizontalUnlockTitle = "This transition cannot be persisted safely: when the other axis still needs ResizeGadget(...), the source code cannot store a state with neither LockLeft nor LockRight.";
-  const impossibleVerticalUnlockTitle = "This transition cannot be persisted safely: when the other axis still needs ResizeGadget(...), the source code cannot store a state with neither LockTop nor LockBottom.";
-  propsEl.appendChild(row("LockLeft", checkboxInput(currentLockLeft, v => {
+  propsEl.appendChild(row(resizeLockField.lockLeftLabel, checkboxInput(currentLockLeft, v => {
     applyLocalGadgetHorizontalLockUpdate(g, v, currentLockRight);
   }, {
     disabled: !horizontalLockLeftToggle,
     title: horizontalLockLeftToggle
-      ? "Keep the gadget anchored to the left when the window is resized."
-      : (currentLockLeft && !currentLockRight ? impossibleHorizontalUnlockTitle : "This lock can be edited only when the current layout can be converted to a safe ResizeGadget(...) update.")
+      ? resizeLockField.lockLeftTitle
+      : (currentLockLeft && !currentLockRight ? resizeLockField.unsafeHorizontalUnlockTitle : resizeLockField.unavailableTitle)
   })));
-  propsEl.appendChild(row("LockRight", checkboxInput(currentLockRight, v => {
+  propsEl.appendChild(row(resizeLockField.lockRightLabel, checkboxInput(currentLockRight, v => {
     applyLocalGadgetHorizontalLockUpdate(g, currentLockLeft, v);
   }, {
     disabled: !horizontalLockRightToggle,
     title: horizontalLockRightToggle
-      ? "Keep the gadget anchored to the right when the window is resized."
-      : (!currentLockLeft && currentLockRight ? impossibleHorizontalUnlockTitle : "This lock can be edited only when the current layout can be converted to a safe ResizeGadget(...) update.")
+      ? resizeLockField.lockRightTitle
+      : (!currentLockLeft && currentLockRight ? resizeLockField.unsafeHorizontalUnlockTitle : resizeLockField.unavailableTitle)
   })));
-  propsEl.appendChild(row("LockTop", checkboxInput(currentLockTop, v => {
+  propsEl.appendChild(row(resizeLockField.lockTopLabel, checkboxInput(currentLockTop, v => {
     applyLocalGadgetVerticalLockUpdate(g, v, currentLockBottom);
   }, {
     disabled: !verticalLockTopToggle,
     title: verticalLockTopToggle
-      ? "Keep the gadget anchored to the top when the window is resized."
-      : (currentLockTop && !currentLockBottom ? impossibleVerticalUnlockTitle : "This lock can be edited only when the current layout can be converted to a safe ResizeGadget(...) update.")
+      ? resizeLockField.lockTopTitle
+      : (currentLockTop && !currentLockBottom ? resizeLockField.unsafeVerticalUnlockTitle : resizeLockField.unavailableTitle)
   })));
-  propsEl.appendChild(row("LockBottom", checkboxInput(currentLockBottom, v => {
+  propsEl.appendChild(row(resizeLockField.lockBottomLabel, checkboxInput(currentLockBottom, v => {
     applyLocalGadgetVerticalLockUpdate(g, currentLockTop, v);
   }, {
     disabled: !verticalLockBottomToggle,
     title: verticalLockBottomToggle
-      ? "Keep the gadget anchored to the bottom when the window is resized."
-      : (!currentLockTop && currentLockBottom ? impossibleVerticalUnlockTitle : "This lock can be edited only when the current layout can be converted to a safe ResizeGadget(...) update.")
+      ? resizeLockField.lockBottomTitle
+      : (!currentLockTop && currentLockBottom ? resizeLockField.unsafeVerticalUnlockTitle : resizeLockField.unavailableTitle)
   })));
   propsEl.appendChild(mutedNote(horizontalLockLeftToggle || horizontalLockRightToggle || verticalLockTopToggle || verticalLockBottomToggle
-    ? "These lock options create, update or remove the gadget's ResizeGadget(...) line as needed."
-    : "Lock editing is available only when the current layout can be converted to a safe ResizeGadget(...) update."
+    ? resizeLockField.editableNote
+    : resizeLockField.unavailableNote
   ));
   }
-  if (hasExpressionVisibility) {
-    propsEl.appendChild(mutedNote("Custom Hidden/Disabled expressions stay unchanged until you edit them here. Editing replaces them with 1 or 0."));
+  if (hasExpressionVisibility && visibilityStateField) {
+    propsEl.appendChild(mutedNote(visibilityStateField.customExpressionNote));
   }
 
   if (fontField) {
     propsEl.appendChild(
       row(
-        "Font Raw",
+        fontField.label,
         textInput(
           g.gadgetFontRaw ?? "",
           v => {
@@ -11844,17 +11858,18 @@ function renderProps() {
     );
     const gadgetFontSummary = getGadgetFontDisplaySummary(g);
     if (gadgetFontSummary) {
-      propsEl.appendChild(mutedNote(`Current font: ${gadgetFontSummary}`));
+      propsEl.appendChild(mutedNote(`${fontField.summaryPrefix}: ${gadgetFontSummary}`));
     }
   }
 
-  if (canEditColors) {
+  if (colorRowsField?.visible) {
     const frontColorInput = readonlyInput((g.frontColorRaw ?? "").trim());
-    frontColorInput.title = "Use the color picker to choose the gadget front color, or Remove to clear it.";
+    frontColorInput.title = colorRowsField.frontColorTitle;
     const frontColorPicker = document.createElement("input");
     frontColorPicker.type = "color";
     frontColorPicker.value = pbColorNumberToCssHex(g.frontColor) ?? "#000000";
-    frontColorPicker.title = "Choose the gadget front color. The value is saved as RGB(...).";
+    frontColorPicker.disabled = !colorRowsField.valueEditable;
+    frontColorPicker.title = colorRowsField.frontColorPickerTitle;
     frontColorPicker.style.width = "40px";
     frontColorPicker.style.minWidth = "40px";
     frontColorPicker.style.padding = "0";
@@ -11872,11 +11887,11 @@ function renderProps() {
       renderProps();
     };
     const clearFrontColorBtn = document.createElement("button");
-    clearFrontColorBtn.textContent = "Remove";
-    clearFrontColorBtn.disabled = !(g.frontColorRaw?.trim() || typeof g.frontColor === "number");
+    clearFrontColorBtn.textContent = colorRowsField.removeButtonLabel;
+    clearFrontColorBtn.disabled = !colorRowsField.valueEditable || !(g.frontColorRaw?.trim() || typeof g.frontColor === "number");
     clearFrontColorBtn.title = clearFrontColorBtn.disabled
-      ? "No gadget front color is set."
-      : "Remove the current gadget front color.";
+      ? colorRowsField.frontColorRemoveEmptyTitle
+      : colorRowsField.frontColorRemoveTitle;
     clearFrontColorBtn.onclick = () => {
       clearInfoError();
       g.frontColorRaw = undefined;
@@ -11885,14 +11900,17 @@ function renderProps() {
       render();
       renderProps();
     };
-    propsEl.appendChild(row("FrontColor", inputWithActions(frontColorInput, frontColorPicker, clearFrontColorBtn)));
+    if (colorRowsField.frontColorVisible) {
+      propsEl.appendChild(row(colorRowsField.frontColorLabel, inputWithActions(frontColorInput, frontColorPicker, clearFrontColorBtn)));
+    }
 
     const backColorInput = readonlyInput((g.backColorRaw ?? "").trim());
-    backColorInput.title = "Use the color picker to choose the gadget background color, or Remove to clear it.";
+    backColorInput.title = colorRowsField.backColorTitle;
     const backColorPicker = document.createElement("input");
     backColorPicker.type = "color";
     backColorPicker.value = pbColorNumberToCssHex(g.backColor) ?? "#000000";
-    backColorPicker.title = "Choose the gadget background color. The value is saved as RGB(...).";
+    backColorPicker.disabled = !colorRowsField.valueEditable;
+    backColorPicker.title = colorRowsField.backColorPickerTitle;
     backColorPicker.style.width = "40px";
     backColorPicker.style.minWidth = "40px";
     backColorPicker.style.padding = "0";
@@ -11910,11 +11928,11 @@ function renderProps() {
       renderProps();
     };
     const clearBackColorBtn = document.createElement("button");
-    clearBackColorBtn.textContent = "Remove";
-    clearBackColorBtn.disabled = !(g.backColorRaw?.trim() || typeof g.backColor === "number");
+    clearBackColorBtn.textContent = colorRowsField.removeButtonLabel;
+    clearBackColorBtn.disabled = !colorRowsField.valueEditable || !(g.backColorRaw?.trim() || typeof g.backColor === "number");
     clearBackColorBtn.title = clearBackColorBtn.disabled
-      ? "No gadget background color is set."
-      : "Remove the current gadget background color.";
+      ? colorRowsField.backColorRemoveEmptyTitle
+      : colorRowsField.backColorRemoveTitle;
     clearBackColorBtn.onclick = () => {
       clearInfoError();
       g.backColorRaw = undefined;
@@ -11923,8 +11941,10 @@ function renderProps() {
       render();
       renderProps();
     };
-    propsEl.appendChild(row("BackColor", inputWithActions(backColorInput, backColorPicker, clearBackColorBtn)));
-    propsEl.appendChild(mutedNote("Use the pickers to set gadget front/background colors. Remove clears the current color."));
+    if (colorRowsField.backColorVisible) {
+      propsEl.appendChild(row(colorRowsField.backColorLabel, inputWithActions(backColorInput, backColorPicker, clearBackColorBtn)));
+    }
+    propsEl.appendChild(mutedNote(colorRowsField.note));
   }
 
   const gadgetCtorRangeLabels = getGadgetCtorRangeFieldLabels(g.kind);
@@ -11937,12 +11957,12 @@ function renderProps() {
           v => {
             applyLocalGadgetCtorRangeUpdate(g, "min", v);
           },
-          { title: gadgetCtorRangeLabels.title }
+          { title: gadgetCtorRangeLabels.minTitle }
         )
       )
     );
     if (shouldShowReadonlyUnscaledGadgetCtorRangeRows(g)) {
-      propsEl.appendChild(row(`${gadgetCtorRangeLabels.minLabel} (Unscaled)`, readonlyInput(getReadonlyUnscaledGadgetCtorRangeValue(g, "min"), "Readonly code value written to the gadget constructor.")));
+      propsEl.appendChild(row(gadgetCtorRangeLabels.minUnscaledLabel, readonlyInput(getReadonlyUnscaledGadgetCtorRangeValue(g, "min"), gadgetCtorRangeLabels.minUnscaledTitle)));
     }
     propsEl.appendChild(
       row(
@@ -11952,19 +11972,19 @@ function renderProps() {
           v => {
             applyLocalGadgetCtorRangeUpdate(g, "max", v);
           },
-          { title: gadgetCtorRangeLabels.title }
+          { title: gadgetCtorRangeLabels.maxTitle }
         )
       )
     );
     if (shouldShowReadonlyUnscaledGadgetCtorRangeRows(g)) {
-      propsEl.appendChild(row(`${gadgetCtorRangeLabels.maxLabel} (Unscaled)`, readonlyInput(getReadonlyUnscaledGadgetCtorRangeValue(g, "max"), "Readonly code value written to the gadget constructor.")));
+      propsEl.appendChild(row(gadgetCtorRangeLabels.maxUnscaledLabel, readonlyInput(getReadonlyUnscaledGadgetCtorRangeValue(g, "max"), gadgetCtorRangeLabels.maxUnscaledTitle)));
     }
   }
 
-  if (canEditChecked) {
+  if (checkedStateField?.visible) {
     propsEl.appendChild(
       row(
-        "Checked",
+        checkedStateField.label,
         checkboxInput(Boolean(g.state), v => {
           g.state = v ? 1 : 0;
           g.stateRaw = buildGadgetCheckedStateRaw(g.kind, v);
@@ -11973,21 +11993,23 @@ function renderProps() {
           renderProps();
         }, {
           title: hasExpressionChecked
-            ? "This gadget currently uses a custom checked expression. Changing it here replaces it with a simple checked/unchecked value."
-            : "Set whether this gadget starts checked."
+            ? checkedStateField.customExpressionTitle
+            : checkedStateField.title,
+          disabled: !checkedStateField.valueEditable
         })
       )
     );
     if (hasExpressionChecked) {
-      propsEl.appendChild(mutedNote("Custom checked expressions stay unchanged until you edit them here. Editing replaces them with a simple checked/unchecked value or removes the line."));
+      propsEl.appendChild(mutedNote(checkedStateField.customExpressionNote));
     }
   }
 
-  if (canInspectCustomGadgetCodeRows(g.kind)) {
+  const customGadgetCodeRowsField = getCustomGadgetCodeRowsFieldConfig(g.kind);
+  if (customGadgetCodeRowsField?.visible) {
     const customSelectPresetField = getCustomGadgetSelectPresetFieldConfig(g.kind);
     propsEl.appendChild(
       row(
-        "SelectGadget",
+        customGadgetCodeRowsField.selectGadgetLabel,
         editableComboInput(
           g.customSelectName ?? "",
           [],
@@ -11997,14 +12019,14 @@ function renderProps() {
           },
           {
             disabled: !customSelectPresetField?.valueEditable,
-            title: customSelectPresetField?.title ?? "Shows the original CustomGadget combobox row."
+            title: customSelectPresetField?.title ?? "Select a CustomGadget preset."
           }
         )
       )
     );
     propsEl.appendChild(
       row(
-        "InitCode",
+        customGadgetCodeRowsField.initCodeLabel,
         textInput(
           g.customInitRaw ?? "",
           v => {
@@ -12012,13 +12034,13 @@ function renderProps() {
             postCustomGadgetCode(g.id, { customInitRaw: v });
             renderProps();
           },
-          { title: "Initialization code written before the custom gadget is created." }
+          { title: customGadgetCodeRowsField.initCodeTitle }
         )
       )
     );
     propsEl.appendChild(
       row(
-        "CreateCode",
+        customGadgetCodeRowsField.createCodeLabel,
         textInput(
           g.customCreateRaw ?? "",
           v => {
@@ -12030,30 +12052,34 @@ function renderProps() {
             postCustomGadgetCode(g.id, { customCreateRaw: v });
             renderProps();
           },
-          { title: "Creation code used to build this custom gadget." }
+          { title: customGadgetCodeRowsField.createCodeTitle }
         )
       )
     );
     propsEl.appendChild(
       row(
-        "Help",
+        customGadgetCodeRowsField.helpLabel,
         textInput(
           getCustomGadgetHelpDisplay(),
           () => {},
           {
             disabled: true,
-            title: "Reference placeholders that can be used in custom gadget code."
+            title: customGadgetCodeRowsField.helpTitle
           }
         )
       )
     );
-    propsEl.appendChild(mutedNote("SelectGadget follows the original combobox row. In the available PureBasic source, preset changes there are not written back automatically; InitCode and CreateCode remain the effective saved values."));
+    propsEl.appendChild(mutedNote(customGadgetCodeRowsField.note));
+  }
+
+  if (parentField) {
+    propsEl.appendChild(row(parentField.label, readonlyInput(getGadgetParentInspectorValue(parentGadget), parentField.title)));
   }
 
   if (parentField?.selectTargetAvailable && g.parentId) {
     const btn = document.createElement("button");
-    btn.textContent = "Select Parent";
-    btn.title = parentField.title;
+    btn.textContent = parentField.selectButtonLabel;
+    btn.title = parentField.selectButtonTitle;
     btn.onclick = () => {
       selection = { kind: "gadget", id: g.parentId! };
       render();
@@ -12066,11 +12092,11 @@ function renderProps() {
   if (parentField) {
     const changeParentBtn = document.createElement("button");
     const canChangeParent = parentField.changeDialogAvailable && canOpenGadgetReparentDialog(g);
-    changeParentBtn.textContent = "Change Parent";
+    changeParentBtn.textContent = parentField.changeButtonLabel;
     changeParentBtn.disabled = !canChangeParent;
     changeParentBtn.title = canChangeParent
-      ? "Open the original-style Select Parent dialog for this gadget."
-      : "CustomGadget reparenting is blocked until an additional original-source proof exists.";
+      ? parentField.changeAvailableTitle
+      : parentField.changeUnavailableTitle;
     changeParentBtn.onclick = () => {
       if (!canChangeParent) return;
       openSelectParentDialog(g);
@@ -12078,46 +12104,45 @@ function renderProps() {
     propsEl.appendChild(row("", changeParentBtn));
   }
 
-  if (canInspectGadgetSplitterPosition(g.kind)) {
-    propsEl.appendChild(
-      row(
-        "Splitter Position",
-        numberInput(getEditableSplitterState(g), v => {
-          const next = Math.trunc(v);
-          const vertical = hasPbFlag(g.flagsExpr, "#PB_Splitter_Vertical");
-          const limit = vertical ? g.w : g.h;
-          if (!Number.isFinite(next) || next <= 0 || next >= limit) {
-            alert(`Splitter position must be between 1 and ${Math.max(1, limit - 1)}.`);
-            renderProps();
-            return;
-          }
-          if (isActiveLayoutDpiScalingEnabled() && isDpiScaledGadgetState(g.kind)) {
-            const nextRaw = toUnscaledLayoutRaw(next);
-            storeLayoutDisplayOverride("gadget", g.id, "state", next, nextRaw);
-            g.state = next;
-            g.stateRaw = nextRaw;
-            post({ type: WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw, id: g.id, stateRaw: nextRaw });
-          } else {
-            g.state = next;
-            g.stateRaw = String(next);
-            post({ type: WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw, id: g.id, stateRaw: String(next) });
-          }
-          render();
-          renderProps();
-        })
-      )
-    );
+  const splitterPositionField = getGadgetSplitterPositionFieldConfig(g.kind);
+  if (splitterPositionField?.visible) {
+    const splitterPositionInput = numberInput(getEditableSplitterState(g), v => {
+      const next = Math.trunc(v);
+      const vertical = hasPbFlag(g.flagsExpr, "#PB_Splitter_Vertical");
+      const limit = vertical ? g.w : g.h;
+      if (!Number.isFinite(next) || next <= 0 || next >= limit) {
+        alert(`Splitter position must be between 1 and ${Math.max(1, limit - 1)}.`);
+        renderProps();
+        return;
+      }
+      if (isActiveLayoutDpiScalingEnabled() && isDpiScaledGadgetState(g.kind)) {
+        const nextRaw = toUnscaledLayoutRaw(next);
+        storeLayoutDisplayOverride("gadget", g.id, "state", next, nextRaw);
+        g.state = next;
+        g.stateRaw = nextRaw;
+        post({ type: WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw, id: g.id, stateRaw: nextRaw });
+      } else {
+        g.state = next;
+        g.stateRaw = String(next);
+        post({ type: WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw, id: g.id, stateRaw: String(next) });
+      }
+      render();
+      renderProps();
+    });
+    splitterPositionInput.disabled = !splitterPositionField.valueEditable;
+    splitterPositionInput.title = splitterPositionField.title;
+    propsEl.appendChild(row(splitterPositionField.label, splitterPositionInput));
     if (shouldShowReadonlyUnscaledGadgetStateRows(g)) {
-      propsEl.appendChild(row("Splitter Position (Unscaled)", readonlyInput(getReadonlyUnscaledGadgetStateValue(g), "Readonly code value written to SetGadgetState(...).")));
+      propsEl.appendChild(row(splitterPositionField.unscaledLabel, readonlyInput(getReadonlyUnscaledGadgetStateValue(g), splitterPositionField.unscaledTitle)));
     }
-    propsEl.appendChild(mutedNote("Set the splitter position between the two child gadgets."));
+    propsEl.appendChild(mutedNote(splitterPositionField.note));
   }
 
-  if (isImageCapableGadget) {
+  if (imageRowsField) {
     propsEl.appendChild(
       row(
-        "CurrentImage",
-        readonlyInput(getGadgetCurrentImageDisplay(g, gadgetImage))
+        imageRowsField.currentImageLabel,
+        readonlyInput(getGadgetCurrentImageDisplay(g, gadgetImage), imageRowsField.currentImageTitle)
       )
     );
     if (gadgetImage && typeof gadgetImage.source?.line === "number") {
@@ -12147,13 +12172,15 @@ function renderProps() {
     const gadgetImageActions = document.createElement("div");
     gadgetImageActions.className = "row-actions";
     const gadgetChooseFileBtn = document.createElement("button");
-    gadgetChooseFileBtn.textContent = "Select";
-    gadgetChooseFileBtn.title = "Choose a file for this gadget. Existing matching LoadImage entries are reused when possible, and you can keep the gadget size or resize it to the image.";
+    gadgetChooseFileBtn.textContent = imageRowsField.selectButtonLabel;
+    gadgetChooseFileBtn.disabled = !imageRowsField.changeImageAvailable;
+    gadgetChooseFileBtn.title = imageRowsField.changeImageTitle;
     gadgetChooseFileBtn.onclick = () => {
+      if (!imageRowsField.changeImageAvailable) return;
       openImageAssignmentDraft({ kind: "gadget", gadgetId: g.id }, "chooseFile");
     };
     gadgetImageActions.appendChild(gadgetChooseFileBtn);
-    propsEl.appendChild(row("ChangeImage", gadgetImageActions));
+    propsEl.appendChild(row(imageRowsField.changeImageLabel, gadgetImageActions));
   }
 
   if (isImageAssignmentDraftOpenFor({ kind: "gadget", gadgetId: g.id })) {
@@ -12165,7 +12192,7 @@ function renderProps() {
   if (gadgetSelectProcField) {
     propsEl.appendChild(
       row(
-        "SelectProc",
+        gadgetSelectProcField.label,
         editableComboInput(
           g.eventProc ?? "",
           getProcedureSuggestions(),
@@ -12197,7 +12224,7 @@ function renderProps() {
         .filter(Boolean)
     );
 
-    propsEl.appendChild(section("Constants"));
+    propsEl.appendChild(section(constantsField.sectionLabel));
     for (const flag of gadgetKnownFlags) {
       propsEl.appendChild(row(
         flag,
@@ -12223,43 +12250,43 @@ function renderProps() {
   }
 
   // Items editor (minimal UI)
-  if (showsItemsInspector) {
-    propsEl.appendChild(section("Items"));
+  if (itemEditorField) {
+    propsEl.appendChild(section(itemEditorField.sectionLabel));
     const itemDraft = getGadgetItemDraft(g);
     const itemEditorOpen = isGadgetItemEditorOpen(g);
   if (itemDraft && itemEditorOpen) {
     propsEl.appendChild(row(
-      "Item Text",
+      itemEditorField.itemTextLabel,
       textInput(itemDraft.text, v => updateGadgetItemEditorDraft({ text: v }), {
-        title: "Edit the text for this item."
+        title: itemEditorField.itemTextTitle
       })
     ));
     propsEl.appendChild(row(
-      "Position",
+      itemEditorField.positionRawLabel,
       textInput(itemDraft.posRaw, v => updateGadgetItemEditorDraft({ posRaw: v }), {
-        title: "Edit the position used for this item."
+        title: itemEditorField.positionRawTitle
       })
     ));
     propsEl.appendChild(row(
-      "Image Raw",
+      itemEditorField.imageRawLabel,
       textInput(itemDraft.imageRaw, v => updateGadgetItemEditorDraft({ imageRaw: v }), {
-        title: "Edit the optional image reference for this item."
+        title: itemEditorField.imageRawTitle
       })
     ));
     propsEl.appendChild(row(
-      "Flags Raw",
+      itemEditorField.flagsRawLabel,
       textInput(itemDraft.flagsRaw, v => updateGadgetItemEditorDraft({ flagsRaw: v }), {
-        title: "Edit the optional flags for this item."
+        title: itemEditorField.flagsRawTitle
       })
     ));
 
     const itemEditorActions = document.createElement("div");
     itemEditorActions.className = "miniActions";
     const saveItemBtn = document.createElement("button");
-    saveItemBtn.textContent = itemDraft.sourceLine ? "Save Item" : "Insert Item";
+    saveItemBtn.textContent = itemDraft.sourceLine ? itemEditorField.saveButtonLabel : itemEditorField.insertButtonLabel;
     saveItemBtn.onclick = () => saveGadgetItemEditor(g);
     const cancelItemBtn = document.createElement("button");
-    cancelItemBtn.textContent = "Cancel Item";
+    cancelItemBtn.textContent = itemEditorField.cancelButtonLabel;
     cancelItemBtn.onclick = () => {
       closeGadgetItemEditor(g.id);
       renderProps();
@@ -12295,12 +12322,12 @@ function renderProps() {
                 gadgetId: g.id,
                 sourceLine: it.source!.line,
                 message: `Delete item ${idx} from gadget '${g.id}'?`,
-                confirmLabel: "Delete Item"
+                confirmLabel: itemEditorField.deleteConfirmLabel
               });
             }
           : undefined,
         {
-          label: "Image",
+          label: itemEditorField.imageActionLabel,
           onClick: itemImage ? () => selectImageById(itemImage.id) : undefined,
           disabled: !itemImage,
           title: itemImage ? "" : itemImageHint
@@ -12310,7 +12337,8 @@ function renderProps() {
   });
 
   const addItemBtn = document.createElement("button");
-  addItemBtn.textContent = "Add Item";
+  addItemBtn.textContent = itemEditorField.addButtonLabel;
+  addItemBtn.title = itemEditorField.addButtonTitle;
   addItemBtn.onclick = () => {
     openGadgetItemEditor(g);
     renderProps();
@@ -12329,37 +12357,37 @@ function renderProps() {
   }
 
   // Columns editor (minimal UI)
-  if (showsColumnsInspector) {
-    propsEl.appendChild(section("Columns"));
+  if (columnEditorField) {
+    propsEl.appendChild(section(columnEditorField.sectionLabel));
     const columnDraft = getGadgetColumnDraft(g);
     const columnEditorOpen = isGadgetColumnEditorOpen(g);
   if (columnDraft && columnEditorOpen) {
     propsEl.appendChild(row(
-      "Column Title",
+      columnEditorField.columnTitleLabel,
       textInput(columnDraft.title, v => updateGadgetColumnEditorDraft({ title: v }), {
-        title: "Edit the column title."
+        title: columnEditorField.columnTitleTitle
       })
     ));
     propsEl.appendChild(row(
-      "Column Index",
+      columnEditorField.columnIndexLabel,
       textInput(columnDraft.colRaw, v => updateGadgetColumnEditorDraft({ colRaw: v }), {
-        title: "Edit the column index."
+        title: columnEditorField.indexRawTitle
       })
     ));
     propsEl.appendChild(row(
-      "Width",
+      columnEditorField.widthRawLabel,
       textInput(columnDraft.widthRaw, v => updateGadgetColumnEditorDraft({ widthRaw: v }), {
-        title: "Edit the column width."
+        title: columnEditorField.widthRawTitle
       })
     ));
 
     const columnEditorActions = document.createElement("div");
     columnEditorActions.className = "miniActions";
     const saveColumnBtn = document.createElement("button");
-    saveColumnBtn.textContent = columnDraft.sourceLine ? "Save Column" : "Insert Column";
+    saveColumnBtn.textContent = columnDraft.sourceLine ? columnEditorField.saveButtonLabel : columnEditorField.insertButtonLabel;
     saveColumnBtn.onclick = () => saveGadgetColumnEditor(g);
     const cancelColumnBtn = document.createElement("button");
-    cancelColumnBtn.textContent = "Cancel Column";
+    cancelColumnBtn.textContent = columnEditorField.cancelButtonLabel;
     cancelColumnBtn.onclick = () => {
       closeGadgetColumnEditor(g.id);
       renderProps();
@@ -12390,7 +12418,7 @@ function renderProps() {
                 gadgetId: g.id,
                 sourceLine: c.source!.line,
                 message: `Delete column ${idx} from gadget '${g.id}'?`,
-                confirmLabel: "Delete Column"
+                confirmLabel: columnEditorField.deleteConfirmLabel
               });
             }
           : undefined
@@ -12399,7 +12427,7 @@ function renderProps() {
   });
 
   const addColBtn = document.createElement("button");
-  addColBtn.textContent = "Add Column";
+  addColBtn.textContent = columnEditorField.addButtonLabel;
   addColBtn.onclick = () => {
     openGadgetColumnEditor(g);
     renderProps();
@@ -12705,10 +12733,11 @@ function checkboxInput(
   return i;
 }
 
-function numberInput(value: number, onChange: (v: number) => void) {
+function numberInput(value: number, onChange: (v: number) => void, options?: { title?: string }) {
   const i = document.createElement("input");
   i.type = "number";
   i.value = String(value);
+  i.title = options?.title ?? "";
   i.onchange = () => onChange(Number(i.value));
   return i;
 }
