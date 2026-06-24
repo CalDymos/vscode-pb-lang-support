@@ -965,6 +965,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             { gadget1Id: msg.gadget1Id, gadget2Id: msg.gadget2Id },
             { pbAny: designerSettings.newGadgetsUsePbAnyByDefault },
             msg.yRaw,
+            { w: msg.w, h: msg.h },
           );
           if (!await applyEditOrError(edit, `Could not insert gadget '${msg.kind}'. No suitable insertion point found${rangeInfo}.`)) {
             return;

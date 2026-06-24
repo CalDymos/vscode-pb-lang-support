@@ -217,11 +217,16 @@ import {
   syncPanelActiveItemsForSelection
 } from "../core/utils/webview-state";
 import {
+  buildGadgetDrawInsertRect,
+  clampGadgetDrawInsertPointToBounds,
   buildInsertedGadgetIdentity,
   canHostInsertedGadgets,
   getGadgetInsertLabel,
   isInsertableGadgetKind,
   shouldInsertGadgetAsPbAny,
+  type GadgetDrawInsertPoint,
+  type GadgetDrawInsertRect,
+  type GadgetDrawInsertBounds,
   type InsertableGadgetKind
 } from "../core/gadget/insert";
 import { resolvePreviewPlatformFromOsSkin, type PreviewPlatform } from "../core/utils/form-settings-runtime";
@@ -250,7 +255,7 @@ import {
   getToolboxPanelCategories,
   type ToolboxPanelTabId
 } from "../core/toolbox/panel";
-import { buildOriginalGadgetDeletePlan } from "../core/gadget/delete";
+import { buildOriginalGadgetDeletePlan, shouldOpenGadgetKeyboardDeleteDialog } from "../core/gadget/delete";
 import { quotePbString } from "../core/parser/tokenizer";
 import {
   GADGET_KIND,
@@ -507,12 +512,19 @@ type PendingSplitterInsertConfig = {
   gadget2Id: string;
 };
 
+type PendingGadgetDrawInsert = {
+  kind: InsertableGadgetKind;
+  start: GadgetDrawInsertPoint;
+  current: GadgetDrawInsertPoint;
+};
+
 let pendingMenuEntrySelection: PendingMenuEntrySelection | null = null;
 let pendingToolBarEntrySelection: PendingToolBarEntrySelection | null = null;
 let pendingStatusBarFieldSelection: PendingStatusBarFieldSelection | null = null;
 let pendingGadgetSelection: PendingGadgetSelection | null = null;
 let pendingInsertGadgetKind: string | null = null;
 let pendingSplitterInsertConfig: PendingSplitterInsertConfig | null = null;
+let pendingGadgetDrawInsert: PendingGadgetDrawInsert | null = null;
 let activeTopPanelTab: ToolboxPanelTabId = "toolbox";
 let selectedToolboxKind: InsertableGadgetKind = getDefaultToolboxPanelKind();
 
@@ -1674,6 +1686,34 @@ function closeDestructiveDialog(): void {
   renderDestructiveDialog();
 }
 
+function isEditableKeyboardTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  return target instanceof HTMLInputElement
+    || target instanceof HTMLTextAreaElement
+    || target instanceof HTMLSelectElement;
+}
+
+function openSelectedGadgetKeyboardDeleteDialog(key: string, editableTarget: boolean): boolean {
+  const selectedGadgetId = selection && selection.kind === "gadget" ? selection.id : undefined;
+  const shouldOpen = shouldOpenGadgetKeyboardDeleteDialog({
+    key,
+    editableTarget,
+    hasBlockingDialog: Boolean(pendingDestructiveDialogAction || splitterInsertDialogBackdropEl || selectParentDialogBackdropEl),
+    hasPendingInsertGadget: Boolean(pendingInsertGadgetKind),
+    selectionKind: selection?.kind,
+  });
+  if (!shouldOpen || !selectedGadgetId) return false;
+
+  const gadget = model.gadgets.find(entry => entry.id === selectedGadgetId);
+  const action = buildGadgetDeleteAction(gadget);
+  if (!action) return false;
+
+  closeCanvasContextMenu();
+  openDestructiveDialog(action);
+  return true;
+}
+
 function confirmDestructiveDialogAction(): void {
   const action = pendingDestructiveDialogAction;
   if (!action) return;
@@ -1920,21 +1960,28 @@ function buildTopLevelWindowGadgetYRaw(unscaledY: number, parentId?: string): st
   return `ToolBarHeight(${toolbarCount - 1}) + ${baseRaw}`;
 }
 
-function postInsertGadget(kind: string, x: number, y: number, parentId?: string, parentItem?: number): void {
+function postInsertGadget(kind: string, x: number, y: number, parentId?: string, parentItem?: number, w?: number, h?: number): void {
   if (!isInsertableGadgetKind(kind)) return;
   const predictedId = getPredictedInsertedGadgetId(kind);
-  const committed = commitDisplayedLayoutPoint(x, y, getActiveLayoutDpiScale());
+  const scale = getActiveLayoutDpiScale();
+  const committed = commitDisplayedLayoutPoint(x, y, scale);
+  const committedW = Number.isFinite(w) ? commitDisplayedLayoutValue(w as number, scale) : undefined;
+  const committedH = Number.isFinite(h) ? commitDisplayedLayoutValue(h as number, scale) : undefined;
   const yRaw = buildTopLevelWindowGadgetYRaw(committed.yUnscaled, parentId);
   if (predictedId) {
     pendingGadgetSelection = { id: predictedId };
     storeLayoutDisplayOverride("gadget", predictedId, "x", committed.x, committed.xRaw);
     storeLayoutDisplayOverride("gadget", predictedId, "y", committed.y, yRaw);
+    if (committedW) storeLayoutDisplayOverride("gadget", predictedId, "w", committedW.displayValue, committedW.raw);
+    if (committedH) storeLayoutDisplayOverride("gadget", predictedId, "h", committedH.displayValue, committedH.raw);
   }
   post({
     type: WEBVIEW_TO_EXT_MSG_TYPE.insertGadget,
     kind,
     x: committed.xUnscaled,
     y: committed.yUnscaled,
+    w: committedW?.unscaledValue,
+    h: committedH?.unscaledValue,
     yRaw,
     parentId,
     parentItem,
@@ -1945,6 +1992,7 @@ function postInsertGadget(kind: string, x: number, y: number, parentId?: string,
 
 function setPendingInsertGadgetKind(kind: string | null): void {
   pendingInsertGadgetKind = kind && isInsertableGadgetKind(kind) ? kind : null;
+  pendingGadgetDrawInsert = null;
   closeCanvasContextMenu();
   if (!pendingInsertGadgetKind) {
     pendingSplitterInsertConfig = null;
@@ -2747,6 +2795,14 @@ window.addEventListener("mousedown", event => {
 });
 
 document.addEventListener("keydown", event => {
+  if (event.key === "Delete" || event.key === "Backspace") {
+    if (openSelectedGadgetKeyboardDeleteDialog(event.key, isEditableKeyboardTarget(event.target))) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    return;
+  }
+
   if (event.key !== "Escape") return;
   if (pendingDestructiveDialogAction) {
     closeDestructiveDialog();
@@ -3768,8 +3824,13 @@ canvas.addEventListener("mousedown", (e) => {
   if (pendingInsertGadgetKind) {
     const placement = resolveGadgetInsertPlacement(mx, my);
     if (placement && isInsertableGadgetKind(pendingInsertGadgetKind)) {
-      postInsertGadget(pendingInsertGadgetKind, placement.x, placement.y, placement.parentId, placement.parentItem);
-      setPendingInsertGadgetKind(null);
+      pendingGadgetDrawInsert = {
+        kind: pendingInsertGadgetKind,
+        start: placement,
+        current: placement,
+      };
+      canvas.style.cursor = "crosshair";
+      render();
     } else if (pendingInsertGadgetKind === GADGET_KIND.SplitterGadget) {
       errEl.textContent = "Choose a valid placement position for the splitter inside the window or a container parent.";
       renderInfoPanel();
@@ -4101,6 +4162,18 @@ window.addEventListener("mousemove", (e) => {
   const mx = e.clientX - rect.left;
   const my = e.clientY - rect.top;
 
+  if (pendingGadgetDrawInsert) {
+    const placement = resolveGadgetDrawInsertPoint(pendingGadgetDrawInsert.start, mx, my);
+    if (placement) {
+      pendingGadgetDrawInsert.current = placement;
+      canvas.style.cursor = "crosshair";
+      render();
+    } else {
+      canvas.style.cursor = "not-allowed";
+    }
+    return;
+  }
+
   if (pendingInsertGadgetKind) {
     canvas.style.cursor = resolveGadgetInsertPlacement(mx, my) ? "crosshair" : "not-allowed";
     return;
@@ -4348,7 +4421,24 @@ window.addEventListener("mousemove", (e) => {
   renderProps();
 });
 
-window.addEventListener("mouseup", () => {
+window.addEventListener("mouseup", (event) => {
+  const pendingDraw = pendingGadgetDrawInsert;
+  if (pendingDraw) {
+    const canvasRect = canvas.getBoundingClientRect();
+    const finalPoint = resolveGadgetDrawInsertPoint(pendingDraw.start, event.clientX - canvasRect.left, event.clientY - canvasRect.top);
+    if (finalPoint) pendingDraw.current = finalPoint;
+    const drawRect = buildGadgetDrawInsertRect(pendingDraw.start, pendingDraw.current);
+    if (drawRect) {
+      postInsertGadget(pendingDraw.kind, drawRect.x, drawRect.y, drawRect.parentId, drawRect.parentItem, drawRect.w, drawRect.h);
+    } else {
+      postInsertGadget(pendingDraw.kind, pendingDraw.start.x, pendingDraw.start.y, pendingDraw.start.parentId, pendingDraw.start.parentItem);
+    }
+    setPendingInsertGadgetKind(null);
+    canvas.style.cursor = "default";
+    render();
+    return;
+  }
+
   const d = drag;
   if (!d) return;
 
@@ -4671,25 +4761,41 @@ function hitTestPanelTab(mx: number, my: number, metrics: PreviewChromeMetrics):
   return null;
 }
 
-function resolveGadgetInsertPlacement(mx: number, my: number): { x: number; y: number; parentId?: string; parentItem?: number } | null {
+type SnappedWindowContentPoint = {
+  x: number;
+  y: number;
+  alignedX: number;
+  alignedY: number;
+  contentRect: PreviewRect;
+};
+
+function resolveSnappedWindowContentPoint(mx: number, my: number): SnappedWindowContentPoint {
+  const { lx, ly } = toLocal(mx, my);
+  const contentRect = getWindowContentPreviewRect(previewChromeMetrics);
+  const rawLocalX = lx - contentRect.x;
+  const rawLocalY = ly - contentRect.y;
+  const x = settings.snapToGrid ? snapValue(rawLocalX, settings.gridSize) : Math.trunc(rawLocalX);
+  const y = settings.snapToGrid ? snapValue(rawLocalY, settings.gridSize) : Math.trunc(rawLocalY);
+  return {
+    x,
+    y,
+    alignedX: contentRect.x + x,
+    alignedY: contentRect.y + y,
+    contentRect,
+  };
+}
+
+function resolveGadgetInsertPlacement(mx: number, my: number): GadgetDrawInsertPoint | null {
   if (!pendingInsertGadgetKind || !isInsertableGadgetKind(pendingInsertGadgetKind)) return null;
   if (pendingInsertGadgetKind === GADGET_KIND.SplitterGadget && !pendingSplitterInsertConfig) return null;
   if (!hitWindow(mx, my)) return null;
 
-  const { lx, ly } = toLocal(mx, my);
-  const metrics = previewChromeMetrics;
-  const windowContentRect = getWindowContentPreviewRect(metrics);
-  const rawLocalX = lx - windowContentRect.x;
-  const rawLocalY = ly - windowContentRect.y;
-  const snappedLocalX = settings.snapToGrid ? snapValue(rawLocalX, settings.gridSize) : Math.trunc(rawLocalX);
-  const snappedLocalY = settings.snapToGrid ? snapValue(rawLocalY, settings.gridSize) : Math.trunc(rawLocalY);
-  const alignedX = windowContentRect.x + snappedLocalX;
-  const alignedY = windowContentRect.y + snappedLocalY;
-
-  if (!rectContainsPoint(windowContentRect, alignedX, alignedY)) {
+  const point = resolveSnappedWindowContentPoint(mx, my);
+  if (!rectContainsPoint(point.contentRect, point.alignedX, point.alignedY)) {
     return null;
   }
 
+  const metrics = previewChromeMetrics;
   const cache = new Map<string, GadgetPreviewLayout>();
   for (let i = model.gadgets.length - 1; i >= 0; i--) {
     const gadget = model.gadgets[i];
@@ -4697,12 +4803,12 @@ function resolveGadgetInsertPlacement(mx: number, my: number): { x: number; y: n
 
     const layout = getGadgetPreviewLayout(gadget, metrics, cache);
     if (!layout.visible) continue;
-    if (!rectContainsPoint(layout.rect, alignedX, alignedY)) continue;
-    if (!rectContainsPoint(layout.clip, alignedX, alignedY)) continue;
+    if (!rectContainsPoint(layout.rect, point.alignedX, point.alignedY)) continue;
+    if (!rectContainsPoint(layout.clip, point.alignedX, point.alignedY)) continue;
 
     const contentRect = getGadgetContentRect(gadget.kind, layout.rect, metrics);
-    let x = alignedX - contentRect.x;
-    let y = alignedY - contentRect.y;
+    let x = point.alignedX - contentRect.x;
+    let y = point.alignedY - contentRect.y;
     if (gadget.kind === GADGET_KIND.ScrollAreaGadget) {
       x += getScrollAreaOffsetX(gadget, layout.rect, metrics);
       y += getScrollAreaOffsetY(gadget, layout.rect, metrics);
@@ -4716,7 +4822,113 @@ function resolveGadgetInsertPlacement(mx: number, my: number): { x: number; y: n
     };
   }
 
-  return { x: snappedLocalX, y: snappedLocalY };
+  return { x: point.x, y: point.y };
+}
+
+function resolveGadgetDrawInsertBounds(start: GadgetDrawInsertPoint, cache = new Map<string, GadgetPreviewLayout>()): GadgetDrawInsertBounds | null {
+  const windowContentRect = getWindowContentPreviewRect(previewChromeMetrics);
+  if (!start.parentId) {
+    return { xMin: 0, yMin: 0, xMax: windowContentRect.w, yMax: windowContentRect.h };
+  }
+
+  const parent = model.gadgets.find(gadget => gadget.id === start.parentId);
+  if (!parent) return null;
+  const layout = getGadgetPreviewLayout(parent, previewChromeMetrics, cache);
+  if (!layout.visible) return null;
+  const contentRect = getGadgetContentRect(parent.kind, layout.rect, previewChromeMetrics);
+  let xMin = windowContentRect.x - contentRect.x;
+  let yMin = windowContentRect.y - contentRect.y;
+  let xMax = windowContentRect.x + windowContentRect.w - contentRect.x;
+  let yMax = windowContentRect.y + windowContentRect.h - contentRect.y;
+  if (parent.kind === GADGET_KIND.ScrollAreaGadget) {
+    const scrollX = getScrollAreaOffsetX(parent, layout.rect, previewChromeMetrics);
+    const scrollY = getScrollAreaOffsetY(parent, layout.rect, previewChromeMetrics);
+    xMin += scrollX;
+    xMax += scrollX;
+    yMin += scrollY;
+    yMax += scrollY;
+  }
+  return { xMin, yMin, xMax, yMax };
+}
+
+function resolveGadgetDrawInsertPoint(start: GadgetDrawInsertPoint, mx: number, my: number): GadgetDrawInsertPoint | null {
+  const point = resolveSnappedWindowContentPoint(mx, my);
+  let resolved: GadgetDrawInsertPoint;
+  if (!start.parentId) {
+    resolved = { x: point.x, y: point.y };
+  } else {
+    const parent = model.gadgets.find(gadget => gadget.id === start.parentId);
+    if (!parent) return null;
+    const layout = getGadgetPreviewLayout(parent, previewChromeMetrics, new Map<string, GadgetPreviewLayout>());
+    if (!layout.visible) return null;
+    const contentRect = getGadgetContentRect(parent.kind, layout.rect, previewChromeMetrics);
+    let x = point.alignedX - contentRect.x;
+    let y = point.alignedY - contentRect.y;
+    if (parent.kind === GADGET_KIND.ScrollAreaGadget) {
+      x += getScrollAreaOffsetX(parent, layout.rect, previewChromeMetrics);
+      y += getScrollAreaOffsetY(parent, layout.rect, previewChromeMetrics);
+    }
+    resolved = { x, y, parentId: start.parentId };
+    if (start.parentItem !== undefined) resolved.parentItem = start.parentItem;
+  }
+
+  const bounds = resolveGadgetDrawInsertBounds(start);
+  return bounds ? clampGadgetDrawInsertPointToBounds(resolved, bounds) : null;
+}
+
+function getGadgetDrawInsertPreviewClip(parentId: string | undefined, cache: Map<string, GadgetPreviewLayout>): PreviewRect | undefined {
+  if (!parentId) return getWindowContentPreviewRect(previewChromeMetrics);
+  const parent = model.gadgets.find(gadget => gadget.id === parentId);
+  if (!parent) return undefined;
+  const layout = getGadgetPreviewLayout(parent, previewChromeMetrics, cache);
+  if (!layout.visible) return undefined;
+  return layout.clip;
+}
+
+function getGadgetDrawInsertPreviewRect(rect: GadgetDrawInsertRect, cache = new Map<string, GadgetPreviewLayout>()): { rect: PreviewRect; clip: PreviewRect } | undefined {
+  if (!rect.parentId) {
+    const contentRect = getWindowContentPreviewRect(previewChromeMetrics);
+    return {
+      rect: { x: contentRect.x + rect.x, y: contentRect.y + rect.y, w: rect.w, h: rect.h },
+      clip: contentRect,
+    };
+  }
+
+  const parent = model.gadgets.find(gadget => gadget.id === rect.parentId);
+  if (!parent) return undefined;
+  const layout = getGadgetPreviewLayout(parent, previewChromeMetrics, cache);
+  if (!layout.visible) return undefined;
+  const contentRect = getGadgetContentRect(parent.kind, layout.rect, previewChromeMetrics);
+  let x = contentRect.x + rect.x;
+  let y = contentRect.y + rect.y;
+  if (parent.kind === GADGET_KIND.ScrollAreaGadget) {
+    x -= getScrollAreaOffsetX(parent, layout.rect, previewChromeMetrics);
+    y -= getScrollAreaOffsetY(parent, layout.rect, previewChromeMetrics);
+  }
+  return {
+    rect: { x, y, w: rect.w, h: rect.h },
+    clip: layout.clip,
+  };
+}
+
+function drawPendingGadgetInsertRect(ctx: CanvasRenderingContext2D, winX: number, winY: number, stroke: string): void {
+  const pending = pendingGadgetDrawInsert;
+  if (!pending) return;
+  const drawRect = buildGadgetDrawInsertRect(pending.start, pending.current);
+  if (!drawRect) return;
+  const preview = getGadgetDrawInsertPreviewRect(drawRect);
+  if (!preview) return;
+  const clip = getGadgetDrawInsertPreviewClip(drawRect.parentId, new Map<string, GadgetPreviewLayout>()) ?? preview.clip;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(winX + clip.x, winY + clip.y, clip.w, clip.h);
+  ctx.clip();
+  ctx.setLineDash([4, 3]);
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(winX + preview.rect.x + 0.5, winY + preview.rect.y + 0.5, Math.max(0, preview.rect.w - 1), Math.max(0, preview.rect.h - 1));
+  ctx.restore();
 }
 
 function drawContainerGadgetChrome(
@@ -8978,6 +9190,8 @@ function render() {
       ctx.restore();
     }
   }
+
+  drawPendingGadgetInsertRect(ctx, winX, winY, focus);
 
   if (menuBarRect) {
     drawMenuBarPreview(ctx, menuBarRect, fg, settings.osSkin);

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildOriginalGadgetDeletePlan } from "../src/core/gadget/delete";
+import { buildOriginalGadgetDeletePlan, shouldOpenGadgetKeyboardDeleteDialog } from "../src/core/gadget/delete";
 
 test("deletes splitter-owned gadgets when their owning splitter is part of the same delete subtree", () => {
   const gadgets = [
@@ -32,4 +32,21 @@ test("keeps splitter-owned gadgets skipped when the owning splitter is not delet
   assert.deepEqual([...plan.requestedIds], ["#LeftPane", "#InnerLeft"]);
   assert.deepEqual([...plan.deletedIds], ["#InnerLeft"]);
   assert.deepEqual([...plan.skippedIds], ["#LeftPane"]);
+});
+
+test("opens selected gadget keyboard delete only for safe Delete or Backspace shortcuts", () => {
+  const base = {
+    editableTarget: false,
+    hasBlockingDialog: false,
+    hasPendingInsertGadget: false,
+    selectionKind: "gadget",
+  };
+
+  assert.equal(shouldOpenGadgetKeyboardDeleteDialog({ ...base, key: "Delete" }), true);
+  assert.equal(shouldOpenGadgetKeyboardDeleteDialog({ ...base, key: "Backspace" }), true);
+  assert.equal(shouldOpenGadgetKeyboardDeleteDialog({ ...base, key: "Escape" }), false);
+  assert.equal(shouldOpenGadgetKeyboardDeleteDialog({ ...base, key: "Delete", editableTarget: true }), false);
+  assert.equal(shouldOpenGadgetKeyboardDeleteDialog({ ...base, key: "Delete", hasBlockingDialog: true }), false);
+  assert.equal(shouldOpenGadgetKeyboardDeleteDialog({ ...base, key: "Delete", hasPendingInsertGadget: true }), false);
+  assert.equal(shouldOpenGadgetKeyboardDeleteDialog({ ...base, key: "Delete", selectionKind: "window" }), false);
 });

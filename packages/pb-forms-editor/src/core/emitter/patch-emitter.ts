@@ -1809,11 +1809,18 @@ type GadgetInsertDefaults = {
   pbAny?: boolean;
 };
 
+type GadgetInsertLayoutArgs = {
+  w?: number;
+  h?: number;
+};
+
 type GadgetInsertArgs = {
   kind: InsertableGadgetKind;
   x: number;
   y: number;
   yRaw?: string;
+  w?: number;
+  h?: number;
   parentId?: string;
   parentItem?: number;
 };
@@ -1871,8 +1878,10 @@ function buildInsertedGadgetBlock(
 ): string | undefined {
   const x = String(Math.trunc(args.x));
   const y = args.yRaw?.trim() || String(Math.trunc(args.y));
-  const w = "100";
-  const h = "25";
+  const wValue = Number.isFinite(args.w) ? Math.trunc(args.w as number) : 100;
+  const hValue = Number.isFinite(args.h) ? Math.trunc(args.h as number) : 25;
+  const w = String(wValue);
+  const h = String(hValue);
   const idRaw = identity.idRaw;
   const prefix = identity.assignedVar ? `${indent}${identity.assignedVar} = ` : indent;
   const callbackRaw = `@Callback_${identity.name}()`;
@@ -1952,8 +1961,9 @@ ${indent}CloseGadgetList()
       const gadget1Raw = extraArgs?.gadget1Id?.trim();
       const gadget2Raw = extraArgs?.gadget2Id?.trim();
       if (!gadget1Raw || !gadget2Raw || gadget1Raw === gadget2Raw) return undefined;
+      const splitterState = String(Math.trunc(hValue / 2));
       return `${prefix}SplitterGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, ${gadget1Raw}, ${gadget2Raw})
-${indent}SetGadgetState(${identity.id}, 12)
+${indent}SetGadgetState(${identity.id}, ${splitterState})
 `;
     }
     case GADGET_KIND.WebViewGadget:
@@ -2607,6 +2617,7 @@ export function applyGadgetInsert(
   extraArgs?: GadgetInsertExtraArgs,
   insertDefaults?: GadgetInsertDefaults,
   yRaw?: string,
+  layout?: GadgetInsertLayoutArgs,
 ): vscode.WorkspaceEdit | undefined {
   if (!isInsertableGadgetKind(kind)) return undefined;
 
@@ -2652,7 +2663,7 @@ export function applyGadgetInsert(
     : findTopLevelGadgetInsertAnchor(document, calls, openCall, proc);
   if (!anchor) return undefined;
 
-  const block = buildInsertedGadgetBlock({ kind, x, y, yRaw, parentId, parentItem }, identity, anchor.indent, extraArgs);
+  const block = buildInsertedGadgetBlock({ kind, x, y, yRaw, w: layout?.w, h: layout?.h, parentId, parentItem }, identity, anchor.indent, extraArgs);
   if (!block) return undefined;
   const edit = new vscode.WorkspaceEdit();
   const anchorPos = new vscode.Position(Math.min(document.lineCount, anchor.insertLine), 0);
