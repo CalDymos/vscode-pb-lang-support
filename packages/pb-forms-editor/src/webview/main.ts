@@ -250,7 +250,7 @@ import {
   getToolboxPanelCategories,
   type ToolboxPanelTabId
 } from "../core/toolbox/panel";
-import { buildOriginalGadgetDeletePlan } from "../core/gadget/delete";
+import { buildOriginalGadgetDeletePlan, shouldOpenGadgetKeyboardDeleteDialog } from "../core/gadget/delete";
 import { quotePbString } from "../core/parser/tokenizer";
 import {
   GADGET_KIND,
@@ -1674,6 +1674,34 @@ function closeDestructiveDialog(): void {
   renderDestructiveDialog();
 }
 
+function isEditableKeyboardTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  return target instanceof HTMLInputElement
+    || target instanceof HTMLTextAreaElement
+    || target instanceof HTMLSelectElement;
+}
+
+function openSelectedGadgetKeyboardDeleteDialog(key: string, editableTarget: boolean): boolean {
+  const selectedGadgetId = selection && selection.kind === "gadget" ? selection.id : undefined;
+  const shouldOpen = shouldOpenGadgetKeyboardDeleteDialog({
+    key,
+    editableTarget,
+    hasBlockingDialog: Boolean(pendingDestructiveDialogAction || splitterInsertDialogBackdropEl || selectParentDialogBackdropEl),
+    hasPendingInsertGadget: Boolean(pendingInsertGadgetKind),
+    selectionKind: selection?.kind,
+  });
+  if (!shouldOpen || !selectedGadgetId) return false;
+
+  const gadget = model.gadgets.find(entry => entry.id === selectedGadgetId);
+  const action = buildGadgetDeleteAction(gadget);
+  if (!action) return false;
+
+  closeCanvasContextMenu();
+  openDestructiveDialog(action);
+  return true;
+}
+
 function confirmDestructiveDialogAction(): void {
   const action = pendingDestructiveDialogAction;
   if (!action) return;
@@ -2747,6 +2775,14 @@ window.addEventListener("mousedown", event => {
 });
 
 document.addEventListener("keydown", event => {
+  if (event.key === "Delete" || event.key === "Backspace") {
+    if (openSelectedGadgetKeyboardDeleteDialog(event.key, isEditableKeyboardTarget(event.target))) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    return;
+  }
+
   if (event.key !== "Escape") return;
   if (pendingDestructiveDialogAction) {
     closeDestructiveDialog();

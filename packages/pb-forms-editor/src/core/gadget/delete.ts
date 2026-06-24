@@ -15,6 +15,22 @@ export interface OriginalDeletePlan {
   skippedIds: Set<string>;
 }
 
+export interface GadgetKeyboardDeleteRequest {
+  key: string;
+  editableTarget: boolean;
+  hasBlockingDialog: boolean;
+  hasPendingInsertGadget: boolean;
+  selectionKind?: string;
+}
+
+export function shouldOpenGadgetKeyboardDeleteDialog(request: GadgetKeyboardDeleteRequest): boolean {
+  return (request.key === "Delete" || request.key === "Backspace")
+    && !request.editableTarget
+    && !request.hasBlockingDialog
+    && !request.hasPendingInsertGadget
+    && request.selectionKind === "gadget";
+}
+
 export function collectRequestedGadgetDeleteIds<T extends DeletePlanGadgetLike>(gadgets: readonly T[], rootId: string): Set<string> {
   const requested = new Set<string>();
 
