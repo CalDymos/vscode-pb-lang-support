@@ -55,8 +55,34 @@ export type GadgetDrawInsertRect = {
   parentItem?: number;
 };
 
+export type GadgetDrawInsertBounds = {
+  xMin: number;
+  yMin: number;
+  xMax: number;
+  yMax: number;
+};
+
 function hasSameDrawInsertParent(a: GadgetDrawInsertPoint, b: GadgetDrawInsertPoint): boolean {
   return a.parentId === b.parentId && a.parentItem === b.parentItem;
+}
+
+function clampValue(value: number, min: number, max: number): number {
+  const low = Math.min(min, max);
+  const high = Math.max(min, max);
+  return Math.min(high, Math.max(low, value));
+}
+
+export function clampGadgetDrawInsertPointToBounds(
+  point: GadgetDrawInsertPoint,
+  bounds: GadgetDrawInsertBounds
+): GadgetDrawInsertPoint {
+  const clamped: GadgetDrawInsertPoint = {
+    x: clampValue(Math.trunc(point.x), bounds.xMin, bounds.xMax),
+    y: clampValue(Math.trunc(point.y), bounds.yMin, bounds.yMax),
+  };
+  if (point.parentId !== undefined) clamped.parentId = point.parentId;
+  if (point.parentItem !== undefined) clamped.parentItem = point.parentItem;
+  return clamped;
 }
 
 export function buildGadgetDrawInsertRect(

@@ -218,6 +218,7 @@ import {
 } from "../core/utils/webview-state";
 import {
   buildGadgetDrawInsertRect,
+  clampGadgetDrawInsertPointToBounds,
   buildInsertedGadgetIdentity,
   canHostInsertedGadgets,
   getGadgetInsertLabel,
@@ -225,6 +226,7 @@ import {
   shouldInsertGadgetAsPbAny,
   type GadgetDrawInsertPoint,
   type GadgetDrawInsertRect,
+  type GadgetDrawInsertBounds,
   type InsertableGadgetKind
 } from "../core/gadget/insert";
 import { resolvePreviewPlatformFromOsSkin, type PreviewPlatform } from "../core/utils/form-settings-runtime";
@@ -4161,8 +4163,8 @@ window.addEventListener("mousemove", (e) => {
   const my = e.clientY - rect.top;
 
   if (pendingGadgetDrawInsert) {
-    const placement = resolveGadgetInsertPlacement(mx, my);
-    if (placement && isSameGadgetInsertParent(pendingGadgetDrawInsert.start, placement)) {
+    const placement = resolveGadgetDrawInsertPoint(pendingGadgetDrawInsert.start, mx, my);
+    if (placement) {
       pendingGadgetDrawInsert.current = placement;
       canvas.style.cursor = "crosshair";
       render();
@@ -4419,9 +4421,12 @@ window.addEventListener("mousemove", (e) => {
   renderProps();
 });
 
-window.addEventListener("mouseup", () => {
+window.addEventListener("mouseup", (event) => {
   const pendingDraw = pendingGadgetDrawInsert;
   if (pendingDraw) {
+    const canvasRect = canvas.getBoundingClientRect();
+    const finalPoint = resolveGadgetDrawInsertPoint(pendingDraw.start, event.clientX - canvasRect.left, event.clientY - canvasRect.top);
+    if (finalPoint) pendingDraw.current = finalPoint;
     const drawRect = buildGadgetDrawInsertRect(pendingDraw.start, pendingDraw.current);
     if (drawRect) {
       postInsertGadget(pendingDraw.kind, drawRect.x, drawRect.y, drawRect.parentId, drawRect.parentItem, drawRect.w, drawRect.h);
@@ -4756,25 +4761,41 @@ function hitTestPanelTab(mx: number, my: number, metrics: PreviewChromeMetrics):
   return null;
 }
 
-function resolveGadgetInsertPlacement(mx: number, my: number): { x: number; y: number; parentId?: string; parentItem?: number } | null {
+type SnappedWindowContentPoint = {
+  x: number;
+  y: number;
+  alignedX: number;
+  alignedY: number;
+  contentRect: PreviewRect;
+};
+
+function resolveSnappedWindowContentPoint(mx: number, my: number): SnappedWindowContentPoint {
+  const { lx, ly } = toLocal(mx, my);
+  const contentRect = getWindowContentPreviewRect(previewChromeMetrics);
+  const rawLocalX = lx - contentRect.x;
+  const rawLocalY = ly - contentRect.y;
+  const x = settings.snapToGrid ? snapValue(rawLocalX, settings.gridSize) : Math.trunc(rawLocalX);
+  const y = settings.snapToGrid ? snapValue(rawLocalY, settings.gridSize) : Math.trunc(rawLocalY);
+  return {
+    x,
+    y,
+    alignedX: contentRect.x + x,
+    alignedY: contentRect.y + y,
+    contentRect,
+  };
+}
+
+function resolveGadgetInsertPlacement(mx: number, my: number): GadgetDrawInsertPoint | null {
   if (!pendingInsertGadgetKind || !isInsertableGadgetKind(pendingInsertGadgetKind)) return null;
   if (pendingInsertGadgetKind === GADGET_KIND.SplitterGadget && !pendingSplitterInsertConfig) return null;
   if (!hitWindow(mx, my)) return null;
 
-  const { lx, ly } = toLocal(mx, my);
-  const metrics = previewChromeMetrics;
-  const windowContentRect = getWindowContentPreviewRect(metrics);
-  const rawLocalX = lx - windowContentRect.x;
-  const rawLocalY = ly - windowContentRect.y;
-  const snappedLocalX = settings.snapToGrid ? snapValue(rawLocalX, settings.gridSize) : Math.trunc(rawLocalX);
-  const snappedLocalY = settings.snapToGrid ? snapValue(rawLocalY, settings.gridSize) : Math.trunc(rawLocalY);
-  const alignedX = windowContentRect.x + snappedLocalX;
-  const alignedY = windowContentRect.y + snappedLocalY;
-
-  if (!rectContainsPoint(windowContentRect, alignedX, alignedY)) {
+  const point = resolveSnappedWindowContentPoint(mx, my);
+  if (!rectContainsPoint(point.contentRect, point.alignedX, point.alignedY)) {
     return null;
   }
 
+  const metrics = previewChromeMetrics;
   const cache = new Map<string, GadgetPreviewLayout>();
   for (let i = model.gadgets.length - 1; i >= 0; i--) {
     const gadget = model.gadgets[i];
@@ -4782,12 +4803,12 @@ function resolveGadgetInsertPlacement(mx: number, my: number): { x: number; y: n
 
     const layout = getGadgetPreviewLayout(gadget, metrics, cache);
     if (!layout.visible) continue;
-    if (!rectContainsPoint(layout.rect, alignedX, alignedY)) continue;
-    if (!rectContainsPoint(layout.clip, alignedX, alignedY)) continue;
+    if (!rectContainsPoint(layout.rect, point.alignedX, point.alignedY)) continue;
+    if (!rectContainsPoint(layout.clip, point.alignedX, point.alignedY)) continue;
 
     const contentRect = getGadgetContentRect(gadget.kind, layout.rect, metrics);
-    let x = alignedX - contentRect.x;
-    let y = alignedY - contentRect.y;
+    let x = point.alignedX - contentRect.x;
+    let y = point.alignedY - contentRect.y;
     if (gadget.kind === GADGET_KIND.ScrollAreaGadget) {
       x += getScrollAreaOffsetX(gadget, layout.rect, metrics);
       y += getScrollAreaOffsetY(gadget, layout.rect, metrics);
@@ -4801,11 +4822,58 @@ function resolveGadgetInsertPlacement(mx: number, my: number): { x: number; y: n
     };
   }
 
-  return { x: snappedLocalX, y: snappedLocalY };
+  return { x: point.x, y: point.y };
 }
 
-function isSameGadgetInsertParent(a: GadgetDrawInsertPoint, b: GadgetDrawInsertPoint): boolean {
-  return a.parentId === b.parentId && a.parentItem === b.parentItem;
+function resolveGadgetDrawInsertBounds(start: GadgetDrawInsertPoint, cache = new Map<string, GadgetPreviewLayout>()): GadgetDrawInsertBounds | null {
+  const windowContentRect = getWindowContentPreviewRect(previewChromeMetrics);
+  if (!start.parentId) {
+    return { xMin: 0, yMin: 0, xMax: windowContentRect.w, yMax: windowContentRect.h };
+  }
+
+  const parent = model.gadgets.find(gadget => gadget.id === start.parentId);
+  if (!parent) return null;
+  const layout = getGadgetPreviewLayout(parent, previewChromeMetrics, cache);
+  if (!layout.visible) return null;
+  const contentRect = getGadgetContentRect(parent.kind, layout.rect, previewChromeMetrics);
+  let xMin = windowContentRect.x - contentRect.x;
+  let yMin = windowContentRect.y - contentRect.y;
+  let xMax = windowContentRect.x + windowContentRect.w - contentRect.x;
+  let yMax = windowContentRect.y + windowContentRect.h - contentRect.y;
+  if (parent.kind === GADGET_KIND.ScrollAreaGadget) {
+    const scrollX = getScrollAreaOffsetX(parent, layout.rect, previewChromeMetrics);
+    const scrollY = getScrollAreaOffsetY(parent, layout.rect, previewChromeMetrics);
+    xMin += scrollX;
+    xMax += scrollX;
+    yMin += scrollY;
+    yMax += scrollY;
+  }
+  return { xMin, yMin, xMax, yMax };
+}
+
+function resolveGadgetDrawInsertPoint(start: GadgetDrawInsertPoint, mx: number, my: number): GadgetDrawInsertPoint | null {
+  const point = resolveSnappedWindowContentPoint(mx, my);
+  let resolved: GadgetDrawInsertPoint;
+  if (!start.parentId) {
+    resolved = { x: point.x, y: point.y };
+  } else {
+    const parent = model.gadgets.find(gadget => gadget.id === start.parentId);
+    if (!parent) return null;
+    const layout = getGadgetPreviewLayout(parent, previewChromeMetrics, new Map<string, GadgetPreviewLayout>());
+    if (!layout.visible) return null;
+    const contentRect = getGadgetContentRect(parent.kind, layout.rect, previewChromeMetrics);
+    let x = point.alignedX - contentRect.x;
+    let y = point.alignedY - contentRect.y;
+    if (parent.kind === GADGET_KIND.ScrollAreaGadget) {
+      x += getScrollAreaOffsetX(parent, layout.rect, previewChromeMetrics);
+      y += getScrollAreaOffsetY(parent, layout.rect, previewChromeMetrics);
+    }
+    resolved = { x, y, parentId: start.parentId };
+    if (start.parentItem !== undefined) resolved.parentItem = start.parentItem;
+  }
+
+  const bounds = resolveGadgetDrawInsertBounds(start);
+  return bounds ? clampGadgetDrawInsertPointToBounds(resolved, bounds) : null;
 }
 
 function getGadgetDrawInsertPreviewClip(parentId: string | undefined, cache: Map<string, GadgetPreviewLayout>): PreviewRect | undefined {

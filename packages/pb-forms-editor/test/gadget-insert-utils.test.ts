@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildGadgetDrawInsertRect, insertedGadgetHasAmbiguousEmptyTextDefault, shouldInsertGadgetAsPbAny } from '../src/core/gadget/insert';
+import { buildGadgetDrawInsertRect, clampGadgetDrawInsertPointToBounds, insertedGadgetHasAmbiguousEmptyTextDefault, shouldInsertGadgetAsPbAny } from '../src/core/gadget/insert';
 
 test('shouldInsertGadgetAsPbAny honours the configured default when provided', () => {
   const mixedIds = [
@@ -59,5 +59,24 @@ test('buildGadgetDrawInsertRect rejects clicks and parent-changing drags', () =>
   assert.equal(
     buildGadgetDrawInsertRect({ x: 10, y: 10, parentId: '#Container_0' }, { x: 30, y: 30, parentId: '#Container_1' }),
     undefined
+  );
+});
+
+
+test('clampGadgetDrawInsertPointToBounds preserves the start parent while applying the original window edge clamp', () => {
+  assert.deepEqual(
+    clampGadgetDrawInsertPointToBounds(
+      { x: -12, y: 240, parentId: '#Container_0', parentItem: 1 },
+      { xMin: -5, yMin: 0, xMax: 120, yMax: 80 }
+    ),
+    { x: -5, y: 80, parentId: '#Container_0', parentItem: 1 }
+  );
+
+  assert.deepEqual(
+    clampGadgetDrawInsertPointToBounds(
+      { x: 18.9, y: 24.2 },
+      { xMin: 0, yMin: 0, xMax: 100, yMax: 60 }
+    ),
+    { x: 18, y: 24 }
   );
 });
