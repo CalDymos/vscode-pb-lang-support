@@ -1948,21 +1948,28 @@ function buildTopLevelWindowGadgetYRaw(unscaledY: number, parentId?: string): st
   return `ToolBarHeight(${toolbarCount - 1}) + ${baseRaw}`;
 }
 
-function postInsertGadget(kind: string, x: number, y: number, parentId?: string, parentItem?: number): void {
+function postInsertGadget(kind: string, x: number, y: number, parentId?: string, parentItem?: number, w?: number, h?: number): void {
   if (!isInsertableGadgetKind(kind)) return;
   const predictedId = getPredictedInsertedGadgetId(kind);
-  const committed = commitDisplayedLayoutPoint(x, y, getActiveLayoutDpiScale());
+  const scale = getActiveLayoutDpiScale();
+  const committed = commitDisplayedLayoutPoint(x, y, scale);
+  const committedW = Number.isFinite(w) ? commitDisplayedLayoutValue(w as number, scale) : undefined;
+  const committedH = Number.isFinite(h) ? commitDisplayedLayoutValue(h as number, scale) : undefined;
   const yRaw = buildTopLevelWindowGadgetYRaw(committed.yUnscaled, parentId);
   if (predictedId) {
     pendingGadgetSelection = { id: predictedId };
     storeLayoutDisplayOverride("gadget", predictedId, "x", committed.x, committed.xRaw);
     storeLayoutDisplayOverride("gadget", predictedId, "y", committed.y, yRaw);
+    if (committedW) storeLayoutDisplayOverride("gadget", predictedId, "w", committedW.displayValue, committedW.raw);
+    if (committedH) storeLayoutDisplayOverride("gadget", predictedId, "h", committedH.displayValue, committedH.raw);
   }
   post({
     type: WEBVIEW_TO_EXT_MSG_TYPE.insertGadget,
     kind,
     x: committed.xUnscaled,
     y: committed.yUnscaled,
+    w: committedW?.unscaledValue,
+    h: committedH?.unscaledValue,
     yRaw,
     parentId,
     parentItem,

@@ -228,6 +228,26 @@ EndProcedure
 });
 
 
+test("inserts a new top-level gadget with explicit draw dimensions", () => {
+  const text = `; Form Designer for PureBasic - 6.40
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyGadgetInsert(document, "ButtonGadget", 12, 34, undefined, undefined, undefined, undefined, undefined, undefined, { w: 160, h: 40 })
+  );
+
+  assert.match(patchedText, /ButtonGadget\(#Button_0, 12, 34, 160, 40, ""\)/);
+  const gadget = parsed.gadgets.find((g) => g.id === "#Button_0");
+  assert.ok(gadget, "Expected inserted button gadget.");
+  assert.equal(gadget?.x, 12);
+  assert.equal(gadget?.y, 34);
+  assert.equal(gadget?.w, 160);
+  assert.equal(gadget?.h, 40);
+});
+
 test("preserves original top-level Windows toolbar Y expressions when patching gadget rects", () => {
   const text = `; Form Designer for PureBasic - 6.40
 Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
@@ -362,6 +382,40 @@ EndProcedure
   assert.equal(gadget?.gadget1Id, "#TxtLeft");
   assert.equal(gadget?.gadget2Id, "#TxtRight");
   assert.equal(gadget?.stateRaw, "12");
+});
+
+test("inserts a splitter with explicit draw dimensions and matching original half-height state", () => {
+  const text = `; Form Designer for PureBasic - 6.40
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #TxtLeft
+  #TxtRight
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  StringGadget(#TxtLeft, 10, 40, 120, 25, "Left")
+  StringGadget(#TxtRight, 140, 40, 120, 25, "Right")
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyGadgetInsert(document, "SplitterGadget", 10, 80, undefined, undefined, undefined, {
+      gadget1Id: "#TxtLeft",
+      gadget2Id: "#TxtRight",
+    }, undefined, undefined, { w: 180, h: 60 })
+  );
+
+  assert.match(patchedText, /SplitterGadget\(#Splitter_0, 10, 80, 180, 60, #TxtLeft, #TxtRight\)/);
+  assert.match(patchedText, /SetGadgetState\(#Splitter_0, 30\)/);
+  const gadget = parsed.gadgets.find((g) => g.id === "#Splitter_0");
+  assert.ok(gadget, "Expected inserted splitter gadget.");
+  assert.equal(gadget?.w, 180);
+  assert.equal(gadget?.h, 60);
+  assert.equal(gadget?.stateRaw, "30");
 });
 
 test("rejects splitter insertion when the selected gadgets do not share the same source parent", () => {
